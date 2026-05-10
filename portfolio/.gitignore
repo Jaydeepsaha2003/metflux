@@ -1,6 +1,10 @@
 node_modules/
 .next/
-out/
+# NOTE: out/ is intentionally NOT ignored. We pre-build the portfolio locally
+# (via `npm run build:portfolio`) and commit `portfolio/out/` so Hostinger
+# doesn't need to run `next build` — it ships into server/public/portfolio/
+# via copy-portfolio.js as part of the root `npm run build`.
+# .next/ stays ignored — it's only used during `next build` itself.
 .env*
 !.env.example
 *.tsbuildinfo
