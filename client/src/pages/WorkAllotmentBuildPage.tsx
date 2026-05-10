@@ -1,0 +1,678 @@
+// Work Allotment template — opened either in "build mode" (state.poItemIds) or
+// "view mode" (state.waId). Each row carries an editable pcs and a labour
+// dropdown. On save we POST to /work-allotments and download a PDF using the
+// same html2pdf approach as PackingListPage.
+import { useRef, useState, useEffect } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { ArrowLeft, Download, ClipboardList, Loader2, MessageCircle } from 'lucide-react';
+import { api } from '@/lib/api';
+import html2pdf from 'html2pdf.js';
+
+/* ── Types ────────────────────────────────────────────────────── */
+type PendingItem = {
+  id: string;
+  poNumber: string;
+  customerName: string;
+  orderDate: string;
+  coreType: 'TOROIDAL' | 'RECTANGULAR';
+  grade: string;
+  material: string;
+  measure: string;
+  flux: number | null;
+  turns: number | null;
+  testVoltage: number | null;
+  testCurrent: number | null;
+  orderedPcs: number;
+  producedPcs: number;
+  remainingPcs: number;
+};
+type WaItemDetail = {
+  id: string;
+  poOrderItemId: string;
+  poNumber: string | null;
+  orderDate: string | null;
+  customerName: string | null;
+  coreType: 'TOROIDAL' | 'RECTANGULAR' | null;
+  grade: string | null;
+  material: string | null;
+  measure: string | null;
+  flux: number | null;
+  turns: number | null;
+  testVoltage: number | null;
+  testCurrent: number | null;
+  pcs: number;
+  labourId: string | null;
+  labourName: string | null;
+};
+type WaDetail = {
+  id: string; waNumber: string; waDate: string; remarks: string | null;
+  items: WaItemDetail[];
+};
+type CompanyDetail = {
+  name: string; address: string | null; phone: string | null;
+  whatsappNumber: string | null;
+  email: string | null; logoUrl: string | null; gstNumber: string | null;
+};
+type LabourOption = { id: string; name: string };
+
+type RowState = {
+  poOrderItemId: string;
+  customerName: string;
+  orderDate: string;
+  measure: string;
+  grade: string;
+  material: string;
+  flux: string;
+  turns: string;
+  voltage: string;
+  iemax: string;
+  pcs: string;        // editable
+  maxPcs: number;     // remaining cap
+  labourId: string;   // editable
+};
+
+const fmtDate = (iso: string | null | undefined) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+
+const numStr = (n: number | null | undefined, digits = 2) =>
+  n == null ? '' : Number(n).toFixed(digits);
+
+/* ── Inline cells used in the printable doc ── */
+const Display = ({
+  value, align = 'center', bold,
+}: {
+  value: string;
+  align?: 'left' | 'center' | 'right'; bold?: boolean;
+}) => (
+  <div
+    className={`block w-full h-9 leading-9 px-1 text-[12px] truncate
+      ${align === 'left' ? 'text-left' : align === 'right' ? 'text-right' : 'text-center'}
+      ${bold ? 'font-semibold' : ''}`}
+  >
+    {value || ' '}
+  </div>
+);
+
+/* ── Main page ────────────────────────────────────────────────── */
+export const WorkAllotmentBuildPage = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const state = (location.state ?? {}) as { poItemIds?: string[]; waId?: string };
+  const { poItemIds: stateIds, waId } = state;
+
+  useEffect(() => {
+    if (!stateIds?.length && !waId) navigate('/work-allotment', { replace: true });
+  }, []);
+
+  /* Queries */
+  const { data: existingWa, isLoading: loadingWa } = useQuery({
+    queryKey: ['work-allotment', waId],
+    queryFn: () => api<WaDetail>(`/work-allotments/${waId}`),
+    enabled: !!waId,
+  });
+
+  // For build-mode we need pending list filtered to selected ids.
+  const { data: pendingList } = useQuery({
+    queryKey: ['wa-pending-all'],
+    queryFn: () => api<{ items: PendingItem[] }>(`/work-allotments/pending`),
+    enabled: !waId,
+  });
+
+  const { data: company } = useQuery({
+    queryKey: ['company-me'],
+    queryFn: () => api<CompanyDetail>('/companies/me'),
+  });
+
+  const { data: labourData } = useQuery({
+    queryKey: ['labours-dropdown'],
+    queryFn: () => api<{ labours: LabourOption[] }>('/labours/dropdown'),
+  });
+  const labours = labourData?.labours ?? [];
+  const labourName = (id: string | null | undefined) =>
+    labours.find((l) => l.id === id)?.name ?? '';
+
+  const { data: allWas } = useQuery({
+    queryKey: ['work-allotments-all'],
+    queryFn: () => api<{ items: Array<{ waNumber: string }> }>('/work-allotments'),
+    enabled: !waId,
+  });
+
+  /* Form state */
+  const today = new Date().toISOString().slice(0, 10);
+  const [waNumber, setWaNumber] = useState('');
+  const [waDate] = useState(today);
+  const [remarks, setRemarks] = useState('');
+
+  /* Auto-generate WA No. — same pattern as Packing List WO No.
+     Format: <3-letter company prefix>WA-<3-digit serial> */
+  useEffect(() => {
+    if (waId || !company || waNumber) return;
+    const prefix = `${company.name.slice(0, 3).toUpperCase()}WA`;
+    const existing = allWas?.items.filter((w) => w.waNumber.startsWith(prefix + '-')).length ?? 0;
+    setWaNumber(`${prefix}-${String(existing + 1).padStart(3, '0')}`);
+  }, [company, allWas, waId]);
+
+  /* Pre-fill from existing WA */
+  useEffect(() => {
+    if (!existingWa) return;
+    setWaNumber(existingWa.waNumber);
+    if (existingWa.remarks) setRemarks(existingWa.remarks);
+  }, [existingWa]);
+
+  /* Editable rows — initialized from pending items (build) or saved items (view) */
+  const [rows, setRows] = useState<RowState[]>([]);
+
+  useEffect(() => {
+    if (waId) {
+      // View mode — populate from existing WA items.
+      if (!existingWa) return;
+      setRows(existingWa.items.map((it) => ({
+        poOrderItemId: it.poOrderItemId,
+        customerName:  it.customerName ?? '',
+        orderDate:     it.orderDate ?? '',
+        measure:       it.measure ?? '',
+        grade:         it.grade ?? '',
+        material:      it.material ?? '',
+        flux:          numStr(it.flux, 2),
+        turns:         it.turns != null ? String(it.turns) : '',
+        voltage:       numStr(it.testVoltage, 2),
+        iemax:         numStr(it.testCurrent, 2),
+        pcs:           String(it.pcs),
+        maxPcs:        it.pcs, // already locked-in; can't grow past saved value
+        labourId:      it.labourId ?? '',
+      })));
+    } else {
+      // Build mode — pull the selected ids out of the cached pending list.
+      if (!pendingList || !stateIds) return;
+      const wanted = pendingList.items.filter((p) => stateIds.includes(p.id));
+      setRows(wanted.map((p) => ({
+        poOrderItemId: p.id,
+        customerName:  p.customerName,
+        orderDate:     p.orderDate,
+        measure:       p.measure,
+        grade:         p.grade,
+        material:      p.material,
+        flux:          numStr(p.flux, 2),
+        turns:         p.turns != null ? String(p.turns) : '',
+        voltage:       numStr(p.testVoltage, 2),
+        iemax:         numStr(p.testCurrent, 2),
+        pcs:           String(p.remainingPcs),
+        maxPcs:        p.remainingPcs,
+        labourId:      '',
+      })));
+    }
+  }, [waId, existingWa, pendingList, (stateIds ?? []).join(',')]);
+
+  const updateRow = (id: string, field: keyof RowState, val: string) =>
+    setRows((prev) => prev.map((r) => (r.poOrderItemId === id ? { ...r, [field]: val } : r)));
+
+  const totalPcs = rows.reduce((s, r) => s + (parseInt(r.pcs) || 0), 0);
+
+  /* Validation — shown inline before save */
+  const validationError = (() => {
+    if (!rows.length) return 'No items to allot.';
+    if (!waNumber.trim()) return 'WA Number is required.';
+    for (const r of rows) {
+      const p = parseInt(r.pcs);
+      if (!Number.isFinite(p) || p <= 0) return `Pcs must be > 0 for ${r.measure || r.grade}.`;
+      if (p > r.maxPcs) return `Pcs (${p}) for ${r.measure || r.grade} exceeds remaining (${r.maxPcs}).`;
+    }
+    return null;
+  })();
+
+  const isLoading = waId ? loadingWa : !pendingList;
+
+  /* Address helper */
+  const addressLine = company?.address?.replace(/\n+/g, ', ').trim() ?? '';
+
+  /* PDF + share */
+  const printRef = useRef<HTMLDivElement>(null);
+  const [generating, setGenerating] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const handleWhatsappShare = () => {
+    const labourNames = [...new Set(
+      rows.map((r) => labourName(r.labourId)).filter(Boolean)
+    )];
+    const summary = [
+      `*Work Allotment ${waNumber || 'DRAFT'}*`,
+      company?.name ? `From: ${company.name}` : null,
+      labourNames.length ? `Workers: ${labourNames.join(', ')}` : null,
+      `Date: ${waDate ? fmtDate(waDate) : ''}`,
+      `Total: ${totalPcs} pcs across ${rows.length} item${rows.length !== 1 ? 's' : ''}`,
+    ].filter(Boolean).join('\n');
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(summary)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleDownload = async () => {
+    if (validationError) { setSaveError(validationError); return; }
+    const el = printRef.current;
+    if (!el || !rows.length) return;
+    setGenerating(true);
+    setSaveError(null);
+
+    // Save to server first (build mode only — view mode is already saved).
+    if (!waId) {
+      try {
+        await api('/work-allotments', {
+          method: 'POST',
+          body: JSON.stringify({
+            waNumber,
+            waDate,
+            remarks: remarks || null,
+            items: rows.map((r) => ({
+              poOrderItemId: r.poOrderItemId,
+              pcs:           parseInt(r.pcs),
+              labourId:      r.labourId || null,
+            })),
+          }),
+        });
+      } catch (e: unknown) {
+        setSaveError(e instanceof Error ? e.message : 'Save failed');
+      }
+    }
+
+    // Same input-to-span clone trick used in PackingListPage so html2canvas
+    // captures the typed values reliably.
+    const A4_USABLE_PX = 734;
+    const clone = el.cloneNode(true) as HTMLElement;
+
+    const liveInputs = Array.from(el.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select'));
+    const cloneInputs = Array.from(clone.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select'));
+    cloneInputs.forEach((ci, i) => {
+      const live = liveInputs[i];
+      let value = '';
+      if (live instanceof HTMLSelectElement) {
+        value = live.options[live.selectedIndex]?.text ?? '';
+      } else if (live instanceof HTMLInputElement) {
+        value = live.value;
+      }
+      const span = document.createElement('span');
+      span.className = ci.className;
+      span.style.display = 'block';
+      span.style.lineHeight = '36px';
+      span.style.whiteSpace = 'pre';
+      span.textContent = value.length ? value : ' ';
+      ci.replaceWith(span);
+    });
+
+    clone.style.width = `${A4_USABLE_PX}px`;
+    clone.style.minWidth = '0';
+    clone.style.overflow = 'visible';
+    clone.style.borderRadius = '0';
+    clone.style.boxShadow = 'none';
+
+    const offscreen = document.createElement('div');
+    offscreen.style.position = 'fixed';
+    offscreen.style.left = '-10000px';
+    offscreen.style.top = '0';
+    offscreen.style.width = `${A4_USABLE_PX}px`;
+    offscreen.style.background = '#ffffff';
+    offscreen.appendChild(clone);
+    document.body.appendChild(offscreen);
+
+    await new Promise((r) => requestAnimationFrame(r));
+
+    try {
+      await html2pdf().set({
+        margin: 8,
+        filename: `Work-Allotment-${waNumber || 'WA'}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          windowWidth: A4_USABLE_PX,
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any).from(clone).save();
+    } finally {
+      document.body.removeChild(offscreen);
+      setGenerating(false);
+    }
+  };
+
+  if (isLoading) return <div className="card p-10 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-slate-400" /></div>;
+  if (!rows.length && !isLoading) return (
+    <div className="card p-10 text-center text-slate-400">
+      No items to allot. <Link to="/work-allotment" className="text-brand-700 hover:underline">Go back</Link>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4 max-w-6xl">
+
+      {/* ── Control bar (hidden in print) ── */}
+      <div className="no-print rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm space-y-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Link to="/work-allotment" className="btn-ghost text-slate-600 shrink-0">
+            <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">Back</span>
+          </Link>
+          <h1 className="text-base sm:text-lg font-bold tracking-tight flex items-center gap-2 min-w-0">
+            <ClipboardList className="h-5 w-5 text-brand-600 shrink-0" />
+            <span className="truncate">Work Allotment</span>
+            {rows.length > 1 && (
+              <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-700 shrink-0">
+                {rows.length} items
+              </span>
+            )}
+          </h1>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <label className="block">
+            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">WA Number</span>
+            <input className="input" value={waNumber} onChange={(e) => setWaNumber(e.target.value.toUpperCase())} disabled={!!waId} />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">WA Date</span>
+            <input className="input" type="date" value={waDate} disabled />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Remarks</span>
+            <input className="input" value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="optional" disabled={!!waId} />
+          </label>
+        </div>
+
+        {(saveError || validationError) && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            {saveError ?? validationError}
+          </div>
+        )}
+
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+          <button onClick={handleWhatsappShare} className="btn-ghost border border-slate-300 text-emerald-700 hover:bg-emerald-50 w-full sm:w-auto">
+            <MessageCircle className="h-4 w-4" /> Share on WhatsApp
+          </button>
+          <button onClick={handleDownload} disabled={generating || !!validationError} className="btn-primary w-full sm:w-auto">
+            {generating ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating…</> : <><Download className="h-4 w-4" /> {waId ? 'Download PDF' : 'Save & Download PDF'}</>}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Editable section (live) ── */}
+      {!waId && (
+        <div className="card overflow-hidden no-print">
+          <div className="px-4 py-2 bg-slate-50 border-b border-slate-200 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Edit pcs and assign workers
+          </div>
+
+          {/* Desktop / tablet — table */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-sm whitespace-nowrap">
+              <thead>
+                <tr className="border-b border-slate-200 bg-white text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <th className="px-3 py-2 text-left">Customer</th>
+                  <th className="px-3 py-2 text-left">SO Date</th>
+                  <th className="px-3 py-2 text-left">Measure</th>
+                  <th className="px-3 py-2 text-left">Grade</th>
+                  <th className="px-3 py-2 text-right">Turns</th>
+                  <th className="px-3 py-2 text-right">Voltage</th>
+                  <th className="px-3 py-2 text-right">Iemax</th>
+                  <th className="px-3 py-2 text-right">Pcs <span className="text-[10px] text-slate-400 font-normal">(max)</span></th>
+                  <th className="px-3 py-2 text-left">Worker</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {rows.map((r) => (
+                  <tr key={r.poOrderItemId} className="hover:bg-slate-50">
+                    <td className="px-3 py-2 font-medium">{r.customerName}</td>
+                    <td className="px-3 py-2 text-slate-600">{fmtDate(r.orderDate)}</td>
+                    <td className="px-3 py-2 text-slate-600">{r.measure}</td>
+                    <td className="px-3 py-2 text-slate-600">{r.grade}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{r.turns || '—'}</td>
+                    <td className="px-3 py-2 text-right tabular-nums font-mono text-xs">{r.voltage || '—'}</td>
+                    <td className="px-3 py-2 text-right tabular-nums font-mono text-xs">{r.iemax || '—'}</td>
+                    <td className="px-3 py-2 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <input
+                          type="number" min={1} max={r.maxPcs}
+                          className="input w-20 text-right tabular-nums"
+                          value={r.pcs}
+                          onChange={(e) => updateRow(r.poOrderItemId, 'pcs', e.target.value)}
+                        />
+                        <span className="text-[10px] text-slate-400">/{r.maxPcs}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <select
+                        className="input w-44"
+                        value={r.labourId}
+                        onChange={(e) => updateRow(r.poOrderItemId, 'labourId', e.target.value)}
+                      >
+                        <option value="">— select worker —</option>
+                        {labours.map((l) => (
+                          <option key={l.id} value={l.id}>{l.name}</option>
+                        ))}
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile — one card per row, structured for easy editing */}
+          <div className="md:hidden divide-y divide-slate-100">
+            {rows.map((r, idx) => (
+              <div key={r.poOrderItemId} className="px-4 py-3 space-y-2.5">
+                {/* Header — index + customer */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-[10px] uppercase tracking-wide text-slate-400 font-medium">
+                      Item {idx + 1} · {fmtDate(r.orderDate)}
+                    </div>
+                    <div className="font-semibold text-sm text-slate-900 truncate">{r.customerName}</div>
+                  </div>
+                </div>
+
+                {/* Measure / grade / material chips */}
+                <div className="flex flex-wrap gap-1.5 text-[11px]">
+                  <span className="rounded bg-slate-100 px-2 py-0.5 font-medium text-slate-700">{r.measure}</span>
+                  <span className="rounded bg-slate-100 px-2 py-0.5 font-medium text-slate-700">{r.grade}</span>
+                  <span className="rounded bg-slate-100 px-2 py-0.5 font-medium text-slate-700">{r.material}</span>
+                </div>
+
+                {/* Calibration row */}
+                {(r.flux || r.turns || r.voltage || r.iemax) && (
+                  <div className="grid grid-cols-4 gap-2 rounded-md bg-slate-50 px-2 py-1.5 text-[11px]">
+                    <Stat label="Flux"    value={r.flux || '—'} />
+                    <Stat label="Turns"   value={r.turns || '—'} />
+                    <Stat label="Voltage" value={r.voltage || '—'} />
+                    <Stat label="Iemax"   value={r.iemax || '—'} />
+                  </div>
+                )}
+
+                {/* Editable inputs — pcs and worker, stacked full-width */}
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <label className="block">
+                    <span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                      Pcs <span className="text-slate-400 normal-case">(max {r.maxPcs})</span>
+                    </span>
+                    <input
+                      type="number" min={1} max={r.maxPcs} inputMode="numeric"
+                      className="input w-full text-right tabular-nums"
+                      value={r.pcs}
+                      onChange={(e) => updateRow(r.poOrderItemId, 'pcs', e.target.value)}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                      Worker
+                    </span>
+                    <select
+                      className="input w-full"
+                      value={r.labourId}
+                      onChange={(e) => updateRow(r.poOrderItemId, 'labourId', e.target.value)}
+                    >
+                      <option value="">— select —</option>
+                      {labours.map((l) => (
+                        <option key={l.id} value={l.id}>{l.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Printable document — scroll horizontally on mobile; full-width PDF capture is unaffected. ── */}
+      <div className="overflow-x-auto rounded-xl shadow-md print:overflow-visible print:shadow-none print:rounded-none">
+        <div className="md:hidden px-3 py-2 bg-amber-50 border-b border-amber-200 text-[11px] text-amber-800 sticky left-0">
+          Preview below scrolls horizontally — the downloaded PDF is full size.
+        </div>
+        <div ref={printRef} id="work-allotment-doc"
+          className="bg-white text-black min-w-[1000px] rounded-xl overflow-hidden print:min-w-0 print:rounded-none print:overflow-visible">
+
+          {/* Company header */}
+          <div className="flex items-center justify-between border-b-2 border-black px-6 pt-4 pb-3 gap-4">
+            <div className="flex items-center gap-5">
+              {company?.logoUrl
+                ? <img src={company.logoUrl} alt={company.name} className="h-20 w-20 object-contain shrink-0" />
+                : <div className="h-20 w-20 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 text-xs shrink-0">LOGO</div>
+              }
+              <div className="min-w-0">
+                <div className="text-lg font-black uppercase tracking-wide leading-tight">{company?.name ?? 'Company Name'}</div>
+                {addressLine && (
+                  <div className="text-[11px] font-semibold text-slate-700 mt-0.5 max-w-md leading-snug">
+                    {addressLine}
+                  </div>
+                )}
+                {(company?.phone || company?.whatsappNumber || company?.email) && (
+                  <div className="text-[11px] text-slate-600 mt-0.5">
+                    <span className="font-semibold">Contact:</span>{' '}
+                    {[company.phone, company.whatsappNumber, company.email].filter(Boolean).join('  |  ')}
+                  </div>
+                )}
+                {company?.gstNumber && (
+                  <div className="text-[11px] text-slate-600 mt-0.5">GSTIN: {company.gstNumber}</div>
+                )}
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <div className="text-base font-bold uppercase tracking-widest text-slate-900 border-2 border-slate-700 px-4 py-1.5 rounded flex items-center justify-center">
+                Work Allotment
+              </div>
+            </div>
+          </div>
+
+          {/* Info rows */}
+          <div className="grid grid-cols-2 border-b border-slate-300 text-sm">
+            <InfoRow label="WA No." value={waNumber || '—'} border="border-r border-b" />
+            <InfoRow label="WA Date" value={waDate ? fmtDate(waDate) : '—'} border="border-b" />
+            <InfoRow label="Remarks" value={remarks || '—'} border="" />
+            <InfoRow label="Total Pcs" value={String(totalPcs)} border="" />
+          </div>
+
+          {/* Items table */}
+          <table className="w-full text-sm border-collapse table-fixed">
+            <colgroup>
+              <col style={{ width: '36px' }} />     {/* SR */}
+              <col style={{ width: '15%' }} />      {/* CUSTOMER */}
+              <col style={{ width: '9%' }} />       {/* SO DATE */}
+              <col />                                {/* MEASURE */}
+              <col style={{ width: '9%' }} />       {/* GRADE */}
+              <col style={{ width: '10%' }} />      {/* MATERIAL */}
+              <col style={{ width: '6%' }} />       {/* FLUX */}
+              <col style={{ width: '6%' }} />       {/* TURNS */}
+              <col style={{ width: '7%' }} />       {/* VOLTAGE */}
+              <col style={{ width: '7%' }} />       {/* IEMAX */}
+              <col style={{ width: '6%' }} />       {/* PCS */}
+              <col style={{ width: '12%' }} />      {/* WORKER */}
+            </colgroup>
+            <thead>
+              <tr className="bg-slate-100 border-b-2 border-slate-400 text-center font-bold uppercase tracking-wide text-[10px]">
+                <th className="px-1 py-1.5 border-r border-slate-300 align-middle">SR</th>
+                <th className="px-1 py-1.5 border-r border-slate-300 align-middle text-left">Customer</th>
+                <th className="px-1 py-1.5 border-r border-slate-300 align-middle">SO Date</th>
+                <th className="px-1 py-1.5 border-r border-slate-300 align-middle text-left">Measure</th>
+                <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Grade</th>
+                <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Material</th>
+                <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Flux</th>
+                <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Turns</th>
+                <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Voltage</th>
+                <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Iemax</th>
+                <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Pcs</th>
+                <th className="px-1 py-1.5 align-middle text-left">Worker</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, idx) => (
+                <tr key={r.poOrderItemId} className="h-9 border-b border-slate-200">
+                  <td className="px-1 border-r border-slate-200 text-center font-medium text-slate-500 text-[12px] align-middle">
+                    {idx + 1}
+                  </td>
+                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.customerName} align="left" /></td>
+                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={fmtDate(r.orderDate)} /></td>
+                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.measure} align="left" /></td>
+                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.grade} /></td>
+                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.material} /></td>
+                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.flux} /></td>
+                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.turns} /></td>
+                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.voltage} /></td>
+                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.iemax} /></td>
+                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.pcs} bold /></td>
+                  <td className="px-0.5 align-middle"><Display value={labourName(r.labourId)} align="left" /></td>
+                </tr>
+              ))}
+              {/* Total row */}
+              <tr className="h-8 border-t-2 border-slate-500 bg-slate-200">
+                <td colSpan={10} className="px-2 border-r border-slate-400 text-right text-[10px] font-black uppercase tracking-widest text-slate-600 align-middle">
+                  Grand Total
+                </td>
+                <td className="px-1 border-r border-slate-400 text-center text-xs font-black text-slate-800 align-middle">
+                  {totalPcs}
+                </td>
+                <td className="align-middle" />
+              </tr>
+            </tbody>
+          </table>
+
+          {/* Signature footer */}
+          <div className="grid grid-cols-2 border-t-2 border-slate-400 mt-2">
+            <div className="border-r border-slate-300 px-6 py-5">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-5">Issued By</div>
+              <div className="border-b border-slate-400 mb-1 min-h-[24px] text-sm font-medium" />
+              <div className="text-[10px] text-slate-500">Name &amp; Signature</div>
+              <div className="mt-2 text-[10px] text-slate-500">Date: {waDate ? fmtDate(waDate) : '___________'}</div>
+            </div>
+            <div className="px-6 py-5">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-5">Received By</div>
+              <div className="border-b border-slate-400 mb-1 min-h-[24px] text-sm font-medium" />
+              <div className="text-[10px] text-slate-500">Worker Signature</div>
+              <div className="mt-2 text-[10px] text-slate-500">Date: ___________</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const InfoRow = ({ label, value, border }: { label: string; value: string; border: string }) => (
+  <div className={`flex ${border} border-slate-300`}>
+    <span className="w-28 shrink-0 bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 border-r border-slate-300">
+      {label}
+    </span>
+    <span className="flex-1 px-3 py-1.5 text-sm font-medium">{value}</span>
+  </div>
+);
+
+const Stat = ({ label, value }: { label: string; value: string }) => (
+  <div className="flex flex-col">
+    <span className="text-[9px] uppercase tracking-wide text-slate-400 font-medium">{label}</span>
+    <span className="font-mono tabular-nums text-slate-700 truncate">{value}</span>
+  </div>
+);

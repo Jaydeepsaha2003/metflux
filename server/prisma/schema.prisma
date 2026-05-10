@@ -1,0 +1,638 @@
+// Metflux Prisma schema
+// Multi-tenancy: a User belongs to many Companies via the Membership table.
+// Each Membership carries the user's role inside that specific company.
+// Tenant-scoped tables (Customer, PushSubscription, …) keep a `companyId` FK
+// and queries are filtered by the active company resolved from the JWT.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// Per-company role. Platform-wide privileges live on User.isPlatformAdmin.
+enum Role {
+  COMPANY_ADMIN
+  MANAGER
+  STAFF
+}
+
+model Company {
+  id             String  @id @default(cuid())
+  name           String  @db.VarChar(160)
+  slug           String  @unique @db.VarChar(80)
+  gstNumber      String? @db.VarChar(40)
+  address        String? @db.VarChar(400)
+  phone          String? @db.VarChar(40)   // landline / company phone
+  whatsappNumber String? @db.VarChar(40)   // WhatsApp number for share-link / contact
+  email          String? @db.VarChar(160)
+  logoUrl        String? @db.VarChar(400)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships       Membership[]
+  customers         Customer[]
+  pushSubscriptions PushSubscription[]
+  poOrders          PoOrder[]
+  materialGrades    MaterialGrade[]
+  productions       Production[]
+  dispatches        Dispatch[]
+  packingLists      PackingList[]
+  labourMembers     LabourMembership[]
+  suppliers         Supplier[]
+  supplierOrders    SupplierOrder[]
+  fluxGrades        FluxGrade[]
+  workAllotments    WorkAllotment[]
+  returns           Return[]
+}
+
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique @db.VarChar(160)
+  username        String   @unique @db.VarChar(40)
+  passwordHash    String   @db.VarChar(120)
+  name            String   @db.VarChar(120)
+  isPlatformAdmin Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  memberships       Membership[]
+  refreshTokens     RefreshToken[]
+  pushSubscriptions PushSubscription[]
+  customersCreated  Customer[]         @relation("CustomerCreatedBy")
+  poOrdersCreated   PoOrder[]          @relation("PoOrderCreatedBy")
+  productionsCreated Production[]      @relation("ProductionCreatedBy")
+  dispatchesCreated  Dispatch[]        @relation("DispatchCreatedBy")
+  packingListsCreated PackingList[]    @relation("PackingListCreatedBy")
+  suppliersCreated   Supplier[]        @relation("SupplierCreatedBy")
+  supplierOrdersCreated SupplierOrder[] @relation("SupplierOrderCreatedBy")
+  workAllotmentsCreated WorkAllotment[] @relation("WorkAllotmentCreatedBy")
+  returnsCreated     Return[]          @relation("ReturnCreatedBy")
+}
+
+// Bridge between User and Company. The user's role + fine-grained permissions
+// are stored here so the same person can have different access in different
+// companies. `permissions` is a JSON array of keys from PERMISSION_KEYS.
+model Membership {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  role        Role     @default(STAFF)
+  permissions Json     // string[] of permission keys; ignored for COMPANY_ADMIN (full access)
+  isPrimary   Boolean  @default(false) // landing company after sign-in
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, companyId])
+  @@index([companyId])
+  @@index([userId])
+}
+
+model RefreshToken {
+  jti       String    @id @db.VarChar(40)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String   @db.VarChar(160)
+  email     String?  @db.VarChar(160)
+  phone     String?  @db.VarChar(40)
+  address   String?  @db.VarChar(400)
+  gstNumber String?  @db.VarChar(40)
+  gstRate   Float    @default(0)        // percentage, e.g. 18 = 18% GST applied to PO totals
+  state     String?  @db.VarChar(80)
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  createdById String?
+  createdBy   User?   @relation("CustomerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  poOrders PoOrder[]
+  returns  Return[]
+
+  @@index([companyId, createdAt])
+  @@index([companyId, name])
+}
+
+// Per-grade BH-curve calibration table for the flux-test calculator.
+// Each row is one (grade, flux, coreType) → ATe/cm point. The same grade can
+// have different ATe/cm values for toroidal vs rectangular cores at the same
+// flux density, so coreType is part of the unique key.
+model FluxGrade {
+  id        String   @id @default(cuid())
+  grade     String   @db.VarChar(80)        // e.g. "M4", "M3", "ZDMH", "M3 (MOH)"
+  flux      Float                            // tesla, e.g. 0.5, 1.0, 1.5, 1.7
+  coreType  CoreType @default(TOROIDAL)      // TOROIDAL | RECTANGULAR
+  ateCm     Float                            // ampere-turns per centimetre
+  notes     String?  @db.VarChar(200)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, grade, flux, coreType])
+  @@index([companyId, grade])
+  @@index([companyId, coreType])
+}
+
+// Master list of grade ↔ material combinations available to a company.
+// Used to populate the dropdowns in the PO entry form.
+model MaterialGrade {
+  id        String   @id @default(cuid())
+  grade     String   @db.VarChar(80)
+  material  String   @db.VarChar(120)
+  createdAt DateTime @default(now())
+
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, grade, material])
+  @@index([companyId, grade])
+}
+
+enum CoreType {
+  TOROIDAL
+  RECTANGULAR
+}
+
+enum PoItemStatus {
+  ACTIVE
+  CANCELLED
+}
+
+// What the user typed on the PO form. The system always derives the OTHER
+// rate so that downstream reporting (kg-based vs pcs-based) is consistent.
+enum RateBasis {
+  PER_KG
+  PER_PCS
+}
+
+// Header row for one purchase order. Items hang off poOrderId.
+model PoOrder {
+  id           String   @id @default(cuid())
+  poNumber     String   @db.VarChar(60)
+  orderDate    DateTime
+  deliveryDays Int      @default(0)
+  deliveryDate DateTime
+  notes        String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id])
+  createdById String?
+  createdBy   User?    @relation("PoOrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  items       PoOrderItem[]
+
+  @@unique([companyId, poNumber])
+  @@index([companyId, createdAt])
+  @@index([customerId])
+}
+
+// Individual line item on a PO. Toroidal-only fields (id1/od1/ht/pcs) are
+// always set; rectangular-only fields are nullable.
+model PoOrderItem {
+  id        String   @id @default(cuid())
+  poOrderId String
+  poOrder   PoOrder  @relation(fields: [poOrderId], references: [id], onDelete: Cascade)
+
+  coreType  CoreType
+  grade     String   @db.VarChar(80)
+  material  String   @db.VarChar(120)
+  measure   String   @db.VarChar(160)
+
+  // Common — toroidal uses id1 + od1 + ht; rectangular uses all four.
+  id1       Float
+  id2       Float?
+  od1       Float
+  od2       Float?
+  ht        Float
+  builtup   Float?
+
+  weightPerPc Float
+  pcs         Int
+  totalWeight Float
+
+  // Rectangular-only derived fields
+  coreAc Float?
+  coreMl Float?
+  d13    Float?
+
+  // Toroidal flux-test calibration (computed at PO entry)
+  turns       Int?     // number of turns on the test winding
+  flux        Float?   // tesla, e.g. 1.0
+  ateCm       Float?   // ampere-turns per cm — looked up from FluxGrade at PO entry
+  testVoltage Float?   // volts (Faraday's law)
+  testCurrent Float?   // mA (Ie max — magnetizing current)
+
+  // Pricing — user enters one of (per-kg / per-pcs) and the other is derived.
+  // totalAmount is pre-tax; GST is computed at display time using customer.gstRate.
+  rateBasis   RateBasis?  // PER_KG or PER_PCS — whichever the user typed
+  rateValue   Float?      // the number the user typed
+  ratePerKg   Float?      // derived: rate per kg
+  ratePerPc   Float?      // derived: rate per piece
+  totalAmount Float?      // derived: pre-tax line total
+
+  status PoItemStatus @default(ACTIVE)
+  createdAt DateTime @default(now())
+
+  productions Production[]
+  dispatches  Dispatch[]
+  workAllotmentItems WorkAllotmentItem[]
+  returnItems        ReturnItem[]
+
+  @@index([poOrderId])
+  @@index([status])
+}
+
+// One production entry per labour shift / batch worked on a single PO item.
+// Multiple Production rows may exist per PoOrderItem until the ordered qty
+// is fully produced (sum of pcs ≤ poOrderItem.pcs).
+model Production {
+  id            String      @id @default(cuid())
+  poOrderItemId String
+  poOrderItem   PoOrderItem @relation(fields: [poOrderItemId], references: [id], onDelete: Cascade)
+
+  prodDate    DateTime
+  pcs         Int
+  weightPerPc Float
+  totalWeight Float
+  labourName  String   @db.VarChar(120)
+  notes       String?  @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdById String?
+  createdBy   User?    @relation("ProductionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([companyId, prodDate])
+  @@index([poOrderItemId])
+  @@index([labourName])
+}
+
+// One dispatch entry per shipment batch for a single PO item.
+// Constraint: sum(dispatch.pcs) ≤ sum(production.pcs) for the same item.
+model Dispatch {
+  id            String      @id @default(cuid())
+  poOrderItemId String
+  poOrderItem   PoOrderItem @relation(fields: [poOrderItemId], references: [id], onDelete: Cascade)
+
+  dispatchDate DateTime
+  pcs          Int
+  weightPerPc  Float
+  totalWeight  Float    // calculated = pcs × weightPerPc
+  actualWeight Float?   // user-entered weighbridge reading; falls back to totalWeight when null
+  vehicleNo    String?  @db.VarChar(80)
+  notes        String?  @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  companyId   String
+  company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdById String?
+  createdBy   User?   @relation("DispatchCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  packingListItem PackingListItem?
+
+  @@index([companyId, dispatchDate])
+  @@index([poOrderItemId])
+}
+
+// A packing list can cover one or many dispatches (e.g. toroidal + rectangular
+// in the same shipment). PackingListItem is the join table.
+model PackingList {
+  id          String    @id @default(cuid())
+  plNumber    String    @db.VarChar(80)   // WO Number (auto-generated)
+  plDate      DateTime                    // WO Date
+  invoiceNo   String?   @db.VarChar(80)  // Invoice number (user-entered)
+  invoiceDate DateTime?                  // Invoice date (user-entered)
+  testedBy    String?   @db.VarChar(120)
+  approvedBy  String?   @db.VarChar(120)
+  remarks     String?   @db.VarChar(200)
+
+  items PackingListItem[]
+
+  companyId   String
+  company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdById String?
+  createdBy   User?   @relation("PackingListCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, plDate])
+}
+
+// Join: each dispatch belongs to at most one packing list.
+model PackingListItem {
+  id            String      @id @default(cuid())
+  packingListId String
+  packingList   PackingList @relation(fields: [packingListId], references: [id], onDelete: Cascade)
+  dispatchId    String      @unique
+  dispatch      Dispatch    @relation(fields: [dispatchId], references: [id], onDelete: Cascade)
+
+  @@index([packingListId])
+}
+
+// Worker/labour master — can be assigned to multiple companies.
+model Labour {
+  id        String   @id @default(cuid())
+  name      String   @db.VarChar(120)
+  phone     String?  @db.VarChar(40)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  companies LabourMembership[]
+  workAllotmentItems WorkAllotmentItem[]
+
+  @@index([name])
+}
+
+// Many-to-many: a Labour may work at multiple Companies.
+model LabourMembership {
+  id        String   @id @default(cuid())
+  labourId  String
+  labour    Labour   @relation(fields: [labourId], references: [id], onDelete: Cascade)
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([labourId, companyId])
+  @@index([companyId])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  endpoint  String   @unique @db.VarChar(500)
+  p256dh    String   @db.VarChar(200)
+  auth      String   @db.VarChar(60)
+  userAgent String?  @db.VarChar(300)
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([userId])
+}
+
+// Supplier master — vendors we buy raw material from. Mirrors Customer but
+// adds gstRate (% applicable on their invoices, e.g. 18 for steel sheets).
+model Supplier {
+  id        String   @id @default(cuid())
+  name      String   @db.VarChar(160)
+  email     String?  @db.VarChar(160)
+  phone     String?  @db.VarChar(40)
+  address   String?  @db.VarChar(400)
+  gstNumber String?  @db.VarChar(40)
+  state     String?  @db.VarChar(80)
+  gstRate   Float    @default(0)        // percentage, e.g. 18 = 18% GST
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  createdById String?
+  createdBy   User?   @relation("SupplierCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  supplierOrders SupplierOrder[]
+
+  @@index([companyId, createdAt])
+  @@index([companyId, name])
+}
+
+enum SupplierOrderStatus {
+  PENDING        // not yet received
+  PARTIAL        // some items received
+  RECEIVED       // fully received
+  CANCELLED
+}
+
+// Header of a purchase order placed with a supplier. Items hang off supplierOrderId.
+model SupplierOrder {
+  id           String              @id @default(cuid())
+  poNumber     String              @db.VarChar(60)
+  orderDate    DateTime
+  expectedDate DateTime?
+  status       SupplierOrderStatus @default(PENDING)
+  notes        String?             @db.Text
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  supplierId  String
+  supplier    Supplier @relation(fields: [supplierId], references: [id])
+  createdById String?
+  createdBy   User?    @relation("SupplierOrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  items SupplierOrderItem[]
+
+  @@unique([companyId, poNumber])
+  @@index([companyId, createdAt])
+  @@index([supplierId])
+  @@index([status])
+}
+
+// Work Allotment — assignment slip handed to labour for winding/production
+// of one or more pending PO items. Records are kept for 7 days then lazily
+// deleted by GET /api/work-allotments. The slip is informational only — the
+// real source of truth for "what was made" stays the Production records.
+model WorkAllotment {
+  id        String   @id @default(cuid())
+  waNumber  String   @db.VarChar(60)
+  waDate    DateTime
+  remarks   String?  @db.VarChar(300)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  companyId   String
+  company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdById String?
+  createdBy   User?   @relation("WorkAllotmentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  items WorkAllotmentItem[]
+
+  @@unique([companyId, waNumber])
+  @@index([companyId, createdAt])
+}
+
+// One row on a Work Allotment — a labour assignment for a specific PO item.
+model WorkAllotmentItem {
+  id              String        @id @default(cuid())
+  workAllotmentId String
+  workAllotment   WorkAllotment @relation(fields: [workAllotmentId], references: [id], onDelete: Cascade)
+
+  poOrderItemId String
+  poOrderItem   PoOrderItem @relation(fields: [poOrderItemId], references: [id], onDelete: Cascade)
+
+  pcs       Int
+  labourId  String?
+  labour    Labour? @relation(fields: [labourId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([workAllotmentId])
+  @@index([poOrderItemId])
+}
+
+// One line on a SupplierOrder — a single material item with HSN code, rate, qty.
+model SupplierOrderItem {
+  id              String        @id @default(cuid())
+  supplierOrderId String
+  supplierOrder   SupplierOrder @relation(fields: [supplierOrderId], references: [id], onDelete: Cascade)
+
+  description String  @db.VarChar(300)   // free-text material description
+  hsnCode     String? @db.VarChar(20)    // HSN/SAC code
+  qty         Float
+  unit        String  @db.VarChar(20)    // KG, PCS, MTR, etc.
+  rate        Float                       // per unit (pre-tax)
+  amount      Float                       // qty * rate (pre-tax)
+  receivedQty Float   @default(0)         // running total of received qty
+
+  createdAt DateTime @default(now())
+
+  @@index([supplierOrderId])
+}
+
+// What document the user is referencing when they create a return — they
+// could quote any of the three numbers from the original sale flow.
+enum ReturnReferenceType {
+  SO_NUMBER       // Sales Order number (PoOrder.poNumber)
+  INVOICE_NUMBER  // Invoice no on the packing list
+  WO_NUMBER       // Work Order / Packing List number
+}
+
+// Lifecycle of a Return record:
+//   PENDING → RECEIVED → IN_REWORK → REDISPATCHED → CLOSED
+// CANCELLED is also possible from PENDING/RECEIVED if the customer changes
+// their mind before we touch the items.
+enum ReturnStatus {
+  PENDING
+  RECEIVED
+  IN_REWORK
+  REDISPATCHED
+  CLOSED
+  CANCELLED
+}
+
+// Public-website contact form submissions. Created without auth from
+// metflux.com; the admin can browse / triage these from inside the panel.
+// Not tenant-scoped (the website is a single brand) — kept on Company-less
+// rows so any platform admin can read them.
+enum ContactStatus {
+  NEW
+  CONTACTED
+  ARCHIVED
+}
+
+model ContactSubmission {
+  id        String   @id @default(cuid())
+  name      String   @db.VarChar(160)
+  email     String   @db.VarChar(160)
+  phone     String?  @db.VarChar(40)
+  company   String?  @db.VarChar(200)
+  subject   String?  @db.VarChar(200)
+  message   String?  @db.Text
+  formType  String   @db.VarChar(40)  // "contact" | "connect" | other forms in future
+  status    ContactStatus @default(NEW)
+  ipAddress String?  @db.VarChar(60)
+  userAgent String?  @db.VarChar(400)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([createdAt])
+}
+
+// Customer-return record. A return is logged against ONE reference number
+// (SO / Invoice / WO) but can span multiple PoOrderItems via ReturnItem.
+// Returns don't reverse any dispatch/production counters automatically —
+// they're tracked as a separate flow until rework is done and items go back.
+model Return {
+  id           String   @id @default(cuid())
+  returnNumber String   @db.VarChar(60)
+  returnDate   DateTime
+
+  referenceType  ReturnReferenceType
+  referenceValue String              @db.VarChar(80) // free-text user-typed value
+
+  status ReturnStatus @default(PENDING)
+
+  receivedAt    DateTime?
+  reworkAt      DateTime?
+  redispatchAt  DateTime?
+  redispatchVehicle String? @db.VarChar(80)
+  closedAt      DateTime?
+
+  reason  String? @db.VarChar(400)
+  notes   String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id])
+  createdById String?
+  createdBy   User?    @relation("ReturnCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  items ReturnItem[]
+
+  @@unique([companyId, returnNumber])
+  @@index([companyId, returnDate])
+  @@index([companyId, status])
+  @@index([customerId])
+}
+
+// One line on a Return — links to the original PoOrderItem so we can pull
+// measure/grade/material/wt-per-pc without duplicating those fields.
+model ReturnItem {
+  id       String @id @default(cuid())
+  returnId String
+  return   Return @relation(fields: [returnId], references: [id], onDelete: Cascade)
+
+  poOrderItemId String
+  poOrderItem   PoOrderItem @relation(fields: [poOrderItemId], references: [id], onDelete: Cascade)
+
+  pcs    Int
+  reason String? @db.VarChar(300)
+
+  createdAt DateTime @default(now())
+
+  @@index([returnId])
+  @@index([poOrderItemId])
+}

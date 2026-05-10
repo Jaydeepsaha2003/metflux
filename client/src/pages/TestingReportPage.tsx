@@ -1,0 +1,524 @@
+// Testing Report — multi-page PDF grouped by PO Order.
+// Reachable from:
+//   • PackingPage row action → state: { dispatchIds: [...] }
+//   • PackingPage multi-select → state: { dispatchIds: [...] }
+//   • PackingListPage → state: { plId } (re-uses saved WO/Invoice)
+//
+// Each PO group renders one A4 page with the same company header as the
+// Packing List, but the title bar reads "TESTING REPORT". Per group the user
+// can edit WO No, WO Date, Invoice No, Invoice Date, Tested By, Approved By,
+// and per-row Sample Pcs.
+import { useRef, useState, useEffect } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useQuery, useQueries } from '@tanstack/react-query';
+import { ArrowLeft, Download, ClipboardCheck, Loader2, MessageCircle } from 'lucide-react';
+import { api } from '@/lib/api';
+import html2pdf from 'html2pdf.js';
+
+/* ── Types ────────────────────────────────────────────────────── */
+type DispatchDetail = {
+  id: string; poOrderId: string | null; poOrderItemId: string;
+  poNumber: string; orderDate: string;
+  customerName: string; customerState: string | null;
+  coreType: 'TOROIDAL' | 'RECTANGULAR';
+  grade: string; material: string; measure: string;
+  pcs: number; weightPerPc: number; totalWeight: number;
+  turns: number | null; flux: number | null;
+  testVoltage: number | null; testCurrent: number | null;
+};
+
+/* Reported "Max Allowable Current" on the testing report — sits 3–5% below
+   the calculated theoretical max so the customer-facing spec has a built-in
+   safety margin. The exact offset is hashed off the PoOrderItem.id so the
+   same PO+size always shows the SAME value across every dispatch's testing
+   report — different items get different (but stable) offsets within the
+   3–5% band. */
+const reportedIemax = (poItemId: string, testCurrent: number | null): number | null => {
+  if (testCurrent == null) return null;
+  let hash = 0;
+  for (let i = 0; i < poItemId.length; i++) {
+    hash = (hash * 31 + poItemId.charCodeAt(i)) | 0;
+  }
+  // Map hash into [3.00, 5.00] inclusive, two-decimal precision.
+  const pct = 3 + (Math.abs(hash) % 201) / 100;
+  return +(testCurrent * (1 - pct / 100)).toFixed(2);
+};
+type PlDispatchDetail = DispatchDetail;
+type PlDetail = {
+  id: string; plNumber: string; plDate: string;
+  invoiceNo: string | null; invoiceDate: string | null;
+  testedBy: string | null; approvedBy: string | null;
+  dispatches: PlDispatchDetail[];
+};
+type CompanyDetail = {
+  name: string; address: string | null; phone: string | null;
+  whatsappNumber: string | null;
+  email: string | null; logoUrl: string | null; gstNumber: string | null;
+};
+
+/* Per-group editable form state — keyed by poOrderId. */
+type GroupForm = {
+  woNumber: string;
+  woDate: string;          // ISO yyyy-mm-dd
+  invoiceNo: string;
+  invoiceDate: string;
+  testedBy: string;
+  approvedBy: string;
+  /** sample pcs per dispatch id within the group */
+  samplePcs: Record<string, string>;
+};
+
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const fmtDate = (iso: string | null | undefined) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+
+/* ── Reusable cells (read-only / editable) ── */
+const Display = ({ value, align = 'center', bold }: {
+  value: string; align?: 'left' | 'center' | 'right'; bold?: boolean;
+}) => (
+  <div
+    className={`block w-full h-9 leading-9 px-1 text-[12px] truncate
+      ${align === 'left' ? 'text-left' : align === 'right' ? 'text-right' : 'text-center'}
+      ${bold ? 'font-semibold' : ''}`}
+  >
+    {value || ' '}
+  </div>
+);
+
+const Cell = ({
+  value, onChange, align = 'center', bold,
+}: {
+  value: string; onChange: (v: string) => void;
+  align?: 'left' | 'center' | 'right'; bold?: boolean;
+}) => (
+  <input
+    value={value}
+    onChange={(e) => onChange(e.target.value)}
+    style={{ fontFamily: 'inherit' }}
+    className={`block w-full h-9 bg-transparent border-0 border-b border-transparent
+      focus:border-brand-400 focus:outline-none text-[12px] leading-9 py-0 px-1 align-middle box-border
+      ${align === 'left' ? 'text-left' : align === 'right' ? 'text-right' : 'text-center'}
+      ${bold ? 'font-semibold' : ''}`}
+  />
+);
+
+/* ── Main page ────────────────────────────────────────────────── */
+export const TestingReportPage = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const state = (location.state ?? {}) as { dispatchIds?: string[]; plId?: string };
+  const { dispatchIds: stateIds, plId } = state;
+
+  useEffect(() => {
+    if (!stateIds?.length && !plId) navigate('/packing', { replace: true });
+  }, []);
+
+  /* Data sources */
+  const { data: existingPl, isLoading: loadingPl } = useQuery({
+    queryKey: ['packing-list', plId],
+    queryFn: () => api<PlDetail>(`/packing-lists/${plId}`),
+    enabled: !!plId,
+  });
+
+  // For the standalone (dispatchIds) flow we hit /dispatch/:id one-by-one.
+  const dispatchQueries = useQueries({
+    queries: (stateIds ?? []).map((id) => ({
+      queryKey: ['dispatch-item', id],
+      queryFn: () => api<DispatchDetail>(`/dispatch/${id}`),
+      enabled: !plId,
+    })),
+  });
+
+  const { data: company } = useQuery({
+    queryKey: ['company-me'],
+    queryFn: () => api<CompanyDetail>('/companies/me'),
+  });
+
+  const dispatches: DispatchDetail[] = plId
+    ? (existingPl?.dispatches ?? []) as DispatchDetail[]
+    : dispatchQueries.filter((q) => q.data).map((q) => q.data as DispatchDetail);
+
+  const isLoading = plId ? loadingPl : dispatchQueries.some((q) => q.isLoading);
+
+  /* Group dispatches by PO order id (or fall back to poNumber if id absent). */
+  const groups = (() => {
+    const map = new Map<string, { key: string; poNumber: string; orderDate: string; customerName: string; rows: DispatchDetail[] }>();
+    for (const d of dispatches) {
+      const key = d.poOrderId ?? d.poNumber;
+      if (!map.has(key)) {
+        map.set(key, { key, poNumber: d.poNumber, orderDate: d.orderDate, customerName: d.customerName, rows: [] });
+      }
+      map.get(key)!.rows.push(d);
+    }
+    return [...map.values()];
+  })();
+
+  /* Per-group editable state. Initialised lazily as groups appear. */
+  const [forms, setForms] = useState<Record<string, GroupForm>>({});
+  useEffect(() => {
+    if (!groups.length) return;
+    setForms((prev) => {
+      const next: Record<string, GroupForm> = { ...prev };
+      // Defaults pulled from the saved packing list when present.
+      const defaultWo = existingPl?.plNumber ?? '';
+      const defaultWoDate = existingPl?.plDate?.slice(0, 10) ?? todayISO();
+      const defaultInv = existingPl?.invoiceNo ?? '';
+      const defaultInvDate = existingPl?.invoiceDate?.slice(0, 10) ?? '';
+      const defaultTested = existingPl?.testedBy ?? '';
+      const defaultApproved = existingPl?.approvedBy ?? '';
+      for (const g of groups) {
+        if (next[g.key]) continue;
+        next[g.key] = {
+          woNumber:    defaultWo,
+          woDate:      defaultWoDate,
+          invoiceNo:   defaultInv,
+          invoiceDate: defaultInvDate,
+          testedBy:    defaultTested,
+          approvedBy:  defaultApproved,
+          // Sample pcs default to total pcs — user can reduce per row.
+          samplePcs: Object.fromEntries(g.rows.map((r) => [r.id, String(r.pcs)])),
+        };
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatches.map((d) => d.id).join(','), existingPl?.id]);
+
+  const updateForm = (key: string, patch: Partial<GroupForm>) =>
+    setForms((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
+
+  const updateSample = (key: string, dispatchId: string, val: string) =>
+    setForms((prev) => ({
+      ...prev,
+      [key]: {
+        ...prev[key],
+        samplePcs: { ...prev[key].samplePcs, [dispatchId]: val },
+      },
+    }));
+
+  /* Display helpers */
+  const addressLine = company?.address?.replace(/\n+/g, ', ').trim() ?? '';
+
+  /* PDF download — uses the same html2canvas-input-replace trick the
+     Packing List page uses, but adds CSS page-break-before on each PO group
+     after the first so html2pdf renders one PO per page. */
+  const printRef = useRef<HTMLDivElement>(null);
+  const [generating, setGenerating] = useState(false);
+
+  const handleWhatsappShare = () => {
+    const summary = [
+      `*Testing Report*`,
+      company?.name ? `From: ${company.name}` : null,
+      `Groups: ${groups.length} PO${groups.length === 1 ? '' : 's'} · ${dispatches.length} item${dispatches.length === 1 ? '' : 's'}`,
+      `Date: ${fmtDate(todayISO())}`,
+    ].filter(Boolean).join('\n');
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(summary)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleDownload = async () => {
+    const el = printRef.current;
+    if (!el || !dispatches.length) return;
+    setGenerating(true);
+
+    const A4_USABLE_PX = 734;
+    const clone = el.cloneNode(true) as HTMLElement;
+
+    // Replace inputs with spans so html2canvas captures values reliably.
+    const liveInputs = Array.from(el.querySelectorAll<HTMLInputElement>('input'));
+    const cloneInputs = Array.from(clone.querySelectorAll<HTMLInputElement>('input'));
+    cloneInputs.forEach((ci, i) => {
+      const v = liveInputs[i]?.value ?? '';
+      const span = document.createElement('span');
+      span.className = ci.className;
+      span.style.display = 'block';
+      span.style.lineHeight = '36px';
+      span.style.whiteSpace = 'pre';
+      span.textContent = v.length ? v : ' ';
+      ci.replaceWith(span);
+    });
+
+    clone.style.width = `${A4_USABLE_PX}px`;
+    clone.style.minWidth = '0';
+    clone.style.overflow = 'visible';
+    clone.style.borderRadius = '0';
+    clone.style.boxShadow = 'none';
+
+    const offscreen = document.createElement('div');
+    offscreen.style.position = 'fixed';
+    offscreen.style.left = '-10000px';
+    offscreen.style.top = '0';
+    offscreen.style.width = `${A4_USABLE_PX}px`;
+    offscreen.style.background = '#ffffff';
+    offscreen.appendChild(clone);
+    document.body.appendChild(offscreen);
+
+    await new Promise((r) => requestAnimationFrame(r));
+
+    try {
+      await html2pdf().set({
+        margin: 8,
+        filename: `Testing-Report-${todayISO()}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          windowWidth: A4_USABLE_PX,
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['css', 'legacy'], before: '.tr-page-break' },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any).from(clone).save();
+    } finally {
+      document.body.removeChild(offscreen);
+      setGenerating(false);
+    }
+  };
+
+  if (isLoading) return <div className="card p-10 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-slate-400" /></div>;
+  if (!dispatches.length) return (
+    <div className="card p-10 text-center text-slate-400">
+      No dispatches selected. <Link to="/packing" className="text-brand-700 hover:underline">Go back</Link>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4 max-w-5xl">
+
+      {/* ── Control bar ── */}
+      <div className="no-print rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+          <Link to="/packing" className="btn-ghost text-slate-600 shrink-0 self-start">
+            <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">Back</span>
+          </Link>
+          <h1 className="text-base sm:text-lg font-bold tracking-tight flex items-center gap-2 min-w-0">
+            <ClipboardCheck className="h-5 w-5 text-brand-600 shrink-0" />
+            <span className="truncate">Testing Report</span>
+            <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-700 shrink-0">
+              {groups.length} PO · {dispatches.length} item{dispatches.length === 1 ? '' : 's'}
+            </span>
+          </h1>
+          <div className="sm:ml-auto flex flex-col-reverse gap-2 sm:flex-row sm:gap-3">
+            <button onClick={handleWhatsappShare} className="btn-ghost border border-slate-300 text-emerald-700 hover:bg-emerald-50 w-full sm:w-auto justify-center">
+              <MessageCircle className="h-4 w-4" /> Share on WhatsApp
+            </button>
+            <button onClick={handleDownload} disabled={generating} className="btn-primary w-full sm:w-auto justify-center">
+              {generating ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating…</> : <><Download className="h-4 w-4" /> Download PDF</>}
+            </button>
+          </div>
+        </div>
+        <div className="mt-2 text-[11px] text-slate-500">
+          Each PO renders on its own page. Edit WO / Invoice / sample pcs / signatures inline below — every page can have different values.
+        </div>
+      </div>
+
+      {/* ── Printable document ── */}
+      <div className="overflow-x-auto rounded-xl shadow-md print:overflow-visible print:shadow-none print:rounded-none">
+        <div ref={printRef} id="testing-report-doc"
+          className="bg-white text-black min-w-[820px] rounded-xl overflow-hidden print:min-w-0 print:rounded-none print:overflow-visible">
+
+          {groups.map((g, idx) => {
+            const form = forms[g.key];
+            if (!form) return null;
+            return (
+              <div
+                key={g.key}
+                className={idx > 0 ? 'tr-page-break' : ''}
+                style={idx > 0 ? { pageBreakBefore: 'always' } : undefined}
+              >
+                {/* Company header — logo + brand block on the left only.
+                    The document title moves to its own centered banner below
+                    so it reads as a clear "TESTING REPORT" heading. */}
+                <div className="flex items-center border-b-2 border-black px-6 pt-4 pb-3 gap-4">
+                  <div className="flex items-center gap-5">
+                    {company?.logoUrl
+                      ? <img src={company.logoUrl} alt={company.name} className="h-20 w-20 object-contain shrink-0" />
+                      : <div className="h-20 w-20 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 text-xs shrink-0">LOGO</div>
+                    }
+                    <div className="min-w-0">
+                      <div className="text-lg font-black uppercase tracking-wide leading-tight">{company?.name ?? 'Company Name'}</div>
+                      {addressLine && (
+                        <div className="text-[11px] font-semibold text-slate-700 mt-0.5 max-w-md leading-snug">
+                          {addressLine}
+                        </div>
+                      )}
+                      {(company?.phone || company?.whatsappNumber || company?.email) && (
+                        <div className="text-[11px] text-slate-600 mt-0.5">
+                          <span className="font-semibold">Contact:</span>{' '}
+                          {[company.phone, company.whatsappNumber, company.email].filter(Boolean).join('  |  ')}
+                        </div>
+                      )}
+                      {company?.gstNumber && (
+                        <div className="text-[11px] text-slate-600 mt-0.5">GSTIN: {company.gstNumber}</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Centered, bold document title — full-width banner. */}
+                <div className="border-b-2 border-black px-6 py-2.5 text-center">
+                  <span className="inline-block text-lg font-extrabold uppercase tracking-[0.25em] text-slate-900 border-2 border-slate-800 px-6 py-1.5 rounded">
+                    Testing Report
+                  </span>
+                </div>
+
+                {/* Per-PO info grid — PO/WO/Invoice each with a date */}
+                <div className="grid grid-cols-2 border-b border-slate-300 text-sm">
+                  <InfoRow label="Customer" value={g.customerName} border="border-r border-b" />
+                  <InfoRow label="State" value={g.rows[0]?.customerState ?? '—'} border="border-b" />
+                  <InfoRow label="PO No." value={g.poNumber} border="border-r border-b" />
+                  <InfoRow label="PO Date" value={fmtDate(g.orderDate)} border="border-b" />
+                  <InfoEdit
+                    label="WO No." value={form.woNumber}
+                    onChange={(v) => updateForm(g.key, { woNumber: v.toUpperCase() })}
+                    border="border-r border-b"
+                  />
+                  <InfoEdit
+                    label="WO Date" value={form.woDate} type="date"
+                    onChange={(v) => updateForm(g.key, { woDate: v })}
+                    border="border-b"
+                  />
+                  <InfoEdit
+                    label="Invoice No." value={form.invoiceNo}
+                    onChange={(v) => updateForm(g.key, { invoiceNo: v.toUpperCase() })}
+                    border="border-r"
+                  />
+                  <InfoEdit
+                    label="Invoice Date" value={form.invoiceDate} type="date"
+                    onChange={(v) => updateForm(g.key, { invoiceDate: v })}
+                    border=""
+                  />
+                </div>
+
+                {/* Items table */}
+                <table className="w-full text-sm border-collapse table-fixed">
+                  <colgroup>
+                    <col style={{ width: '36px' }} />   {/* SR */}
+                    <col />                              {/* MEASURE */}
+                    <col style={{ width: '11%' }} />    {/* GRADE */}
+                    <col style={{ width: '9%' }} />     {/* TURNS */}
+                    <col style={{ width: '8%' }} />     {/* PCS */}
+                    <col style={{ width: '11%' }} />    {/* SAMPLE PCS */}
+                    <col style={{ width: '13%' }} />    {/* APPLIED VOLTAGE */}
+                    <col style={{ width: '15%' }} />    {/* MAX I_e mA */}
+                  </colgroup>
+                  <thead>
+                    <tr className="bg-slate-100 border-b-2 border-slate-400 text-center font-bold uppercase tracking-wide text-[10px]">
+                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">SR</th>
+                      <th className="px-1 py-1.5 border-r border-slate-300 text-left align-middle">Measure</th>
+                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Grade</th>
+                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">No. of Turns</th>
+                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Pcs</th>
+                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Sample Pcs</th>
+                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Applied Voltage (V)</th>
+                      <th className="px-1 py-1.5 align-middle">Max Allowable Current (mA)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {g.rows.map((d, i) => (
+                      <tr key={d.id} className="h-9 border-b border-slate-200">
+                        <td className="px-1 border-r border-slate-200 text-center font-medium text-slate-500 text-[12px] align-middle">
+                          {i + 1}
+                        </td>
+                        <td className="px-0.5 border-r border-slate-200 align-middle">
+                          <Display value={d.measure} align="left" />
+                        </td>
+                        <td className="px-0.5 border-r border-slate-200 align-middle">
+                          <Display value={d.grade} />
+                        </td>
+                        <td className="px-0.5 border-r border-slate-200 align-middle">
+                          <Display value={d.turns != null ? String(d.turns) : '—'} />
+                        </td>
+                        <td className="px-0.5 border-r border-slate-200 align-middle">
+                          <Display value={String(d.pcs)} bold />
+                        </td>
+                        <td className="px-0.5 border-r border-slate-200 align-middle">
+                          <Cell
+                            value={form.samplePcs[d.id] ?? ''}
+                            onChange={(v) => updateSample(g.key, d.id, v)}
+                          />
+                        </td>
+                        <td className="px-0.5 border-r border-slate-200 align-middle">
+                          <Display value={d.testVoltage != null ? d.testVoltage.toFixed(3) : '—'} />
+                        </td>
+                        <td className="px-0.5 align-middle">
+                          <Display value={(() => {
+                            const v = reportedIemax(d.poOrderItemId, d.testCurrent);
+                            return v != null ? v.toFixed(2) : '—';
+                          })()} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {/* Signature footer — editable per PO group */}
+                <div className="grid grid-cols-2 border-t-2 border-slate-400">
+                  <div className="border-r border-slate-300 px-6 py-5">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-2">Tested By</div>
+                    <input
+                      value={form.testedBy}
+                      onChange={(e) => updateForm(g.key, { testedBy: e.target.value.toUpperCase() })}
+                      className="w-full bg-transparent text-sm font-medium border-0 border-b border-slate-400 focus:border-brand-500 focus:outline-none px-0 py-0.5"
+                      placeholder="Name"
+                    />
+                    <div className="mt-1 text-[10px] text-slate-500">Name &amp; Signature</div>
+                    <div className="mt-2 text-[10px] text-slate-500">Date: {fmtDate(form.woDate)}</div>
+                  </div>
+                  <div className="px-6 py-5">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-2">Approved By</div>
+                    <input
+                      value={form.approvedBy}
+                      onChange={(e) => updateForm(g.key, { approvedBy: e.target.value.toUpperCase() })}
+                      className="w-full bg-transparent text-sm font-medium border-0 border-b border-slate-400 focus:border-brand-500 focus:outline-none px-0 py-0.5"
+                      placeholder="Name"
+                    />
+                    <div className="mt-1 text-[10px] text-slate-500">Name &amp; Signature</div>
+                    <div className="mt-2 text-[10px] text-slate-500">Date: {fmtDate(form.woDate)}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const InfoRow = ({ label, value, border }: { label: string; value: string; border: string }) => (
+  <div className={`flex ${border} border-slate-300`}>
+    <span className="w-28 shrink-0 bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 border-r border-slate-300">
+      {label}
+    </span>
+    <span className="flex-1 px-3 py-1.5 text-sm font-medium">{value}</span>
+  </div>
+);
+
+const InfoEdit = ({
+  label, value, onChange, type = 'text', border,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: 'text' | 'date';
+  border: string;
+}) => (
+  <div className={`flex ${border} border-slate-300`}>
+    <span className="w-28 shrink-0 bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 border-r border-slate-300">
+      {label}
+    </span>
+    <input
+      type={type}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="flex-1 min-w-0 bg-transparent px-3 py-1.5 text-sm font-medium outline-none focus:bg-amber-50/40"
+    />
+  </div>
+);

@@ -1,0 +1,89 @@
+// Pure calculation helpers — ported verbatim from .NET New_PO_Order.vb so
+// numbers stay identical to your existing PO records.
+//
+// Toroidal:
+//   weightPerPc = (od² − id²) × ht × 5.77 × 1e-6
+//   measure     = "{id} x {od} x {ht}"
+//
+// Rectangular:
+//   builtup     = (od1 − id1) / 2
+//   coreAc      = ((od2 − id2) / 2) × ht × 0.95 / 100
+//   d13         = ((od2 − id2) / 20) × π        // .NET uses 3.14, we keep the same factor
+//   coreMl      = 0.2 × (id1 + id2) + d13
+//   weightPerPc = (coreAc × coreMl × 7.65) / 1000
+//   measure     = "{id1} x {id2} x {od1} x {od2} x {ht} x {builtup}"
+
+export const round3 = (n: number) => Math.round(n * 1000) / 1000;
+
+export const toroidalCalc = ({ id, od, ht, pcs }: { id: number; od: number; ht: number; pcs: number }) => {
+  const valid = id > 0 && od > 0 && ht > 0;
+  const weightPerPc = valid ? round3((od * od - id * id) * ht * 5.77 * 1e-6) : 0;
+  const totalWeight = pcs > 0 ? round3(pcs * weightPerPc) : 0;
+  const measure = `${id || 0} x ${od || 0} x ${ht || 0}`;
+  return { weightPerPc, totalWeight, measure };
+};
+
+export const rectangularCalc = ({
+  id1, id2, od1, od2, ht, pcs,
+}: { id1: number; id2: number; od1: number; od2: number; ht: number; pcs: number }) => {
+  const builtup = od1 > 0 && id1 > 0 ? round3((od1 - id1) / 2) : 0;
+  const coreAc  = od2 > 0 && id2 > 0 && ht > 0 ? round3(((od2 - id2) / 2) * ht * 0.95 / 100) : 0;
+  // Match the legacy 3.14 multiplier used by the .NET form.
+  const d13     = od2 > 0 && id2 > 0 ? round3(((od2 - id2) / 20) * 3.14) : 0;
+  const coreMl  = id1 > 0 && id2 > 0 ? round3(0.2 * (id1 + id2) + d13) : 0;
+  const weightPerPc = coreAc > 0 && coreMl > 0 ? round3((coreAc * coreMl * 7.65) / 1000) : 0;
+  const totalWeight = pcs > 0 ? round3(pcs * weightPerPc) : 0;
+  const measure = `${id1 || 0} x ${id2 || 0} x ${od1 || 0} x ${od2 || 0} x ${ht || 0} x ${builtup}`;
+  return { builtup, coreAc, d13, coreMl, weightPerPc, totalWeight, measure };
+};
+
+export const numFromInput = (s: string) => {
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : 0;
+};
+
+// Voltage / Ie-max computation — same math regardless of core shape, given A
+// (sq.cm) and meanPath (cm) already in hand.
+//   V       = 222 × Flux × A × Turns / 10000   # volts (4.44 × 50 Hz)
+//   Ie max  = ATe/cm × 1000 × meanPath / Turns # mA
+// Voltage is grade-independent; only Ie max needs the grade-specific ATe/cm.
+const fluxTestVI = ({
+  area, meanPath, turns, flux, ateCm,
+}: {
+  area: number; meanPath: number;
+  turns: number; flux: number; ateCm: number;
+}) => {
+  const testVoltage = area > 0 && flux > 0 && turns > 0
+    ? Math.round((222 * flux * area * turns) / 10000 * 1000) / 1000        // 3 dp
+    : 0;
+  const testCurrent = meanPath > 0 && ateCm > 0 && turns > 0
+    ? Math.round((ateCm * 1000 * meanPath / turns) * 100) / 100             // 2 dp, mA
+    : 0;
+  return { testVoltage, testCurrent };
+};
+
+// Toroidal flux-test calculation per the calibration spec.
+//   A          = 0.48  × (OD − ID) × HT / 100   # sq.cm  (stacking factor 0.48)
+//   meanPath   = 0.157 × (OD + ID)              # cm     (π / 20)
+export const fluxTestCalc = ({
+  id, od, ht, turns, flux, ateCm,
+}: {
+  id: number; od: number; ht: number;
+  turns: number; flux: number; ateCm: number;
+}) => {
+  const geomOk   = id > 0 && od > 0 && ht > 0 && od > id;
+  const area     = geomOk ? round3((0.48 * (od - id) * ht) / 100) : 0;
+  const meanPath = geomOk ? round3(0.157 * (od + id)) : 0;
+  const { testVoltage, testCurrent } = fluxTestVI({ area, meanPath, turns, flux, ateCm });
+  return { area, meanPath, testVoltage, testCurrent };
+};
+
+// Rectangular flux-test calculation. The geometry helper rectangularCalc()
+// already computes the area (coreAc) and mean magnetic path (coreMl); we only
+// need to feed those plus turns/flux/ATe-cm into the shared V & Ie-max math.
+export const rectangularFluxTestCalc = ({
+  area, meanPath, turns, flux, ateCm,
+}: {
+  area: number; meanPath: number;
+  turns: number; flux: number; ateCm: number;
+}) => fluxTestVI({ area, meanPath, turns, flux, ateCm });

@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+server/public/admin/
+client/dist/
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+server/private/keys/
+
+# Generated content (server-only)
+server/private/invoices/*
+!server/private/invoices/.gitkeep
+server/public/uploads/*
+!server/public/uploads/.gitkeep
+
+# Prisma
+server/prisma/migrations/dev.db*
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body, #root { height: 100%; }
+  body {
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Stop iOS Safari from zooming into inputs on focus. */
+  @media (max-width: 640px) {
+    input, select, textarea { font-size: 16px !important; }
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium
+           transition-all focus:outline-none focus:ring-2 focus:ring-offset-2
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn text-white shadow-lg shadow-brand-600/25
+           bg-gradient-to-r from-brand-600 to-brand-500
+           hover:from-brand-700 hover:to-brand-600
+           hover:shadow-brand-600/40 hover:-translate-y-0.5
+           active:translate-y-0
+           focus:ring-brand-500;
+  }
+  .btn-ghost  { @apply btn bg-transparent text-slate-700 hover:bg-slate-100; }
+  .btn-danger { @apply btn bg-red-600 text-white hover:bg-red-700 focus:ring-red-500; }
+  .input {
+    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm
+           placeholder:text-slate-400
+           focus:border-brand-500 focus:ring-2 focus:ring-brand-200 focus:outline-none
+           transition-colors;
+  }
+  .card { @apply rounded-xl border border-slate-200 bg-white shadow-sm; }
+}
+
+@layer utilities {
+  /* Subtle dot grid used behind the auth backdrop. */
+  .bg-dot-grid {
+    background-image: radial-gradient(rgba(255,255,255,0.07) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+}
+
+/* ── Browser print styles for Packing List ────────────────────── */
+@page { size: A4 portrait; margin: 8mm; }
+
+@media print {
+  /* Hide app chrome */
+  aside,
+  .page-header,
+  .no-print { display: none !important; }
+
+  /* Reset layout so document fills the page */
+  body, #root { background: white !important; height: auto !important; }
+  .flex.min-h-screen { display: block !important; }
+  main { display: block !important; padding: 0 !important; }
+  .flex-1.p-6 { padding: 0 !important; }
+
+  /* Packing list document */
+  .overflow-x-auto { overflow: visible !important; }
+  #packing-list-doc {
+    min-width: 100% !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* Prevent rows being sliced across pages */
+  thead { display: table-header-group; }
+  tr, .avoid-break { page-break-inside: avoid; break-inside: avoid; }
+
+  /* Core-type section headers should start fresh if they don't fit */
+  .core-section { page-break-inside: avoid; }
+
+  /* Strip input chrome so values print as plain text */
+  input {
+    border: none !important;
+    border-bottom: 1px solid #94a3b8 !important;
+    background: transparent !important;
+    outline: none !important;
+    box-shadow: none !important;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+}
+

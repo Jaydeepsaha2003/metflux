@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(rm -rf pages/api lib/mongodb.ts models pages/view-entries.tsx pages/debug-api.tsx pages/test-logos.tsx)",
+      "Bash(rmdir lib *)",
+      "Bash(rmdir models *)"
+    ]
+  }
+}
