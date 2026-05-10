@@ -27,6 +27,12 @@ export default defineConfig({
         type: 'module',
       },
       workbox: {
+        // Bumped from default 2 MiB so the precache can include the main JS
+        // bundle (~2.8 MB after vendoring all of Radix + Recharts + html2pdf).
+        // 5 MiB gives breathing room as the app grows; if it ever overflows
+        // again we should code-split via dynamic import() rather than bumping
+        // this further.
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         // Always go to network for /api — never cache JSON responses.
         navigateFallbackDenylist: [/^\/api/],
         runtimeCaching: [
