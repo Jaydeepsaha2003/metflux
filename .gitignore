@@ -6,7 +6,11 @@ node_modules/
 dist/
 build/
 server/public/admin/
+server/public/portfolio/
 client/dist/
+portfolio/.next/
+# NOTE: portfolio/out/ is intentionally NOT ignored — committed so Hostinger
+# can skip `next build` (see portfolio/.gitignore for context).
 
 # Env / secrets
 .env
