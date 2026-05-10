@@ -338,3 +338,42 @@ const ProductDetail = () => {
 
 export default ProductDetail;
 
+// Required for `output: 'export'` — Next.js needs to know every slug at
+// build time to emit one HTML file per product.
+export async function getStaticPaths() {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const globalProducts = require('../../global_products.json');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const transformerProducts = require('../../transformer_products.json');
+
+  const collect = (data: unknown): string[] => {
+    if (!data) return [];
+    if (Array.isArray(data)) {
+      return data.flatMap((entry) =>
+        entry && typeof entry === 'object' && 'slug' in entry && typeof (entry as { slug: unknown }).slug === 'string'
+          ? [(entry as { slug: string }).slug]
+          : Array.isArray((entry as { products?: unknown[] }).products)
+            ? collect((entry as { products: unknown[] }).products)
+            : []
+      );
+    }
+    if (typeof data === 'object') {
+      return Object.values(data as Record<string, unknown>).flatMap(collect);
+    }
+    return [];
+  };
+
+  const slugs = [...new Set([...collect(globalProducts), ...collect(transformerProducts)])];
+
+  return {
+    paths: slugs.map((slug) => ({ params: { slug } })),
+    fallback: false, // 404 for any slug not pre-rendered (required for static export).
+  };
+}
+
+export async function getStaticProps() {
+  // The page reads the JSON files at runtime via direct import, so no per-slug
+  // data needs to be passed through here. Empty props are enough.
+  return { props: {} };
+}
+
