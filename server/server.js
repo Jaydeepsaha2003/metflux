@@ -88,21 +88,38 @@ const applyPendingMigrations = async () => {
   }
 };
 
-/* ---------- listen ---------- */
-await applyPendingMigrations();
-
-const server = app.listen(env.PORT, () => {
-  console.log(`[metflux] api listening on :${env.PORT} (${env.NODE_ENV})`);
-});
+/* ---------- listen ----------
+   Hostinger's LiteSpeed `lsnode.js` wrapper loads this file via `require()`,
+   which refuses any ESM graph with top-level await. So the startup sequence
+   has to be wrapped in an IIFE — no `await` may appear at the module's top
+   level. */
+let server;
 
 const shutdown = async (signal) => {
   console.log(`[metflux] ${signal} received — shutting down`);
-  server.close(async () => {
+  if (server) {
+    server.close(async () => {
+      await prisma.$disconnect();
+      process.exit(0);
+    });
+  } else {
     await prisma.$disconnect();
     process.exit(0);
-  });
+  }
   setTimeout(() => process.exit(1), 10_000).unref();
 };
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT',  () => shutdown('SIGINT'));
 process.on('unhandledRejection', (err) => console.error('[metflux] unhandledRejection', err));
+
+(async () => {
+  try {
+    await applyPendingMigrations();
+    server = app.listen(env.PORT, () => {
+      console.log(`[metflux] api listening on :${env.PORT} (${env.NODE_ENV})`);
+    });
+  } catch (err) {
+    console.error('[metflux] startup failed:', err);
+    process.exit(1);
+  }
+})();
