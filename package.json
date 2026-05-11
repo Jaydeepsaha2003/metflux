@@ -12,7 +12,7 @@
     "dev:server": "npm --workspace server run dev",
     "dev:client": "npm --workspace client run dev",
     "dev:portfolio": "npm --workspace portfolio run dev",
-    "build:client":    "npm --workspace client run build",
+    "build:client": "npm --workspace client run build",
     "build:portfolio": "npm --workspace portfolio run build",
     "build:portfolio:if-needed": "node -e \"if(!require('fs').existsSync('portfolio/out')){process.exit(1)}\" || npm run build:portfolio",
     "build": "npm run build:client && npm run build:portfolio:if-needed && npm --workspace server run build:copy-client && npm --workspace server run build:copy-portfolio",
@@ -24,5 +24,8 @@
   },
   "engines": {
     "node": ">=18.18.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0"
   }
 }
