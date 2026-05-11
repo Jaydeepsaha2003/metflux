@@ -58,6 +58,7 @@ type CompanyDetail = {
 
 /* Per-group editable form state — keyed by poOrderId. */
 type GroupForm = {
+  reportNo: string;
   woNumber: string;
   woDate: string;          // ISO yyyy-mm-dd
   invoiceNo: string;
@@ -69,6 +70,14 @@ type GroupForm = {
 };
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
+const todayCompact = () => todayISO().replace(/-/g, '');
+// Auto Report No. — deterministic so the same PO opened on the same day
+// always shows the same identifier. Sanitises the PO number so the report
+// no looks clean (alphanumeric + dashes only).
+const autoReportNo = (poNumber: string) => {
+  const safe = (poNumber || 'PO').replace(/[^A-Z0-9]/gi, '').toUpperCase() || 'PO';
+  return `TR-${safe}-${todayCompact()}`;
+};
 const fmtDate = (iso: string | null | undefined) => {
   if (!iso) return '';
   const d = new Date(iso);
@@ -173,6 +182,7 @@ export const TestingReportPage = () => {
       for (const g of groups) {
         if (next[g.key]) continue;
         next[g.key] = {
+          reportNo:    autoReportNo(g.poNumber),
           woNumber:    defaultWo,
           woDate:      defaultWoDate,
           invoiceNo:   defaultInv,
@@ -368,8 +378,14 @@ export const TestingReportPage = () => {
                   </span>
                 </div>
 
-                {/* Per-PO info grid — PO/WO/Invoice each with a date */}
+                {/* Per-PO info grid — Report/PO/WO/Invoice each with a date */}
                 <div className="grid grid-cols-2 border-b border-slate-300 text-sm">
+                  <InfoEdit
+                    label="Report No." value={form.reportNo}
+                    onChange={(v) => updateForm(g.key, { reportNo: v.toUpperCase() })}
+                    border="border-r border-b"
+                  />
+                  <InfoRow label="Report Date" value={fmtDate(todayISO())} border="border-b" />
                   <InfoRow label="Customer" value={g.customerName} border="border-r border-b" />
                   <InfoRow label="State" value={g.rows[0]?.customerState ?? '—'} border="border-b" />
                   <InfoRow label="PO No." value={g.poNumber} border="border-r border-b" />
