@@ -6,6 +6,8 @@ import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import morgan from 'morgan';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
 import { env } from './lib/env.js';
@@ -13,6 +15,8 @@ import { prisma } from './lib/db.js';
 import { errorHandler, notFoundHandler } from './lib/errors.js';
 import { hostRouter } from './lib/hostRouter.js';
 import { apiRouter } from './routes/index.js';
+
+const execFileAsync = promisify(execFile);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.resolve(__dirname, 'public');
@@ -54,7 +58,39 @@ app.use(hostRouter({
 app.use(notFoundHandler);
 app.use(errorHandler);
 
+/* ---------- prisma migrate deploy on boot ----------
+   Hostinger's Node.js plan auto-runs `npm install` after each git deploy but
+   does NOT apply database migrations — so without this, every schema change
+   would need a manual SSH step. `migrate deploy` is idempotent: it only
+   applies migrations that aren't already recorded in `_prisma_migrations`,
+   so the cost on a clean boot is negligible.
+
+   Skipped when SKIP_AUTO_MIGRATE=true (handy if you want to run migrations
+   manually from SSH and not have the app race against you on restart). */
+const applyPendingMigrations = async () => {
+  if (process.env.SKIP_AUTO_MIGRATE === 'true') {
+    console.log('[metflux] SKIP_AUTO_MIGRATE=true — skipping prisma migrate deploy');
+    return;
+  }
+  try {
+    const { stdout, stderr } = await execFileAsync(
+      'npx',
+      ['--no', 'prisma', 'migrate', 'deploy'],
+      { cwd: __dirname, env: process.env, shell: process.platform === 'win32' }
+    );
+    const out = (stdout + stderr).trim();
+    if (out) console.log('[metflux] migrate deploy:\n' + out);
+  } catch (err) {
+    console.error('[metflux] migrate deploy failed:');
+    console.error(err.stdout?.toString().trim() || '');
+    console.error(err.stderr?.toString().trim() || err.message);
+    throw err;
+  }
+};
+
 /* ---------- listen ---------- */
+await applyPendingMigrations();
+
 const server = app.listen(env.PORT, () => {
   console.log(`[metflux] api listening on :${env.PORT} (${env.NODE_ENV})`);
 });
