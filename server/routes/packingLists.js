@@ -59,6 +59,7 @@ const flattenDispatch = (d) => ({
   orderDate:     d.poOrderItem?.poOrder?.orderDate ?? null,
   customerName:  d.poOrderItem?.poOrder?.customer?.name ?? null,
   customerState: d.poOrderItem?.poOrder?.customer?.state ?? null,
+  customerPhone: d.poOrderItem?.poOrder?.customer?.phone ?? null,
   coreType:      d.poOrderItem?.coreType ?? null,
   grade:         d.poOrderItem?.grade ?? null,
   material:      d.poOrderItem?.material ?? null,

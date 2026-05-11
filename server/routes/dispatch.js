@@ -46,6 +46,7 @@ const flatten = (d) => {
     customerId: item.poOrder.customerId,
     customerName: item.poOrder.customer.name,
     customerState: item.poOrder.customer.state ?? null,
+    customerPhone: item.poOrder.customer.phone ?? null,
     coreType: item.coreType,
     grade: item.grade,
     material: item.material,

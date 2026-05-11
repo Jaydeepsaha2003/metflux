@@ -7,6 +7,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Download, ClipboardList, Loader2, MessageCircle } from 'lucide-react';
 import { api } from '@/lib/api';
+import { shareViaWhatsApp, type ShareTarget } from '@/lib/share';
 import html2pdf from 'html2pdf.js';
 
 /* ── Types ────────────────────────────────────────────────────── */
@@ -52,6 +53,7 @@ type WaDetail = {
 type CompanyDetail = {
   name: string; address: string | null; phone: string | null;
   whatsappNumber: string | null;
+  defaultShareTarget: ShareTarget;
   email: string | null; logoUrl: string | null; gstNumber: string | null;
 };
 type LabourOption = { id: string; name: string };
@@ -235,51 +237,33 @@ export const WorkAllotmentBuildPage = () => {
   const [generating, setGenerating] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const handleWhatsappShare = () => {
-    const labourNames = [...new Set(
-      rows.map((r) => labourName(r.labourId)).filter(Boolean)
-    )];
-    const summary = [
-      `*Work Allotment ${waNumber || 'DRAFT'}*`,
-      company?.name ? `From: ${company.name}` : null,
-      labourNames.length ? `Workers: ${labourNames.join(', ')}` : null,
-      `Date: ${waDate ? fmtDate(waDate) : ''}`,
-      `Total: ${totalPcs} pcs across ${rows.length} item${rows.length !== 1 ? 's' : ''}`,
-    ].filter(Boolean).join('\n');
-    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(summary)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
+  const persistWorkAllotment = async () => {
+    if (waId) return;
+    try {
+      await api('/work-allotments', {
+        method: 'POST',
+        body: JSON.stringify({
+          waNumber,
+          waDate,
+          remarks: remarks || null,
+          items: rows.map((r) => ({
+            poOrderItemId: r.poOrderItemId,
+            pcs:           parseInt(r.pcs),
+            labourId:      r.labourId || null,
+          })),
+        }),
+      });
+    } catch (e: unknown) {
+      setSaveError(e instanceof Error ? e.message : 'Save failed');
+    }
   };
 
-  const handleDownload = async () => {
-    if (validationError) { setSaveError(validationError); return; }
+  // Same input-to-span clone trick used in PackingListPage so html2canvas
+  // captures the typed values reliably. Shared by download + share.
+  const buildPdfJob = () => {
     const el = printRef.current;
-    if (!el || !rows.length) return;
-    setGenerating(true);
-    setSaveError(null);
+    if (!el || !rows.length) return null;
 
-    // Save to server first (build mode only — view mode is already saved).
-    if (!waId) {
-      try {
-        await api('/work-allotments', {
-          method: 'POST',
-          body: JSON.stringify({
-            waNumber,
-            waDate,
-            remarks: remarks || null,
-            items: rows.map((r) => ({
-              poOrderItemId: r.poOrderItemId,
-              pcs:           parseInt(r.pcs),
-              labourId:      r.labourId || null,
-            })),
-          }),
-        });
-      } catch (e: unknown) {
-        setSaveError(e instanceof Error ? e.message : 'Save failed');
-      }
-    }
-
-    // Same input-to-span clone trick used in PackingListPage so html2canvas
-    // captures the typed values reliably.
     const A4_USABLE_PX = 734;
     const clone = el.cloneNode(true) as HTMLElement;
 
@@ -317,26 +301,69 @@ export const WorkAllotmentBuildPage = () => {
     offscreen.appendChild(clone);
     document.body.appendChild(offscreen);
 
-    await new Promise((r) => requestAnimationFrame(r));
+    const filename = `Work-Allotment-${waNumber || 'WA'}.pdf`;
+    const worker = html2pdf().set({
+      margin: 8,
+      filename,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        windowWidth: A4_USABLE_PX,
+      },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any).from(clone);
 
+    return { worker, filename, teardown: () => document.body.removeChild(offscreen) };
+  };
+
+  const handleDownload = async () => {
+    if (validationError) { setSaveError(validationError); return; }
+    setGenerating(true);
+    setSaveError(null);
+    await persistWorkAllotment();
+    const job = buildPdfJob();
+    if (!job) { setGenerating(false); return; }
+    await new Promise((r) => requestAnimationFrame(r));
+    try { await job.worker.save(); }
+    finally { job.teardown(); setGenerating(false); }
+  };
+
+  const handleWhatsappShare = async () => {
+    if (validationError) { setSaveError(validationError); return; }
+    setGenerating(true);
+    setSaveError(null);
+    await persistWorkAllotment();
+    const job = buildPdfJob();
+    if (!job) { setGenerating(false); return; }
+    await new Promise((r) => requestAnimationFrame(r));
     try {
-      await html2pdf().set({
-        margin: 8,
-        filename: `Work-Allotment-${waNumber || 'WA'}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          backgroundColor: '#ffffff',
-          windowWidth: A4_USABLE_PX,
-        },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any).from(clone).save();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const blob = (await (job.worker as any).output('blob')) as Blob;
+      const labourNames = [...new Set(
+        rows.map((r) => labourName(r.labourId)).filter(Boolean)
+      )];
+      const message = [
+        `*Work Allotment ${waNumber || 'DRAFT'}*`,
+        company?.name ? `From: ${company.name}` : null,
+        labourNames.length ? `Workers: ${labourNames.join(', ')}` : null,
+        `Date: ${waDate ? fmtDate(waDate) : ''}`,
+        `Total: ${totalPcs} pcs across ${rows.length} item${rows.length !== 1 ? 's' : ''}`,
+      ].filter(Boolean).join('\n');
+      // Work Allotment has no customer — CUSTOMER mode falls back to PROMPT.
+      await shareViaWhatsApp({
+        message,
+        target: company?.defaultShareTarget,
+        companyPhone: company?.whatsappNumber ?? null,
+        customerPhone: null,
+        pdf: { blob, filename: job.filename.replace(/\.pdf$/i, '') },
+      });
     } finally {
-      document.body.removeChild(offscreen);
+      job.teardown();
       setGenerating(false);
     }
   };

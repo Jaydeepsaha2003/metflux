@@ -6,12 +6,14 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueries } from '@tanstack/react-query';
 import { ArrowLeft, Download, Package, Loader2, MessageCircle, ClipboardCheck } from 'lucide-react';
 import { api } from '@/lib/api';
+import { shareViaWhatsApp, type ShareTarget } from '@/lib/share';
 import html2pdf from 'html2pdf.js';
 
 /* ── Types ────────────────────────────────────────────────────── */
 type DispatchDetail = {
   id: string; poNumber: string; orderDate: string;
   customerName: string; customerState: string | null;
+  customerPhone: string | null;
   coreType: 'TOROIDAL' | 'RECTANGULAR';
   grade: string; material: string; measure: string;
   id1: number; id2: number | null; od1: number; od2: number | null; ht: number;
@@ -29,6 +31,7 @@ type PlDetail = {
 type CompanyDetail = {
   name: string; address: string | null; phone: string | null;
   whatsappNumber: string | null;
+  defaultShareTarget: ShareTarget;
   email: string | null; logoUrl: string | null; gstNumber: string | null;
 };
 type RowState = {
@@ -202,28 +205,7 @@ export const PackingListPage = () => {
   const [generating, setGenerating] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  /* WhatsApp share — opens WhatsApp with a pre-filled summary; user picks the
-     contact and can attach the downloaded PDF separately. */
-  const handleWhatsappShare = () => {
-    const summary = [
-      `*Packing List ${woNo || 'DRAFT'}*`,
-      company?.name ? `From: ${company.name}` : null,
-      customerLabel ? `Customer: ${customerLabel}` : null,
-      invoiceNo ? `Invoice: ${invoiceNo}` : null,
-      `Date: ${woDate ? fmtDate(woDate) : ''}`,
-      `Total: ${grandTotalPcs} pcs · ${grandTotalWeight.toFixed(3)} kg`,
-    ].filter(Boolean).join('\n');
-    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(summary)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
-  };
-
-  const handleDownload = async () => {
-    const el = printRef.current;
-    if (!el || !dispatches.length) return;
-    setGenerating(true);
-    setSaveError(null);
-
-    // Best-effort save to the server first. If it fails we still produce the PDF.
+  const persistPackingList = async () => {
     try {
       const payload = {
         plNumber: woNo || 'DRAFT',
@@ -242,54 +224,36 @@ export const PackingListPage = () => {
     } catch (e: unknown) {
       setSaveError(e instanceof Error ? e.message : 'Save failed');
     }
+  };
 
-    // ── PDF FIDELITY FIX ──────────────────────────────────────────────
-    // Every editable data-cell in this layout is an <input>. html2canvas
-    // (under html2pdf) does NOT reliably rasterize <input> values into
-    // the canvas — particularly with our transparent borders and 11px
-    // text — which is why the data rows came out blank.
-    //
-    // Earlier attempts using html2canvas's `onclone` hook were brittle:
-    // its TypeScript types reject the option, and its callback timing
-    // inside the html2pdf pipeline can miss the swap. So instead we
-    // build a fully static clone OURSELVES, manually replace every
-    // <input> with a <span> carrying the live value, mount the clone
-    // off-screen at the exact PDF target width, and hand THAT to
-    // html2pdf. The rasterizer never sees an input — only plain text.
-    // The on-screen UI is never mutated.
-    const A4_USABLE_PX = 734; // A4 portrait minus 8mm margins @ 96dpi
+  // Build the print-ready clone (swap inputs → spans, mount offscreen) and
+  // return an html2pdf worker plus a teardown. Shared by download + share.
+  const buildPdfJob = () => {
+    const el = printRef.current;
+    if (!el || !dispatches.length) return null;
 
-    // 1. Deep-clone the printable element.
+    const A4_USABLE_PX = 734;
     const clone = el.cloneNode(true) as HTMLElement;
 
-    // 2. Swap every <input> in the clone for a <span> carrying the live value.
-    //    We pair them up by DOM order — the live and cloned trees are identical.
     const liveInputs = Array.from(el.querySelectorAll<HTMLInputElement>('input'));
     const cloneInputs = Array.from(clone.querySelectorAll<HTMLInputElement>('input'));
     cloneInputs.forEach((ci, i) => {
       const v = liveInputs[i]?.value ?? '';
       const span = document.createElement('span');
-      // Reuse the input's classes — block / w-full / text-left|center|right
-      // / font / padding all carry over cleanly to a span.
       span.className = ci.className;
-      // Vertical centering: line-height equal to the row height (h-7 = 28px)
-      // perfectly centers single-line text with no flex math involved.
-      // Horizontal alignment is already handled by the text-* class.
       span.style.display = 'block';
       span.style.lineHeight = '36px';
       span.style.whiteSpace = 'pre';
-      span.textContent = v.length ? v : '\u00A0';
+      span.textContent = v.length ? v : ' ';
       ci.replaceWith(span);
     });
 
-    // 3. Style the clone to the exact PDF target width and strip screen-only chrome.
     clone.style.width = `${A4_USABLE_PX}px`;
     clone.style.minWidth = '0';
     clone.style.overflow = 'visible';
     clone.style.borderRadius = '0';
     clone.style.boxShadow = 'none';
 
-    // 4. Mount off-screen — must be in the document so layout / Tailwind apply.
     const offscreen = document.createElement('div');
     offscreen.style.position = 'fixed';
     offscreen.style.left = '-10000px';
@@ -299,31 +263,64 @@ export const PackingListPage = () => {
     offscreen.appendChild(clone);
     document.body.appendChild(offscreen);
 
-    // One frame so the browser lays out the off-screen tree before capture.
-    await new Promise((r) => requestAnimationFrame(r));
+    const filename = `Packing-List-${woNo || 'PL'}.pdf`;
+    const worker = html2pdf().set({
+      margin: 8,
+      filename,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        windowWidth: A4_USABLE_PX,
+      },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any).from(clone);
 
+    return { worker, filename, teardown: () => document.body.removeChild(offscreen) };
+  };
+
+  const handleDownload = async () => {
+    setGenerating(true);
+    setSaveError(null);
+    await persistPackingList();
+    const job = buildPdfJob();
+    if (!job) { setGenerating(false); return; }
+    await new Promise((r) => requestAnimationFrame(r));
+    try { await job.worker.save(); }
+    finally { job.teardown(); setGenerating(false); }
+  };
+
+  const handleWhatsappShare = async () => {
+    setGenerating(true);
+    setSaveError(null);
+    await persistPackingList();
+    const job = buildPdfJob();
+    if (!job) { setGenerating(false); return; }
+    await new Promise((r) => requestAnimationFrame(r));
     try {
-      await html2pdf().set({
-        margin: 8,
-        filename: `Packing-List-${woNo || 'PL'}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        // html2pdf.js's typings only declare scale/useCORS/logging on
-        // the html2canvas object, but the underlying html2canvas accepts
-        // many more options at runtime (backgroundColor, windowWidth, …).
-        // Casting to `any` satisfies tsc without changing runtime behaviour.
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          backgroundColor: '#ffffff',
-          windowWidth: A4_USABLE_PX,
-        },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any).from(clone).save();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const blob = (await (job.worker as any).output('blob')) as Blob;
+      const message = [
+        `*Packing List ${woNo || 'DRAFT'}*`,
+        company?.name ? `From: ${company.name}` : null,
+        customerLabel ? `Customer: ${customerLabel}` : null,
+        invoiceNo ? `Invoice: ${invoiceNo}` : null,
+        `Date: ${woDate ? fmtDate(woDate) : ''}`,
+        `Total: ${grandTotalPcs} pcs · ${grandTotalWeight.toFixed(3)} kg`,
+      ].filter(Boolean).join('\n');
+      await shareViaWhatsApp({
+        message,
+        target: company?.defaultShareTarget,
+        companyPhone: company?.whatsappNumber ?? null,
+        customerPhone: dispatches[0]?.customerPhone ?? null,
+        pdf: { blob, filename: job.filename.replace(/\.pdf$/i, '') },
+      });
     } finally {
-      document.body.removeChild(offscreen);
+      job.teardown();
       setGenerating(false);
     }
   };

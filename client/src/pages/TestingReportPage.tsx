@@ -13,6 +13,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueries } from '@tanstack/react-query';
 import { ArrowLeft, Download, ClipboardCheck, Loader2, MessageCircle } from 'lucide-react';
 import { api } from '@/lib/api';
+import { shareViaWhatsApp, type ShareTarget } from '@/lib/share';
 import html2pdf from 'html2pdf.js';
 
 /* ── Types ────────────────────────────────────────────────────── */
@@ -20,6 +21,7 @@ type DispatchDetail = {
   id: string; poOrderId: string | null; poOrderItemId: string;
   poNumber: string; orderDate: string;
   customerName: string; customerState: string | null;
+  customerPhone: string | null;
   coreType: 'TOROIDAL' | 'RECTANGULAR';
   grade: string; material: string; measure: string;
   pcs: number; weightPerPc: number; totalWeight: number;
@@ -53,6 +55,7 @@ type PlDetail = {
 type CompanyDetail = {
   name: string; address: string | null; phone: string | null;
   whatsappNumber: string | null;
+  defaultShareTarget: ShareTarget;
   email: string | null; logoUrl: string | null; gstNumber: string | null;
 };
 
@@ -219,21 +222,11 @@ export const TestingReportPage = () => {
   const printRef = useRef<HTMLDivElement>(null);
   const [generating, setGenerating] = useState(false);
 
-  const handleWhatsappShare = () => {
-    const summary = [
-      `*Testing Report*`,
-      company?.name ? `From: ${company.name}` : null,
-      `Groups: ${groups.length} PO${groups.length === 1 ? '' : 's'} · ${dispatches.length} item${dispatches.length === 1 ? '' : 's'}`,
-      `Date: ${fmtDate(todayISO())}`,
-    ].filter(Boolean).join('\n');
-    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(summary)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
-  };
-
-  const handleDownload = async () => {
+  // Build the print-ready clone (inputs → spans, offscreen container) and
+  // return an html2pdf builder plus a teardown.
+  const buildPdfJob = () => {
     const el = printRef.current;
-    if (!el || !dispatches.length) return;
-    setGenerating(true);
+    if (!el || !dispatches.length) return null;
 
     const A4_USABLE_PX = 734;
     const clone = el.cloneNode(true) as HTMLElement;
@@ -267,26 +260,58 @@ export const TestingReportPage = () => {
     offscreen.appendChild(clone);
     document.body.appendChild(offscreen);
 
-    await new Promise((r) => requestAnimationFrame(r));
+    const filename = `Testing-Report-${todayISO()}.pdf`;
+    const worker = html2pdf().set({
+      margin: 8,
+      filename,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        windowWidth: A4_USABLE_PX,
+      },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['css', 'legacy'], before: '.tr-page-break' },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any).from(clone);
 
+    return { worker, filename, teardown: () => document.body.removeChild(offscreen) };
+  };
+
+  const handleDownload = async () => {
+    const job = buildPdfJob();
+    if (!job) return;
+    setGenerating(true);
+    await new Promise((r) => requestAnimationFrame(r));
+    try { await job.worker.save(); }
+    finally { job.teardown(); setGenerating(false); }
+  };
+
+  const handleWhatsappShare = async () => {
+    const job = buildPdfJob();
+    if (!job) return;
+    setGenerating(true);
+    await new Promise((r) => requestAnimationFrame(r));
     try {
-      await html2pdf().set({
-        margin: 8,
-        filename: `Testing-Report-${todayISO()}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          backgroundColor: '#ffffff',
-          windowWidth: A4_USABLE_PX,
-        },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak: { mode: ['css', 'legacy'], before: '.tr-page-break' },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any).from(clone).save();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const blob = (await (job.worker as any).output('blob')) as Blob;
+      const message = [
+        `*Testing Report*`,
+        company?.name ? `From: ${company.name}` : null,
+        `Groups: ${groups.length} PO${groups.length === 1 ? '' : 's'} · ${dispatches.length} item${dispatches.length === 1 ? '' : 's'}`,
+        `Date: ${fmtDate(todayISO())}`,
+      ].filter(Boolean).join('\n');
+      await shareViaWhatsApp({
+        message,
+        target: company?.defaultShareTarget,
+        companyPhone: company?.whatsappNumber ?? null,
+        customerPhone: dispatches[0]?.customerPhone ?? null,
+        pdf: { blob, filename: job.filename.replace(/\.pdf$/i, '') },
+      });
     } finally {
-      document.body.removeChild(offscreen);
+      job.teardown();
       setGenerating(false);
     }
   };

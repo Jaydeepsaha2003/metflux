@@ -68,6 +68,8 @@ const uniqueSlug = async (base, ignoreId) => {
   return `${base}-${Date.now().toString(36).slice(-4)}`;
 };
 
+const SHARE_TARGETS = ['PROMPT', 'CUSTOMER', 'COMPANY'];
+
 const createSchema = z.object({
   name: z.string().trim().min(2).max(160),
   gstNumber: z.string().trim().max(40).optional().nullable(),
@@ -75,6 +77,7 @@ const createSchema = z.object({
   phone: z.string().trim().max(40).optional().nullable(),
   whatsappNumber: z.string().trim().max(40).optional().nullable(),
   email: z.string().email().optional().nullable().or(z.literal('')),
+  defaultShareTarget: z.enum(SHARE_TARGETS).optional(),
   joinAsAdmin: z.boolean().optional().default(true),
 });
 
@@ -85,6 +88,7 @@ const updateSchema = z.object({
   phone: z.string().trim().max(40).optional().nullable(),
   whatsappNumber: z.string().trim().max(40).optional().nullable(),
   email: z.string().email().optional().nullable().or(z.literal('')),
+  defaultShareTarget: z.enum(SHARE_TARGETS).optional(),
 });
 
 const publicCompany = (c) => ({
@@ -97,6 +101,7 @@ const publicCompany = (c) => ({
   whatsappNumber: c.whatsappNumber ?? null,
   email: c.email,
   logoUrl: c.logoUrl ?? null,
+  defaultShareTarget: c.defaultShareTarget ?? 'PROMPT',
   isActive: c.isActive,
   createdAt: c.createdAt,
   counts: c._count
@@ -148,6 +153,7 @@ router.post('/', asyncHandler(async (req, res) => {
         phone: data.phone || null,
         whatsappNumber: data.whatsappNumber || null,
         email: data.email || null,
+        ...(data.defaultShareTarget ? { defaultShareTarget: data.defaultShareTarget } : {}),
       },
     });
     if (data.joinAsAdmin) {
@@ -182,6 +188,7 @@ router.patch('/:id', asyncHandler(async (req, res) => {
       ...(data.phone !== undefined ? { phone: data.phone || null } : {}),
       ...(data.whatsappNumber !== undefined ? { whatsappNumber: data.whatsappNumber || null } : {}),
       ...(data.email !== undefined ? { email: data.email || null } : {}),
+      ...(data.defaultShareTarget !== undefined ? { defaultShareTarget: data.defaultShareTarget } : {}),
     },
   });
   res.json(publicCompany(updated));

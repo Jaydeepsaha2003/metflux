@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `company` ADD COLUMN `defaultShareTarget` ENUM('PROMPT', 'CUSTOMER', 'COMPANY') NOT NULL DEFAULT 'PROMPT';

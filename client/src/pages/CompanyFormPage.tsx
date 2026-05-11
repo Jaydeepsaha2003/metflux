@@ -9,6 +9,8 @@ import { api, ApiError } from '@/lib/api';
 import { useAuthStore, type LoginPayload } from '@/store/auth';
 import { useConfirm } from '@/hooks/useConfirm';
 
+type ShareTarget = 'PROMPT' | 'CUSTOMER' | 'COMPANY';
+
 type Company = {
   id: string;
   name: string;
@@ -19,6 +21,7 @@ type Company = {
   whatsappNumber: string | null;
   email: string | null;
   logoUrl: string | null;
+  defaultShareTarget: ShareTarget;
   isActive: boolean;
 };
 
@@ -29,9 +32,13 @@ type Form = {
   phone: string;
   whatsappNumber: string;
   email: string;
+  defaultShareTarget: ShareTarget;
 };
 
-const empty: Form = { name: '', gstNumber: '', address: '', phone: '', whatsappNumber: '', email: '' };
+const empty: Form = {
+  name: '', gstNumber: '', address: '', phone: '', whatsappNumber: '', email: '',
+  defaultShareTarget: 'PROMPT',
+};
 
 export const CompanyFormPage = () => {
   const { id } = useParams();
@@ -63,6 +70,7 @@ export const CompanyFormPage = () => {
       phone: existing.phone ?? '',
       whatsappNumber: existing.whatsappNumber ?? '',
       email: existing.email ?? '',
+      defaultShareTarget: existing.defaultShareTarget ?? 'PROMPT',
     });
     setLogoPreview(existing.logoUrl ?? null);
   }, [existing]);
@@ -185,6 +193,20 @@ export const CompanyFormPage = () => {
           </Field>
           <Field label="WhatsApp Number">
             <input className="input" value={form.whatsappNumber} onChange={(e) => set('whatsappNumber', e.target.value)} placeholder="+91 98765 43210" />
+          </Field>
+          <Field label="WhatsApp Share Default">
+            <select
+              className="input"
+              value={form.defaultShareTarget}
+              onChange={(e) => set('defaultShareTarget', e.target.value as ShareTarget)}
+            >
+              <option value="PROMPT">Pick contact each time (default)</option>
+              <option value="CUSTOMER">Send to the document's customer</option>
+              <option value="COMPANY">Send to this company's WhatsApp number</option>
+            </select>
+            <span className="mt-1 block text-[11px] text-slate-500">
+              Applies to share buttons on Packing List, Testing Report, and Work Allotment.
+            </span>
           </Field>
           <Field label="Email">
             <input className="input" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} />
