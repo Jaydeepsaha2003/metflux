@@ -45,16 +45,8 @@ app.use('/uploads', express.static(path.join(PUBLIC_DIR, 'uploads'), {
 // JSON API
 app.use('/api', apiRouter);
 
-// Static SPA / portfolio routed by Host header.
-// Any incoming Host that matches one of these (or starts with one followed
-// by a dot, e.g. `www.admin.metfluxelectrical.com`) gets the admin SPA.
-// Anything else gets the portfolio.
+// Admin SPA at /s/admin, portfolio at /.
 app.use(hostRouter({
-  adminHosts: [
-    'admin.metflux.com',           // legacy / dev
-    'admin.localhost',             // local dev
-    'admin.metfluxelectrical.com', // production
-  ],
   adminDir: ADMIN_DIR,
   publicDir: PUBLIC_DIR,
 }));

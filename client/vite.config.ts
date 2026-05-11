@@ -4,6 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 import path from 'node:path';
 
 export default defineConfig({
+  base: '/s/admin/',
   plugins: [
     react(),
     VitePWA({
@@ -16,9 +17,10 @@ export default defineConfig({
         theme_color: '#0f172a',
         background_color: '#ffffff',
         display: 'standalone',
-        start_url: '/',
+        start_url: '/s/admin/',
+        scope: '/s/admin/',
         icons: [
-          { src: '/icons/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
+          { src: '/s/admin/icons/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
         ],
         prefer_related_applications: false,
       },
