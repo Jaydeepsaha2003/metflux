@@ -15,6 +15,7 @@ type PendingDispatch = {
   coreType: 'TOROIDAL' | 'RECTANGULAR';
   grade: string;
   material: string;
+  measure: string | null;
   dispatchDate: string;
   pcs: number;
   totalWeight: number;
@@ -256,6 +257,7 @@ export const PackingPage = () => {
                     <th className="px-4 py-3 text-left">PO Number</th>
                     <th className="px-4 py-3 text-left">Type</th>
                     <th className="px-4 py-3 text-left">Grade</th>
+                    <th className="px-4 py-3 text-left">Measure</th>
                     <th className="px-4 py-3 text-left">Dispatch Date</th>
                     <th className="px-4 py-3 text-right">Pcs</th>
                     <th className="px-4 py-3 text-right">Weight (kg)</th>
@@ -283,6 +285,7 @@ export const PackingPage = () => {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-slate-600">{d.grade}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-slate-600">{d.measure ?? '—'}</td>
                         <td className="px-4 py-3 text-slate-600">{fmt(d.dispatchDate)}</td>
                         <td className="px-4 py-3 text-right tabular-nums font-semibold">{d.pcs}</td>
                         <td className="px-4 py-3 text-right tabular-nums font-mono">{d.totalWeight.toFixed(3)}</td>
