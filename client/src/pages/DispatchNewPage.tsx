@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search, Loader2, Truck, ArrowLeft, CheckCircle2, FileText, Plus } from 'lucide-react';
+import { Search, Loader2, Truck, ArrowLeft, CheckCircle2, FileText } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 
@@ -54,6 +54,9 @@ export const DispatchNewPage = () => {
     setPcs(0);
     setActualWeight(0);
     setError(null);
+    // Clear the last-saved banner when the user starts a new entry — keeping
+    // it around while typing the next dispatch is more confusing than helpful.
+    if (selected) setCreatedId(null);
   }, [selected?.id]);
 
   const totalWeight = useMemo(
@@ -67,6 +70,13 @@ export const DispatchNewPage = () => {
       queryClient.invalidateQueries({ queryKey: ['dispatch'] });
       queryClient.invalidateQueries({ queryKey: ['dispatch-ready'] });
       setCreatedId(data.id);
+      // Auto-reset form fields so the user can immediately enter the next
+      // dispatch. Keep dispatchDate — same date is usually right for a batch.
+      setSelected(null);
+      setPcs(0);
+      setVehicleNo('');
+      setActualWeight(0);
+      setError(null);
     },
     onError: (e) => {
       if (e instanceof ApiError) {
@@ -82,15 +92,6 @@ export const DispatchNewPage = () => {
       }
     },
   });
-
-  // Clear all per-entry state so the form is ready for the next dispatch.
-  const resetForm = () => {
-    setSelected(null);
-    setPcs(0);
-    setVehicleNo('');
-    setError(null);
-    setCreatedId(null);
-  };
 
   const onSave = () => {
     setError(null);
@@ -267,6 +268,25 @@ export const DispatchNewPage = () => {
         </div>
       </section>
 
+      {/* Last-saved confirmation. Lives outside the `{selected && ...}` block so it
+          stays visible after the form auto-resets on successful save. */}
+      {createdId && (
+        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-sm font-medium text-green-800">
+            ✓ Dispatch saved — form is ready for the next entry.
+          </span>
+          <div className="flex flex-wrap gap-2">
+            <Link to="/packing-list" state={{ dispatchIds: [createdId] }} className="btn-ghost text-sm border border-slate-300">
+              <FileText className="h-4 w-4" /> Create Packing List
+            </Link>
+            <Link to="/dispatch" className="btn-ghost text-sm">View All</Link>
+            <button onClick={() => setCreatedId(null)} className="btn-ghost text-sm text-slate-500" title="Dismiss">
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Dispatch form */}
       <section className="card p-4 space-y-4">
         <h2 className="text-sm font-semibold text-slate-900">2. Dispatch details</h2>
@@ -329,30 +349,13 @@ export const DispatchNewPage = () => {
               </div>
             )}
 
-            {createdId && (
-              <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-sm font-medium text-green-800">Dispatch saved successfully!</span>
-                <div className="flex flex-wrap gap-2">
-                  <button onClick={resetForm} className="btn-primary text-sm">
-                    <Plus className="h-4 w-4" /> New Dispatch
-                  </button>
-                  <Link to="/packing-list" state={{ dispatchIds: [createdId] }} className="btn-ghost text-sm border border-slate-300">
-                    <FileText className="h-4 w-4" /> Create Packing List
-                  </Link>
-                  <Link to="/dispatch" className="btn-ghost text-sm">View All</Link>
-                </div>
-              </div>
-            )}
-
-            {!createdId && (
-              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
-                <Link to="/dispatch" className="btn-ghost w-full sm:w-auto justify-center">Cancel</Link>
-                <button onClick={onSave} disabled={submit.isPending} className="btn-primary w-full sm:w-auto justify-center">
-                  {submit.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
-                  Dispatch
-                </button>
-              </div>
-            )}
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+              <Link to="/dispatch" className="btn-ghost w-full sm:w-auto justify-center">Cancel</Link>
+              <button onClick={onSave} disabled={submit.isPending} className="btn-primary w-full sm:w-auto justify-center">
+                {submit.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
+                Dispatch
+              </button>
+            </div>
           </div>
         )}
       </section>
