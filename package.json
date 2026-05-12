@@ -18,9 +18,7 @@
     "build": "npm run build:client && npm run build:portfolio:if-needed && npm --workspace server run build:copy-client && npm --workspace server run build:copy-portfolio",
     "start": "npm --workspace server run start",
     "postinstall": "node node_modules/prisma/build/index.js generate --schema=server/prisma/schema.prisma",
-    "prisma:generate": "npm --workspace server run prisma:generate",
-    "prisma:migrate": "npm --workspace server run prisma:migrate",
-    "prisma:studio": "npm --workspace server run prisma:studio"
+    "prisma:generate": "npm --workspace server run prisma:generate"
   },
   "engines": {
     "node": ">=18.18.0"

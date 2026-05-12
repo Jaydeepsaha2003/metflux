@@ -1,0 +1,609 @@
+-- =====================================================================
+-- Metflux — full database schema (MySQL 8 / MariaDB)
+-- =====================================================================
+-- USAGE
+--   1. Open phpMyAdmin → select your empty database (or create one).
+--   2. Click the "Import" tab → choose this file → Go.
+--   3. After import, log into the app once with the seed admin user
+--      (see "FIRST-RUN ADMIN" at the bottom of this file).
+--
+-- NOTES
+--   - Charset is utf8mb4 / utf8mb4_unicode_ci (full Unicode support).
+--   - All `id` columns are VARCHAR(191) and hold app-generated CUIDs
+--     (Prisma Client creates them automatically on insert) — do NOT
+--     change to AUTO_INCREMENT.
+--   - This file CREATES tables; it does NOT drop them. If you need to
+--     re-import, drop the database (or all tables) first in phpMyAdmin.
+--
+-- HOW TO ADD A COLUMN LATER (manual update workflow)
+--   1. In phpMyAdmin: ALTER TABLE `MyTable` ADD COLUMN `myCol` ...
+--   2. In schema.prisma: add the matching field on the model.
+--   3. From `server/`: run `npx prisma generate` so the JS client
+--      knows about the new column. (This does NOT touch the database.)
+--   4. Use the column in your route code.
+-- =====================================================================
+
+-- CreateTable
+CREATE TABLE `Company` (
+    `id` VARCHAR(191) NOT NULL,
+    `name` VARCHAR(160) NOT NULL,
+    `slug` VARCHAR(80) NOT NULL,
+    `gstNumber` VARCHAR(40) NULL,
+    `address` VARCHAR(400) NULL,
+    `phone` VARCHAR(40) NULL,
+    `whatsappNumber` VARCHAR(40) NULL,
+    `email` VARCHAR(160) NULL,
+    `logoUrl` VARCHAR(400) NULL,
+    `defaultShareTarget` ENUM('PROMPT', 'CUSTOMER', 'COMPANY') NOT NULL DEFAULT 'PROMPT',
+    `isActive` BOOLEAN NOT NULL DEFAULT true,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+
+    UNIQUE INDEX `Company_slug_key`(`slug`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `User` (
+    `id` VARCHAR(191) NOT NULL,
+    `email` VARCHAR(160) NOT NULL,
+    `username` VARCHAR(40) NOT NULL,
+    `passwordHash` VARCHAR(120) NOT NULL,
+    `name` VARCHAR(120) NOT NULL,
+    `isPlatformAdmin` BOOLEAN NOT NULL DEFAULT false,
+    `isActive` BOOLEAN NOT NULL DEFAULT true,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+
+    UNIQUE INDEX `User_email_key`(`email`),
+    UNIQUE INDEX `User_username_key`(`username`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `Membership` (
+    `id` VARCHAR(191) NOT NULL,
+    `userId` VARCHAR(191) NOT NULL,
+    `companyId` VARCHAR(191) NOT NULL,
+    `role` ENUM('COMPANY_ADMIN', 'MANAGER', 'STAFF') NOT NULL DEFAULT 'STAFF',
+    `permissions` JSON NOT NULL,
+    `isPrimary` BOOLEAN NOT NULL DEFAULT false,
+    `isActive` BOOLEAN NOT NULL DEFAULT true,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+
+    INDEX `Membership_companyId_idx`(`companyId`),
+    INDEX `Membership_userId_idx`(`userId`),
+    UNIQUE INDEX `Membership_userId_companyId_key`(`userId`, `companyId`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `RefreshToken` (
+    `jti` VARCHAR(40) NOT NULL,
+    `userId` VARCHAR(191) NOT NULL,
+    `expiresAt` DATETIME(3) NOT NULL,
+    `revokedAt` DATETIME(3) NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    INDEX `RefreshToken_userId_idx`(`userId`),
+    PRIMARY KEY (`jti`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `Customer` (
+    `id` VARCHAR(191) NOT NULL,
+    `name` VARCHAR(160) NOT NULL,
+    `email` VARCHAR(160) NULL,
+    `phone` VARCHAR(40) NULL,
+    `address` VARCHAR(400) NULL,
+    `gstNumber` VARCHAR(40) NULL,
+    `gstRate` DOUBLE NOT NULL DEFAULT 0,
+    `state` VARCHAR(80) NULL,
+    `notes` TEXT NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+    `companyId` VARCHAR(191) NOT NULL,
+    `createdById` VARCHAR(191) NULL,
+
+    INDEX `Customer_companyId_createdAt_idx`(`companyId`, `createdAt`),
+    INDEX `Customer_companyId_name_idx`(`companyId`, `name`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `FluxGrade` (
+    `id` VARCHAR(191) NOT NULL,
+    `grade` VARCHAR(80) NOT NULL,
+    `flux` DOUBLE NOT NULL,
+    `coreType` ENUM('TOROIDAL', 'RECTANGULAR') NOT NULL DEFAULT 'TOROIDAL',
+    `ateCm` DOUBLE NOT NULL,
+    `notes` VARCHAR(200) NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+    `companyId` VARCHAR(191) NOT NULL,
+
+    INDEX `FluxGrade_companyId_grade_idx`(`companyId`, `grade`),
+    INDEX `FluxGrade_companyId_coreType_idx`(`companyId`, `coreType`),
+    UNIQUE INDEX `FluxGrade_companyId_grade_flux_coreType_key`(`companyId`, `grade`, `flux`, `coreType`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `MaterialGrade` (
+    `id` VARCHAR(191) NOT NULL,
+    `grade` VARCHAR(80) NOT NULL,
+    `material` VARCHAR(120) NOT NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `companyId` VARCHAR(191) NOT NULL,
+
+    INDEX `MaterialGrade_companyId_grade_idx`(`companyId`, `grade`),
+    UNIQUE INDEX `MaterialGrade_companyId_grade_material_key`(`companyId`, `grade`, `material`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `PoOrder` (
+    `id` VARCHAR(191) NOT NULL,
+    `poNumber` VARCHAR(60) NOT NULL,
+    `orderDate` DATETIME(3) NOT NULL,
+    `deliveryDays` INTEGER NOT NULL DEFAULT 0,
+    `deliveryDate` DATETIME(3) NOT NULL,
+    `notes` TEXT NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+    `companyId` VARCHAR(191) NOT NULL,
+    `customerId` VARCHAR(191) NOT NULL,
+    `createdById` VARCHAR(191) NULL,
+
+    INDEX `PoOrder_companyId_createdAt_idx`(`companyId`, `createdAt`),
+    INDEX `PoOrder_customerId_idx`(`customerId`),
+    UNIQUE INDEX `PoOrder_companyId_poNumber_key`(`companyId`, `poNumber`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `PoOrderItem` (
+    `id` VARCHAR(191) NOT NULL,
+    `poOrderId` VARCHAR(191) NOT NULL,
+    `coreType` ENUM('TOROIDAL', 'RECTANGULAR') NOT NULL,
+    `grade` VARCHAR(80) NOT NULL,
+    `material` VARCHAR(120) NOT NULL,
+    `measure` VARCHAR(160) NOT NULL,
+    `id1` DOUBLE NOT NULL,
+    `id2` DOUBLE NULL,
+    `od1` DOUBLE NOT NULL,
+    `od2` DOUBLE NULL,
+    `ht` DOUBLE NOT NULL,
+    `builtup` DOUBLE NULL,
+    `weightPerPc` DOUBLE NOT NULL,
+    `pcs` INTEGER NOT NULL,
+    `totalWeight` DOUBLE NOT NULL,
+    `coreAc` DOUBLE NULL,
+    `coreMl` DOUBLE NULL,
+    `d13` DOUBLE NULL,
+    `turns` INTEGER NULL,
+    `flux` DOUBLE NULL,
+    `ateCm` DOUBLE NULL,
+    `testVoltage` DOUBLE NULL,
+    `testCurrent` DOUBLE NULL,
+    `rateBasis` ENUM('PER_KG', 'PER_PCS') NULL,
+    `rateValue` DOUBLE NULL,
+    `ratePerKg` DOUBLE NULL,
+    `ratePerPc` DOUBLE NULL,
+    `totalAmount` DOUBLE NULL,
+    `status` ENUM('ACTIVE', 'CANCELLED') NOT NULL DEFAULT 'ACTIVE',
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    INDEX `PoOrderItem_poOrderId_idx`(`poOrderId`),
+    INDEX `PoOrderItem_status_idx`(`status`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `Production` (
+    `id` VARCHAR(191) NOT NULL,
+    `poOrderItemId` VARCHAR(191) NOT NULL,
+    `prodDate` DATETIME(3) NOT NULL,
+    `pcs` INTEGER NOT NULL,
+    `weightPerPc` DOUBLE NOT NULL,
+    `totalWeight` DOUBLE NOT NULL,
+    `labourName` VARCHAR(120) NOT NULL,
+    `notes` TEXT NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+    `companyId` VARCHAR(191) NOT NULL,
+    `createdById` VARCHAR(191) NULL,
+
+    INDEX `Production_companyId_prodDate_idx`(`companyId`, `prodDate`),
+    INDEX `Production_poOrderItemId_idx`(`poOrderItemId`),
+    INDEX `Production_labourName_idx`(`labourName`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `Dispatch` (
+    `id` VARCHAR(191) NOT NULL,
+    `poOrderItemId` VARCHAR(191) NOT NULL,
+    `dispatchDate` DATETIME(3) NOT NULL,
+    `pcs` INTEGER NOT NULL,
+    `weightPerPc` DOUBLE NOT NULL,
+    `totalWeight` DOUBLE NOT NULL,
+    `actualWeight` DOUBLE NULL,
+    `vehicleNo` VARCHAR(80) NULL,
+    `notes` TEXT NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+    `companyId` VARCHAR(191) NOT NULL,
+    `createdById` VARCHAR(191) NULL,
+
+    INDEX `Dispatch_companyId_dispatchDate_idx`(`companyId`, `dispatchDate`),
+    INDEX `Dispatch_poOrderItemId_idx`(`poOrderItemId`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `PackingList` (
+    `id` VARCHAR(191) NOT NULL,
+    `plNumber` VARCHAR(80) NOT NULL,
+    `plDate` DATETIME(3) NOT NULL,
+    `invoiceNo` VARCHAR(80) NULL,
+    `invoiceDate` DATETIME(3) NULL,
+    `testedBy` VARCHAR(120) NULL,
+    `approvedBy` VARCHAR(120) NULL,
+    `remarks` VARCHAR(200) NULL,
+    `companyId` VARCHAR(191) NOT NULL,
+    `createdById` VARCHAR(191) NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+
+    INDEX `PackingList_companyId_plDate_idx`(`companyId`, `plDate`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `PackingListItem` (
+    `id` VARCHAR(191) NOT NULL,
+    `packingListId` VARCHAR(191) NOT NULL,
+    `dispatchId` VARCHAR(191) NOT NULL,
+
+    UNIQUE INDEX `PackingListItem_dispatchId_key`(`dispatchId`),
+    INDEX `PackingListItem_packingListId_idx`(`packingListId`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `Labour` (
+    `id` VARCHAR(191) NOT NULL,
+    `name` VARCHAR(120) NOT NULL,
+    `phone` VARCHAR(40) NULL,
+    `isActive` BOOLEAN NOT NULL DEFAULT true,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+
+    INDEX `Labour_name_idx`(`name`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `LabourMembership` (
+    `id` VARCHAR(191) NOT NULL,
+    `labourId` VARCHAR(191) NOT NULL,
+    `companyId` VARCHAR(191) NOT NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    INDEX `LabourMembership_companyId_idx`(`companyId`),
+    UNIQUE INDEX `LabourMembership_labourId_companyId_key`(`labourId`, `companyId`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `PushSubscription` (
+    `id` VARCHAR(191) NOT NULL,
+    `endpoint` VARCHAR(500) NOT NULL,
+    `p256dh` VARCHAR(200) NOT NULL,
+    `auth` VARCHAR(60) NOT NULL,
+    `userAgent` VARCHAR(300) NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `userId` VARCHAR(191) NOT NULL,
+    `companyId` VARCHAR(191) NOT NULL,
+
+    UNIQUE INDEX `PushSubscription_endpoint_key`(`endpoint`),
+    INDEX `PushSubscription_companyId_idx`(`companyId`),
+    INDEX `PushSubscription_userId_idx`(`userId`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `Supplier` (
+    `id` VARCHAR(191) NOT NULL,
+    `name` VARCHAR(160) NOT NULL,
+    `email` VARCHAR(160) NULL,
+    `phone` VARCHAR(40) NULL,
+    `address` VARCHAR(400) NULL,
+    `gstNumber` VARCHAR(40) NULL,
+    `state` VARCHAR(80) NULL,
+    `gstRate` DOUBLE NOT NULL DEFAULT 0,
+    `notes` TEXT NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+    `companyId` VARCHAR(191) NOT NULL,
+    `createdById` VARCHAR(191) NULL,
+
+    INDEX `Supplier_companyId_createdAt_idx`(`companyId`, `createdAt`),
+    INDEX `Supplier_companyId_name_idx`(`companyId`, `name`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `SupplierOrder` (
+    `id` VARCHAR(191) NOT NULL,
+    `poNumber` VARCHAR(60) NOT NULL,
+    `orderDate` DATETIME(3) NOT NULL,
+    `expectedDate` DATETIME(3) NULL,
+    `status` ENUM('PENDING', 'PARTIAL', 'RECEIVED', 'CANCELLED') NOT NULL DEFAULT 'PENDING',
+    `notes` TEXT NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+    `companyId` VARCHAR(191) NOT NULL,
+    `supplierId` VARCHAR(191) NOT NULL,
+    `createdById` VARCHAR(191) NULL,
+
+    INDEX `SupplierOrder_companyId_createdAt_idx`(`companyId`, `createdAt`),
+    INDEX `SupplierOrder_supplierId_idx`(`supplierId`),
+    INDEX `SupplierOrder_status_idx`(`status`),
+    UNIQUE INDEX `SupplierOrder_companyId_poNumber_key`(`companyId`, `poNumber`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `WorkAllotment` (
+    `id` VARCHAR(191) NOT NULL,
+    `waNumber` VARCHAR(60) NOT NULL,
+    `waDate` DATETIME(3) NOT NULL,
+    `remarks` VARCHAR(300) NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+    `companyId` VARCHAR(191) NOT NULL,
+    `createdById` VARCHAR(191) NULL,
+
+    INDEX `WorkAllotment_companyId_createdAt_idx`(`companyId`, `createdAt`),
+    UNIQUE INDEX `WorkAllotment_companyId_waNumber_key`(`companyId`, `waNumber`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `WorkAllotmentItem` (
+    `id` VARCHAR(191) NOT NULL,
+    `workAllotmentId` VARCHAR(191) NOT NULL,
+    `poOrderItemId` VARCHAR(191) NOT NULL,
+    `pcs` INTEGER NOT NULL,
+    `labourId` VARCHAR(191) NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    INDEX `WorkAllotmentItem_workAllotmentId_idx`(`workAllotmentId`),
+    INDEX `WorkAllotmentItem_poOrderItemId_idx`(`poOrderItemId`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `SupplierOrderItem` (
+    `id` VARCHAR(191) NOT NULL,
+    `supplierOrderId` VARCHAR(191) NOT NULL,
+    `description` VARCHAR(300) NOT NULL,
+    `hsnCode` VARCHAR(20) NULL,
+    `qty` DOUBLE NOT NULL,
+    `unit` VARCHAR(20) NOT NULL,
+    `rate` DOUBLE NOT NULL,
+    `amount` DOUBLE NOT NULL,
+    `receivedQty` DOUBLE NOT NULL DEFAULT 0,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    INDEX `SupplierOrderItem_supplierOrderId_idx`(`supplierOrderId`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `ContactSubmission` (
+    `id` VARCHAR(191) NOT NULL,
+    `name` VARCHAR(160) NOT NULL,
+    `email` VARCHAR(160) NOT NULL,
+    `phone` VARCHAR(40) NULL,
+    `company` VARCHAR(200) NULL,
+    `subject` VARCHAR(200) NULL,
+    `message` TEXT NULL,
+    `formType` VARCHAR(40) NOT NULL,
+    `status` ENUM('NEW', 'CONTACTED', 'ARCHIVED') NOT NULL DEFAULT 'NEW',
+    `ipAddress` VARCHAR(60) NULL,
+    `userAgent` VARCHAR(400) NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+
+    INDEX `ContactSubmission_status_createdAt_idx`(`status`, `createdAt`),
+    INDEX `ContactSubmission_createdAt_idx`(`createdAt`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `Return` (
+    `id` VARCHAR(191) NOT NULL,
+    `returnNumber` VARCHAR(60) NOT NULL,
+    `returnDate` DATETIME(3) NOT NULL,
+    `referenceType` ENUM('SO_NUMBER', 'INVOICE_NUMBER', 'WO_NUMBER') NOT NULL,
+    `referenceValue` VARCHAR(80) NOT NULL,
+    `status` ENUM('PENDING', 'RECEIVED', 'IN_REWORK', 'REDISPATCHED', 'CLOSED', 'CANCELLED') NOT NULL DEFAULT 'PENDING',
+    `receivedAt` DATETIME(3) NULL,
+    `reworkAt` DATETIME(3) NULL,
+    `redispatchAt` DATETIME(3) NULL,
+    `redispatchVehicle` VARCHAR(80) NULL,
+    `closedAt` DATETIME(3) NULL,
+    `reason` VARCHAR(400) NULL,
+    `notes` TEXT NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+    `companyId` VARCHAR(191) NOT NULL,
+    `customerId` VARCHAR(191) NOT NULL,
+    `createdById` VARCHAR(191) NULL,
+
+    INDEX `Return_companyId_returnDate_idx`(`companyId`, `returnDate`),
+    INDEX `Return_companyId_status_idx`(`companyId`, `status`),
+    INDEX `Return_customerId_idx`(`customerId`),
+    UNIQUE INDEX `Return_companyId_returnNumber_key`(`companyId`, `returnNumber`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `ReturnItem` (
+    `id` VARCHAR(191) NOT NULL,
+    `returnId` VARCHAR(191) NOT NULL,
+    `poOrderItemId` VARCHAR(191) NOT NULL,
+    `pcs` INTEGER NOT NULL,
+    `reason` VARCHAR(300) NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    INDEX `ReturnItem_returnId_idx`(`returnId`),
+    INDEX `ReturnItem_poOrderItemId_idx`(`poOrderItemId`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- AddForeignKey
+ALTER TABLE `Membership` ADD CONSTRAINT `Membership_userId_fkey` FOREIGN KEY (`userId`) REFERENCES `User`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `Membership` ADD CONSTRAINT `Membership_companyId_fkey` FOREIGN KEY (`companyId`) REFERENCES `Company`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `RefreshToken` ADD CONSTRAINT `RefreshToken_userId_fkey` FOREIGN KEY (`userId`) REFERENCES `User`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `Customer` ADD CONSTRAINT `Customer_companyId_fkey` FOREIGN KEY (`companyId`) REFERENCES `Company`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `Customer` ADD CONSTRAINT `Customer_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `User`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `FluxGrade` ADD CONSTRAINT `FluxGrade_companyId_fkey` FOREIGN KEY (`companyId`) REFERENCES `Company`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `MaterialGrade` ADD CONSTRAINT `MaterialGrade_companyId_fkey` FOREIGN KEY (`companyId`) REFERENCES `Company`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PoOrder` ADD CONSTRAINT `PoOrder_companyId_fkey` FOREIGN KEY (`companyId`) REFERENCES `Company`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PoOrder` ADD CONSTRAINT `PoOrder_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `Customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PoOrder` ADD CONSTRAINT `PoOrder_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `User`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PoOrderItem` ADD CONSTRAINT `PoOrderItem_poOrderId_fkey` FOREIGN KEY (`poOrderId`) REFERENCES `PoOrder`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `Production` ADD CONSTRAINT `Production_poOrderItemId_fkey` FOREIGN KEY (`poOrderItemId`) REFERENCES `PoOrderItem`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `Production` ADD CONSTRAINT `Production_companyId_fkey` FOREIGN KEY (`companyId`) REFERENCES `Company`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `Production` ADD CONSTRAINT `Production_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `User`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `Dispatch` ADD CONSTRAINT `Dispatch_poOrderItemId_fkey` FOREIGN KEY (`poOrderItemId`) REFERENCES `PoOrderItem`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `Dispatch` ADD CONSTRAINT `Dispatch_companyId_fkey` FOREIGN KEY (`companyId`) REFERENCES `Company`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `Dispatch` ADD CONSTRAINT `Dispatch_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `User`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PackingList` ADD CONSTRAINT `PackingList_companyId_fkey` FOREIGN KEY (`companyId`) REFERENCES `Company`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PackingList` ADD CONSTRAINT `PackingList_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `User`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PackingListItem` ADD CONSTRAINT `PackingListItem_packingListId_fkey` FOREIGN KEY (`packingListId`) REFERENCES `PackingList`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PackingListItem` ADD CONSTRAINT `PackingListItem_dispatchId_fkey` FOREIGN KEY (`dispatchId`) REFERENCES `Dispatch`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `LabourMembership` ADD CONSTRAINT `LabourMembership_labourId_fkey` FOREIGN KEY (`labourId`) REFERENCES `Labour`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `LabourMembership` ADD CONSTRAINT `LabourMembership_companyId_fkey` FOREIGN KEY (`companyId`) REFERENCES `Company`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PushSubscription` ADD CONSTRAINT `PushSubscription_userId_fkey` FOREIGN KEY (`userId`) REFERENCES `User`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `PushSubscription` ADD CONSTRAINT `PushSubscription_companyId_fkey` FOREIGN KEY (`companyId`) REFERENCES `Company`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `Supplier` ADD CONSTRAINT `Supplier_companyId_fkey` FOREIGN KEY (`companyId`) REFERENCES `Company`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `Supplier` ADD CONSTRAINT `Supplier_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `User`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `SupplierOrder` ADD CONSTRAINT `SupplierOrder_companyId_fkey` FOREIGN KEY (`companyId`) REFERENCES `Company`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `SupplierOrder` ADD CONSTRAINT `SupplierOrder_supplierId_fkey` FOREIGN KEY (`supplierId`) REFERENCES `Supplier`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `SupplierOrder` ADD CONSTRAINT `SupplierOrder_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `User`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `WorkAllotment` ADD CONSTRAINT `WorkAllotment_companyId_fkey` FOREIGN KEY (`companyId`) REFERENCES `Company`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `WorkAllotment` ADD CONSTRAINT `WorkAllotment_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `User`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `WorkAllotmentItem` ADD CONSTRAINT `WorkAllotmentItem_workAllotmentId_fkey` FOREIGN KEY (`workAllotmentId`) REFERENCES `WorkAllotment`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `WorkAllotmentItem` ADD CONSTRAINT `WorkAllotmentItem_poOrderItemId_fkey` FOREIGN KEY (`poOrderItemId`) REFERENCES `PoOrderItem`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `WorkAllotmentItem` ADD CONSTRAINT `WorkAllotmentItem_labourId_fkey` FOREIGN KEY (`labourId`) REFERENCES `Labour`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `SupplierOrderItem` ADD CONSTRAINT `SupplierOrderItem_supplierOrderId_fkey` FOREIGN KEY (`supplierOrderId`) REFERENCES `SupplierOrder`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `Return` ADD CONSTRAINT `Return_companyId_fkey` FOREIGN KEY (`companyId`) REFERENCES `Company`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `Return` ADD CONSTRAINT `Return_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `Customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `Return` ADD CONSTRAINT `Return_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `User`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `ReturnItem` ADD CONSTRAINT `ReturnItem_returnId_fkey` FOREIGN KEY (`returnId`) REFERENCES `Return`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `ReturnItem` ADD CONSTRAINT `ReturnItem_poOrderItemId_fkey` FOREIGN KEY (`poOrderItemId`) REFERENCES `PoOrderItem`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- =====================================================================
+-- FIRST-RUN ADMIN
+-- =====================================================================
+-- The password column stores a bcrypt hash, not the plain password, so
+-- we can't include a working INSERT for it here. After importing this
+-- file, run ONCE from the project root to create the platform admin:
+--
+--     npm --workspace server run seed
+--
+-- That creates:
+--     email:    admin@metflux.com     (or SEED_SUPERADMIN_EMAIL)
+--     username: admin                 (or SEED_SUPERADMIN_USERNAME)
+--     password: ChangeMe!123          (or SEED_SUPERADMIN_PASSWORD)
+--     company:  Metflux Demo Co       (or SEED_DEFAULT_COMPANY_NAME)
+--
+-- Change the password immediately after first login.
+-- =====================================================================
+

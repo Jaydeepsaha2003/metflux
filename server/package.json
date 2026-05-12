@@ -10,11 +10,6 @@
     "build:copy-client": "node scripts/copy-client.js",
     "build:copy-portfolio": "node scripts/copy-portfolio.js",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
-    "prisma:deploy": "prisma migrate deploy",
-    "prisma:reset": "prisma migrate reset",
-    "prisma:studio": "prisma studio",
-    "db:push": "prisma db push",
     "seed": "node prisma/seed.js"
   },
   "dependencies": {
