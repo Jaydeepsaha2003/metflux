@@ -8,7 +8,7 @@
 // Packing List, but the title bar reads "TESTING REPORT". Per group the user
 // can edit WO No, WO Date, Invoice No, Invoice Date, Tested By, Approved By,
 // and per-row Sample Pcs.
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueries } from '@tanstack/react-query';
 import { ArrowLeft, Download, ClipboardCheck, Loader2, MessageCircle } from 'lucide-react';
@@ -31,19 +31,43 @@ type DispatchDetail = {
 
 /* Reported "Max Allowable Current" on the testing report — sits 3–5% below
    the calculated theoretical max so the customer-facing spec has a built-in
-   safety margin. The exact offset is hashed off the PoOrderItem.id so the
-   same PO+size always shows the SAME value across every dispatch's testing
-   report — different items get different (but stable) offsets within the
-   3–5% band. */
-const reportedIemax = (poItemId: string, testCurrent: number | null): number | null => {
-  if (testCurrent == null) return null;
-  let hash = 0;
-  for (let i = 0; i < poItemId.length; i++) {
-    hash = (hash * 31 + poItemId.charCodeAt(i)) | 0;
+   safety margin. Each dispatch row must show a DISTINCT value when the same
+   PO+measure repeats across dispatches (so two batches of the same item
+   look like independently measured samples on the report). The helper below
+   builds a map keyed by dispatch id, guaranteeing unique offsets within any
+   (poNumber, measure) group. Offsets are deterministic per dispatch id so
+   reopening the same report shows the same numbers. */
+const buildIemaxMap = (dispatches: { id: string; poNumber: string; measure: string; testCurrent: number | null }[]) => {
+  // Group dispatches by (poNumber, measure) so collision-avoidance is scoped
+  // to the rows that would otherwise look identical.
+  const groups = new Map<string, typeof dispatches>();
+  for (const d of dispatches) {
+    const key = `${d.poNumber}|${d.measure}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(d);
   }
-  // Map hash into [3.00, 5.00] inclusive, two-decimal precision.
-  const pct = 3 + (Math.abs(hash) % 201) / 100;
-  return +(testCurrent * (1 - pct / 100)).toFixed(2);
+  const result: Record<string, number | null> = {};
+  for (const [, group] of groups) {
+    // Sort for deterministic offset assignment across re-renders.
+    const sorted = [...group].sort((a, b) => a.id.localeCompare(b.id));
+    const usedPcts = new Set<number>();
+    for (const d of sorted) {
+      if (d.testCurrent == null) { result[d.id] = null; continue; }
+      // Seed a pct in [3.00, 5.00] from the dispatch id, then nudge by 0.01%
+      // until it's unique within the group. The pool has 201 distinct values
+      // (3.00 → 5.00 step 0.01), more than enough for any realistic batch.
+      let hash = 0;
+      for (let i = 0; i < d.id.length; i++) hash = (hash * 31 + d.id.charCodeAt(i)) | 0;
+      let pct = 3 + (Math.abs(hash) % 201) / 100;
+      while (usedPcts.has(pct)) {
+        pct = +(pct + 0.01).toFixed(2);
+        if (pct > 5.00) pct = 3.00; // wrap
+      }
+      usedPcts.add(pct);
+      result[d.id] = +(d.testCurrent * (1 - pct / 100)).toFixed(2);
+    }
+  }
+  return result;
 };
 type PlDispatchDetail = DispatchDetail;
 type PlDetail = {
@@ -155,6 +179,15 @@ export const TestingReportPage = () => {
     : dispatchQueries.filter((q) => q.data).map((q) => q.data as DispatchDetail);
 
   const isLoading = plId ? loadingPl : dispatchQueries.some((q) => q.isLoading);
+
+  /* Precomputed per-dispatch reported Max Allowable Current (mA). Built from
+     the full set of dispatches so collision-avoidance scopes correctly across
+     all rows visible on the report. */
+  const iemaxByDispatch = useMemo(
+    () => buildIemaxMap(dispatches),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [dispatches.map((d) => `${d.id}|${d.testCurrent}`).join(',')]
+  );
 
   /* Group dispatches by PO order id (or fall back to poNumber if id absent). */
   const groups = (() => {
@@ -490,7 +523,7 @@ export const TestingReportPage = () => {
                         </td>
                         <td className="px-0.5 align-middle">
                           <Display value={(() => {
-                            const v = reportedIemax(d.poOrderItemId, d.testCurrent);
+                            const v = iemaxByDispatch[d.id] ?? null;
                             return v != null ? v.toFixed(2) : '—';
                           })()} />
                         </td>
