@@ -101,13 +101,23 @@ node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 # 4. Generate VAPID keys for push notifications (paste into server\.env)
 npx web-push generate-vapid-keys
 
-# 5. Create the database — see DATABASE.md
-#    Set DATABASE_URL in server\.env, then:
-npm --workspace server run prisma:migrate -- --name init
+# 5. Create the database — manual, via phpMyAdmin (or any MySQL client)
+#    a) Create an empty database in phpMyAdmin.
+#    b) Open the "Import" tab → upload database.sql (at repo root) → Go.
+#    c) Set DATABASE_URL in server\.env to point at that database.
+#    d) Create the first admin user (one-time):
 npm --workspace server run seed
 ```
 
 The seed creates: `admin@metflux.com` / `admin` / password `ChangeMe!123` as a platform admin.
+
+> **Schema changes after first install** are also manual now:
+> 1. Run your `ALTER TABLE …` in phpMyAdmin.
+> 2. Edit `server/prisma/schema.prisma` to match (so the JS client knows about the new column).
+> 3. From `server/`, run `npx prisma generate` to regenerate the typed client.
+>
+> Prisma is **only** used as a query client now — it never migrates or
+> modifies the database on its own. Boot does not call migrate deploy.
 
 ## Run locally
 
@@ -140,7 +150,8 @@ In hPanel → Node.js:
 Then in the Hostinger terminal:
 ```bash
 npm install
-npm --workspace server run prisma:deploy
+# Tables are already created via phpMyAdmin (import database.sql once).
+# Seed only needs to run once, the very first time:
 npm --workspace server run seed
 npm run build
 # click Restart in hPanel
