@@ -9,7 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { env } from './lib/env.js';
-import { prisma } from './lib/db.js';
+import { pool } from './lib/db.js';
 import { errorHandler, notFoundHandler } from './lib/errors.js';
 import { hostRouter } from './lib/hostRouter.js';
 import { apiRouter } from './routes/index.js';
@@ -61,19 +61,19 @@ app.use(errorHandler);
    level.
 
    Database schema is managed manually via phpMyAdmin (see /database.sql at
-   repo root). The Prisma Client below just reads DATABASE_URL from env and
-   talks to whatever tables already exist — it never runs migrations. */
+   repo root). DB access goes through a mysql2 connection pool — no Prisma,
+   no Rust engine, no migrate-on-boot. */
 let server;
 
 const shutdown = async (signal) => {
   console.log(`[metflux] ${signal} received — shutting down`);
   if (server) {
     server.close(async () => {
-      await prisma.$disconnect();
+      await pool.end();
       process.exit(0);
     });
   } else {
-    await prisma.$disconnect();
+    await pool.end();
     process.exit(0);
   }
   setTimeout(() => process.exit(1), 10_000).unref();

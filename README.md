@@ -113,11 +113,12 @@ The seed creates: `admin@metflux.com` / `admin` / password `ChangeMe!123` as a p
 
 > **Schema changes after first install** are also manual now:
 > 1. Run your `ALTER TABLE …` in phpMyAdmin.
-> 2. Edit `server/prisma/schema.prisma` to match (so the JS client knows about the new column).
-> 3. From `server/`, run `npx prisma generate` to regenerate the typed client.
+> 2. Use the new column in your route SQL via the helpers in
+>    `server/lib/db.js` (`q`, `qOne`, `insert`, `update`, `del`, `txn`).
 >
-> Prisma is **only** used as a query client now — it never migrates or
-> modifies the database on its own. Boot does not call migrate deploy.
+> No ORM, no client regeneration, no schema file to keep in sync.
+> The SQL is the source of truth. Prisma was removed because its Rust
+> query engine panics on Hostinger's LiteSpeed wrapper.
 
 ## Run locally
 
