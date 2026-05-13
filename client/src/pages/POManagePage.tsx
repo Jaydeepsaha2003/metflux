@@ -177,8 +177,19 @@ export const POManagePage = () => {
                           <>
                             <Link
                               to={`/po/manage/${it.id}`}
-                              className="btn-ghost text-brand-700 hover:bg-brand-50"
-                              title="Edit"
+                              className={cn(
+                                'btn-ghost',
+                                // The page still opens when production has
+                                // started — it just renders the locked banner
+                                // instead of the form. Greying the icon makes
+                                // that obvious before the user clicks.
+                                (it.pcsProduced ?? 0) > 0
+                                  ? 'text-slate-300 hover:bg-slate-50'
+                                  : 'text-brand-700 hover:bg-brand-50'
+                              )}
+                              title={(it.pcsProduced ?? 0) > 0
+                                ? `Locked — ${it.pcsProduced} pcs produced. Use Cancel to shrink remaining qty.`
+                                : 'Edit'}
                             >
                               <Pencil className="h-4 w-4" />
                             </Link>
