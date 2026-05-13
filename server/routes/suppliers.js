@@ -1,11 +1,10 @@
-// Suppliers CRUD — scoped to active company. Mirrors customers.js but adds
-// a numeric gstRate (% applicable on supplier invoices, e.g. 18 for steel).
+// Suppliers CRUD — scoped to active company.
 import { Router } from 'express';
 import { z } from 'zod';
-import { prisma } from '../lib/db.js';
+import { q, qOne, insert, update, del } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
-import { resolveTenant, tenantWhere } from '../lib/tenant.js';
+import { resolveTenant } from '../lib/tenant.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -32,64 +31,62 @@ const supplierInput = z.object({
 }));
 
 const findOwned = async (req, id) => {
-  const item = await prisma.supplier.findFirst({ where: tenantWhere(req, { id }) });
+  const item = await qOne(
+    'SELECT * FROM `Supplier` WHERE `id` = ? AND `companyId` = ?',
+    [id, req.tenant.companyId]
+  );
   if (!item) throw new AppError('Supplier not found', 404, 'NOT_FOUND');
   return item;
 };
 
-// GET /api/suppliers
 router.get('/', requirePermission('add_supplier'), asyncHandler(async (req, res) => {
   const { page, pageSize, search } = paginationQuery.parse(req.query);
-  const where = tenantWhere(req, search
-    ? { OR: [
-        { name:      { contains: search } },
-        { email:     { contains: search } },
-        { phone:     { contains: search } },
-        { gstNumber: { contains: search } },
-      ] }
-    : {});
+  const skip = (page - 1) * pageSize;
 
-  const [items, total] = await Promise.all([
-    prisma.supplier.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.supplier.count({ where }),
+  let where = '`companyId` = ?';
+  const params = [req.tenant.companyId];
+  if (search) {
+    where += ' AND (`name` LIKE ? OR `email` LIKE ? OR `phone` LIKE ? OR `gstNumber` LIKE ?)';
+    const like = `%${search}%`;
+    params.push(like, like, like, like);
+  }
+
+  const [items, totalRow] = await Promise.all([
+    q(
+      `SELECT * FROM \`Supplier\` WHERE ${where} ORDER BY \`createdAt\` DESC LIMIT ? OFFSET ?`,
+      [...params, pageSize, skip]
+    ),
+    qOne(`SELECT COUNT(*) AS n FROM \`Supplier\` WHERE ${where}`, params),
   ]);
-
-  res.json({ items, total, page, pageSize });
+  res.json({ items, total: Number(totalRow?.n ?? 0), page, pageSize });
 }));
 
-// GET /api/suppliers/:id
 router.get('/:id', requirePermission('add_supplier'), asyncHandler(async (req, res) => {
   const { id } = idParam.parse(req.params);
   res.json(await findOwned(req, id));
 }));
 
-// POST /api/suppliers
 router.post('/', requirePermission('add_supplier'), asyncHandler(async (req, res) => {
   const data = supplierInput.parse(req.body);
-  const created = await prisma.supplier.create({
-    data: { ...data, companyId: req.tenant.companyId, createdById: req.auth.userId },
+  const created = await insert('Supplier', {
+    ...data,
+    companyId: req.tenant.companyId,
+    createdById: req.auth.userId,
   });
   res.status(201).json(created);
 }));
 
-// PATCH /api/suppliers/:id
 router.patch('/:id', requirePermission('add_supplier'), asyncHandler(async (req, res) => {
   const { id } = idParam.parse(req.params);
   const data = supplierInput.partial().parse(req.body);
   await findOwned(req, id);
-  res.json(await prisma.supplier.update({ where: { id }, data }));
+  res.json(await update('Supplier', id, data));
 }));
 
-// DELETE /api/suppliers/:id
 router.delete('/:id', requirePermission('add_supplier'), asyncHandler(async (req, res) => {
   const { id } = idParam.parse(req.params);
   await findOwned(req, id);
-  await prisma.supplier.delete({ where: { id } });
+  await del('Supplier', id);
   res.status(204).end();
 }));
 

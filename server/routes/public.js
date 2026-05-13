@@ -6,7 +6,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
-import { prisma } from '../lib/db.js';
+import { insert } from '../lib/db.js';
 import { asyncHandler } from '../lib/errors.js';
 
 const router = Router();
@@ -40,27 +40,21 @@ router.post('/contact', contactLimiter, asyncHandler(async (req, res) => {
   }
   const data = parsed.data;
 
-  // Best-effort client IP — trust proxy is set on the app, so x-forwarded-for
-  // is parsed by Express into req.ip.
   const ipAddress = (req.ip || req.socket?.remoteAddress || 'unknown').slice(0, 60);
   const userAgent = (req.headers['user-agent'] || 'unknown').slice(0, 400);
 
-  const created = await prisma.contactSubmission.create({
-    data: {
-      name:     data.name,
-      email:    data.email,
-      phone:    data.phone   ?? null,
-      company:  data.company ?? null,
-      subject:  data.subject ?? null,
-      message:  data.message ?? null,
-      formType: data.formType ?? 'contact',
-      ipAddress,
-      userAgent,
-    },
+  const created = await insert('ContactSubmission', {
+    name:     data.name,
+    email:    data.email,
+    phone:    data.phone   ?? null,
+    company:  data.company ?? null,
+    subject:  data.subject ?? null,
+    message:  data.message ?? null,
+    formType: data.formType ?? 'contact',
+    ipAddress,
+    userAgent,
   });
 
-  // Mirror the response shape the portfolio form expected from the old
-  // Next.js /api/form-entries handler so no frontend code has to change.
   res.status(201).json({
     success: true,
     message: 'Form submitted successfully',

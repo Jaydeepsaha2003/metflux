@@ -1,8 +1,7 @@
 // Dashboard analytics — KPIs and employee performance.
-// Read-only, all queries scoped to the active company via resolveTenant.
 import { Router } from 'express';
 import { z } from 'zod';
-import { prisma } from '../lib/db.js';
+import { q, qOne } from '../lib/db.js';
 import { asyncHandler } from '../lib/errors.js';
 import { requireAuth } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
@@ -13,24 +12,26 @@ router.use(requireAuth, resolveTenant);
 const startOfMonth = (now = new Date()) => new Date(now.getFullYear(), now.getMonth(), 1);
 const startOfYear  = (now = new Date()) => new Date(now.getFullYear(), 0, 1);
 
-/* GET /api/dashboard/stats — KPI snapshot. */
+/* GET /api/dashboard/stats */
 router.get('/stats', asyncHandler(async (req, res) => {
   const companyId = req.tenant.companyId;
   const now = new Date();
   const monthStart = startOfMonth(now);
   const yearStart  = startOfYear(now);
 
-  // Active PO items used by several KPIs below.
-  const activeItems = await prisma.poOrderItem.findMany({
-    where: { status: 'ACTIVE', poOrder: { companyId } },
-    select: {
-      pcs: true,
-      totalAmount: true,
-      productions: { select: { pcs: true } },
-      dispatches:  { select: { pcs: true } },
-      poOrder: { select: { orderDate: true, customerId: true } },
-    },
-  });
+  // Active PO items with produced + dispatched sums + order context, in one query.
+  const activeItems = await q(
+    `SELECT it.\`pcs\`         AS pcs,
+            it.\`totalAmount\` AS totalAmount,
+            po.\`orderDate\`   AS orderDate,
+            po.\`customerId\`  AS customerId,
+            (SELECT COALESCE(SUM(pp.\`pcs\`),0) FROM \`Production\` pp WHERE pp.\`poOrderItemId\` = it.\`id\`) AS produced,
+            (SELECT COALESCE(SUM(dd.\`pcs\`),0) FROM \`Dispatch\`   dd WHERE dd.\`poOrderItemId\` = it.\`id\`) AS dispatched
+       FROM \`PoOrderItem\` it
+       INNER JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
+       WHERE po.\`companyId\` = ? AND it.\`status\` = ?`,
+    [companyId, 'ACTIVE']
+  );
 
   let pendingProductionAmount = 0;
   let readyDispatchAmount = 0;
@@ -38,8 +39,8 @@ router.get('/stats', asyncHandler(async (req, res) => {
   let readyDispatchPcs = 0;
 
   for (const it of activeItems) {
-    const produced   = it.productions.reduce((s, p) => s + p.pcs, 0);
-    const dispatched = it.dispatches.reduce((s, d) => s + d.pcs, 0);
+    const produced   = Number(it.produced ?? 0);
+    const dispatched = Number(it.dispatched ?? 0);
     const remaining  = Math.max(it.pcs - produced, 0);
     const readyPcs   = Math.max(produced - dispatched, 0);
     pendingProductionPcs += remaining;
@@ -50,56 +51,58 @@ router.get('/stats', asyncHandler(async (req, res) => {
     }
   }
 
-  // SO counts + values, current month + ytd.
-  const [soThisMonth, soThisYear] = await Promise.all([
-    prisma.poOrder.findMany({
-      where: { companyId, orderDate: { gte: monthStart } },
-      select: { id: true, items: { select: { totalAmount: true } } },
-    }),
-    prisma.poOrder.findMany({
-      where: { companyId, orderDate: { gte: yearStart } },
-      select: { id: true, items: { select: { totalAmount: true } } },
-    }),
-  ]);
-  const sumSoAmount = (orders) =>
-    orders.reduce((s, o) => s + o.items.reduce((x, i) => x + (i.totalAmount ?? 0), 0), 0);
+  // SO counts + sum(items.totalAmount) by month / year.
+  const soMonthRow = await qOne(
+    `SELECT COUNT(DISTINCT po.\`id\`) AS cnt, COALESCE(SUM(it.\`totalAmount\`),0) AS amount
+       FROM \`PoOrder\` po
+       LEFT JOIN \`PoOrderItem\` it ON it.\`poOrderId\` = po.\`id\`
+       WHERE po.\`companyId\` = ? AND po.\`orderDate\` >= ?`,
+    [companyId, monthStart]
+  );
+  const soYearRow = await qOne(
+    `SELECT COUNT(DISTINCT po.\`id\`) AS cnt, COALESCE(SUM(it.\`totalAmount\`),0) AS amount
+       FROM \`PoOrder\` po
+       LEFT JOIN \`PoOrderItem\` it ON it.\`poOrderId\` = po.\`id\`
+       WHERE po.\`companyId\` = ? AND po.\`orderDate\` >= ?`,
+    [companyId, yearStart]
+  );
 
-  // Dispatches this month (count + total weight + total amount).
-  const dispatchesThisMonth = await prisma.dispatch.findMany({
-    where: { companyId, dispatchDate: { gte: monthStart } },
-    select: {
-      pcs: true,
-      totalWeight: true,
-      poOrderItem: { select: { pcs: true, totalAmount: true } },
-    },
-  });
+  // Dispatches this month with pro-rated amount.
+  const dispatchesThisMonth = await q(
+    `SELECT d.\`pcs\` AS pcs, d.\`totalWeight\` AS totalWeight,
+            it.\`pcs\` AS itemPcs, it.\`totalAmount\` AS itemAmount
+       FROM \`Dispatch\` d
+       INNER JOIN \`PoOrderItem\` it ON it.\`id\` = d.\`poOrderItemId\`
+       WHERE d.\`companyId\` = ? AND d.\`dispatchDate\` >= ?`,
+    [companyId, monthStart]
+  );
   const dispatchAmountThisMonth = dispatchesThisMonth.reduce((s, d) => {
-    const it = d.poOrderItem;
-    if (it && it.totalAmount != null && it.pcs > 0) {
-      return s + (it.totalAmount * (d.pcs / it.pcs));
-    }
+    if (d.itemAmount != null && d.itemPcs > 0) return s + (d.itemAmount * (d.pcs / d.itemPcs));
     return s;
   }, 0);
   const dispatchWeightThisMonth = dispatchesThisMonth.reduce((s, d) => s + (d.totalWeight ?? 0), 0);
 
-  // Top 5 customers by year-to-date SO amount.
+  // Top 5 customers by YTD SO amount.
   const customerTotals = new Map();
   for (const it of activeItems) {
-    const cid = it.poOrder.customerId;
-    if (!customerTotals.has(cid)) customerTotals.set(cid, 0);
-    if (it.poOrder.orderDate >= yearStart) {
-      customerTotals.set(cid, customerTotals.get(cid) + (it.totalAmount ?? 0));
+    if (new Date(it.orderDate) >= yearStart) {
+      const cid = it.customerId;
+      customerTotals.set(cid, (customerTotals.get(cid) ?? 0) + (it.totalAmount ?? 0));
     }
   }
   const topCustomerIds = [...customerTotals.entries()]
     .filter(([, v]) => v > 0)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5);
-  const customerLookup = await prisma.customer.findMany({
-    where: { id: { in: topCustomerIds.map(([id]) => id) }, companyId },
-    select: { id: true, name: true },
-  });
-  const customerNameById = Object.fromEntries(customerLookup.map((c) => [c.id, c.name]));
+  let customerNameById = {};
+  if (topCustomerIds.length > 0) {
+    const placeholders = topCustomerIds.map(() => '?').join(',');
+    const rows = await q(
+      `SELECT \`id\`, \`name\` FROM \`Customer\` WHERE \`id\` IN (${placeholders}) AND \`companyId\` = ?`,
+      [...topCustomerIds.map(([id]) => id), companyId]
+    );
+    customerNameById = Object.fromEntries(rows.map((c) => [c.id, c.name]));
+  }
   const topCustomers = topCustomerIds.map(([id, amount]) => ({
     id,
     name: customerNameById[id] ?? '—',
@@ -107,18 +110,19 @@ router.get('/stats', asyncHandler(async (req, res) => {
   }));
 
   // Open returns — anything not CLOSED/CANCELLED.
-  const openReturns = await prisma.return.count({
-    where: { companyId, status: { notIn: ['CLOSED', 'CANCELLED'] } },
-  });
+  const openReturnsRow = await qOne(
+    "SELECT COUNT(*) AS n FROM `Return` WHERE `companyId` = ? AND `status` NOT IN ('CLOSED','CANCELLED')",
+    [companyId]
+  );
 
   res.json({
     soThisMonth: {
-      count:  soThisMonth.length,
-      amount: +sumSoAmount(soThisMonth).toFixed(2),
+      count:  Number(soMonthRow?.cnt ?? 0),
+      amount: +Number(soMonthRow?.amount ?? 0).toFixed(2),
     },
     soThisYear: {
-      count:  soThisYear.length,
-      amount: +sumSoAmount(soThisYear).toFixed(2),
+      count:  Number(soYearRow?.cnt ?? 0),
+      amount: +Number(soYearRow?.amount ?? 0).toFixed(2),
     },
     pendingProduction: {
       pcs:    pendingProductionPcs,
@@ -134,77 +138,58 @@ router.get('/stats', asyncHandler(async (req, res) => {
       weight: +dispatchWeightThisMonth.toFixed(3),
       amount: +dispatchAmountThisMonth.toFixed(2),
     },
-    openReturns,
+    openReturns: Number(openReturnsRow?.n ?? 0),
     topCustomers,
   });
 }));
 
-/* GET /api/dashboard/employees?from=YYYY-MM-DD&to=YYYY-MM-DD
-   Aggregates production records by labour name. Returns ranking by pcs. */
+/* GET /api/dashboard/employees */
 router.get('/employees', asyncHandler(async (req, res) => {
   const { from, to } = z.object({
     from: z.coerce.date().optional(),
     to:   z.coerce.date().optional(),
   }).parse(req.query);
 
-  // Default window: this month-to-date.
   const fromDate = from ?? startOfMonth();
   const toDate   = to   ?? new Date();
-  // Make `to` inclusive — bump to end-of-day.
   toDate.setHours(23, 59, 59, 999);
 
-  const records = await prisma.production.findMany({
-    where: {
-      companyId: req.tenant.companyId,
-      prodDate:  { gte: fromDate, lte: toDate },
-    },
-    select: {
-      pcs: true,
-      totalWeight: true,
-      labourName: true,
-      poOrderItem: { select: { measure: true, grade: true } },
-    },
-  });
+  const records = await q(
+    `SELECT p.\`pcs\` AS pcs, p.\`totalWeight\` AS totalWeight, p.\`labourName\` AS labourName,
+            it.\`measure\` AS measure, it.\`grade\` AS grade
+       FROM \`Production\` p
+       INNER JOIN \`PoOrderItem\` it ON it.\`id\` = p.\`poOrderItemId\`
+       WHERE p.\`companyId\` = ? AND p.\`prodDate\` >= ? AND p.\`prodDate\` <= ?`,
+    [req.tenant.companyId, fromDate, toDate]
+  );
 
-  // Group by labour name. Track per-size pcs to produce a top size + size list.
   const byLabour = new Map();
   for (const r of records) {
     const key = r.labourName || '—';
     if (!byLabour.has(key)) {
-      byLabour.set(key, {
-        labourName: key,
-        pcs: 0,
-        totalWeight: 0,
-        entries: 0,
-        bySize: new Map(),
-      });
+      byLabour.set(key, { labourName: key, pcs: 0, totalWeight: 0, entries: 0, bySize: new Map() });
     }
     const row = byLabour.get(key);
     row.pcs += r.pcs;
     row.totalWeight += r.totalWeight;
     row.entries += 1;
-    const size = r.poOrderItem?.measure ?? '—';
+    const size = r.measure ?? '—';
     row.bySize.set(size, (row.bySize.get(size) ?? 0) + r.pcs);
   }
 
   const list = [...byLabour.values()].map((row) => {
     const sizes = [...row.bySize.entries()].sort((a, b) => b[1] - a[1]);
-    const topSize = sizes[0]?.[0] ?? null;
-    const topSizePcs = sizes[0]?.[1] ?? 0;
     return {
       labourName:    row.labourName,
       pcs:           row.pcs,
       totalWeight:   +row.totalWeight.toFixed(3),
       entries:       row.entries,
       distinctSizes: sizes.length,
-      topSize,
-      topSizePcs,
-      // Truncate to top 5 sizes per worker — front-end can render chips.
-      sizes: sizes.slice(0, 5).map(([measure, pcs]) => ({ measure, pcs })),
+      topSize:       sizes[0]?.[0] ?? null,
+      topSizePcs:    sizes[0]?.[1] ?? 0,
+      sizes:         sizes.slice(0, 5).map(([measure, pcs]) => ({ measure, pcs })),
     };
-  })
-  .sort((a, b) => b.pcs - a.pcs)
-  .map((row, idx) => ({ ...row, rank: idx + 1 }));
+  }).sort((a, b) => b.pcs - a.pcs).map((row, idx) => ({ ...row, rank: idx + 1 }));
 
   res.json({
     from: fromDate.toISOString(),

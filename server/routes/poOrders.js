@@ -2,10 +2,10 @@
 // Header (PoOrder) + many lines (PoOrderItem) saved in one transaction.
 import { Router } from 'express';
 import { z } from 'zod';
-import { prisma } from '../lib/db.js';
+import { q, qOne, insert, update, txn } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
-import { resolveTenant, tenantWhere } from '../lib/tenant.js';
+import { resolveTenant } from '../lib/tenant.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -27,20 +27,15 @@ const itemSchema = z.object({
   coreAc: z.coerce.number().nonnegative().optional().nullable(),
   coreMl: z.coerce.number().nonnegative().optional().nullable(),
   d13: z.coerce.number().nonnegative().optional().nullable(),
-  // Toroidal flux-test calibration — optional; only sent for toroidal items.
   turns:       z.coerce.number().int().positive().optional().nullable(),
   flux:        z.coerce.number().positive().optional().nullable(),
   ateCm:       z.coerce.number().nonnegative().optional().nullable(),
   testVoltage: z.coerce.number().nonnegative().optional().nullable(),
   testCurrent: z.coerce.number().nonnegative().optional().nullable(),
-  // Pricing — only rateBasis + rateValue are user-entered. Server derives
-  // ratePerKg / ratePerPc / totalAmount so the two views are always consistent.
   rateBasis: z.enum(['PER_KG', 'PER_PCS']).optional().nullable(),
   rateValue: z.coerce.number().nonnegative().optional().nullable(),
 });
 
-// Returns the three derived rate values from a (basis, value, weightPerPc, pcs,
-// totalWeight) tuple. Skips division-by-zero when weightPerPc is 0.
 const deriveRate = ({ rateBasis, rateValue, weightPerPc, pcs, totalWeight }) => {
   if (!rateBasis || rateValue == null || rateValue <= 0) {
     return { ratePerKg: null, ratePerPc: null, totalAmount: null };
@@ -69,23 +64,40 @@ const createSchema = z.object({
   items: z.array(itemSchema).min(1, 'Add at least one item before submitting'),
 });
 
+// Loads items for a list of poOrderIds keyed by poOrderId.
+const loadItemsForPos = async (poOrderIds) => {
+  if (poOrderIds.length === 0) return new Map();
+  const placeholders = poOrderIds.map(() => '?').join(',');
+  const rows = await q(
+    `SELECT * FROM \`PoOrderItem\` WHERE \`poOrderId\` IN (${placeholders}) ORDER BY \`createdAt\` ASC`,
+    poOrderIds
+  );
+  const byPo = new Map();
+  for (const it of rows) {
+    if (!byPo.has(it.poOrderId)) byPo.set(it.poOrderId, []);
+    byPo.get(it.poOrderId).push(it);
+  }
+  return byPo;
+};
+
 /* ---------- POST /api/po-orders — create ---------- */
 router.post('/', requirePermission('add_po'), asyncHandler(async (req, res) => {
   const data = createSchema.parse(req.body);
 
-  // Customer must belong to active tenant.
-  const customer = await prisma.customer.findFirst({
-    where: tenantWhere(req, { id: data.customerId }),
-  });
+  const customer = await qOne(
+    'SELECT * FROM `Customer` WHERE `id` = ? AND `companyId` = ?',
+    [data.customerId, req.tenant.companyId]
+  );
   if (!customer) throw new AppError('Customer not found', 400, 'BAD_CUSTOMER');
 
-  const dup = await prisma.poOrder.findUnique({
-    where: { companyId_poNumber: { companyId: req.tenant.companyId, poNumber: data.poNumber } },
-  });
+  const dup = await qOne(
+    'SELECT `id` FROM `PoOrder` WHERE `companyId` = ? AND `poNumber` = ?',
+    [req.tenant.companyId, data.poNumber]
+  );
   if (dup) throw new AppError('PO number already exists in this company', 409, 'PO_DUPLICATE');
 
-  const created = await prisma.poOrder.create({
-    data: {
+  const result = await txn(async (tx) => {
+    const po = await tx.insert('PoOrder', {
       poNumber: data.poNumber,
       orderDate: data.orderDate,
       deliveryDays: data.deliveryDays,
@@ -94,44 +106,38 @@ router.post('/', requirePermission('add_po'), asyncHandler(async (req, res) => {
       companyId: req.tenant.companyId,
       customerId: customer.id,
       createdById: req.auth.userId,
-      items: {
-        create: data.items.map((it) => {
-          const derived = deriveRate(it);
-          return {
-            coreType: it.coreType,
-            grade: it.grade,
-            material: it.material,
-            measure: it.measure,
-            id1: it.id1,
-            id2: it.id2 ?? null,
-            od1: it.od1,
-            od2: it.od2 ?? null,
-            ht: it.ht,
-            builtup: it.builtup ?? null,
-            weightPerPc: it.weightPerPc,
-            pcs: it.pcs,
-            totalWeight: it.totalWeight,
-            coreAc: it.coreAc ?? null,
-            coreMl: it.coreMl ?? null,
-            d13: it.d13 ?? null,
-            turns:       it.turns       ?? null,
-            flux:        it.flux        ?? null,
-            ateCm:       it.ateCm       ?? null,
-            testVoltage: it.testVoltage ?? null,
-            testCurrent: it.testCurrent ?? null,
-            rateBasis:   it.rateBasis   ?? null,
-            rateValue:   it.rateValue   ?? null,
-            ratePerKg:   derived.ratePerKg,
-            ratePerPc:   derived.ratePerPc,
-            totalAmount: derived.totalAmount,
-          };
-        }),
-      },
-    },
-    include: { items: true, customer: true },
+    });
+    const items = [];
+    for (const it of data.items) {
+      const derived = deriveRate(it);
+      const inserted = await tx.insert('PoOrderItem', {
+        poOrderId: po.id,
+        coreType: it.coreType,
+        grade: it.grade,
+        material: it.material,
+        measure: it.measure,
+        id1: it.id1, id2: it.id2 ?? null,
+        od1: it.od1, od2: it.od2 ?? null,
+        ht: it.ht, builtup: it.builtup ?? null,
+        weightPerPc: it.weightPerPc, pcs: it.pcs, totalWeight: it.totalWeight,
+        coreAc: it.coreAc ?? null, coreMl: it.coreMl ?? null, d13: it.d13 ?? null,
+        turns:       it.turns       ?? null,
+        flux:        it.flux        ?? null,
+        ateCm:       it.ateCm       ?? null,
+        testVoltage: it.testVoltage ?? null,
+        testCurrent: it.testCurrent ?? null,
+        rateBasis:   it.rateBasis   ?? null,
+        rateValue:   it.rateValue   ?? null,
+        ratePerKg:   derived.ratePerKg,
+        ratePerPc:   derived.ratePerPc,
+        totalAmount: derived.totalAmount,
+      });
+      items.push(inserted);
+    }
+    return { ...po, items, customer };
   });
 
-  res.status(201).json(created);
+  res.status(201).json(result);
 }));
 
 /* ---------- GET /api/po-orders — list ---------- */
@@ -141,48 +147,71 @@ router.get('/', requirePermission('view_po'), asyncHandler(async (req, res) => {
     pageSize: z.coerce.number().int().min(1).max(100).default(20),
     search: z.string().trim().max(120).optional(),
   }).parse(req.query);
+  const skip = (page - 1) * pageSize;
 
-  const where = tenantWhere(req, search
-    ? { OR: [
-        { poNumber: { contains: search } },
-        { customer: { name: { contains: search } } },
-        { items: { some: { measure:  { contains: search } } } },
-        { items: { some: { grade:    { contains: search } } } },
-        { items: { some: { material: { contains: search } } } },
-      ] }
-    : {});
+  let baseWhere = 'p.`companyId` = ?';
+  const params = [req.tenant.companyId];
 
-  const [items, total] = await Promise.all([
-    prisma.poOrder.findMany({
-      where, orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * pageSize, take: pageSize,
-      include: {
-        customer: { select: { id: true, name: true } },
-        _count: { select: { items: true } },
-      },
-    }),
-    prisma.poOrder.count({ where }),
+  if (search) {
+    const like = `%${search}%`;
+    // EXISTS handles "any item matches" without duplicating PO rows.
+    baseWhere += ` AND (
+      p.\`poNumber\` LIKE ?
+      OR c.\`name\` LIKE ?
+      OR EXISTS (SELECT 1 FROM \`PoOrderItem\` it WHERE it.\`poOrderId\` = p.\`id\`
+                  AND (it.\`measure\` LIKE ? OR it.\`grade\` LIKE ? OR it.\`material\` LIKE ?))
+    )`;
+    params.push(like, like, like, like, like);
+  }
+
+  const listSql = `
+    SELECT p.*, c.\`id\` AS c_id, c.\`name\` AS c_name,
+           (SELECT COUNT(*) FROM \`PoOrderItem\` ii WHERE ii.\`poOrderId\` = p.\`id\`) AS itemCount
+      FROM \`PoOrder\` p
+      INNER JOIN \`Customer\` c ON c.\`id\` = p.\`customerId\`
+      WHERE ${baseWhere}
+      ORDER BY p.\`createdAt\` DESC
+      LIMIT ? OFFSET ?`;
+  const countSql = `
+    SELECT COUNT(*) AS n
+      FROM \`PoOrder\` p
+      INNER JOIN \`Customer\` c ON c.\`id\` = p.\`customerId\`
+      WHERE ${baseWhere}`;
+
+  const [rows, totalRow] = await Promise.all([
+    q(listSql, [...params, pageSize, skip]),
+    qOne(countSql, params),
   ]);
 
-  res.json({ items, total, page, pageSize });
+  const items = rows.map((r) => ({
+    id: r.id,
+    poNumber: r.poNumber,
+    orderDate: r.orderDate,
+    deliveryDate: r.deliveryDate,
+    deliveryDays: r.deliveryDays,
+    notes: r.notes,
+    companyId: r.companyId,
+    customerId: r.customerId,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+    customer: { id: r.c_id, name: r.c_name },
+    _count: { items: Number(r.itemCount ?? 0) },
+  }));
+
+  res.json({ items, total: Number(totalRow?.n ?? 0), page, pageSize });
 }));
 
-/* ---------- ITEMS — flat view across all POs in the active company ----------
-   These routes MUST come before /:id so "items" isn't matched as an order id. */
-
 const flattenItem = (it) => {
-  // Sum produced + dispatched if relations were included; otherwise null so
-  // the UI knows the data wasn't loaded for this query.
-  const pcsProduced   = it.productions ? it.productions.reduce((s, p) => s + p.pcs, 0) : null;
-  const pcsDispatched = it.dispatches  ? it.dispatches.reduce((s, d) => s + d.pcs, 0)  : null;
+  const pcsProduced   = Number(it.pcsProduced   ?? 0);
+  const pcsDispatched = Number(it.pcsDispatched ?? 0);
   return {
     id: it.id,
     poOrderId: it.poOrderId,
-    poNumber: it.poOrder.poNumber,
-    customerId: it.poOrder.customerId,
-    customerName: it.poOrder.customer.name,
-    orderDate: it.poOrder.orderDate,
-    deliveryDate: it.poOrder.deliveryDate,
+    poNumber: it.poNumber,
+    customerId: it.customerId,
+    customerName: it.customerName,
+    orderDate: it.orderDate,
+    deliveryDate: it.deliveryDate,
     coreType: it.coreType,
     grade: it.grade,
     material: it.material,
@@ -206,6 +235,21 @@ const flattenItem = (it) => {
   };
 };
 
+// SQL that returns each PoOrderItem row joined with its parent + customer
+// plus pcsProduced / pcsDispatched aggregated via correlated subqueries.
+const itemRowSql = `
+  SELECT it.*,
+         po.\`poNumber\`     AS poNumber,
+         po.\`orderDate\`    AS orderDate,
+         po.\`deliveryDate\` AS deliveryDate,
+         po.\`customerId\`   AS customerId,
+         c.\`name\`          AS customerName,
+         (SELECT COALESCE(SUM(p.\`pcs\`),0) FROM \`Production\` p WHERE p.\`poOrderItemId\` = it.\`id\`) AS pcsProduced,
+         (SELECT COALESCE(SUM(d.\`pcs\`),0) FROM \`Dispatch\`   d WHERE d.\`poOrderItemId\` = it.\`id\`) AS pcsDispatched
+    FROM \`PoOrderItem\` it
+    INNER JOIN \`PoOrder\`  po ON po.\`id\` = it.\`poOrderId\`
+    INNER JOIN \`Customer\` c  ON c.\`id\`  = po.\`customerId\``;
+
 /* GET /api/po-orders/items — paginated flat list */
 router.get('/items', requirePermission('view_po'), asyncHandler(async (req, res) => {
   const { page, pageSize, search, status } = z.object({
@@ -214,75 +258,58 @@ router.get('/items', requirePermission('view_po'), asyncHandler(async (req, res)
     search: z.string().trim().max(120).optional(),
     status: z.enum(['ACTIVE', 'CANCELLED', 'ALL']).default('ACTIVE'),
   }).parse(req.query);
+  const skip = (page - 1) * pageSize;
 
-  const where = {
-    poOrder: { companyId: req.tenant.companyId },
-    ...(status !== 'ALL' ? { status } : {}),
-    ...(search
-      ? {
-          OR: [
-            { poOrder: { poNumber: { contains: search } } },
-            { poOrder: { customer: { name: { contains: search } } } },
-            { grade:    { contains: search } },
-            { material: { contains: search } },
-            { measure:  { contains: search } },
-          ],
-        }
-      : {}),
-  };
+  let where = 'po.`companyId` = ?';
+  const params = [req.tenant.companyId];
+  if (status !== 'ALL') { where += ' AND it.`status` = ?'; params.push(status); }
+  if (search) {
+    const like = `%${search}%`;
+    where += ' AND (po.`poNumber` LIKE ? OR c.`name` LIKE ? OR it.`grade` LIKE ? OR it.`material` LIKE ? OR it.`measure` LIKE ?)';
+    params.push(like, like, like, like, like);
+  }
 
-  const [items, total] = await Promise.all([
-    prisma.poOrderItem.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      include: {
-        poOrder: { include: { customer: true } },
-        productions: { select: { pcs: true } },
-        dispatches:  { select: { pcs: true } },
-      },
-    }),
-    prisma.poOrderItem.count({ where }),
+  const [rows, totalRow] = await Promise.all([
+    q(
+      `${itemRowSql} WHERE ${where} ORDER BY it.\`createdAt\` DESC LIMIT ? OFFSET ?`,
+      [...params, pageSize, skip]
+    ),
+    qOne(
+      `SELECT COUNT(*) AS n FROM \`PoOrderItem\` it
+        INNER JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
+        INNER JOIN \`Customer\` c ON c.\`id\` = po.\`customerId\`
+        WHERE ${where}`,
+      params
+    ),
   ]);
 
-  res.json({ items: items.map(flattenItem), total, page, pageSize });
+  res.json({ items: rows.map(flattenItem), total: Number(totalRow?.n ?? 0), page, pageSize });
 }));
 
-/* GET /api/po-orders/items/:id — one item with PO meta + processed counts */
+/* GET /api/po-orders/items/:id */
 router.get('/items/:id', requirePermission('view_po'), asyncHandler(async (req, res) => {
-  const it = await prisma.poOrderItem.findFirst({
-    where: { id: req.params.id, poOrder: { companyId: req.tenant.companyId } },
-    include: {
-      poOrder: { include: { customer: true } },
-      productions: { select: { pcs: true } },
-      dispatches:  { select: { pcs: true } },
-    },
-  });
-  if (!it) throw new AppError('Item not found', 404, 'NOT_FOUND');
-  res.json(flattenItem(it));
+  const row = await qOne(
+    `${itemRowSql} WHERE it.\`id\` = ? AND po.\`companyId\` = ?`,
+    [req.params.id, req.tenant.companyId]
+  );
+  if (!row) throw new AppError('Item not found', 404, 'NOT_FOUND');
+  res.json(flattenItem(row));
 }));
 
-/* PATCH /api/po-orders/items/:id — edit fields of a single item.
-   If pcs is being changed, validates that the new count is at least the
-   amount already produced or dispatched (whichever is higher) so we never
-   end up with an impossible "ordered < built" state. */
+const itemUpdateSchema = itemSchema.partial();
+
+/* PATCH /api/po-orders/items/:id */
 router.patch('/items/:id', requirePermission('add_po'), asyncHandler(async (req, res) => {
-  const data = itemSchema.partial().parse(req.body);
-  const it = await prisma.poOrderItem.findFirst({
-    where: { id: req.params.id, poOrder: { companyId: req.tenant.companyId } },
-    include: {
-      productions: { select: { pcs: true } },
-      dispatches:  { select: { pcs: true } },
-    },
-  });
-  if (!it) throw new AppError('Item not found', 404, 'NOT_FOUND');
-  if (it.status === 'CANCELLED') throw new AppError('Cannot edit a cancelled item', 400, 'ITEM_CANCELLED');
+  const data = itemUpdateSchema.parse(req.body);
+  const row = await qOne(
+    `${itemRowSql} WHERE it.\`id\` = ? AND po.\`companyId\` = ?`,
+    [req.params.id, req.tenant.companyId]
+  );
+  if (!row) throw new AppError('Item not found', 404, 'NOT_FOUND');
+  if (row.status === 'CANCELLED') throw new AppError('Cannot edit a cancelled item', 400, 'ITEM_CANCELLED');
 
   if (data.pcs !== undefined) {
-    const produced   = it.productions.reduce((s, p) => s + p.pcs, 0);
-    const dispatched = it.dispatches.reduce((s, d) => s + d.pcs, 0);
-    const minPcs = Math.max(produced, dispatched);
+    const minPcs = Math.max(Number(row.pcsProduced ?? 0), Number(row.pcsDispatched ?? 0));
     if (data.pcs < minPcs) {
       throw new AppError(
         `New pcs (${data.pcs}) is below already produced/dispatched (${minPcs}). Reduce production or dispatch first.`,
@@ -291,99 +318,73 @@ router.patch('/items/:id', requirePermission('add_po'), asyncHandler(async (req,
     }
   }
 
-  // Recompute derived pricing when ANY input that feeds it has changed.
-  // We use the patched value if present, otherwise the existing row's value.
   const rateInputsTouched =
     data.rateBasis !== undefined || data.rateValue !== undefined ||
     data.weightPerPc !== undefined || data.pcs !== undefined ||
     data.totalWeight !== undefined;
 
-  let rateUpdate = {};
+  const patch = { ...data };
   if (rateInputsTouched) {
     const derived = deriveRate({
-      rateBasis:   data.rateBasis   !== undefined ? data.rateBasis   : it.rateBasis,
-      rateValue:   data.rateValue   !== undefined ? data.rateValue   : it.rateValue,
-      weightPerPc: data.weightPerPc !== undefined ? data.weightPerPc : it.weightPerPc,
-      pcs:         data.pcs         !== undefined ? data.pcs         : it.pcs,
-      totalWeight: data.totalWeight !== undefined ? data.totalWeight : it.totalWeight,
+      rateBasis:   data.rateBasis   !== undefined ? data.rateBasis   : row.rateBasis,
+      rateValue:   data.rateValue   !== undefined ? data.rateValue   : row.rateValue,
+      weightPerPc: data.weightPerPc !== undefined ? data.weightPerPc : row.weightPerPc,
+      pcs:         data.pcs         !== undefined ? data.pcs         : row.pcs,
+      totalWeight: data.totalWeight !== undefined ? data.totalWeight : row.totalWeight,
     });
-    rateUpdate = {
-      ratePerKg:   derived.ratePerKg,
-      ratePerPc:   derived.ratePerPc,
-      totalAmount: derived.totalAmount,
-    };
+    patch.ratePerKg   = derived.ratePerKg;
+    patch.ratePerPc   = derived.ratePerPc;
+    patch.totalAmount = derived.totalAmount;
   }
 
-  const updated = await prisma.poOrderItem.update({
-    where: { id: it.id },
-    data: { ...data, ...rateUpdate },
-  });
+  const updated = await update('PoOrderItem', row.id, patch);
   res.json(updated);
 }));
 
-/* POST /api/po-orders/items/:id/cancel — cancel the unprocessed remainder.
-   - If nothing has been produced/dispatched yet → mark CANCELLED, keep pcs as-is.
-   - If some pcs are already produced/dispatched → reduce ordered pcs to that
-     count (effectively cancelling only the remaining/unprocessed portion).
-   - If everything is already produced/dispatched → 400 NOTHING_TO_CANCEL. */
+/* POST /api/po-orders/items/:id/cancel */
 router.post('/items/:id/cancel', requirePermission('add_po'), asyncHandler(async (req, res) => {
-  const it = await prisma.poOrderItem.findFirst({
-    where: { id: req.params.id, poOrder: { companyId: req.tenant.companyId } },
-    include: {
-      productions: { select: { pcs: true } },
-      dispatches:  { select: { pcs: true } },
-    },
-  });
-  if (!it) throw new AppError('Item not found', 404, 'NOT_FOUND');
-  if (it.status === 'CANCELLED') return res.status(204).end();
+  const row = await qOne(
+    `${itemRowSql} WHERE it.\`id\` = ? AND po.\`companyId\` = ?`,
+    [req.params.id, req.tenant.companyId]
+  );
+  if (!row) throw new AppError('Item not found', 404, 'NOT_FOUND');
+  if (row.status === 'CANCELLED') return res.status(204).end();
 
-  const produced   = it.productions.reduce((s, p) => s + p.pcs, 0);
-  const dispatched = it.dispatches.reduce((s, d) => s + d.pcs, 0);
+  const produced = Number(row.pcsProduced ?? 0);
+  const dispatched = Number(row.pcsDispatched ?? 0);
   const processed = Math.max(produced, dispatched);
-  const remaining = it.pcs - processed;
+  const remaining = row.pcs - processed;
 
   if (remaining <= 0) {
     throw new AppError(
-      `Nothing remaining to cancel — ${processed} pcs already produced/dispatched out of ${it.pcs}.`,
+      `Nothing remaining to cancel — ${processed} pcs already produced/dispatched out of ${row.pcs}.`,
       400, 'NOTHING_TO_CANCEL'
     );
   }
 
   if (processed === 0) {
-    // Nothing built yet — full cancel.
-    await prisma.poOrderItem.update({
-      where: { id: it.id },
-      data: { status: 'CANCELLED' },
-    });
+    await update('PoOrderItem', row.id, { status: 'CANCELLED' });
   } else {
-    // Partial cancel — keep the item active but shrink it to the processed count.
-    const newWeightPerPc = it.weightPerPc;
-    const newTotalWeight = +(processed * newWeightPerPc).toFixed(3);
+    const newTotalWeight = +(processed * row.weightPerPc).toFixed(3);
     const derived = deriveRate({
-      rateBasis: it.rateBasis,
-      rateValue: it.rateValue,
-      weightPerPc: newWeightPerPc,
+      rateBasis: row.rateBasis,
+      rateValue: row.rateValue,
+      weightPerPc: row.weightPerPc,
       pcs: processed,
       totalWeight: newTotalWeight,
     });
-    await prisma.poOrderItem.update({
-      where: { id: it.id },
-      data: {
-        pcs: processed,
-        totalWeight: newTotalWeight,
-        ratePerKg:   derived.ratePerKg,
-        ratePerPc:   derived.ratePerPc,
-        totalAmount: derived.totalAmount,
-      },
+    await update('PoOrderItem', row.id, {
+      pcs: processed,
+      totalWeight: newTotalWeight,
+      ratePerKg: derived.ratePerKg,
+      ratePerPc: derived.ratePerPc,
+      totalAmount: derived.totalAmount,
     });
   }
   res.status(204).end();
 }));
 
-/* ---------- GET /api/po-orders/summary — items with stage counts + test fields ----------
-   Drives the SO Summary page. Per-item snapshot of ordered / produced /
-   dispatched / pending plus the flux-test calibration values for the
-   "View test data" expand panel. */
+/* GET /api/po-orders/summary */
 router.get('/summary', requirePermission('po_summary'), asyncHandler(async (req, res) => {
   const { page, pageSize, search, status } = z.object({
     page: z.coerce.number().int().min(1).default(1),
@@ -391,83 +392,73 @@ router.get('/summary', requirePermission('po_summary'), asyncHandler(async (req,
     search: z.string().trim().max(120).optional(),
     status: z.enum(['ACTIVE', 'CANCELLED', 'ALL']).default('ACTIVE'),
   }).parse(req.query);
+  const skip = (page - 1) * pageSize;
 
-  const where = {
-    poOrder: { companyId: req.tenant.companyId },
-    ...(status !== 'ALL' ? { status } : {}),
-    ...(search
-      ? {
-          OR: [
-            { poOrder: { poNumber: { contains: search } } },
-            { poOrder: { customer: { name: { contains: search } } } },
-            { grade: { contains: search } },
-            { material: { contains: search } },
-            { measure: { contains: search } },
-          ],
-        }
-      : {}),
-  };
+  let where = 'po.`companyId` = ?';
+  const params = [req.tenant.companyId];
+  if (status !== 'ALL') { where += ' AND it.`status` = ?'; params.push(status); }
+  if (search) {
+    const like = `%${search}%`;
+    where += ' AND (po.`poNumber` LIKE ? OR c.`name` LIKE ? OR it.`grade` LIKE ? OR it.`material` LIKE ? OR it.`measure` LIKE ?)';
+    params.push(like, like, like, like, like);
+  }
 
-  const [items, total] = await Promise.all([
-    prisma.poOrderItem.findMany({
-      where,
-      orderBy: [{ poOrder: { orderDate: 'desc' } }, { createdAt: 'desc' }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      include: {
-        poOrder: { include: { customer: true } },
-        productions: { select: { pcs: true } },
-        dispatches:  { select: { pcs: true } },
-      },
-    }),
-    prisma.poOrderItem.count({ where }),
+  const [rows, totalRow] = await Promise.all([
+    q(
+      `${itemRowSql} WHERE ${where} ORDER BY po.\`orderDate\` DESC, it.\`createdAt\` DESC LIMIT ? OFFSET ?`,
+      [...params, pageSize, skip]
+    ),
+    qOne(
+      `SELECT COUNT(*) AS n FROM \`PoOrderItem\` it
+        INNER JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
+        INNER JOIN \`Customer\` c ON c.\`id\` = po.\`customerId\`
+        WHERE ${where}`,
+      params
+    ),
   ]);
 
-  const enriched = items.map((it) => {
-    const produced   = it.productions.reduce((s, p) => s + p.pcs, 0);
-    const dispatched = it.dispatches.reduce((s, d) => s + d.pcs, 0);
-    return {
-      id:            it.id,
-      poOrderId:     it.poOrderId,
-      poNumber:      it.poOrder.poNumber,
-      orderDate:     it.poOrder.orderDate,
-      deliveryDate:  it.poOrder.deliveryDate,
-      customerName:  it.poOrder.customer.name,
-      coreType:      it.coreType,
-      grade:         it.grade,
-      material:      it.material,
-      measure:       it.measure,
-      pcsOrdered:    it.pcs,
-      pcsProduced:   produced,
-      pcsDispatched: dispatched,
-      pcsPending:    Math.max(it.pcs - dispatched, 0),
-      weightPerPc:   it.weightPerPc,
-      totalWeight:   it.totalWeight,
-      turns:         it.turns       ?? null,
-      flux:          it.flux        ?? null,
-      ateCm:         it.ateCm       ?? null,
-      testVoltage:   it.testVoltage ?? null,
-      testCurrent:   it.testCurrent ?? null,
-      rateBasis:     it.rateBasis   ?? null,
-      rateValue:     it.rateValue   ?? null,
-      ratePerKg:     it.ratePerKg   ?? null,
-      ratePerPc:     it.ratePerPc   ?? null,
-      totalAmount:   it.totalAmount ?? null,
-      status:        it.status,
-    };
-  });
-
-  res.json({ items: enriched, total, page, pageSize });
+  const enriched = rows.map((it) => ({
+    id:            it.id,
+    poOrderId:     it.poOrderId,
+    poNumber:      it.poNumber,
+    orderDate:     it.orderDate,
+    deliveryDate:  it.deliveryDate,
+    customerName:  it.customerName,
+    coreType:      it.coreType,
+    grade:         it.grade,
+    material:      it.material,
+    measure:       it.measure,
+    pcsOrdered:    it.pcs,
+    pcsProduced:   Number(it.pcsProduced ?? 0),
+    pcsDispatched: Number(it.pcsDispatched ?? 0),
+    pcsPending:    Math.max(it.pcs - Number(it.pcsDispatched ?? 0), 0),
+    weightPerPc:   it.weightPerPc,
+    totalWeight:   it.totalWeight,
+    turns:         it.turns       ?? null,
+    flux:          it.flux        ?? null,
+    ateCm:         it.ateCm       ?? null,
+    testVoltage:   it.testVoltage ?? null,
+    testCurrent:   it.testCurrent ?? null,
+    rateBasis:     it.rateBasis   ?? null,
+    rateValue:     it.rateValue   ?? null,
+    ratePerKg:     it.ratePerKg   ?? null,
+    ratePerPc:     it.ratePerPc   ?? null,
+    totalAmount:   it.totalAmount ?? null,
+    status:        it.status,
+  }));
+  res.json({ items: enriched, total: Number(totalRow?.n ?? 0), page, pageSize });
 }));
 
-/* ---------- GET /api/po-orders/:id ---------- */
+/* GET /api/po-orders/:id */
 router.get('/:id', requirePermission('view_po'), asyncHandler(async (req, res) => {
-  const po = await prisma.poOrder.findFirst({
-    where: tenantWhere(req, { id: req.params.id }),
-    include: { items: true, customer: true },
-  });
+  const po = await qOne(
+    'SELECT * FROM `PoOrder` WHERE `id` = ? AND `companyId` = ?',
+    [req.params.id, req.tenant.companyId]
+  );
   if (!po) throw new AppError('PO not found', 404, 'NOT_FOUND');
-  res.json(po);
+  const customer = await qOne('SELECT * FROM `Customer` WHERE `id` = ?', [po.customerId]);
+  const itemsByPo = await loadItemsForPos([po.id]);
+  res.json({ ...po, customer, items: itemsByPo.get(po.id) ?? [] });
 }));
 
 export default router;

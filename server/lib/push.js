@@ -2,7 +2,7 @@
 // Firefox/Android out of the box; iOS Safari requires the user to "Add to
 // Home Screen" before they can receive push.
 import webpush from 'web-push';
-import { prisma } from './db.js';
+import { q, qOne, insert, update } from './db.js';
 import { env } from './env.js';
 
 let configured = false;
@@ -14,15 +14,33 @@ const ensureConfigured = () => {
   return true;
 };
 
-export const saveSubscription = async ({ userId, companyId, endpoint, keys, userAgent }) =>
-  prisma.pushSubscription.upsert({
-    where: { endpoint },
-    update: { p256dh: keys.p256dh, auth: keys.auth, userAgent, userId, companyId },
-    create: { endpoint, p256dh: keys.p256dh, auth: keys.auth, userAgent, userId, companyId },
+// Upsert on `endpoint` (unique). Insert if missing, update keys + binding if present.
+export const saveSubscription = async ({ userId, companyId, endpoint, keys, userAgent }) => {
+  const existing = await qOne(
+    'SELECT `id` FROM `PushSubscription` WHERE `endpoint` = ?',
+    [endpoint]
+  );
+  if (existing) {
+    return update('PushSubscription', existing.id, {
+      p256dh: keys.p256dh,
+      auth: keys.auth,
+      userAgent,
+      userId,
+      companyId,
+    });
+  }
+  return insert('PushSubscription', {
+    endpoint,
+    p256dh: keys.p256dh,
+    auth: keys.auth,
+    userAgent,
+    userId,
+    companyId,
   });
+};
 
 export const removeSubscription = ({ userId, endpoint }) =>
-  prisma.pushSubscription.deleteMany({ where: { endpoint, userId } });
+  q('DELETE FROM `PushSubscription` WHERE `endpoint` = ? AND `userId` = ?', [endpoint, userId]);
 
 const sendOne = async (sub, payload) => {
   try {
@@ -33,7 +51,7 @@ const sendOne = async (sub, payload) => {
     return { ok: true };
   } catch (err) {
     if (err?.statusCode === 404 || err?.statusCode === 410) {
-      await prisma.pushSubscription.delete({ where: { endpoint: sub.endpoint } }).catch(() => {});
+      await q('DELETE FROM `PushSubscription` WHERE `endpoint` = ?', [sub.endpoint]).catch(() => {});
       return { ok: false, gone: true };
     }
     return { ok: false, error: err?.message };
@@ -42,7 +60,7 @@ const sendOne = async (sub, payload) => {
 
 export const broadcastToCompany = async (companyId, payload) => {
   if (!ensureConfigured()) return { sent: 0, failed: 0, error: 'VAPID keys not configured' };
-  const subs = await prisma.pushSubscription.findMany({ where: { companyId } });
+  const subs = await q('SELECT * FROM `PushSubscription` WHERE `companyId` = ?', [companyId]);
   const results = await Promise.all(subs.map((s) => sendOne(s, payload)));
   return {
     sent: results.filter((r) => r.ok).length,
@@ -53,7 +71,7 @@ export const broadcastToCompany = async (companyId, payload) => {
 
 export const sendToUser = async (userId, payload) => {
   if (!ensureConfigured()) return { sent: 0 };
-  const subs = await prisma.pushSubscription.findMany({ where: { userId } });
+  const subs = await q('SELECT * FROM `PushSubscription` WHERE `userId` = ?', [userId]);
   const results = await Promise.all(subs.map((s) => sendOne(s, payload)));
   return { sent: results.filter((r) => r.ok).length };
 };

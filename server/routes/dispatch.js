@@ -1,11 +1,10 @@
 // Dispatch records — track shipments of produced goods to customers.
-// Constraint: sum(dispatch.pcs) ≤ sum(production.pcs) for the same PO item.
 import { Router } from 'express';
 import { z } from 'zod';
-import { prisma } from '../lib/db.js';
+import { q, qOne, insert, update, del } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
-import { resolveTenant, tenantWhere } from '../lib/tenant.js';
+import { resolveTenant } from '../lib/tenant.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -31,262 +30,257 @@ const updateSchema = z.object({
   notes: z.string().max(2000).optional().nullable(),
 });
 
-const flatten = (d) => {
-  const item = d.poOrderItem;
-  // Pro-rate the line amount onto this dispatch batch.
-  const lineAmount = item?.totalAmount ?? null;
-  const proRataAmount = (lineAmount != null && item.pcs > 0)
-    ? +(lineAmount * (d.pcs / item.pcs)).toFixed(2)
+const DISPATCH_ROW_SQL = `
+  SELECT d.*,
+         it.\`pcs\`         AS item_pcs,
+         it.\`coreType\`    AS item_coreType,
+         it.\`grade\`       AS item_grade,
+         it.\`material\`    AS item_material,
+         it.\`measure\`     AS item_measure,
+         it.\`id1\`         AS item_id1, it.\`id2\` AS item_id2,
+         it.\`od1\`         AS item_od1, it.\`od2\` AS item_od2,
+         it.\`ht\`          AS item_ht,
+         it.\`rateBasis\`   AS item_rateBasis,
+         it.\`rateValue\`   AS item_rateValue,
+         it.\`ratePerKg\`   AS item_ratePerKg,
+         it.\`ratePerPc\`   AS item_ratePerPc,
+         it.\`totalAmount\` AS item_totalAmount,
+         it.\`turns\`       AS item_turns,
+         it.\`flux\`        AS item_flux,
+         it.\`ateCm\`       AS item_ateCm,
+         it.\`testVoltage\` AS item_testVoltage,
+         it.\`testCurrent\` AS item_testCurrent,
+         po.\`id\`          AS po_id,
+         po.\`poNumber\`    AS po_number,
+         po.\`orderDate\`   AS po_orderDate,
+         po.\`customerId\`  AS customer_id,
+         c.\`name\`         AS customer_name,
+         c.\`state\`        AS customer_state,
+         c.\`phone\`        AS customer_phone
+    FROM \`Dispatch\` d
+    INNER JOIN \`PoOrderItem\` it ON it.\`id\` = d.\`poOrderItemId\`
+    INNER JOIN \`PoOrder\`     po ON po.\`id\` = it.\`poOrderId\`
+    INNER JOIN \`Customer\`    c  ON c.\`id\`  = po.\`customerId\``;
+
+const flatten = (r) => {
+  const lineAmount = r.item_totalAmount ?? null;
+  const proRataAmount = (lineAmount != null && r.item_pcs > 0)
+    ? +(lineAmount * (r.pcs / r.item_pcs)).toFixed(2)
     : null;
   return {
-    id: d.id,
-    poOrderItemId: d.poOrderItemId,
-    poNumber: item.poOrder.poNumber,
-    orderDate: item.poOrder.orderDate,
-    customerId: item.poOrder.customerId,
-    customerName: item.poOrder.customer.name,
-    customerState: item.poOrder.customer.state ?? null,
-    customerPhone: item.poOrder.customer.phone ?? null,
-    coreType: item.coreType,
-    grade: item.grade,
-    material: item.material,
-    measure: item.measure,
-    // Dimensions for packing list
-    id1: item.id1,
-    id2: item.id2 ?? null,
-    od1: item.od1,
-    od2: item.od2 ?? null,
-    ht: item.ht,
-    itemPcs: item.pcs,
-    dispatchDate: d.dispatchDate,
-    pcs: d.pcs,
-    weightPerPc: d.weightPerPc,
-    totalWeight: d.totalWeight,
-    actualWeight: d.actualWeight ?? null,
-    vehicleNo: d.vehicleNo,
-    notes: d.notes,
-    createdAt: d.createdAt,
-    rateBasis:   item.rateBasis ?? null,
-    rateValue:   item.rateValue ?? null,
-    ratePerKg:   item.ratePerKg ?? null,
-    ratePerPc:   item.ratePerPc ?? null,
+    id: r.id,
+    poOrderItemId: r.poOrderItemId,
+    poNumber: r.po_number,
+    orderDate: r.po_orderDate,
+    customerId: r.customer_id,
+    customerName: r.customer_name,
+    customerState: r.customer_state ?? null,
+    customerPhone: r.customer_phone ?? null,
+    coreType: r.item_coreType,
+    grade: r.item_grade,
+    material: r.item_material,
+    measure: r.item_measure,
+    id1: r.item_id1, id2: r.item_id2 ?? null,
+    od1: r.item_od1, od2: r.item_od2 ?? null,
+    ht: r.item_ht,
+    itemPcs: r.item_pcs,
+    dispatchDate: r.dispatchDate,
+    pcs: r.pcs,
+    weightPerPc: r.weightPerPc,
+    totalWeight: r.totalWeight,
+    actualWeight: r.actualWeight ?? null,
+    vehicleNo: r.vehicleNo,
+    notes: r.notes,
+    createdAt: r.createdAt,
+    rateBasis:   r.item_rateBasis ?? null,
+    rateValue:   r.item_rateValue ?? null,
+    ratePerKg:   r.item_ratePerKg ?? null,
+    ratePerPc:   r.item_ratePerPc ?? null,
     lineAmount,
     amount:      proRataAmount,
-    // Flux-test calibration — used by the Testing Report.
-    turns:       item.turns       ?? null,
-    flux:        item.flux        ?? null,
-    ateCm:       item.ateCm       ?? null,
-    testVoltage: item.testVoltage ?? null,
-    testCurrent: item.testCurrent ?? null,
-    poOrderId:   item.poOrder?.id ?? null,
+    turns:       r.item_turns       ?? null,
+    flux:        r.item_flux        ?? null,
+    ateCm:       r.item_ateCm       ?? null,
+    testVoltage: r.item_testVoltage ?? null,
+    testCurrent: r.item_testCurrent ?? null,
+    poOrderId:   r.po_id ?? null,
   };
 };
 
-const withRelations = {
-  include: {
-    poOrderItem: { include: { poOrder: { include: { customer: true } } } },
-  },
-};
-
-/* ---------- GET /ready — PO items that have produced but undispatched pcs ---------- */
+/* GET /ready — PO items with produced but undispatched pcs */
 router.get('/ready', requirePermission('dispatch'), asyncHandler(async (req, res) => {
-  const search = z.object({ search: z.string().trim().max(120).optional() })
-    .parse(req.query).search;
+  const search = z.object({ search: z.string().trim().max(120).optional() }).parse(req.query).search;
 
-  const items = await prisma.poOrderItem.findMany({
-    where: {
-      status: 'ACTIVE',
-      poOrder: { companyId: req.tenant.companyId },
-      ...(search
-        ? {
-            OR: [
-              { poOrder: { poNumber: { contains: search } } },
-              { poOrder: { customer: { name: { contains: search } } } },
-              { grade:    { contains: search } },
-              { material: { contains: search } },
-              { measure:  { contains: search } },
-            ],
-          }
-        : {}),
-    },
-    orderBy: { createdAt: 'desc' },
-    include: {
-      poOrder: { include: { customer: true } },
-      productions: { select: { pcs: true } },
-      dispatches: { select: { pcs: true } },
-    },
-  });
+  let where = 'po.`companyId` = ? AND it.`status` = ?';
+  const params = [req.tenant.companyId, 'ACTIVE'];
+  if (search) {
+    const like = `%${search}%`;
+    where += ' AND (po.`poNumber` LIKE ? OR c.`name` LIKE ? OR it.`grade` LIKE ? OR it.`material` LIKE ? OR it.`measure` LIKE ?)';
+    params.push(like, like, like, like, like);
+  }
 
-  const ready = items
-    .map((it) => {
-      const produced = it.productions.reduce((s, p) => s + p.pcs, 0);
-      const dispatched = it.dispatches.reduce((s, d) => s + d.pcs, 0);
-      const readyPcs = Math.max(produced - dispatched, 0);
-      const readyAmount = (it.totalAmount != null && it.pcs > 0)
-        ? +(it.totalAmount * (readyPcs / it.pcs)).toFixed(2)
-        : null;
-      return {
-        id: it.id,
-        poNumber: it.poOrder.poNumber,
-        customerName: it.poOrder.customer.name,
-        deliveryDate: it.poOrder.deliveryDate,
-        coreType: it.coreType,
-        grade: it.grade,
-        material: it.material,
-        measure: it.measure,
-        weightPerPc: it.weightPerPc,
-        orderedPcs: it.pcs,
-        producedPcs: produced,
-        dispatchedPcs: dispatched,
-        readyPcs,
-        rateBasis:   it.rateBasis   ?? null,
-        rateValue:   it.rateValue   ?? null,
-        totalAmount: it.totalAmount ?? null,
-        readyAmount,
-      };
-    })
-    .filter((x) => x.readyPcs > 0);
+  const rows = await q(
+    `SELECT it.*,
+            po.\`poNumber\`     AS po_number,
+            po.\`deliveryDate\` AS po_deliveryDate,
+            c.\`name\`          AS customer_name,
+            (SELECT COALESCE(SUM(pp.\`pcs\`),0) FROM \`Production\` pp WHERE pp.\`poOrderItemId\` = it.\`id\`) AS produced,
+            (SELECT COALESCE(SUM(dd.\`pcs\`),0) FROM \`Dispatch\`   dd WHERE dd.\`poOrderItemId\` = it.\`id\`) AS dispatched
+       FROM \`PoOrderItem\` it
+       INNER JOIN \`PoOrder\`  po ON po.\`id\` = it.\`poOrderId\`
+       INNER JOIN \`Customer\` c  ON c.\`id\`  = po.\`customerId\`
+       WHERE ${where}
+       ORDER BY it.\`createdAt\` DESC`,
+    params
+  );
+
+  const ready = rows.map((it) => {
+    const produced   = Number(it.produced ?? 0);
+    const dispatched = Number(it.dispatched ?? 0);
+    const readyPcs   = Math.max(produced - dispatched, 0);
+    const readyAmount = (it.totalAmount != null && it.pcs > 0)
+      ? +(it.totalAmount * (readyPcs / it.pcs)).toFixed(2)
+      : null;
+    return {
+      id: it.id,
+      poNumber: it.po_number,
+      customerName: it.customer_name,
+      deliveryDate: it.po_deliveryDate,
+      coreType: it.coreType, grade: it.grade, material: it.material, measure: it.measure,
+      weightPerPc: it.weightPerPc,
+      orderedPcs: it.pcs,
+      producedPcs: produced,
+      dispatchedPcs: dispatched,
+      readyPcs,
+      rateBasis:   it.rateBasis   ?? null,
+      rateValue:   it.rateValue   ?? null,
+      totalAmount: it.totalAmount ?? null,
+      readyAmount,
+    };
+  }).filter((x) => x.readyPcs > 0);
 
   res.json({ items: ready });
 }));
 
-/* ---------- GET / — paginated list ---------- */
+/* GET / — paginated list */
 router.get('/', requirePermission('dispatch'), asyncHandler(async (req, res) => {
   const { page, pageSize, search } = z.object({
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(200).default(50),
     search: z.string().trim().max(120).optional(),
   }).parse(req.query);
+  const skip = (page - 1) * pageSize;
 
-  const where = tenantWhere(req, search
-    ? {
-        OR: [
-          { vehicleNo: { contains: search } },
-          { poOrderItem: { poOrder: { poNumber: { contains: search } } } },
-          { poOrderItem: { poOrder: { customer: { name: { contains: search } } } } },
-          { poOrderItem: { grade:    { contains: search } } },
-          { poOrderItem: { material: { contains: search } } },
-          { poOrderItem: { measure:  { contains: search } } },
-        ],
-      }
-    : {});
+  let where = 'd.`companyId` = ?';
+  const params = [req.tenant.companyId];
+  if (search) {
+    const like = `%${search}%`;
+    where += ' AND (d.`vehicleNo` LIKE ? OR po.`poNumber` LIKE ? OR c.`name` LIKE ? OR it.`grade` LIKE ? OR it.`material` LIKE ? OR it.`measure` LIKE ?)';
+    params.push(like, like, like, like, like, like);
+  }
 
-  const [items, total] = await Promise.all([
-    prisma.dispatch.findMany({
-      where, orderBy: { dispatchDate: 'desc' },
-      skip: (page - 1) * pageSize, take: pageSize,
-      ...withRelations,
-    }),
-    prisma.dispatch.count({ where }),
+  const [rows, totalRow] = await Promise.all([
+    q(`${DISPATCH_ROW_SQL} WHERE ${where} ORDER BY d.\`dispatchDate\` DESC LIMIT ? OFFSET ?`,
+      [...params, pageSize, skip]),
+    qOne(
+      `SELECT COUNT(*) AS n FROM \`Dispatch\` d
+        INNER JOIN \`PoOrderItem\` it ON it.\`id\` = d.\`poOrderItemId\`
+        INNER JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
+        INNER JOIN \`Customer\` c ON c.\`id\` = po.\`customerId\`
+        WHERE ${where}`, params),
   ]);
 
-  res.json({ items: items.map(flatten), total, page, pageSize });
+  res.json({ items: rows.map(flatten), total: Number(totalRow?.n ?? 0), page, pageSize });
 }));
 
-/* ---------- GET /:id ---------- */
+/* GET /:id */
 router.get('/:id', requirePermission('dispatch'), asyncHandler(async (req, res) => {
-  const d = await prisma.dispatch.findFirst({
-    where: tenantWhere(req, { id: req.params.id }),
-    ...withRelations,
-  });
-  if (!d) throw new AppError('Dispatch record not found', 404, 'NOT_FOUND');
-  res.json(flatten(d));
+  const row = await qOne(
+    `${DISPATCH_ROW_SQL} WHERE d.\`id\` = ? AND d.\`companyId\` = ?`,
+    [req.params.id, req.tenant.companyId]
+  );
+  if (!row) throw new AppError('Dispatch record not found', 404, 'NOT_FOUND');
+  res.json(flatten(row));
 }));
 
-/* ---------- POST / ---------- */
+/* POST / */
 router.post('/', requirePermission('dispatch'), asyncHandler(async (req, res) => {
   const data = createSchema.parse(req.body);
 
-  const item = await prisma.poOrderItem.findFirst({
-    where: { id: data.poOrderItemId, poOrder: { companyId: req.tenant.companyId } },
-    include: {
-      productions: { select: { pcs: true } },
-      dispatches: { select: { pcs: true } },
-    },
-  });
+  const item = await qOne(
+    `SELECT it.*,
+            (SELECT COALESCE(SUM(pp.\`pcs\`),0) FROM \`Production\` pp WHERE pp.\`poOrderItemId\` = it.\`id\`) AS produced,
+            (SELECT COALESCE(SUM(dd.\`pcs\`),0) FROM \`Dispatch\`   dd WHERE dd.\`poOrderItemId\` = it.\`id\`) AS dispatched
+       FROM \`PoOrderItem\` it
+       INNER JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
+       WHERE it.\`id\` = ? AND po.\`companyId\` = ?`,
+    [data.poOrderItemId, req.tenant.companyId]
+  );
   if (!item) throw new AppError('PO item not found', 404, 'NOT_FOUND');
   if (item.status === 'CANCELLED') throw new AppError('PO item is cancelled', 400, 'ITEM_CANCELLED');
 
-  const produced = item.productions.reduce((s, p) => s + p.pcs, 0);
-  const alreadyDispatched = item.dispatches.reduce((s, d) => s + d.pcs, 0);
-  const available = Math.max(produced - alreadyDispatched, 0);
-
+  const available = Math.max(Number(item.produced ?? 0) - Number(item.dispatched ?? 0), 0);
   if (data.pcs > available) {
-    throw new AppError(
-      `Dispatch pcs (${data.pcs}) exceeds available produced pcs (${available}).`,
-      400, 'PCS_EXCEEDS'
-    );
+    throw new AppError(`Dispatch pcs (${data.pcs}) exceeds available produced pcs (${available}).`, 400, 'PCS_EXCEEDS');
   }
 
-  const created = await prisma.dispatch.create({
-    data: {
-      poOrderItemId: data.poOrderItemId,
-      dispatchDate: data.dispatchDate,
-      pcs: data.pcs,
-      weightPerPc: data.weightPerPc,
-      totalWeight: data.totalWeight,
-      actualWeight: data.actualWeight ?? null,
-      vehicleNo: data.vehicleNo ?? null,
-      notes: data.notes ?? null,
-      companyId: req.tenant.companyId,
-      createdById: req.auth.userId,
-    },
-    ...withRelations,
+  const created = await insert('Dispatch', {
+    poOrderItemId: data.poOrderItemId,
+    dispatchDate: data.dispatchDate,
+    pcs: data.pcs,
+    weightPerPc: data.weightPerPc,
+    totalWeight: data.totalWeight,
+    actualWeight: data.actualWeight ?? null,
+    vehicleNo: data.vehicleNo ?? null,
+    notes: data.notes ?? null,
+    companyId: req.tenant.companyId,
+    createdById: req.auth.userId,
   });
-  res.status(201).json(flatten(created));
+  const fresh = await qOne(`${DISPATCH_ROW_SQL} WHERE d.\`id\` = ?`, [created.id]);
+  res.status(201).json(flatten(fresh));
 }));
 
-/* ---------- PATCH /:id ---------- */
+/* PATCH /:id */
 router.patch('/:id', requirePermission('dispatch'), asyncHandler(async (req, res) => {
   const data = updateSchema.parse(req.body);
-  const d = await prisma.dispatch.findFirst({
-    where: tenantWhere(req, { id: req.params.id }),
-    include: {
-      poOrderItem: {
-        include: {
-          productions: { select: { pcs: true } },
-          dispatches: { select: { id: true, pcs: true } },
-        },
-      },
-    },
-  });
-  if (!d) throw new AppError('Dispatch record not found', 404, 'NOT_FOUND');
+  const existing = await qOne(
+    `SELECT d.*, it.\`pcs\` AS item_pcs,
+            (SELECT COALESCE(SUM(pp.\`pcs\`),0) FROM \`Production\` pp WHERE pp.\`poOrderItemId\` = d.\`poOrderItemId\`) AS produced,
+            (SELECT COALESCE(SUM(dd.\`pcs\`),0) FROM \`Dispatch\` dd WHERE dd.\`poOrderItemId\` = d.\`poOrderItemId\` AND dd.\`id\` <> d.\`id\`) AS others
+       FROM \`Dispatch\` d
+       INNER JOIN \`PoOrderItem\` it ON it.\`id\` = d.\`poOrderItemId\`
+       WHERE d.\`id\` = ? AND d.\`companyId\` = ?`,
+    [req.params.id, req.tenant.companyId]
+  );
+  if (!existing) throw new AppError('Dispatch record not found', 404, 'NOT_FOUND');
 
   if (data.pcs !== undefined) {
-    const produced = d.poOrderItem.productions.reduce((s, p) => s + p.pcs, 0);
-    const otherDispatched = d.poOrderItem.dispatches
-      .filter((x) => x.id !== d.id)
-      .reduce((s, x) => s + x.pcs, 0);
-    const available = Math.max(produced - otherDispatched, 0);
+    const available = Math.max(Number(existing.produced ?? 0) - Number(existing.others ?? 0), 0);
     if (data.pcs > available) {
-      throw new AppError(
-        `New pcs (${data.pcs}) exceeds available capacity (${available}).`,
-        400, 'PCS_EXCEEDS'
-      );
+      throw new AppError(`New pcs (${data.pcs}) exceeds available capacity (${available}).`, 400, 'PCS_EXCEEDS');
     }
   }
 
-  const updated = await prisma.dispatch.update({
-    where: { id: d.id },
-    data: {
-      ...(data.dispatchDate !== undefined ? { dispatchDate: data.dispatchDate } : {}),
-      ...(data.pcs !== undefined ? { pcs: data.pcs } : {}),
-      ...(data.weightPerPc !== undefined ? { weightPerPc: data.weightPerPc } : {}),
-      ...(data.totalWeight !== undefined ? { totalWeight: data.totalWeight } : {}),
-      ...(data.actualWeight !== undefined ? { actualWeight: data.actualWeight ?? null } : {}),
-      ...(data.vehicleNo !== undefined ? { vehicleNo: data.vehicleNo ?? null } : {}),
-      ...(data.notes !== undefined ? { notes: data.notes ?? null } : {}),
-    },
-    ...withRelations,
-  });
-  res.json(flatten(updated));
+  const patch = {};
+  if (data.dispatchDate !== undefined) patch.dispatchDate = data.dispatchDate;
+  if (data.pcs          !== undefined) patch.pcs = data.pcs;
+  if (data.weightPerPc  !== undefined) patch.weightPerPc = data.weightPerPc;
+  if (data.totalWeight  !== undefined) patch.totalWeight = data.totalWeight;
+  if (data.actualWeight !== undefined) patch.actualWeight = data.actualWeight ?? null;
+  if (data.vehicleNo    !== undefined) patch.vehicleNo = data.vehicleNo ?? null;
+  if (data.notes        !== undefined) patch.notes = data.notes ?? null;
+
+  if (Object.keys(patch).length > 0) await update('Dispatch', existing.id, patch);
+  const fresh = await qOne(`${DISPATCH_ROW_SQL} WHERE d.\`id\` = ?`, [existing.id]);
+  res.json(flatten(fresh));
 }));
 
-/* ---------- DELETE /:id ---------- */
+/* DELETE /:id */
 router.delete('/:id', requirePermission('dispatch'), asyncHandler(async (req, res) => {
-  const d = await prisma.dispatch.findFirst({ where: tenantWhere(req, { id: req.params.id }) });
-  if (!d) throw new AppError('Dispatch record not found', 404, 'NOT_FOUND');
-  await prisma.dispatch.delete({ where: { id: d.id } });
+  const row = await qOne('SELECT `id` FROM `Dispatch` WHERE `id` = ? AND `companyId` = ?',
+    [req.params.id, req.tenant.companyId]);
+  if (!row) throw new AppError('Dispatch record not found', 404, 'NOT_FOUND');
+  await del('Dispatch', row.id);
   res.status(204).end();
 }));
 
