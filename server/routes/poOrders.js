@@ -480,4 +480,75 @@ router.get('/:id', requirePermission('view_po'), asyncHandler(async (req, res) =
   res.json({ ...po, customer, items: itemsByPo.get(po.id) ?? [] });
 }));
 
+/* PATCH /api/po-orders/:id — edit the SO header (poNumber, customer, dates,
+   notes). Locked the moment any production has been recorded on any line —
+   editing identifiers after production would break downstream paperwork. */
+const headerUpdateSchema = z.object({
+  poNumber:     z.string().trim().min(1).max(60).optional(),
+  customerId:   z.string().min(1).optional(),
+  orderDate:    z.coerce.date().optional(),
+  deliveryDate: z.coerce.date().optional(),
+  deliveryDays: z.coerce.number().int().min(0).optional(),
+  notes:        z.string().max(2000).optional().nullable(),
+});
+
+router.patch('/:id', requirePermission('add_po'), asyncHandler(async (req, res) => {
+  const data = headerUpdateSchema.parse(req.body);
+
+  const po = await qOne(
+    'SELECT * FROM `PoOrder` WHERE `id` = ? AND `companyId` = ?',
+    [req.params.id, req.tenant.companyId]
+  );
+  if (!po) throw new AppError('SO not found', 404, 'NOT_FOUND');
+
+  // Block edits once ANY line item has any production logged against it —
+  // changing identifiers / dates after production has started would break
+  // downstream packing-list / dispatch / invoice references.
+  const producedRow = await qOne(
+    `SELECT COALESCE(SUM(p.\`pcs\`), 0) AS n
+       FROM \`Production\` p
+       INNER JOIN \`PoOrderItem\` it ON it.\`id\` = p.\`poOrderItemId\`
+       WHERE it.\`poOrderId\` = ?`,
+    [po.id]
+  );
+  if (Number(producedRow?.n ?? 0) > 0) {
+    throw new AppError(
+      `Cannot edit this SO header — production has already started on one or more lines. ` +
+      `Use Cancel on a specific item to shrink remaining qty instead.`,
+      400, 'PRODUCTION_STARTED'
+    );
+  }
+
+  // If customer is being changed, verify the new one belongs to this tenant.
+  if (data.customerId && data.customerId !== po.customerId) {
+    const c = await qOne(
+      'SELECT `id` FROM `Customer` WHERE `id` = ? AND `companyId` = ?',
+      [data.customerId, req.tenant.companyId]
+    );
+    if (!c) throw new AppError('Customer not found', 400, 'BAD_CUSTOMER');
+  }
+
+  // If SO# is being changed, enforce per-company uniqueness.
+  if (data.poNumber && data.poNumber !== po.poNumber) {
+    const dup = await qOne(
+      'SELECT `id` FROM `PoOrder` WHERE `companyId` = ? AND `poNumber` = ? AND `id` <> ?',
+      [req.tenant.companyId, data.poNumber, po.id]
+    );
+    if (dup) throw new AppError('SO# already exists in this company', 409, 'PO_DUPLICATE');
+  }
+
+  const patch = {};
+  if (data.poNumber     !== undefined) patch.poNumber     = data.poNumber;
+  if (data.customerId   !== undefined) patch.customerId   = data.customerId;
+  if (data.orderDate    !== undefined) patch.orderDate    = data.orderDate;
+  if (data.deliveryDate !== undefined) patch.deliveryDate = data.deliveryDate;
+  if (data.deliveryDays !== undefined) patch.deliveryDays = data.deliveryDays;
+  if (data.notes        !== undefined) patch.notes        = data.notes ?? null;
+
+  if (Object.keys(patch).length > 0) await update('PoOrder', po.id, patch);
+  const fresh = await qOne('SELECT * FROM `PoOrder` WHERE `id` = ?', [po.id]);
+  const customer = await qOne('SELECT * FROM `Customer` WHERE `id` = ?', [fresh.customerId]);
+  res.json({ ...fresh, customer });
+}));
+
 export default router;
