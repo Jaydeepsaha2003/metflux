@@ -7,10 +7,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Save, Loader2, Hash, User2 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
-import { numFromInput, rectangularCalc, toroidalCalc } from '@/lib/calc';
+import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc } from '@/lib/calc';
 import { SearchableSelect } from '@/components/SearchableSelect';
 
 type GradeRow = { grade: string; materials: { id: string; material: string }[] };
+type FluxPoint = { flux: number; ateCm: number };
+type FluxGroup = { grade: string; points: FluxPoint[] };
 
 type Item = {
   id: string;
@@ -36,6 +38,12 @@ type Item = {
   pcsProduced: number | null;
   pcsDispatched: number | null;
   status: 'ACTIVE' | 'CANCELLED';
+  // Flux-test calibration — populated for toroidal and (optionally) rectangular.
+  turns: number | null;
+  flux: number | null;
+  ateCm: number | null;
+  testVoltage: number | null;
+  testCurrent: number | null;
 };
 
 export const POEditPage = () => {
@@ -52,6 +60,16 @@ export const POEditPage = () => {
   const { data: gradesResp } = useQuery({
     queryKey: ['material-grades'],
     queryFn: () => api<{ grades: GradeRow[] }>('/material-grades'),
+  });
+
+  // Flux-grade tables — one per core type, same endpoint as the new-PO form.
+  const { data: fluxTor } = useQuery({
+    queryKey: ['flux-grades-grouped', 'TOROIDAL'],
+    queryFn: () => api<{ grades: FluxGroup[] }>('/flux-grades/grouped?coreType=TOROIDAL'),
+  });
+  const { data: fluxRect } = useQuery({
+    queryKey: ['flux-grades-grouped', 'RECTANGULAR'],
+    queryFn: () => api<{ grades: FluxGroup[] }>('/flux-grades/grouped?coreType=RECTANGULAR'),
   });
 
   return (
@@ -108,14 +126,24 @@ export const POEditPage = () => {
           )}
 
           {item.coreType === 'TOROIDAL'
-            ? <ToroidalEditor item={item} grades={gradesResp?.grades ?? []} onSaved={() => {
-                queryClient.invalidateQueries({ queryKey: ['po-items'] });
-                navigate('/po/manage');
-              }} />
-            : <RectangularEditor item={item} grades={gradesResp?.grades ?? []} onSaved={() => {
-                queryClient.invalidateQueries({ queryKey: ['po-items'] });
-                navigate('/po/manage');
-              }} />}
+            ? <ToroidalEditor
+                item={item}
+                grades={gradesResp?.grades ?? []}
+                fluxGrades={fluxTor?.grades ?? []}
+                onSaved={() => {
+                  queryClient.invalidateQueries({ queryKey: ['po-items'] });
+                  navigate('/po/manage');
+                }}
+              />
+            : <RectangularEditor
+                item={item}
+                grades={gradesResp?.grades ?? []}
+                fluxGrades={fluxRect?.grades ?? []}
+                onSaved={() => {
+                  queryClient.invalidateQueries({ queryKey: ['po-items'] });
+                  navigate('/po/manage');
+                }}
+              />}
         </>
       )}
     </div>
@@ -124,8 +152,8 @@ export const POEditPage = () => {
 
 /* ---------- toroidal editor ---------- */
 const ToroidalEditor = ({
-  item, grades, onSaved,
-}: { item: Item; grades: GradeRow[]; onSaved: () => void }) => {
+  item, grades, fluxGrades, onSaved,
+}: { item: Item; grades: GradeRow[]; fluxGrades: FluxGroup[]; onSaved: () => void }) => {
   const [grade, setGrade] = useState(item.grade);
   const [material, setMaterial] = useState(item.material);
   const [id1, setId1] = useState(item.id1);
@@ -134,11 +162,26 @@ const ToroidalEditor = ({
   const [pcs, setPcs] = useState(item.pcs);
   const [rateBasis, setRateBasis] = useState<'PER_KG' | 'PER_PCS'>(item.rateBasis ?? 'PER_KG');
   const [rateValue, setRateValue] = useState(item.rateValue ?? 0);
+  // Flux-test calibration — pre-filled from the existing item.
+  const [turns, setTurns] = useState(item.turns ?? 0);
+  const [flux,  setFlux]  = useState(item.flux  ?? 0);
 
   const minPcs = Math.max(item.pcsProduced ?? 0, item.pcsDispatched ?? 0);
   const calc = useMemo(() => toroidalCalc({ id: id1, od: od1, ht, pcs }), [id1, od1, ht, pcs]);
   const matchingMaterials = grades.find((g) => g.grade === grade)?.materials ?? [];
   const derived = deriveRate({ rateBasis, rateValue, weightPerPc: calc.weightPerPc, pcs, totalWeight: calc.totalWeight });
+
+  // Available flux points for the selected grade. ateCm is looked up from the
+  // point — if the existing flux doesn't match a known point (e.g. the grade's
+  // flux table changed since this PO was created), we fall back to item.ateCm.
+  const fluxPoints = fluxGrades.find((g) => g.grade === grade)?.points ?? [];
+  const ateCm = fluxPoints.find((p) => p.flux === flux)?.ateCm ?? item.ateCm ?? 0;
+  const gradeHasFluxData = fluxPoints.length > 0;
+  const fluxOptions = fluxPoints.map((p) => ({ value: String(p.flux), label: `${p.flux.toFixed(2)} T` }));
+  const fluxCalc = useMemo(
+    () => fluxTestCalc({ id: id1, od: od1, ht, turns, flux, ateCm }),
+    [id1, od1, ht, turns, flux, ateCm]
+  );
 
   const [error, setError] = useState<string | null>(null);
   const save = useMutation({
@@ -159,6 +202,12 @@ const ToroidalEditor = ({
           weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight,
           rateBasis: rateValue > 0 ? rateBasis : null,
           rateValue: rateValue > 0 ? rateValue : null,
+          // Flux-test fields — send null when the user has cleared them.
+          turns:       turns > 0 ? turns : null,
+          flux:        flux  > 0 ? flux  : null,
+          ateCm:       flux  > 0 && ateCm > 0 ? ateCm : null,
+          testVoltage: fluxCalc.testVoltage > 0 ? fluxCalc.testVoltage : null,
+          testCurrent: fluxCalc.testCurrent > 0 ? fluxCalc.testCurrent : null,
         },
       });
     },
@@ -192,6 +241,20 @@ const ToroidalEditor = ({
         <NumField label="OD"  value={od1} onChange={setOd1} />
         <NumField label="HT"  value={ht}  onChange={setHt} />
         <NumField label="Pcs" value={pcs} onChange={setPcs} />
+        <NumField label="Turns" value={turns} onChange={setTurns} />
+        <Field label="Flux ( T )">
+          <SearchableSelect
+            value={flux > 0 ? String(flux) : ''}
+            onChange={(v) => setFlux(v ? Number(v) : 0)}
+            options={fluxOptions}
+            placeholder={
+              !grade ? 'Pick grade first'
+              : !gradeHasFluxData ? `No flux data for "${grade}"`
+              : 'Select flux…'
+            }
+            disabled={!grade || !gradeHasFluxData}
+          />
+        </Field>
         <Field label="Rate Basis">
           <select
             className="input"
@@ -209,6 +272,9 @@ const ToroidalEditor = ({
         ['Wt/pc',    calc.weightPerPc.toFixed(3)],
         ['Total Wt', calc.totalWeight.toFixed(3)],
         ['Measure',  calc.measure],
+        ['ATe/cm',   ateCm > 0 ? ateCm.toFixed(3) : '—'],
+        ['V (Volts)', fluxCalc.testVoltage > 0 ? fluxCalc.testVoltage.toFixed(3) : '—'],
+        ['I (mA)',   fluxCalc.testCurrent > 0 ? fluxCalc.testCurrent.toFixed(2) : '—'],
         ...(rateValue > 0 ? [
           ['Rate / Kg',  `₹${(derived.ratePerKg ?? 0).toFixed(2)}`],
           ['Rate / Pc',  `₹${(derived.ratePerPc ?? 0).toFixed(2)}`],
@@ -225,8 +291,8 @@ const ToroidalEditor = ({
 
 /* ---------- rectangular editor ---------- */
 const RectangularEditor = ({
-  item, grades, onSaved,
-}: { item: Item; grades: GradeRow[]; onSaved: () => void }) => {
+  item, grades, fluxGrades, onSaved,
+}: { item: Item; grades: GradeRow[]; fluxGrades: FluxGroup[]; onSaved: () => void }) => {
   const [grade, setGrade] = useState(item.grade);
   const [material, setMaterial] = useState(item.material);
   const [id1, setId1] = useState(item.id1);
@@ -237,6 +303,8 @@ const RectangularEditor = ({
   const [pcs, setPcs] = useState(item.pcs);
   const [rateBasis, setRateBasis] = useState<'PER_KG' | 'PER_PCS'>(item.rateBasis ?? 'PER_KG');
   const [rateValue, setRateValue] = useState(item.rateValue ?? 0);
+  const [turns, setTurns] = useState(item.turns ?? 0);
+  const [flux,  setFlux]  = useState(item.flux  ?? 0);
 
   const minPcs = Math.max(item.pcsProduced ?? 0, item.pcsDispatched ?? 0);
   const calc = useMemo(
@@ -245,6 +313,15 @@ const RectangularEditor = ({
   );
   const matchingMaterials = grades.find((g) => g.grade === grade)?.materials ?? [];
   const derived = deriveRate({ rateBasis, rateValue, weightPerPc: calc.weightPerPc, pcs, totalWeight: calc.totalWeight });
+
+  const fluxPoints = fluxGrades.find((g) => g.grade === grade)?.points ?? [];
+  const ateCm = fluxPoints.find((p) => p.flux === flux)?.ateCm ?? item.ateCm ?? 0;
+  const gradeHasFluxData = fluxPoints.length > 0;
+  const fluxOptions = fluxPoints.map((p) => ({ value: String(p.flux), label: `${p.flux.toFixed(2)} T` }));
+  const fluxCalc = useMemo(
+    () => rectangularFluxTestCalc({ area: calc.coreAc, meanPath: calc.coreMl, turns, flux, ateCm }),
+    [calc.coreAc, calc.coreMl, turns, flux, ateCm]
+  );
 
   const [error, setError] = useState<string | null>(null);
   const save = useMutation({
@@ -267,6 +344,11 @@ const RectangularEditor = ({
           coreAc: calc.coreAc, coreMl: calc.coreMl, d13: calc.d13,
           rateBasis: rateValue > 0 ? rateBasis : null,
           rateValue: rateValue > 0 ? rateValue : null,
+          turns:       turns > 0 ? turns : null,
+          flux:        flux  > 0 ? flux  : null,
+          ateCm:       flux  > 0 && ateCm > 0 ? ateCm : null,
+          testVoltage: fluxCalc.testVoltage > 0 ? fluxCalc.testVoltage : null,
+          testCurrent: fluxCalc.testCurrent > 0 ? fluxCalc.testCurrent : null,
         },
       });
     },
@@ -302,6 +384,20 @@ const RectangularEditor = ({
         <NumField label="OD 2" value={od2} onChange={setOd2} />
         <NumField label="HT"   value={ht}  onChange={setHt} />
         <NumField label="Pcs"  value={pcs} onChange={setPcs} />
+        <NumField label="Turns" value={turns} onChange={setTurns} />
+        <Field label="Flux ( T )">
+          <SearchableSelect
+            value={flux > 0 ? String(flux) : ''}
+            onChange={(v) => setFlux(v ? Number(v) : 0)}
+            options={fluxOptions}
+            placeholder={
+              !grade ? 'Pick grade first'
+              : !gradeHasFluxData ? `No flux data for "${grade}"`
+              : 'Select flux…'
+            }
+            disabled={!grade || !gradeHasFluxData}
+          />
+        </Field>
         <Field label="Rate Basis">
           <select
             className="input"
@@ -323,6 +419,9 @@ const RectangularEditor = ({
         ['Wt/pc',    calc.weightPerPc.toFixed(3)],
         ['Total Wt', calc.totalWeight.toFixed(3)],
         ['Measure',  calc.measure],
+        ['ATe/cm',   ateCm > 0 ? ateCm.toFixed(3) : '—'],
+        ['V (Volts)', fluxCalc.testVoltage > 0 ? fluxCalc.testVoltage.toFixed(3) : '—'],
+        ['I (mA)',   fluxCalc.testCurrent > 0 ? fluxCalc.testCurrent.toFixed(2) : '—'],
         ...(rateValue > 0 ? [
           ['Rate / Kg',  `₹${(derived.ratePerKg ?? 0).toFixed(2)}`],
           ['Rate / Pc',  `₹${(derived.ratePerPc ?? 0).toFixed(2)}`],
