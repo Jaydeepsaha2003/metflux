@@ -1,11 +1,10 @@
-// Customers CRUD — scoped to the active company. Copy this file as a template
-// for any new tenant-scoped resource (invoices, products, etc.).
+// Customers CRUD — scoped to the active company.
 import { Router } from 'express';
 import { z } from 'zod';
-import { prisma } from '../lib/db.js';
+import { q, qOne, insert, update, del } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requireRole } from '../lib/auth.js';
-import { resolveTenant, tenantWhere } from '../lib/tenant.js';
+import { resolveTenant } from '../lib/tenant.js';
 
 const router = Router();
 
@@ -33,7 +32,10 @@ const customerInput = z.object({
 
 // Ensures the row belongs to the active tenant — used before update/delete.
 const findOwned = async (req, id) => {
-  const item = await prisma.customer.findFirst({ where: tenantWhere(req, { id }) });
+  const item = await qOne(
+    'SELECT * FROM `Customer` WHERE `id` = ? AND `companyId` = ?',
+    [id, req.tenant.companyId]
+  );
   if (!item) throw new AppError('Customer not found', 404, 'NOT_FOUND');
   return item;
 };
@@ -41,25 +43,25 @@ const findOwned = async (req, id) => {
 // GET /api/customers
 router.get('/', asyncHandler(async (req, res) => {
   const { page, pageSize, search } = paginationQuery.parse(req.query);
-  const where = tenantWhere(req, search
-    ? { OR: [
-        { name:  { contains: search } },
-        { email: { contains: search } },
-        { phone: { contains: search } },
-      ] }
-    : {});
+  const skip = (page - 1) * pageSize;
 
-  const [items, total] = await Promise.all([
-    prisma.customer.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.customer.count({ where }),
+  let where = '`companyId` = ?';
+  const params = [req.tenant.companyId];
+  if (search) {
+    where += ' AND (`name` LIKE ? OR `email` LIKE ? OR `phone` LIKE ?)';
+    const like = `%${search}%`;
+    params.push(like, like, like);
+  }
+
+  const [items, totalRow] = await Promise.all([
+    q(
+      `SELECT * FROM \`Customer\` WHERE ${where} ORDER BY \`createdAt\` DESC LIMIT ? OFFSET ?`,
+      [...params, pageSize, skip]
+    ),
+    qOne(`SELECT COUNT(*) AS n FROM \`Customer\` WHERE ${where}`, params),
   ]);
 
-  res.json({ items, total, page, pageSize });
+  res.json({ items, total: Number(totalRow?.n ?? 0), page, pageSize });
 }));
 
 // GET /api/customers/:id
@@ -71,8 +73,10 @@ router.get('/:id', asyncHandler(async (req, res) => {
 // POST /api/customers
 router.post('/', requireRole('STAFF'), asyncHandler(async (req, res) => {
   const data = customerInput.parse(req.body);
-  const created = await prisma.customer.create({
-    data: { ...data, companyId: req.tenant.companyId, createdById: req.auth.userId },
+  const created = await insert('Customer', {
+    ...data,
+    companyId: req.tenant.companyId,
+    createdById: req.auth.userId,
   });
   res.status(201).json(created);
 }));
@@ -82,14 +86,14 @@ router.patch('/:id', requireRole('STAFF'), asyncHandler(async (req, res) => {
   const { id } = idParam.parse(req.params);
   const data = customerInput.partial().parse(req.body);
   await findOwned(req, id);
-  res.json(await prisma.customer.update({ where: { id }, data }));
+  res.json(await update('Customer', id, data));
 }));
 
 // DELETE /api/customers/:id — managers and up
 router.delete('/:id', requireRole('MANAGER'), asyncHandler(async (req, res) => {
   const { id } = idParam.parse(req.params);
   await findOwned(req, id);
-  await prisma.customer.delete({ where: { id } });
+  await del('Customer', id);
   res.status(204).end();
 }));
 

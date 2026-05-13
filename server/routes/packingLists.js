@@ -2,18 +2,18 @@
 // PackingListItem is the join table (each dispatch belongs to at most one PL).
 import { Router } from 'express';
 import { z } from 'zod';
-import { prisma } from '../lib/db.js';
+import { q, qOne, insert, update, del, txn } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
-import { resolveTenant, tenantWhere } from '../lib/tenant.js';
+import { resolveTenant } from '../lib/tenant.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
 
 const createSchema = z.object({
   dispatchIds: z.array(z.string().min(1)).min(1),
-  plNumber:    z.string().trim().min(1).max(80),          // WO Number
-  plDate:      z.coerce.date(),                            // WO Date
+  plNumber:    z.string().trim().min(1).max(80),
+  plDate:      z.coerce.date(),
   invoiceNo:   z.string().trim().max(80).optional().nullable(),
   invoiceDate: z.coerce.date().optional().nullable(),
   testedBy:    z.string().trim().max(120).optional().nullable(),
@@ -31,21 +31,6 @@ const updateSchema = z.object({
   remarks:     z.string().trim().max(200).optional().nullable(),
 });
 
-const dispatchInclude = {
-  include: {
-    poOrderItem: { include: { poOrder: { include: { customer: true } } } },
-  },
-};
-
-const withItems = {
-  include: {
-    items: {
-      orderBy: { dispatch: { dispatchDate: 'asc' } },
-      include: { dispatch: dispatchInclude },
-    },
-  },
-};
-
 const flattenDispatch = (d) => ({
   id:            d.id,
   poOrderItemId: d.poOrderItemId,
@@ -55,34 +40,68 @@ const flattenDispatch = (d) => ({
   totalWeight:   d.totalWeight,
   actualWeight:  d.actualWeight ?? null,
   vehicleNo:     d.vehicleNo,
-  poNumber:      d.poOrderItem?.poOrder?.poNumber ?? null,
-  orderDate:     d.poOrderItem?.poOrder?.orderDate ?? null,
-  customerName:  d.poOrderItem?.poOrder?.customer?.name ?? null,
-  customerState: d.poOrderItem?.poOrder?.customer?.state ?? null,
-  customerPhone: d.poOrderItem?.poOrder?.customer?.phone ?? null,
-  coreType:      d.poOrderItem?.coreType ?? null,
-  grade:         d.poOrderItem?.grade ?? null,
-  material:      d.poOrderItem?.material ?? null,
-  measure:       d.poOrderItem?.measure ?? null,
-  id1:           d.poOrderItem?.id1 ?? null,
-  id2:           d.poOrderItem?.id2 ?? null,
-  od1:           d.poOrderItem?.od1 ?? null,
-  od2:           d.poOrderItem?.od2 ?? null,
-  ht:            d.poOrderItem?.ht ?? null,
-  itemPcs:       d.poOrderItem?.pcs ?? null,
-  // Flux-test calibration — surfaced for the Testing Report when launched
-  // from a saved packing list (plId flow).
-  turns:       d.poOrderItem?.turns       ?? null,
-  flux:        d.poOrderItem?.flux        ?? null,
-  testVoltage: d.poOrderItem?.testVoltage ?? null,
-  testCurrent: d.poOrderItem?.testCurrent ?? null,
+  poNumber:      d.po_number      ?? null,
+  orderDate:     d.po_orderDate   ?? null,
+  customerName:  d.customer_name  ?? null,
+  customerState: d.customer_state ?? null,
+  customerPhone: d.customer_phone ?? null,
+  coreType:      d.item_coreType  ?? null,
+  grade:         d.item_grade     ?? null,
+  material:      d.item_material  ?? null,
+  measure:       d.item_measure   ?? null,
+  id1:           d.item_id1 ?? null,
+  id2:           d.item_id2 ?? null,
+  od1:           d.item_od1 ?? null,
+  od2:           d.item_od2 ?? null,
+  ht:            d.item_ht ?? null,
+  itemPcs:       d.item_pcs ?? null,
+  turns:         d.item_turns       ?? null,
+  flux:          d.item_flux        ?? null,
+  testVoltage:   d.item_testVoltage ?? null,
+  testCurrent:   d.item_testCurrent ?? null,
 });
 
-const flattenPl = (pl) => {
-  const dispatches = (pl.items ?? []).map((i) => flattenDispatch(i.dispatch));
+// Load all dispatches that belong to the given packing-list ids, with
+// joined PO + Customer + PoOrderItem columns.
+const loadDispatchesForPls = async (plIds) => {
+  if (plIds.length === 0) return new Map();
+  const placeholders = plIds.map(() => '?').join(',');
+  const rows = await q(
+    `SELECT pli.\`packingListId\` AS plId,
+            d.\`id\` AS id, d.\`poOrderItemId\` AS poOrderItemId,
+            d.\`dispatchDate\` AS dispatchDate, d.\`pcs\` AS pcs,
+            d.\`weightPerPc\` AS weightPerPc, d.\`totalWeight\` AS totalWeight,
+            d.\`actualWeight\` AS actualWeight, d.\`vehicleNo\` AS vehicleNo,
+            it.\`coreType\` AS item_coreType, it.\`grade\` AS item_grade,
+            it.\`material\` AS item_material, it.\`measure\` AS item_measure,
+            it.\`id1\` AS item_id1, it.\`id2\` AS item_id2,
+            it.\`od1\` AS item_od1, it.\`od2\` AS item_od2,
+            it.\`ht\` AS item_ht, it.\`pcs\` AS item_pcs,
+            it.\`turns\` AS item_turns, it.\`flux\` AS item_flux,
+            it.\`testVoltage\` AS item_testVoltage, it.\`testCurrent\` AS item_testCurrent,
+            po.\`poNumber\` AS po_number, po.\`orderDate\` AS po_orderDate,
+            c.\`name\` AS customer_name, c.\`state\` AS customer_state, c.\`phone\` AS customer_phone
+       FROM \`PackingListItem\` pli
+       INNER JOIN \`Dispatch\`    d  ON d.\`id\`  = pli.\`dispatchId\`
+       INNER JOIN \`PoOrderItem\` it ON it.\`id\` = d.\`poOrderItemId\`
+       INNER JOIN \`PoOrder\`     po ON po.\`id\` = it.\`poOrderId\`
+       INNER JOIN \`Customer\`    c  ON c.\`id\`  = po.\`customerId\`
+       WHERE pli.\`packingListId\` IN (${placeholders})
+       ORDER BY d.\`dispatchDate\` ASC`,
+    plIds
+  );
+  const byPl = new Map();
+  for (const r of rows) {
+    if (!byPl.has(r.plId)) byPl.set(r.plId, []);
+    byPl.get(r.plId).push(r);
+  }
+  return byPl;
+};
+
+const flattenPl = (pl, dispatchRows = []) => {
+  const dispatches = dispatchRows.map(flattenDispatch);
   const totalPcs    = dispatches.reduce((s, d) => s + (d.pcs ?? 0), 0);
   const totalWeight = dispatches.reduce((s, d) => s + (d.totalWeight ?? 0), 0);
-  // For list display: show first dispatch's customer / PO
   const first = dispatches[0] ?? {};
   return {
     id:           pl.id,
@@ -109,96 +128,110 @@ const flattenPl = (pl) => {
 router.get('/pending', requirePermission('dispatch'), asyncHandler(async (req, res) => {
   const { search } = z.object({ search: z.string().trim().max(120).optional() }).parse(req.query);
 
-  const dispatches = await prisma.dispatch.findMany({
-    where: {
-      companyId: req.tenant.companyId,
-      packingListItem: null,
-      ...(search ? {
-        OR: [
-          { poOrderItem: { poOrder: { poNumber: { contains: search } } } },
-          { poOrderItem: { poOrder: { customer: { name: { contains: search } } } } },
-          { poOrderItem: { measure: { contains: search } } },
-          { vehicleNo: { contains: search } },
-        ],
-      } : {}),
-    },
-    orderBy: { dispatchDate: 'desc' },
-    include: {
-      poOrderItem: { include: { poOrder: { include: { customer: true } } } },
-    },
-  });
+  let where = 'd.`companyId` = ? AND pli.`id` IS NULL';
+  const params = [req.tenant.companyId];
+  if (search) {
+    const like = `%${search}%`;
+    where += ' AND (po.`poNumber` LIKE ? OR c.`name` LIKE ? OR it.`measure` LIKE ? OR d.`vehicleNo` LIKE ?)';
+    params.push(like, like, like, like);
+  }
 
-  const items = dispatches.map((d) => ({
+  const rows = await q(
+    `SELECT d.*, it.\`coreType\`, it.\`grade\`, it.\`material\`,
+            po.\`poNumber\`, c.\`name\` AS customerName
+       FROM \`Dispatch\` d
+       LEFT JOIN \`PackingListItem\` pli ON pli.\`dispatchId\` = d.\`id\`
+       INNER JOIN \`PoOrderItem\` it ON it.\`id\` = d.\`poOrderItemId\`
+       INNER JOIN \`PoOrder\`     po ON po.\`id\` = it.\`poOrderId\`
+       INNER JOIN \`Customer\`    c  ON c.\`id\`  = po.\`customerId\`
+       WHERE ${where}
+       ORDER BY d.\`dispatchDate\` DESC`,
+    params
+  );
+
+  const items = rows.map((d) => ({
     id:           d.id,
-    poNumber:     d.poOrderItem.poOrder.poNumber,
-    customerName: d.poOrderItem.poOrder.customer.name,
-    coreType:     d.poOrderItem.coreType,
-    grade:        d.poOrderItem.grade,
-    material:     d.poOrderItem.material,
+    poNumber:     d.poNumber,
+    customerName: d.customerName,
+    coreType:     d.coreType,
+    grade:        d.grade,
+    material:     d.material,
     dispatchDate: d.dispatchDate,
     pcs:          d.pcs,
     totalWeight:  d.totalWeight,
     vehicleNo:    d.vehicleNo,
   }));
-
   res.json({ items });
 }));
 
-/* GET /packing-lists — all generated packing lists */
+/* GET /packing-lists */
 router.get('/', requirePermission('dispatch'), asyncHandler(async (req, res) => {
   const { search } = z.object({ search: z.string().trim().max(120).optional() }).parse(req.query);
 
-  const lists = await prisma.packingList.findMany({
-    where: {
-      companyId: req.tenant.companyId,
-      ...(search ? {
-        OR: [
-          { plNumber: { contains: search } },
-          { items: { some: { dispatch: { poOrderItem: { poOrder: { poNumber: { contains: search } } } } } } },
-          { items: { some: { dispatch: { poOrderItem: { poOrder: { customer: { name: { contains: search } } } } } } } },
-          { items: { some: { dispatch: { poOrderItem: { measure: { contains: search } } } } } },
-          { testedBy: { contains: search } },
-          { approvedBy: { contains: search } },
-        ],
-      } : {}),
-    },
-    orderBy: { plDate: 'desc' },
-    ...withItems,
-  });
+  let where = 'pl.`companyId` = ?';
+  const params = [req.tenant.companyId];
+  if (search) {
+    const like = `%${search}%`;
+    // Use EXISTS subquery so search across joined dispatch/po/customer works.
+    where += ` AND (
+      pl.\`plNumber\` LIKE ?
+      OR pl.\`testedBy\` LIKE ?
+      OR pl.\`approvedBy\` LIKE ?
+      OR EXISTS (
+        SELECT 1 FROM \`PackingListItem\` pli
+        INNER JOIN \`Dispatch\` d ON d.\`id\` = pli.\`dispatchId\`
+        INNER JOIN \`PoOrderItem\` it ON it.\`id\` = d.\`poOrderItemId\`
+        INNER JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
+        INNER JOIN \`Customer\` c ON c.\`id\` = po.\`customerId\`
+        WHERE pli.\`packingListId\` = pl.\`id\`
+          AND (po.\`poNumber\` LIKE ? OR c.\`name\` LIKE ? OR it.\`measure\` LIKE ?)
+      )
+    )`;
+    params.push(like, like, like, like, like, like);
+  }
 
-  res.json({ items: lists.map(flattenPl) });
+  const pls = await q(
+    `SELECT * FROM \`PackingList\` pl WHERE ${where} ORDER BY pl.\`plDate\` DESC`,
+    params
+  );
+  const byPl = await loadDispatchesForPls(pls.map((p) => p.id));
+  res.json({ items: pls.map((p) => flattenPl(p, byPl.get(p.id) ?? [])) });
 }));
 
-/* GET /packing-lists/:plId — single PL with full dispatch details */
+/* GET /:plId */
 router.get('/:plId', requirePermission('dispatch'), asyncHandler(async (req, res) => {
-  const pl = await prisma.packingList.findFirst({
-    where: { id: req.params.plId, companyId: req.tenant.companyId },
-    ...withItems,
-  });
+  const pl = await qOne(
+    'SELECT * FROM `PackingList` WHERE `id` = ? AND `companyId` = ?',
+    [req.params.plId, req.tenant.companyId]
+  );
   if (!pl) throw new AppError('Packing list not found', 404, 'NOT_FOUND');
-  res.json(flattenPl(pl));
+  const byPl = await loadDispatchesForPls([pl.id]);
+  res.json(flattenPl(pl, byPl.get(pl.id) ?? []));
 }));
 
-/* POST /packing-lists — create new PL for one or more dispatches */
+/* POST /packing-lists */
 router.post('/', requirePermission('dispatch'), asyncHandler(async (req, res) => {
   const data = createSchema.parse(req.body);
 
-  const dispatches = await prisma.dispatch.findMany({
-    where: { id: { in: data.dispatchIds }, companyId: req.tenant.companyId },
-  });
+  const placeholders = data.dispatchIds.map(() => '?').join(',');
+  const dispatches = await q(
+    `SELECT \`id\` FROM \`Dispatch\` WHERE \`id\` IN (${placeholders}) AND \`companyId\` = ?`,
+    [...data.dispatchIds, req.tenant.companyId]
+  );
   if (dispatches.length !== data.dispatchIds.length) {
     throw new AppError('One or more dispatches not found', 404, 'NOT_FOUND');
   }
 
-  const alreadyLinked = await prisma.packingListItem.findFirst({
-    where: { dispatchId: { in: data.dispatchIds } },
-  });
+  const alreadyLinked = await qOne(
+    `SELECT \`id\` FROM \`PackingListItem\` WHERE \`dispatchId\` IN (${placeholders}) LIMIT 1`,
+    data.dispatchIds
+  );
   if (alreadyLinked) {
     throw new AppError('One or more dispatches already belong to a packing list', 409, 'CONFLICT');
   }
 
-  const pl = await prisma.packingList.create({
-    data: {
+  const plId = await txn(async (tx) => {
+    const pl = await tx.insert('PackingList', {
       plNumber:    data.plNumber,
       plDate:      data.plDate,
       invoiceNo:   data.invoiceNo ?? null,
@@ -208,45 +241,48 @@ router.post('/', requirePermission('dispatch'), asyncHandler(async (req, res) =>
       remarks:     data.remarks ?? null,
       companyId:   req.tenant.companyId,
       createdById: req.auth.userId,
-      items: {
-        create: data.dispatchIds.map((did) => ({ dispatchId: did })),
-      },
-    },
-    ...withItems,
+    });
+    for (const did of data.dispatchIds) {
+      await tx.insert('PackingListItem', { packingListId: pl.id, dispatchId: did });
+    }
+    return pl.id;
   });
 
-  res.status(201).json(flattenPl(pl));
+  const pl = await qOne('SELECT * FROM `PackingList` WHERE `id` = ?', [plId]);
+  const byPl = await loadDispatchesForPls([plId]);
+  res.status(201).json(flattenPl(pl, byPl.get(plId) ?? []));
 }));
 
-/* PUT /packing-lists/:plId — update metadata (number, date, names) */
+/* PUT /:plId */
 router.put('/:plId', requirePermission('dispatch'), asyncHandler(async (req, res) => {
   const data = updateSchema.parse(req.body);
-  const pl = await prisma.packingList.findFirst({
-    where: { id: req.params.plId, companyId: req.tenant.companyId },
-  });
+  const pl = await qOne(
+    'SELECT `id` FROM `PackingList` WHERE `id` = ? AND `companyId` = ?',
+    [req.params.plId, req.tenant.companyId]
+  );
   if (!pl) throw new AppError('Packing list not found', 404, 'NOT_FOUND');
 
-  const updated = await prisma.packingList.update({
-    where: { id: pl.id },
-    data: {
-      plNumber:   data.plNumber,
-      plDate:     data.plDate,
-      testedBy:   data.testedBy ?? null,
-      approvedBy: data.approvedBy ?? null,
-      remarks:    data.remarks ?? null,
-    },
-    ...withItems,
+  await update('PackingList', pl.id, {
+    plNumber:   data.plNumber,
+    plDate:     data.plDate,
+    testedBy:   data.testedBy ?? null,
+    approvedBy: data.approvedBy ?? null,
+    remarks:    data.remarks ?? null,
   });
-  res.json(flattenPl(updated));
+
+  const fresh = await qOne('SELECT * FROM `PackingList` WHERE `id` = ?', [pl.id]);
+  const byPl = await loadDispatchesForPls([pl.id]);
+  res.json(flattenPl(fresh, byPl.get(pl.id) ?? []));
 }));
 
-/* DELETE /packing-lists/:plId */
+/* DELETE /:plId */
 router.delete('/:plId', requirePermission('dispatch'), asyncHandler(async (req, res) => {
-  const pl = await prisma.packingList.findFirst({
-    where: { id: req.params.plId, companyId: req.tenant.companyId },
-  });
+  const pl = await qOne(
+    'SELECT `id` FROM `PackingList` WHERE `id` = ? AND `companyId` = ?',
+    [req.params.plId, req.tenant.companyId]
+  );
   if (!pl) throw new AppError('Packing list not found', 404, 'NOT_FOUND');
-  await prisma.packingList.delete({ where: { id: pl.id } });
+  await del('PackingList', pl.id);
   res.status(204).end();
 }));
 

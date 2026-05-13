@@ -1,13 +1,7 @@
 // Customer returns — track items coming back for rework, then re-dispatched.
-// Lifecycle: PENDING → RECEIVED → IN_REWORK → REDISPATCHED → CLOSED
-// (CANCELLED is also possible from PENDING/RECEIVED).
-//
-// Returns reference an SO / Invoice / WO number (free-text) so the user can
-// type whatever they have on the customer's complaint. Items reference real
-// PoOrderItems so we can pull measure/grade/wt-per-pc consistently.
 import { Router } from 'express';
 import { z } from 'zod';
-import { prisma } from '../lib/db.js';
+import { q, qOne, insert, update, del, txn } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requireAnyPermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
@@ -41,26 +35,45 @@ const updateSchema = z.object({
   notes:          z.string().trim().max(2000).optional().nullable(),
 });
 
-const itemInclude = {
-  include: {
-    poOrderItem: { include: { poOrder: { include: { customer: true } } } },
-  },
-};
-
 const flattenItem = (it) => ({
   id:             it.id,
   poOrderItemId:  it.poOrderItemId,
   pcs:            it.pcs,
   reason:         it.reason,
-  poNumber:       it.poOrderItem?.poOrder?.poNumber ?? null,
-  coreType:       it.poOrderItem?.coreType ?? null,
-  grade:          it.poOrderItem?.grade ?? null,
-  material:       it.poOrderItem?.material ?? null,
-  measure:        it.poOrderItem?.measure ?? null,
-  weightPerPc:    it.poOrderItem?.weightPerPc ?? null,
+  poNumber:       it.po_number ?? null,
+  coreType:       it.item_coreType ?? null,
+  grade:          it.item_grade ?? null,
+  material:       it.item_material ?? null,
+  measure:        it.item_measure ?? null,
+  weightPerPc:    it.item_weightPerPc ?? null,
 });
 
-const flattenReturn = (r) => ({
+const loadItemsForReturns = async (returnIds) => {
+  if (returnIds.length === 0) return new Map();
+  const placeholders = returnIds.map(() => '?').join(',');
+  const rows = await q(
+    `SELECT ri.*,
+            it.\`coreType\`    AS item_coreType,
+            it.\`grade\`       AS item_grade,
+            it.\`material\`    AS item_material,
+            it.\`measure\`     AS item_measure,
+            it.\`weightPerPc\` AS item_weightPerPc,
+            po.\`poNumber\`    AS po_number
+       FROM \`ReturnItem\` ri
+       INNER JOIN \`PoOrderItem\` it ON it.\`id\` = ri.\`poOrderItemId\`
+       INNER JOIN \`PoOrder\`     po ON po.\`id\` = it.\`poOrderId\`
+       WHERE ri.\`returnId\` IN (${placeholders})`,
+    returnIds
+  );
+  const by = new Map();
+  for (const r of rows) {
+    if (!by.has(r.returnId)) by.set(r.returnId, []);
+    by.get(r.returnId).push(r);
+  }
+  return by;
+};
+
+const flattenReturn = (r, itemRows = []) => ({
   id:               r.id,
   returnNumber:     r.returnNumber,
   returnDate:       r.returnDate,
@@ -77,89 +90,101 @@ const flattenReturn = (r) => ({
   createdAt:        r.createdAt,
   updatedAt:        r.updatedAt,
   customerId:       r.customerId,
-  customerName:     r.customer?.name ?? null,
-  itemCount:        r.items?.length ?? 0,
-  totalPcs:         (r.items ?? []).reduce((s, i) => s + (i.pcs ?? 0), 0),
-  items:            (r.items ?? []).map(flattenItem),
+  customerName:     r.customer_name ?? null,
+  itemCount:        itemRows.length,
+  totalPcs:         itemRows.reduce((s, i) => s + (i.pcs ?? 0), 0),
+  items:            itemRows.map(flattenItem),
 });
 
-/* ---------- GET / — paginated list ---------- */
+/* GET / — paginated */
 router.get('/', requireAnyPermission('manage_returns', 'dispatch'), asyncHandler(async (req, res) => {
   const { page, pageSize, search, status } = z.object({
     page:     z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(200).default(50),
     search:   z.string().trim().max(120).optional(),
-    status:   z.enum(['PENDING', 'RECEIVED', 'IN_REWORK', 'REDISPATCHED', 'CLOSED', 'CANCELLED', 'ALL']).default('ALL'),
+    status:   z.enum(['PENDING','RECEIVED','IN_REWORK','REDISPATCHED','CLOSED','CANCELLED','ALL']).default('ALL'),
   }).parse(req.query);
+  const skip = (page - 1) * pageSize;
 
-  const where = {
-    companyId: req.tenant.companyId,
-    ...(status !== 'ALL' ? { status } : {}),
-    ...(search
-      ? {
-          OR: [
-            { returnNumber:   { contains: search } },
-            { referenceValue: { contains: search } },
-            { customer:  { name: { contains: search } } },
-            { reason:    { contains: search } },
-            { items: { some: { poOrderItem: { measure: { contains: search } } } } },
-          ],
-        }
-      : {}),
-  };
+  let where = 'r.`companyId` = ?';
+  const params = [req.tenant.companyId];
+  if (status !== 'ALL') { where += ' AND r.`status` = ?'; params.push(status); }
+  if (search) {
+    const like = `%${search}%`;
+    where += ` AND (
+      r.\`returnNumber\` LIKE ?
+      OR r.\`referenceValue\` LIKE ?
+      OR c.\`name\` LIKE ?
+      OR r.\`reason\` LIKE ?
+      OR EXISTS (SELECT 1 FROM \`ReturnItem\` ri
+                 INNER JOIN \`PoOrderItem\` it ON it.\`id\` = ri.\`poOrderItemId\`
+                 WHERE ri.\`returnId\` = r.\`id\` AND it.\`measure\` LIKE ?)
+    )`;
+    params.push(like, like, like, like, like);
+  }
 
-  const [rows, total] = await Promise.all([
-    prisma.return.findMany({
-      where,
-      orderBy: { returnDate: 'desc' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      include: { customer: true, items: itemInclude },
-    }),
-    prisma.return.count({ where }),
+  const [rows, totalRow] = await Promise.all([
+    q(
+      `SELECT r.*, c.\`name\` AS customer_name FROM \`Return\` r
+         LEFT JOIN \`Customer\` c ON c.\`id\` = r.\`customerId\`
+        WHERE ${where} ORDER BY r.\`returnDate\` DESC LIMIT ? OFFSET ?`,
+      [...params, pageSize, skip]
+    ),
+    qOne(
+      `SELECT COUNT(*) AS n FROM \`Return\` r
+         LEFT JOIN \`Customer\` c ON c.\`id\` = r.\`customerId\`
+        WHERE ${where}`,
+      params
+    ),
   ]);
-
-  res.json({ items: rows.map(flattenReturn), total, page, pageSize });
-}));
-
-/* ---------- GET /:id ---------- */
-router.get('/:id', requireAnyPermission('manage_returns', 'dispatch'), asyncHandler(async (req, res) => {
-  const r = await prisma.return.findFirst({
-    where: { id: req.params.id, companyId: req.tenant.companyId },
-    include: { customer: true, items: itemInclude },
+  const byR = await loadItemsForReturns(rows.map((r) => r.id));
+  res.json({
+    items: rows.map((r) => flattenReturn(r, byR.get(r.id) ?? [])),
+    total: Number(totalRow?.n ?? 0), page, pageSize,
   });
-  if (!r) throw new AppError('Return not found', 404, 'NOT_FOUND');
-  res.json(flattenReturn(r));
 }));
 
-/* ---------- POST / ---------- */
+/* GET /:id */
+router.get('/:id', requireAnyPermission('manage_returns', 'dispatch'), asyncHandler(async (req, res) => {
+  const r = await qOne(
+    `SELECT r.*, c.\`name\` AS customer_name FROM \`Return\` r
+       LEFT JOIN \`Customer\` c ON c.\`id\` = r.\`customerId\`
+       WHERE r.\`id\` = ? AND r.\`companyId\` = ?`,
+    [req.params.id, req.tenant.companyId]
+  );
+  if (!r) throw new AppError('Return not found', 404, 'NOT_FOUND');
+  const byR = await loadItemsForReturns([r.id]);
+  res.json(flattenReturn(r, byR.get(r.id) ?? []));
+}));
+
+/* POST / */
 router.post('/', requireAnyPermission('manage_returns', 'dispatch'), asyncHandler(async (req, res) => {
   const data = createSchema.parse(req.body);
 
-  // Customer must belong to active tenant.
-  const customer = await prisma.customer.findFirst({
-    where: { id: data.customerId, companyId: req.tenant.companyId },
-  });
+  const customer = await qOne(
+    'SELECT * FROM `Customer` WHERE `id` = ? AND `companyId` = ?',
+    [data.customerId, req.tenant.companyId]
+  );
   if (!customer) throw new AppError('Customer not found', 400, 'BAD_CUSTOMER');
 
-  // Each PoOrderItem must belong to the same tenant.
   const itemIds = data.items.map((i) => i.poOrderItemId);
-  const owned = await prisma.poOrderItem.findMany({
-    where: { id: { in: itemIds }, poOrder: { companyId: req.tenant.companyId } },
-    select: { id: true },
-  });
-  if (owned.length !== itemIds.length) {
-    throw new AppError('One or more PO items not found', 404, 'NOT_FOUND');
-  }
+  const placeholders = itemIds.map(() => '?').join(',');
+  const owned = await q(
+    `SELECT it.\`id\` FROM \`PoOrderItem\` it
+       INNER JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
+       WHERE it.\`id\` IN (${placeholders}) AND po.\`companyId\` = ?`,
+    [...itemIds, req.tenant.companyId]
+  );
+  if (owned.length !== itemIds.length) throw new AppError('One or more PO items not found', 404, 'NOT_FOUND');
 
-  // Return number must be unique within the company.
-  const dup = await prisma.return.findUnique({
-    where: { companyId_returnNumber: { companyId: req.tenant.companyId, returnNumber: data.returnNumber } },
-  });
+  const dup = await qOne(
+    'SELECT `id` FROM `Return` WHERE `companyId` = ? AND `returnNumber` = ?',
+    [req.tenant.companyId, data.returnNumber]
+  );
   if (dup) throw new AppError('Return number already exists in this company', 409, 'RETURN_DUPLICATE');
 
-  const created = await prisma.return.create({
-    data: {
+  const retId = await txn(async (tx) => {
+    const ret = await tx.insert('Return', {
       returnNumber:   data.returnNumber,
       returnDate:     data.returnDate,
       referenceType:  data.referenceType,
@@ -169,44 +194,54 @@ router.post('/', requireAnyPermission('manage_returns', 'dispatch'), asyncHandle
       companyId:      req.tenant.companyId,
       customerId:     customer.id,
       createdById:    req.auth.userId,
-      items: {
-        create: data.items.map((i) => ({
-          poOrderItemId: i.poOrderItemId,
-          pcs:           i.pcs,
-          reason:        i.reason ?? null,
-        })),
-      },
-    },
-    include: { customer: true, items: itemInclude },
+    });
+    for (const i of data.items) {
+      await tx.insert('ReturnItem', {
+        returnId:      ret.id,
+        poOrderItemId: i.poOrderItemId,
+        pcs:           i.pcs,
+        reason:        i.reason ?? null,
+      });
+    }
+    return ret.id;
   });
 
-  res.status(201).json(flattenReturn(created));
+  const fresh = await qOne(
+    `SELECT r.*, c.\`name\` AS customer_name FROM \`Return\` r
+       LEFT JOIN \`Customer\` c ON c.\`id\` = r.\`customerId\` WHERE r.\`id\` = ?`,
+    [retId]
+  );
+  const byR = await loadItemsForReturns([retId]);
+  res.status(201).json(flattenReturn(fresh, byR.get(retId) ?? []));
 }));
 
-/* ---------- PATCH /:id — edit metadata only (not items, not status) ---------- */
+/* PATCH /:id */
 router.patch('/:id', requireAnyPermission('manage_returns', 'dispatch'), asyncHandler(async (req, res) => {
   const data = updateSchema.parse(req.body);
-  const r = await prisma.return.findFirst({
-    where: { id: req.params.id, companyId: req.tenant.companyId },
-  });
+  const r = await qOne(
+    'SELECT * FROM `Return` WHERE `id` = ? AND `companyId` = ?',
+    [req.params.id, req.tenant.companyId]
+  );
   if (!r) throw new AppError('Return not found', 404, 'NOT_FOUND');
 
-  const updated = await prisma.return.update({
-    where: { id: r.id },
-    data: {
-      ...(data.returnNumber   !== undefined ? { returnNumber:   data.returnNumber }   : {}),
-      ...(data.returnDate     !== undefined ? { returnDate:     data.returnDate }     : {}),
-      ...(data.referenceType  !== undefined ? { referenceType:  data.referenceType }  : {}),
-      ...(data.referenceValue !== undefined ? { referenceValue: data.referenceValue } : {}),
-      ...(data.reason         !== undefined ? { reason:         data.reason ?? null } : {}),
-      ...(data.notes          !== undefined ? { notes:          data.notes  ?? null } : {}),
-    },
-    include: { customer: true, items: itemInclude },
-  });
-  res.json(flattenReturn(updated));
+  const patch = {};
+  if (data.returnNumber   !== undefined) patch.returnNumber = data.returnNumber;
+  if (data.returnDate     !== undefined) patch.returnDate = data.returnDate;
+  if (data.referenceType  !== undefined) patch.referenceType = data.referenceType;
+  if (data.referenceValue !== undefined) patch.referenceValue = data.referenceValue;
+  if (data.reason         !== undefined) patch.reason = data.reason ?? null;
+  if (data.notes          !== undefined) patch.notes = data.notes ?? null;
+  if (Object.keys(patch).length > 0) await update('Return', r.id, patch);
+
+  const fresh = await qOne(
+    `SELECT r.*, c.\`name\` AS customer_name FROM \`Return\` r
+       LEFT JOIN \`Customer\` c ON c.\`id\` = r.\`customerId\` WHERE r.\`id\` = ?`,
+    [r.id]
+  );
+  const byR = await loadItemsForReturns([r.id]);
+  res.json(flattenReturn(fresh, byR.get(r.id) ?? []));
 }));
 
-/* ---------- POST /:id/transition — move through the lifecycle ---------- */
 const transitionSchema = z.object({
   to: z.enum(['RECEIVED', 'IN_REWORK', 'REDISPATCHED', 'CLOSED', 'CANCELLED']),
   vehicleNo: z.string().trim().max(80).optional().nullable(),
@@ -223,11 +258,11 @@ const ALLOWED = {
 
 router.post('/:id/transition', requireAnyPermission('manage_returns', 'dispatch'), asyncHandler(async (req, res) => {
   const { to, vehicleNo } = transitionSchema.parse(req.body);
-  const r = await prisma.return.findFirst({
-    where: { id: req.params.id, companyId: req.tenant.companyId },
-  });
+  const r = await qOne(
+    'SELECT * FROM `Return` WHERE `id` = ? AND `companyId` = ?',
+    [req.params.id, req.tenant.companyId]
+  );
   if (!r) throw new AppError('Return not found', 404, 'NOT_FOUND');
-
   if (!ALLOWED[r.status].has(to)) {
     throw new AppError(`Cannot transition ${r.status} → ${to}`, 400, 'BAD_TRANSITION');
   }
@@ -240,22 +275,25 @@ router.post('/:id/transition', requireAnyPermission('manage_returns', 'dispatch'
     CLOSED:       { closedAt: now },
     CANCELLED:    { closedAt: now },
   }[to];
+  await update('Return', r.id, { status: to, ...stamp });
 
-  const updated = await prisma.return.update({
-    where: { id: r.id },
-    data: { status: to, ...stamp },
-    include: { customer: true, items: itemInclude },
-  });
-  res.json(flattenReturn(updated));
+  const fresh = await qOne(
+    `SELECT r.*, c.\`name\` AS customer_name FROM \`Return\` r
+       LEFT JOIN \`Customer\` c ON c.\`id\` = r.\`customerId\` WHERE r.\`id\` = ?`,
+    [r.id]
+  );
+  const byR = await loadItemsForReturns([r.id]);
+  res.json(flattenReturn(fresh, byR.get(r.id) ?? []));
 }));
 
-/* ---------- DELETE /:id ---------- */
+/* DELETE /:id */
 router.delete('/:id', requireAnyPermission('manage_returns', 'dispatch'), asyncHandler(async (req, res) => {
-  const r = await prisma.return.findFirst({
-    where: { id: req.params.id, companyId: req.tenant.companyId },
-  });
+  const r = await qOne(
+    'SELECT `id` FROM `Return` WHERE `id` = ? AND `companyId` = ?',
+    [req.params.id, req.tenant.companyId]
+  );
   if (!r) throw new AppError('Return not found', 404, 'NOT_FOUND');
-  await prisma.return.delete({ where: { id: r.id } });
+  await del('Return', r.id);
   res.status(204).end();
 }));
 

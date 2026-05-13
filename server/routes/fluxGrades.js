@@ -2,10 +2,10 @@
 // split by core type (toroidal / rectangular) since the BH curve can differ.
 import { Router } from 'express';
 import { z } from 'zod';
-import { prisma } from '../lib/db.js';
+import { q, qOne, insert, update, del, txn } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
-import { resolveTenant, tenantWhere } from '../lib/tenant.js';
+import { resolveTenant } from '../lib/tenant.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -20,24 +20,24 @@ const inputSchema = z.object({
 
 /* ---------- GET /api/flux-grades — flat list ---------- */
 router.get('/', asyncHandler(async (req, res) => {
-  const items = await prisma.fluxGrade.findMany({
-    where: tenantWhere(req),
-    orderBy: [{ grade: 'asc' }, { coreType: 'asc' }, { flux: 'asc' }],
-  });
+  const items = await q(
+    'SELECT * FROM `FluxGrade` WHERE `companyId` = ? ORDER BY `grade` ASC, `coreType` ASC, `flux` ASC',
+    [req.tenant.companyId]
+  );
   res.json({ items });
 }));
 
 /* ---------- GET /api/flux-grades/grouped — for the calculator ---------- */
-/* Optional ?coreType=TOROIDAL|RECTANGULAR filters to one core type.        */
 router.get('/grouped', asyncHandler(async (req, res) => {
   const { coreType } = z.object({
     coreType: z.enum(['TOROIDAL', 'RECTANGULAR']).optional(),
   }).parse(req.query);
 
-  const rows = await prisma.fluxGrade.findMany({
-    where: tenantWhere(req, coreType ? { coreType } : {}),
-    orderBy: [{ grade: 'asc' }, { flux: 'asc' }],
-  });
+  let sql = 'SELECT * FROM `FluxGrade` WHERE `companyId` = ?';
+  const params = [req.tenant.companyId];
+  if (coreType) { sql += ' AND `coreType` = ?'; params.push(coreType); }
+  sql += ' ORDER BY `grade` ASC, `flux` ASC';
+  const rows = await q(sql, params);
 
   const map = new Map();
   for (const r of rows) {
@@ -47,17 +47,16 @@ router.get('/grouped', asyncHandler(async (req, res) => {
   res.json({ grades: Array.from(map, ([grade, points]) => ({ grade, points })) });
 }));
 
+const findUniqueRow = (companyId, grade, flux, coreType) => qOne(
+  'SELECT * FROM `FluxGrade` WHERE `companyId` = ? AND `grade` = ? AND `flux` = ? AND `coreType` = ?',
+  [companyId, grade, flux, coreType]
+);
+
 /* ---------- POST /api/flux-grades — create new row ---------- */
 router.post('/', requirePermission('add_material'), asyncHandler(async (req, res) => {
   const { grade, flux, coreType, ateCm, notes } = inputSchema.parse(req.body);
 
-  const existing = await prisma.fluxGrade.findUnique({
-    where: {
-      companyId_grade_flux_coreType: {
-        companyId: req.tenant.companyId, grade, flux, coreType,
-      },
-    },
-  });
+  const existing = await findUniqueRow(req.tenant.companyId, grade, flux, coreType);
   if (existing) {
     throw new AppError(
       `${grade} @ ${flux} T (${coreType}) already exists — edit it from the table`,
@@ -65,13 +64,11 @@ router.post('/', requirePermission('add_material'), asyncHandler(async (req, res
     );
   }
 
-  const created = await prisma.fluxGrade.create({
-    data: {
-      grade, flux, coreType,
-      ateCm: ateCm ?? 0,
-      notes: notes ?? null,
-      companyId: req.tenant.companyId,
-    },
+  const created = await insert('FluxGrade', {
+    grade, flux, coreType,
+    ateCm: ateCm ?? 0,
+    notes: notes ?? null,
+    companyId: req.tenant.companyId,
   });
   res.status(201).json(created);
 }));
@@ -79,41 +76,45 @@ router.post('/', requirePermission('add_material'), asyncHandler(async (req, res
 /* ---------- PATCH /api/flux-grades/:id ---------- */
 router.patch('/:id', requirePermission('add_material'), asyncHandler(async (req, res) => {
   const data = inputSchema.partial().parse(req.body);
-  const row = await prisma.fluxGrade.findFirst({ where: tenantWhere(req, { id: req.params.id }) });
+  const row = await qOne(
+    'SELECT * FROM `FluxGrade` WHERE `id` = ? AND `companyId` = ?',
+    [req.params.id, req.tenant.companyId]
+  );
   if (!row) throw new AppError('Not found', 404, 'NOT_FOUND');
 
-  // If any unique-key field changed, ensure no collision with another row.
   const keyChanged = ['grade', 'flux', 'coreType'].some(
     (k) => data[k] !== undefined && data[k] !== row[k]
   );
   if (keyChanged) {
-    const conflict = await prisma.fluxGrade.findFirst({
-      where: tenantWhere(req, {
-        grade:    data.grade    ?? row.grade,
-        flux:     data.flux     ?? row.flux,
-        coreType: data.coreType ?? row.coreType,
-        NOT: { id: row.id },
-      }),
-    });
+    const conflict = await qOne(
+      'SELECT `id` FROM `FluxGrade` WHERE `companyId` = ? AND `grade` = ? AND `flux` = ? AND `coreType` = ? AND `id` <> ?',
+      [
+        req.tenant.companyId,
+        data.grade    ?? row.grade,
+        data.flux     ?? row.flux,
+        data.coreType ?? row.coreType,
+        row.id,
+      ]
+    );
     if (conflict) throw new AppError('Another row already uses that grade + flux + core type', 409, 'DUPLICATE');
   }
 
-  const updated = await prisma.fluxGrade.update({ where: { id: row.id }, data });
+  const updated = await update('FluxGrade', row.id, data);
   res.json(updated);
 }));
 
 /* ---------- DELETE /api/flux-grades/:id ---------- */
 router.delete('/:id', requirePermission('add_material'), asyncHandler(async (req, res) => {
-  const row = await prisma.fluxGrade.findFirst({ where: tenantWhere(req, { id: req.params.id }) });
+  const row = await qOne(
+    'SELECT `id` FROM `FluxGrade` WHERE `id` = ? AND `companyId` = ?',
+    [req.params.id, req.tenant.companyId]
+  );
   if (!row) throw new AppError('Not found', 404, 'NOT_FOUND');
-  await prisma.fluxGrade.delete({ where: { id: row.id } });
+  await del('FluxGrade', row.id);
   res.status(204).end();
 }));
 
-/* ---------- POST /api/flux-grades/bulk — upsert many rows in one request ----------
-   Used by the Excel bulk-upload feature. Each row is upserted on the unique
-   (companyId, grade, flux, coreType) key — existing rows get their ATe/cm and
-   notes refreshed; new rows are created. */
+/* ---------- POST /api/flux-grades/bulk — upsert many rows in one request ---------- */
 router.post('/bulk', requirePermission('add_material'), asyncHandler(async (req, res) => {
   const { rows } = z.object({
     rows: z.array(inputSchema).min(1).max(500),
@@ -126,27 +127,21 @@ router.post('/bulk', requirePermission('add_material'), asyncHandler(async (req,
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
     try {
-      const existing = await prisma.fluxGrade.findUnique({
-        where: {
-          companyId_grade_flux_coreType: {
-            companyId: req.tenant.companyId, grade: r.grade, flux: r.flux, coreType: r.coreType,
-          },
-        },
-      });
-      await prisma.fluxGrade.upsert({
-        where: {
-          companyId_grade_flux_coreType: {
-            companyId: req.tenant.companyId, grade: r.grade, flux: r.flux, coreType: r.coreType,
-          },
-        },
-        create: {
+      const existing = await findUniqueRow(req.tenant.companyId, r.grade, r.flux, r.coreType);
+      if (existing) {
+        await update('FluxGrade', existing.id, {
+          ateCm: r.ateCm ?? 0,
+          notes: r.notes ?? null,
+        });
+        updated += 1;
+      } else {
+        await insert('FluxGrade', {
           grade: r.grade, flux: r.flux, coreType: r.coreType,
           ateCm: r.ateCm ?? 0, notes: r.notes ?? null,
           companyId: req.tenant.companyId,
-        },
-        update: { ateCm: r.ateCm ?? 0, notes: r.notes ?? null },
-      });
-      if (existing) updated += 1; else inserted += 1;
+        });
+        inserted += 1;
+      }
     } catch (e) {
       errors.push({ row: i + 1, message: e.message });
     }
@@ -182,19 +177,18 @@ router.post('/seed', requirePermission('add_material'), asyncHandler(async (req,
     { grade: 'ZDMH',     flux: 1.7, ateCm: 0.30  },
   ];
 
-  await prisma.$transaction(
-    DEFAULTS.map((d) =>
-      prisma.fluxGrade.upsert({
-        where: {
-          companyId_grade_flux_coreType: {
-            companyId: req.tenant.companyId, grade: d.grade, flux: d.flux, coreType: 'TOROIDAL',
-          },
-        },
-        create: { ...d, coreType: 'TOROIDAL', companyId: req.tenant.companyId },
-        update: {},
-      })
-    )
-  );
+  await txn(async (tx) => {
+    for (const d of DEFAULTS) {
+      const existing = await tx.qOne(
+        'SELECT `id` FROM `FluxGrade` WHERE `companyId` = ? AND `grade` = ? AND `flux` = ? AND `coreType` = ?',
+        [req.tenant.companyId, d.grade, d.flux, 'TOROIDAL']
+      );
+      if (existing) continue;
+      await tx.insert('FluxGrade', {
+        ...d, coreType: 'TOROIDAL', companyId: req.tenant.companyId, notes: null,
+      });
+    }
+  });
   res.json({ inserted: DEFAULTS.length, note: 'Toroidal defaults — clone to Rectangular if needed' });
 }));
 
