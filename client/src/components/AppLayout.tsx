@@ -156,23 +156,16 @@ export const AppLayout = () => {
           collapsed ? 'md:w-16' : 'md:w-64'
         )}
       >
-        {/* Logo + collapse toggle */}
+        {/* Top bar — collapse toggle, plus a small Metflux logo only when the
+            sidebar is collapsed. When expanded, the CompanySwitcher below
+            already shows the active company's name + logo, so duplicating the
+            Metflux brand at the top is just noise. */}
         <div className="flex items-center gap-2.5 border-b border-white/5 px-4 py-4 min-w-0">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/10 p-1.5 ring-1 ring-white/10">
-            <img src="/icons/icon.svg" alt="Metflux" className="h-full w-full object-contain" />
-          </div>
-          <div
-            className={cn(
-              'min-w-0 flex-1 text-sm overflow-hidden whitespace-nowrap',
-              'transition-[opacity,max-width] duration-200',
-              collapsed ? 'opacity-0 max-w-0' : 'opacity-100 max-w-[180px] delay-75'
-            )}
-          >
-            <div className="font-semibold tracking-tight">
-              Met<span className="text-brand-400">flux</span>
+          {collapsed && (
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/10 p-1.5 ring-1 ring-white/10">
+              <img src="/icons/icon.svg" alt="Metflux" className="h-full w-full object-contain" />
             </div>
-            <div className="text-[11px] text-white/50">Admin panel</div>
-          </div>
+          )}
           {/* Mobile: close-drawer X. Desktop: collapse/expand toggle. */}
           <button
             onClick={() => {
