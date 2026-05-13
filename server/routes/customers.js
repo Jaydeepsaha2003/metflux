@@ -16,7 +16,11 @@ const paginationQuery = z.object({
   pageSize: z.coerce.number().int().min(1).max(500).default(20),
   search: z.string().trim().max(120).optional(),
 });
-const customerInput = z.object({
+// Split the base object schema from the transform: zod's `.partial()` is only
+// defined on ZodObject, not on ZodEffects (what `.transform()` returns). So
+// the create/patch routes each apply the transform after deciding whether to
+// partial the base.
+const customerInputBase = z.object({
   name: z.string().trim().min(1).max(160),
   email: z.string().email().optional().nullable().or(z.literal('')),
   phone: z.string().trim().max(40).optional().nullable(),
@@ -25,10 +29,12 @@ const customerInput = z.object({
   gstRate: z.coerce.number().min(0).max(100).optional(),
   state: z.string().trim().max(80).optional().nullable(),
   notes: z.string().trim().max(2000).optional().nullable(),
-}).transform((v) => ({
-  ...v,
-  email: v.email === '' ? null : v.email,
-}));
+});
+
+const normalizeEmail = (v) => ({ ...v, email: v.email === '' ? null : v.email });
+
+const customerInput        = customerInputBase.transform(normalizeEmail);
+const customerInputPartial = customerInputBase.partial().transform(normalizeEmail);
 
 // Ensures the row belongs to the active tenant — used before update/delete.
 const findOwned = async (req, id) => {
@@ -84,7 +90,7 @@ router.post('/', requireRole('STAFF'), asyncHandler(async (req, res) => {
 // PATCH /api/customers/:id
 router.patch('/:id', requireRole('STAFF'), asyncHandler(async (req, res) => {
   const { id } = idParam.parse(req.params);
-  const data = customerInput.partial().parse(req.body);
+  const data = customerInputPartial.parse(req.body);
   await findOwned(req, id);
   res.json(await update('Customer', id, data));
 }));

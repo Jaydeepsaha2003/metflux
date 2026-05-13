@@ -16,7 +16,8 @@ const paginationQuery = z.object({
   search: z.string().trim().max(120).optional(),
 });
 
-const supplierInput = z.object({
+// Split base from transform so `.partial()` is callable on the base for PATCH.
+const supplierInputBase = z.object({
   name:      z.string().trim().min(1).max(160),
   email:     z.string().email().optional().nullable().or(z.literal('')),
   phone:     z.string().trim().max(40).optional().nullable(),
@@ -25,10 +26,12 @@ const supplierInput = z.object({
   state:     z.string().trim().max(80).optional().nullable(),
   gstRate:   z.coerce.number().min(0).max(100).default(0),
   notes:     z.string().trim().max(2000).optional().nullable(),
-}).transform((v) => ({
-  ...v,
-  email: v.email === '' ? null : v.email,
-}));
+});
+
+const normalizeEmail = (v) => ({ ...v, email: v.email === '' ? null : v.email });
+
+const supplierInput        = supplierInputBase.transform(normalizeEmail);
+const supplierInputPartial = supplierInputBase.partial().transform(normalizeEmail);
 
 const findOwned = async (req, id) => {
   const item = await qOne(
@@ -78,7 +81,7 @@ router.post('/', requirePermission('add_supplier'), asyncHandler(async (req, res
 
 router.patch('/:id', requirePermission('add_supplier'), asyncHandler(async (req, res) => {
   const { id } = idParam.parse(req.params);
-  const data = supplierInput.partial().parse(req.body);
+  const data = supplierInputPartial.parse(req.body);
   await findOwned(req, id);
   res.json(await update('Supplier', id, data));
 }));

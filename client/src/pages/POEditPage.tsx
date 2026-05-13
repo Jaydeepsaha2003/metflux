@@ -89,7 +89,25 @@ export const POEditPage = () => {
         </div>
       )}
 
-      {item && item.status === 'ACTIVE' && (
+      {/* Once production has started, the item is locked for editing — any
+          change here would invalidate the produced/dispatched tallies. Users
+          can still shrink the remaining qty via Cancel. */}
+      {!isLoading && item && item.status === 'ACTIVE' && (item.pcsProduced ?? 0) > 0 && (
+        <div className="card p-5 border border-amber-200 bg-amber-50 text-amber-800 space-y-2">
+          <div className="font-semibold">You can't edit this item</div>
+          <div className="text-sm">
+            Production has already started — <strong>{item.pcsProduced ?? 0}</strong> pcs produced
+            {(item.pcsDispatched ?? 0) > 0 && <> and <strong>{item.pcsDispatched ?? 0}</strong> pcs dispatched</>}.
+            Editing the line would invalidate the production/dispatch tallies. To reduce or remove the
+            unbuilt remainder, use <strong>Cancel</strong> on the SO Modify page.
+          </div>
+          <Link to="/po/manage" className="btn-ghost text-amber-900 inline-flex">
+            <ArrowLeft className="h-4 w-4" /> Back to SO Modify
+          </Link>
+        </div>
+      )}
+
+      {item && item.status === 'ACTIVE' && (item.pcsProduced ?? 0) === 0 && (
         <>
           {/* Header strip — read-only context about which Sales Order this item belongs to */}
           <section className="card p-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
