@@ -54,6 +54,14 @@ export const SearchableSelect = ({
     }
   }, [open]);
 
+  // Keep the highlighted option scrolled into view as the user arrows
+  // through long lists.
+  useEffect(() => {
+    if (!open) return;
+    const li = listRef.current?.children?.[highlighted] as HTMLElement | undefined;
+    li?.scrollIntoView({ block: 'nearest' });
+  }, [highlighted, open]);
+
   const select = (opt: SelectOption) => {
     onChange(opt.value);
     setOpen(false);
@@ -110,7 +118,17 @@ export const SearchableSelect = ({
           if (!disabled) setOpen(true);
         }}
         onClick={() => !disabled && setOpen((v) => !v)}
-        onKeyDown={open ? onKeyDown : undefined}
+        // Always attach so arrow keys / Enter still work the moment the panel
+        // pops open via Tab focus — without this, the first key press right
+        // after focus could land on a stale (closed-state) handler.
+        onKeyDown={(e) => {
+          if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            if (!disabled) setOpen(true);
+            return;
+          }
+          if (open) onKeyDown(e);
+        }}
         className={cn(
           triggerCls,
           'flex items-center justify-between gap-2 text-left cursor-pointer',
@@ -179,7 +197,8 @@ export const SearchableSelect = ({
                   onMouseEnter={() => setHighlighted(i)}
                   className={cn(
                     'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition',
-                    i === highlighted && 'bg-brand-50 text-brand-700',
+                    // Stronger highlight so keyboard navigation is obvious.
+                    i === highlighted && 'bg-brand-100 text-brand-800 ring-1 ring-brand-300',
                     opt.value === value && 'font-medium'
                   )}
                 >
