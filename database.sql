@@ -9,18 +9,16 @@
 --
 -- NOTES
 --   - Charset is utf8mb4 / utf8mb4_unicode_ci (full Unicode support).
---   - All `id` columns are VARCHAR(191) and hold app-generated CUIDs
---     (Prisma Client creates them automatically on insert) — do NOT
---     change to AUTO_INCREMENT.
+--   - All `id` columns are VARCHAR(191) and hold app-generated string IDs
+--     (UUID v4 via uuid package) — do NOT change to AUTO_INCREMENT.
 --   - This file CREATES tables; it does NOT drop them. If you need to
 --     re-import, drop the database (or all tables) first in phpMyAdmin.
 --
 -- HOW TO ADD A COLUMN LATER (manual update workflow)
 --   1. In phpMyAdmin: ALTER TABLE `MyTable` ADD COLUMN `myCol` ...
---   2. In schema.prisma: add the matching field on the model.
---   3. From `server/`: run `npx prisma generate` so the JS client
---      knows about the new column. (This does NOT touch the database.)
---   4. Use the column in your route code.
+--   2. Use the column in your route SQL via the helpers in server/lib/db.js
+--      (q, qOne, insert, update, del, txn).
+--   No client regeneration step — the SQL is the source of truth.
 -- =====================================================================
 
 -- CreateTable

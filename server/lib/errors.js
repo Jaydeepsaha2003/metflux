@@ -35,14 +35,22 @@ export const errorHandler = (err, req, res, _next) => {
       error: { code: err.code, message: err.message, details: err.details },
     });
   }
-  // Common Prisma errors get a friendly translation.
-  if (err?.code === 'P2002') {
+  // Common MySQL errors get a friendly translation.
+  if (err?.code === 'ER_DUP_ENTRY') {
     return res.status(409).json({
-      error: { code: 'CONFLICT', message: 'Unique constraint violation', details: err.meta },
+      error: { code: 'CONFLICT', message: 'Unique constraint violation', details: { sqlMessage: err.sqlMessage } },
     });
   }
-  if (err?.code === 'P2025') {
-    return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Record not found' } });
+  if (err?.code === 'ER_NO_REFERENCED_ROW_2' || err?.code === 'ER_ROW_IS_REFERENCED_2') {
+    return res.status(400).json({
+      error: { code: 'FK_VIOLATION', message: 'Referenced record not found or still in use', details: { sqlMessage: err.sqlMessage } },
+    });
+  }
+  // Routes that still use the deprecated `prisma` stub from lib/db.js.
+  if (err?.code === 'PRISMA_NOT_MIGRATED') {
+    return res.status(501).json({
+      error: { code: 'NOT_MIGRATED', message: err.message },
+    });
   }
   console.error('[metflux] unhandled error:', err);
   res.status(500).json({
