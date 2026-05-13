@@ -315,6 +315,18 @@ router.patch('/items/:id', requirePermission('add_po'), asyncHandler(async (req,
   if (!row) throw new AppError('Item not found', 404, 'NOT_FOUND');
   if (row.status === 'CANCELLED') throw new AppError('Cannot edit a cancelled item', 400, 'ITEM_CANCELLED');
 
+  // Once any production has been recorded against this item, the item is
+  // locked — anything you change here would invalidate the produced/dispatched
+  // tallies and downstream paperwork. Use Cancel to shrink the remaining qty.
+  const producedSoFar = Number(row.pcsProduced ?? 0);
+  if (producedSoFar > 0) {
+    throw new AppError(
+      `Cannot edit this item — production has already started (${producedSoFar} pcs produced). ` +
+      `Use Cancel to reduce the remaining quantity instead.`,
+      400, 'PRODUCTION_STARTED'
+    );
+  }
+
   if (data.pcs !== undefined) {
     const minPcs = Math.max(Number(row.pcsProduced ?? 0), Number(row.pcsDispatched ?? 0));
     if (data.pcs < minPcs) {
