@@ -156,16 +156,11 @@ export const AppLayout = () => {
           collapsed ? 'md:w-16' : 'md:w-64'
         )}
       >
-        {/* Top bar — collapse toggle, plus a small Metflux logo only when the
-            sidebar is collapsed. When expanded, the CompanySwitcher below
-            already shows the active company's name + logo, so duplicating the
-            Metflux brand at the top is just noise. */}
-        <div className="flex items-center gap-2.5 border-b border-white/5 px-4 py-4 min-w-0">
-          {collapsed && (
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/10 p-1.5 ring-1 ring-white/10">
-              <img src="/icons/icon.svg" alt="Metflux" className="h-full w-full object-contain" />
-            </div>
-          )}
+        {/* Top bar — just the collapse / close toggle now. The Metflux brand
+            block was removed; the CompanySwitcher below carries the active
+            company's identity, and the collapsed rail stays intentionally
+            bare so the nav icons get all the focus. */}
+        <div className="flex items-center justify-end border-b border-white/5 px-4 py-4 min-w-0">
           {/* Mobile: close-drawer X. Desktop: collapse/expand toggle. */}
           <button
             onClick={() => {
