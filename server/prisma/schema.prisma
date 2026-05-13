@@ -7,6 +7,12 @@
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "debian-openssl-1.1.x", "debian-openssl-3.0.x"]
+  // Use the standalone query-engine binary instead of the in-process library.
+  // The library engine's Tokio async runtime panics ("timer has gone away")
+  // on Hostinger's LiteSpeed/lsnode wrapper because background timer threads
+  // get restricted. Running the engine as a child process isolates it from
+  // those restrictions at the cost of ~10–20 ms IPC overhead per query.
+  engineType    = "binary"
 }
 
 datasource db {
