@@ -314,7 +314,12 @@ export const WorkAllotmentBuildPage = () => {
         windowWidth: A4_USABLE_PX,
       },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+      // Allow page breaks naturally — was 'avoid-all', which refused to split
+      // the items table at all and pushed it entirely onto page 2, leaving
+      // page 1 with the header + a huge blank. `avoid: 'tr'` keeps individual
+      // rows intact (no row sliced in half), while still letting the table
+      // flow across pages.
+      pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', 'thead', '.no-break'] },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).from(clone);
 
