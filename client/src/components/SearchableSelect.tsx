@@ -25,6 +25,11 @@ export const SearchableSelect = ({
   const listRef = useRef<HTMLUListElement>(null);
   const [highlighted, setHighlighted] = useState(0);
 
+  // Differentiates "the user tabbed onto the trigger" (open the panel)
+  // from "the user clicked the trigger" (let onClick toggle do its thing).
+  // Without this, a click fires focus first → open, then click → close.
+  const isMouseDownRef = useRef(false);
+
   const filtered = query.trim()
     ? options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase()))
     : options;
@@ -80,11 +85,30 @@ export const SearchableSelect = ({
     : 'input';
 
   return (
-    <div ref={containerRef} className={cn('relative', className)}>
+    <div
+      ref={containerRef}
+      className={cn('relative', className)}
+      // Container-level blur — fires when ANY focusable child loses focus.
+      // If the next focus target is outside this dropdown, collapse the panel
+      // so tabbing out of the trigger or the search input closes it cleanly.
+      onBlur={(e) => {
+        if (!containerRef.current?.contains(e.relatedTarget as Node)) setOpen(false);
+      }}
+    >
       {/* Trigger */}
       <button
         type="button"
         disabled={disabled}
+        onMouseDown={() => { isMouseDownRef.current = true; }}
+        onFocus={() => {
+          // Skip the auto-open when focus was caused by a click — onClick will
+          // toggle the open state itself. Otherwise (Tab navigation), open.
+          if (isMouseDownRef.current) {
+            isMouseDownRef.current = false;
+            return;
+          }
+          if (!disabled) setOpen(true);
+        }}
         onClick={() => !disabled && setOpen((v) => !v)}
         onKeyDown={open ? onKeyDown : undefined}
         className={cn(
@@ -99,7 +123,11 @@ export const SearchableSelect = ({
           {selectedLabel && (
             <span
               role="button"
-              tabIndex={0}
+              // Keep the X out of the natural tab order so the user can Tab
+              // straight from the dropdown trigger to the next form field
+              // without stopping on the clear-icon.
+              tabIndex={-1}
+              onMouseDown={(e) => e.stopPropagation()}
               onClick={clear}
               onKeyDown={(e) => e.key === 'Enter' && clear(e as unknown as React.MouseEvent)}
               className="rounded p-0.5 text-slate-400 hover:text-slate-600"
@@ -143,6 +171,10 @@ export const SearchableSelect = ({
               <li key={opt.value}>
                 <button
                   type="button"
+                  // Skip in the tab order — arrow keys navigate inside the
+                  // panel, Tab advances to the next form field instead of
+                  // walking through every option.
+                  tabIndex={-1}
                   onClick={() => select(opt)}
                   onMouseEnter={() => setHighlighted(i)}
                   className={cn(
