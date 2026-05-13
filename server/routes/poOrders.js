@@ -228,6 +228,13 @@ const flattenItem = (it) => {
     ratePerKg:   it.ratePerKg   ?? null,
     ratePerPc:   it.ratePerPc   ?? null,
     totalAmount: it.totalAmount ?? null,
+    // Flux-test calibration (toroidal + rectangular). The Edit page needs
+    // these to pre-fill the flux/turns inputs.
+    turns:       it.turns       ?? null,
+    flux:        it.flux        ?? null,
+    ateCm:       it.ateCm       ?? null,
+    testVoltage: it.testVoltage ?? null,
+    testCurrent: it.testCurrent ?? null,
     pcsProduced,
     pcsDispatched,
     status: it.status,
