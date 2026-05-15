@@ -127,21 +127,31 @@ export const UserFormPage = () => {
     setMemberships((prev) => prev.map((m, i) => ({ ...m, isPrimary: i === idx })));
   };
 
-  /* ----- live membership endpoints (only when editing) ----- */
+  /* ----- live membership endpoints (only when editing) -----
+     Each of these surfaces server-side errors back into the page-level
+     `error` state — previously a silent onError meant a 4xx response left
+     the UI completely unchanged, so users would click Save and think the
+     request was being ignored.  */
+  const surfaceErr = (fallback: string) => (e: unknown) =>
+    setError(e instanceof ApiError ? e.message : fallback);
+
   const persistMembership = useMutation({
     mutationFn: (m: Membership) =>
       api<UserDetail>(`/users/${id}/memberships`, { method: 'POST', json: m }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', id] }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['user', id] }); setError(null); },
+    onError: surfaceErr('Could not save membership'),
   });
   const updateMembershipMut = useMutation({
     mutationFn: (m: Membership) =>
       api<UserDetail>(`/users/${id}/memberships/${m.id}`, { method: 'PATCH', json: m }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', id] }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['user', id] }); setError(null); },
+    onError: surfaceErr('Could not save membership'),
   });
   const removeMembershipMut = useMutation({
     mutationFn: (mid: string) =>
       api(`/users/${id}/memberships/${mid}`, { method: 'DELETE' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', id] }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['user', id] }); setError(null); },
+    onError: surfaceErr('Could not remove membership'),
   });
 
   return (

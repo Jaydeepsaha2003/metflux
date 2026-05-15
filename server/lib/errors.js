@@ -26,8 +26,19 @@ export const notFoundHandler = (req, res, next) => {
 // eslint-disable-next-line no-unused-vars
 export const errorHandler = (err, req, res, _next) => {
   if (err instanceof ZodError) {
+    // Surface the first field-level error message (e.g. "Password must be at
+    // least 8 characters", "Invalid email") so the UI can show something
+    // actionable. Falls back to a generic message if zod gives us a blob with
+    // no leaf errors. Full structure is still in `details` for debugging.
+    const flat = err.flatten();
+    const firstFieldKey = Object.keys(flat.fieldErrors ?? {})[0];
+    const firstFieldMsg = firstFieldKey ? flat.fieldErrors[firstFieldKey]?.[0] : null;
+    const firstFormErr = flat.formErrors?.[0];
+    const message = firstFieldKey && firstFieldMsg
+      ? `${firstFieldKey}: ${firstFieldMsg}`
+      : firstFormErr || 'Invalid request';
     return res.status(400).json({
-      error: { code: 'VALIDATION_ERROR', message: 'Invalid request', details: err.flatten() },
+      error: { code: 'VALIDATION_ERROR', message, details: flat },
     });
   }
   if (err instanceof AppError) {
