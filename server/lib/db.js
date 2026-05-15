@@ -44,6 +44,29 @@ const prep = (v) => {
 
 export const newId = () => uuidv4();
 
+// Tables that have an `updatedAt` column (Prisma's @updatedAt). Insert/update
+// helpers below auto-fill this column for these tables only — passing it for
+// any other table would produce `Unknown column 'updatedAt' in 'field list'`
+// and roll the whole transaction back. Keep this list in sync with
+// database.sql / the Prisma schema. Join / item tables intentionally omitted.
+const TABLES_WITH_UPDATED_AT = new Set([
+  'Company',
+  'User',
+  'Membership',
+  'Customer',
+  'FluxGrade',
+  'PoOrder',
+  'Production',
+  'Dispatch',
+  'PackingList',
+  'Labour',
+  'Supplier',
+  'SupplierOrder',
+  'WorkAllotment',
+  'Return',
+  'ContactSubmission',
+]);
+
 const pickConn = (override) => override ?? pool;
 
 export const q = async (sql, params = [], overrideConn = null) => {
@@ -60,11 +83,19 @@ export const qOne = async (sql, params = [], overrideConn = null) => {
 export const insert = async (table, data, overrideConn = null) => {
   const c = pickConn(overrideConn);
   const id = data.id ?? newId();
-  const now = new Date();
   const row = { id, ...data };
-  // Prisma's @updatedAt was filled in on the JS side at every write.
-  // Replicate it here so columns declared NOT NULL stay populated.
-  if (row.updatedAt === undefined) row.updatedAt = now;
+  // Auto-fill updatedAt only for tables that actually have the column. Doing
+  // it unconditionally was silently breaking inserts into join / item tables
+  // like LabourMembership, PoOrderItem, ReturnItem, etc. — MySQL would throw
+  // "Unknown column 'updatedAt'" and the surrounding transaction would roll
+  // back, making the whole save look like a no-op.
+  if (TABLES_WITH_UPDATED_AT.has(table) && row.updatedAt === undefined) {
+    row.updatedAt = new Date();
+  } else if (!TABLES_WITH_UPDATED_AT.has(table)) {
+    // Defensive: strip a caller-provided updatedAt for tables that don't
+    // have one, so a typo or stale code can't poison the query.
+    delete row.updatedAt;
+  }
   const keys = Object.keys(row);
   const cols = keys.map((k) => `\`${k}\``).join(',');
   const placeholders = keys.map(() => '?').join(',');
@@ -76,7 +107,13 @@ export const insert = async (table, data, overrideConn = null) => {
 
 export const update = async (table, id, data, overrideConn = null) => {
   const c = pickConn(overrideConn);
-  const row = { ...data, updatedAt: new Date() };
+  const row = { ...data };
+  // Same guard as insert: only bump updatedAt on tables that have it.
+  if (TABLES_WITH_UPDATED_AT.has(table)) {
+    row.updatedAt = new Date();
+  } else {
+    delete row.updatedAt;
+  }
   const keys = Object.keys(row);
   if (keys.length === 0) {
     const [fresh] = await c.query(`SELECT * FROM \`${table}\` WHERE \`id\` = ?`, [id]);
