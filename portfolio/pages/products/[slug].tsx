@@ -239,30 +239,32 @@ const ProductDetail = () => {
           </div>
 
           {/* Product Features Section */}
-          <div className="fade-in-element mt-24">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl font-display font-bold text-gray-900 mb-4">Product Features</h2>
-              <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-                Discover the advanced capabilities and specifications that make this product exceptional.
-              </p>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {product.features.map((feature, index) => (
-                <div key={index} className="bg-white rounded-2xl p-8 shadow-elegant hover:shadow-elegant-hover transition-shadow duration-300">
-                  <div className="flex items-start space-x-4">
-                    <div className="flex-shrink-0 w-12 h-12 bg-pulse-100 rounded-full flex items-center justify-center">
-                      {getProductIcon(product.id)}
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-display font-bold text-gray-900 mb-3">{feature.title}</h3>
-                      <p className="text-gray-600 leading-relaxed">{feature.description}</p>
+          {product.features && product.features.length > 0 && (
+            <div className="fade-in-element mt-24">
+              <div className="text-center mb-12">
+                <h2 className="text-3xl font-display font-bold text-gray-900 mb-4">Product Features</h2>
+                <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+                  Discover the advanced capabilities and specifications that make this product exceptional.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {product.features.map((feature, index) => (
+                  <div key={index} className="bg-white rounded-2xl p-8 shadow-elegant hover:shadow-elegant-hover transition-shadow duration-300">
+                    <div className="flex items-start space-x-4">
+                      <div className="flex-shrink-0 w-12 h-12 bg-pulse-100 rounded-full flex items-center justify-center">
+                        {getProductIcon(product.id)}
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-display font-bold text-gray-900 mb-3">{feature.title}</h3>
+                        <p className="text-gray-600 leading-relaxed">{feature.description}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Specifications Section - Only for products that have specifications */}
           {product.specifications && (
@@ -295,33 +297,35 @@ const ProductDetail = () => {
           </div> */}
 
           {/* FAQs Section */}
-          <div className="fade-in-element mt-24">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl font-display font-bold text-gray-900 mb-4">Frequently Asked Questions</h2>
-              <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-                Find answers to common questions about {product.title}.
-              </p>
+          {product.faqs && product.faqs.length > 0 && (
+            <div className="fade-in-element mt-24">
+              <div className="text-center mb-12">
+                <h2 className="text-3xl font-display font-bold text-gray-900 mb-4">Frequently Asked Questions</h2>
+                <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+                  Find answers to common questions about {product.title}.
+                </p>
+              </div>
+
+              <div className="max-w-4xl mx-auto">
+                <Accordion type="single" collapsible className="w-full space-y-4">
+                  {product.faqs.map((faq) => (
+                    <AccordionItem
+                      key={faq.id}
+                      value={faq.id.toString()}
+                      className="glass-card border-0 shadow-elegant hover:shadow-elegant-hover transition-all duration-300"
+                    >
+                      <AccordionTrigger className="text-left hover:no-underline px-6 py-4 text-base sm:text-lg font-medium hover:text-pulse-500 transition-colors duration-200">
+                        {faq.question}
+                      </AccordionTrigger>
+                      <AccordionContent className="px-6 pb-4 text-gray-600 text-sm sm:text-base leading-relaxed">
+                        {faq.answer}
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              </div>
             </div>
-            
-            <div className="max-w-4xl mx-auto">
-              <Accordion type="single" collapsible className="w-full space-y-4">
-                {product.faqs.map((faq, index) => (
-                  <AccordionItem 
-                    key={faq.id} 
-                    value={faq.id.toString()} 
-                    className="glass-card border-0 shadow-elegant hover:shadow-elegant-hover transition-all duration-300"
-                  >
-                    <AccordionTrigger className="text-left hover:no-underline px-6 py-4 text-base sm:text-lg font-medium hover:text-pulse-500 transition-colors duration-200">
-                      {faq.question}
-                    </AccordionTrigger>
-                    <AccordionContent className="px-6 pb-4 text-gray-600 text-sm sm:text-base leading-relaxed">
-                      {faq.answer}
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            </div>
-          </div>
+          )}
 
         </div>
       </section>

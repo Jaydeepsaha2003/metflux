@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Save, Loader2, Calendar, Hash, Truck, Package } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { ItemTypeahead } from '@/components/ItemTypeahead';
 import { useConfirm } from '@/hooks/useConfirm';
 
 type Supplier = { id: string; name: string; gstRate: number; gstNumber: string | null; state: string | null };
@@ -319,10 +320,30 @@ const ItemEntry = ({ onAdd }: { onAdd: (item: Item) => void }) => {
       <h2 className="text-sm font-semibold text-slate-900">Add line item</h2>
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-6">
         <Field label="Description" className="col-span-2 sm:col-span-3 md:col-span-2">
-          <input className={inputCls} value={description} onChange={(e) => setDescription(e.target.value.toUpperCase())} placeholder="STEEL SHEET 0.23MM" />
+          <ItemTypeahead
+            value={description}
+            onChange={setDescription}
+            onPick={(s) => {
+              setDescription(s.description);
+              if (s.hsnCode) setHsnCode(s.hsnCode);
+              if (s.unit)    setUnit(s.unit);
+            }}
+            placeholder="STEEL SHEET 0.23MM"
+            inputClassName={inputCls}
+          />
         </Field>
         <Field label="HSN Code">
-          <input className={inputCls} value={hsnCode} onChange={(e) => setHsnCode(e.target.value.toUpperCase())} placeholder="72251990" />
+          <ItemTypeahead
+            value={hsnCode}
+            onChange={setHsnCode}
+            onPick={(s) => {
+              if (s.hsnCode) setHsnCode(s.hsnCode);
+              setDescription(s.description);
+              if (s.unit) setUnit(s.unit);
+            }}
+            placeholder="72251990"
+            inputClassName={inputCls}
+          />
         </Field>
         <Field label="Qty">
           <input className={inputCls} type="number" inputMode="decimal" step="any" min={0}

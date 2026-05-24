@@ -21,6 +21,7 @@ const paginationQuery = z.object({
 // the create/patch routes each apply the transform after deciding whether to
 // partial the base.
 const customerInputBase = z.object({
+  customerCode: z.string().trim().max(40).optional().nullable(),
   name: z.string().trim().min(1).max(160),
   email: z.string().email().optional().nullable().or(z.literal('')),
   phone: z.string().trim().max(40).optional().nullable(),
@@ -32,9 +33,30 @@ const customerInputBase = z.object({
 });
 
 const normalizeEmail = (v) => ({ ...v, email: v.email === '' ? null : v.email });
+const cleanCode = (v) => (typeof v === 'string' ? v.trim().toUpperCase() : v);
 
 const customerInput        = customerInputBase.transform(normalizeEmail);
 const customerInputPartial = customerInputBase.partial().transform(normalizeEmail);
+
+/** First 3 alpha chars of name, padded with X. "AARTI STEELS" → "AAR". */
+const prefixFromName = (name) => {
+  const letters = String(name ?? '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
+  return (letters + 'XXX').slice(0, 3);
+};
+
+/** Next free "XYZ-NNN" code for the given prefix in this company. */
+const nextCustomerCode = async (companyId, prefix) => {
+  const rows = await q(
+    'SELECT `customerCode` FROM `Customer` WHERE `companyId` = ? AND `customerCode` LIKE ?',
+    [companyId, `${prefix}-%`]
+  );
+  let max = 0;
+  for (const r of rows) {
+    const m = /-(\d+)$/.exec(r.customerCode ?? '');
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  return `${prefix}-${String(max + 1).padStart(3, '0')}`;
+};
 
 // Ensures the row belongs to the active tenant — used before update/delete.
 const findOwned = async (req, id) => {
@@ -79,8 +101,22 @@ router.get('/:id', asyncHandler(async (req, res) => {
 // POST /api/customers
 router.post('/', requireRole('STAFF'), asyncHandler(async (req, res) => {
   const data = customerInput.parse(req.body);
+
+  // Resolve the customer code: prefer client-supplied; auto-generate otherwise.
+  let customerCode = cleanCode(data.customerCode);
+  if (!customerCode) {
+    customerCode = await nextCustomerCode(req.tenant.companyId, prefixFromName(data.name));
+  } else {
+    const dup = await qOne(
+      'SELECT `id` FROM `Customer` WHERE `companyId` = ? AND `customerCode` = ?',
+      [req.tenant.companyId, customerCode]
+    );
+    if (dup) throw new AppError('Customer code already in use', 409, 'CODE_DUPLICATE');
+  }
+
   const created = await insert('Customer', {
     ...data,
+    customerCode,
     companyId: req.tenant.companyId,
     createdById: req.auth.userId,
   });
@@ -91,7 +127,21 @@ router.post('/', requireRole('STAFF'), asyncHandler(async (req, res) => {
 router.patch('/:id', requireRole('STAFF'), asyncHandler(async (req, res) => {
   const { id } = idParam.parse(req.params);
   const data = customerInputPartial.parse(req.body);
-  await findOwned(req, id);
+  const existing = await findOwned(req, id);
+
+  if (data.customerCode !== undefined) {
+    const cleaned = cleanCode(data.customerCode);
+    if (!cleaned) throw new AppError('Customer code is required', 400, 'CODE_BLANK');
+    if (cleaned !== existing.customerCode) {
+      const dup = await qOne(
+        'SELECT `id` FROM `Customer` WHERE `companyId` = ? AND `customerCode` = ? AND `id` <> ?',
+        [req.tenant.companyId, cleaned, id]
+      );
+      if (dup) throw new AppError('Customer code already in use', 409, 'CODE_DUPLICATE');
+    }
+    data.customerCode = cleaned;
+  }
+
   res.json(await update('Customer', id, data));
 }));
 

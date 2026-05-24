@@ -3,10 +3,12 @@
 // Click an item to reveal the flux-test calibration captured at PO entry.
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, Loader2, BarChart3, Eye, EyeOff, FileText, Activity } from 'lucide-react';
+import { Search, Loader2, BarChart3, Eye, EyeOff, FileText, Activity, Download } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { Pagination } from '@/components/Pagination';
+import { downloadXlsx, todayStamp } from '@/lib/excel';
+import { useHideCustomerNames } from '@/store/auth';
 
 type SummaryItem = {
   id: string;
@@ -14,6 +16,7 @@ type SummaryItem = {
   orderDate: string;
   deliveryDate: string;
   customerName: string;
+  customerCode: string | null;
   coreType: 'TOROIDAL' | 'RECTANGULAR';
   grade: string;
   material: string;
@@ -51,6 +54,7 @@ const PAGE_SIZE = 20;
 export const SOSummaryPage = () => {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<Status>('ACTIVE');
+  const hideNames = useHideCustomerNames();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   useEffect(() => { setPage(1); }, [search, status]);
@@ -64,6 +68,44 @@ export const SOSummaryPage = () => {
   });
 
   const items = data?.items ?? [];
+
+  /* Export every matching SO item to Excel — not just the current page. */
+  const [exporting, setExporting] = useState(false);
+  const onExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const all = await api<{ items: SummaryItem[]; total: number }>(
+        `/po-orders/summary?status=${status}&page=1&pageSize=10000${search ? `&search=${encodeURIComponent(search)}` : ''}`
+      );
+      const rows = all.items.map((it) => ({
+        'SO Date':       fmtDate(it.orderDate),
+        'PO #':          it.poNumber,
+        'Customer Code': it.customerCode ?? '',
+        ...(hideNames ? {} : { 'Customer': it.customerName }),
+        'Type':          it.coreType,
+        'Grade':         it.grade,
+        'Material':      it.material,
+        'Measure':       it.measure,
+        'Ordered':       it.pcsOrdered,
+        'Produced':      it.pcsProduced,
+        'Dispatched':    it.pcsDispatched,
+        'Pending':       it.pcsPending,
+        'Wt / pc':       it.weightPerPc,
+        'Total Wt':      it.totalWeight,
+        'Delivery Date': fmtDate(it.deliveryDate),
+        'Turns':         it.turns,
+        'Flux (T)':      it.flux,
+        'ATe/cm':        it.ateCm,
+        'V (Volts)':     it.testVoltage,
+        'Ie max (mA)':   it.testCurrent,
+        'Status':        it.status,
+      }));
+      downloadXlsx(`so-summary-${status.toLowerCase()}-${todayStamp()}`, 'SO Summary', rows);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Aggregate stats for the header tally — quick read on workload.
   const totals = useMemo(() => items.reduce(
@@ -83,14 +125,25 @@ export const SOSummaryPage = () => {
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <BarChart3 className="h-5 w-5 text-brand-600" /> SO Summary
         </h1>
-        <div className="relative w-full sm:w-72">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input
-            className="input pl-9"
-            placeholder="Search PO#, customer, grade, measure…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="relative flex-1 sm:w-72">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              className="input pl-9"
+              placeholder="Search PO#, customer, grade, measure…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <button
+            onClick={onExport}
+            disabled={exporting || isLoading || !items.length}
+            className="btn-ghost shrink-0 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+            title="Download all matching rows as Excel"
+          >
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            <span className="hidden sm:inline">Excel</span>
+          </button>
         </div>
       </div>
 
@@ -165,7 +218,11 @@ export const SOSummaryPage = () => {
                         onClick={() => setExpanded(isOpen ? null : it.id)}
                       >
                         <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{fmtDate(it.orderDate)}</td>
-                        <td className="px-3 py-2.5 font-medium text-slate-900">{it.customerName}</td>
+                        <td className="px-3 py-2.5 font-medium text-slate-900">
+                          {hideNames
+                            ? <span className="font-mono text-xs text-brand-700">{it.customerCode ?? '—'}</span>
+                            : it.customerName}
+                        </td>
                         <td className="px-3 py-2.5">
                           <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', coreBadge[it.coreType])}>
                             {it.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
@@ -239,7 +296,11 @@ export const SOSummaryPage = () => {
                         </span>
                         <span className="text-xs text-slate-700">{it.grade}</span>
                       </div>
-                      <div className="mt-0.5 text-sm font-medium text-slate-900 truncate">{it.customerName}</div>
+                      <div className="mt-0.5 text-sm font-medium text-slate-900 truncate">
+                        {hideNames
+                          ? <span className="font-mono text-xs text-brand-700">{it.customerCode ?? '—'}</span>
+                          : it.customerName}
+                      </div>
                       <div className="mt-0.5 font-mono text-xs text-slate-600 truncate">{it.measure}</div>
                     </div>
                     <span

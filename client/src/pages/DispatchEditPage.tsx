@@ -4,11 +4,13 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Save, Loader2, Truck, Hash, User2 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import { useHideCustomerNames } from '@/store/auth';
 
 type Item = {
   id: string;
   poNumber: string;
   customerName: string;
+  customerCode: string | null;
   coreType: 'TOROIDAL' | 'RECTANGULAR';
   grade: string;
   material: string;
@@ -26,6 +28,7 @@ export const DispatchEditPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const hideNames = useHideCustomerNames();
 
   const { data: item, isLoading } = useQuery({
     queryKey: ['dispatch-item', id],
@@ -110,7 +113,10 @@ export const DispatchEditPage = () => {
             <span className="flex items-center gap-1.5 text-slate-500"><Hash className="h-3.5 w-3.5" /> PO</span>
             <span className="font-mono text-slate-900">{item.poNumber}</span>
             <span className="flex items-center gap-1.5 text-slate-500"><User2 className="h-3.5 w-3.5" /> Customer</span>
-            <span className="text-slate-900 truncate">{item.customerName}</span>
+            <span className="text-slate-900 truncate">
+              <span className="font-mono text-xs font-semibold text-brand-700 mr-1.5">{item.customerCode ?? '—'}</span>
+              {!hideNames && item.customerName}
+            </span>
             <span className="basis-full sm:basis-auto sm:ml-auto text-xs text-slate-500">
               {item.grade} · {item.material} · <span className="font-mono break-all">{item.measure}</span>
             </span>

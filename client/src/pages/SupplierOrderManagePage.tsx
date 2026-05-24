@@ -2,10 +2,11 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search, Pencil, Trash2, Plus, ListChecks, Loader2 } from 'lucide-react';
+import { Search, Pencil, Trash2, Plus, ListChecks, Loader2, Download, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
+import { downloadXlsx, todayStamp } from '@/lib/excel';
 
 type SupplierOrder = {
   id: string;
@@ -49,15 +50,71 @@ export const SupplierOrderManagePage = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['supplier-orders'] }),
   });
 
+  /* Export — one row per line item so the spreadsheet has full detail.
+     Header columns (PO #, Supplier, Date…) repeat per line so each row stands
+     on its own when sorted/filtered in Excel. */
+  const onExport = () => {
+    const orders = data?.items ?? [];
+    if (!orders.length) return;
+    const rows: Record<string, string | number | null> [] = [];
+    for (const po of orders) {
+      const total = po.items.reduce((s, it) => s + it.amount, 0);
+      if (po.items.length === 0) {
+        rows.push({
+          'PO Number':    po.poNumber,
+          'Supplier':     po.supplier.name,
+          'Order Date':   fmt(po.orderDate),
+          'Expected':     fmt(po.expectedDate),
+          'Status':       po.status,
+          'PO Total (₹)': +total.toFixed(2),
+          'Description':  null,
+          'Qty':          null,
+          'Rate':         null,
+          'Amount (₹)':   null,
+          'Received Qty': null,
+        });
+        continue;
+      }
+      for (const it of po.items) {
+        rows.push({
+          'PO Number':    po.poNumber,
+          'Supplier':     po.supplier.name,
+          'Order Date':   fmt(po.orderDate),
+          'Expected':     fmt(po.expectedDate),
+          'Status':       po.status,
+          'PO Total (₹)': +total.toFixed(2),
+          'Description':  it.description,
+          'Qty':          it.qty,
+          'Rate':         it.rate,
+          'Amount (₹)':   it.amount,
+          'Received Qty': it.receivedQty,
+        });
+      }
+    }
+    downloadXlsx(`supplier-orders-${todayStamp()}`, 'Supplier POs', rows);
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <ListChecks className="h-5 w-5 text-brand-600" /> Modify Supplier POs
         </h1>
-        <Link to="/supplier-po/new" className="btn-primary w-full sm:w-auto">
-          <Plus className="h-4 w-4" /> New PO
-        </Link>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={onExport}
+            disabled={isLoading || !data?.items.length}
+            className="btn-ghost text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+            title="Download all matching rows as Excel"
+          >
+            <Download className="h-4 w-4" />
+            <span className="hidden sm:inline">Excel</span>
+          </button>
+          <Link to="/supplier-po/new" className="btn-primary w-full sm:w-auto">
+            <Plus className="h-4 w-4" /> New PO
+          </Link>
+        </div>
       </div>
 
       <div className="card overflow-hidden">
@@ -119,6 +176,13 @@ export const SupplierOrderManagePage = () => {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="inline-flex items-center gap-1">
+                        <Link
+                          to={`/supplier-po/print/${po.id}`}
+                          className="btn-ghost text-slate-700 hover:bg-slate-100"
+                          title="Print / Download PDF"
+                        >
+                          <FileText className="h-4 w-4" />
+                        </Link>
                         <Link to={`/supplier-po/manage/${po.id}`} className="btn-ghost text-brand-700 hover:bg-brand-50" title="Edit">
                           <Pencil className="h-4 w-4" />
                         </Link>

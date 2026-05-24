@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, Save, Trash2, Building2, Star, ShieldCheck, Loader2,
+  ArrowLeft, Save, Trash2, Building2, Star, ShieldCheck, Loader2, EyeOff,
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
@@ -18,6 +18,7 @@ type Membership = {
   role: Role;
   permissions: PermissionKey[];
   isPrimary: boolean;
+  hideCustomerNames: boolean;
 };
 
 type UserDetail = {
@@ -70,6 +71,7 @@ export const UserFormPage = () => {
     setMemberships(user.memberships.map((m) => ({
       id: m.id, companyId: m.companyId, companyName: m.companyName,
       role: m.role, permissions: m.permissions, isPrimary: m.isPrimary,
+      hideCustomerNames: !!(m as Membership).hideCustomerNames,
     })));
   }, [user]);
 
@@ -115,7 +117,10 @@ export const UserFormPage = () => {
     if (!co) return;
     setMemberships((prev) => [
       ...prev,
-      { companyId, companyName: co.name, role: 'STAFF', permissions: [], isPrimary: prev.length === 0 },
+      {
+        companyId, companyName: co.name, role: 'STAFF', permissions: [],
+        isPrimary: prev.length === 0, hideCustomerNames: false,
+      },
     ]);
   };
 
@@ -324,6 +329,29 @@ const MembershipCard = ({
           </button>
         </div>
       </div>
+
+      {/* Privacy toggle — applies to MANAGER and STAFF. Company admins
+          always see names since they often manage the customer records. */}
+      {!isAdmin && (
+        <label className="mt-3 flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 cursor-pointer hover:bg-slate-100">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-brand-600"
+            checked={!!membership.hideCustomerNames}
+            onChange={(e) => onChange({ hideCustomerNames: e.target.checked })}
+          />
+          <span className="flex-1">
+            <span className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+              <EyeOff className="h-3.5 w-3.5 text-slate-500" />
+              Hide customer names in this company
+            </span>
+            <span className="mt-0.5 block text-[11px] text-slate-500">
+              When ticked, this user only sees customer codes (e.g. AAR-001) in production,
+              dispatch and reports. Names stay visible on PDFs that go to customers.
+            </span>
+          </span>
+        </label>
+      )}
 
       {isAdmin ? (
         <div className="mt-3 rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-800">

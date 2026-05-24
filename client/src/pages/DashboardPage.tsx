@@ -3,21 +3,34 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Factory, Truck, Package, RotateCcw, FileText, TrendingUp, Users2, Trophy, Loader2,
+  Factory, Truck, Package, RotateCcw, FileText, Users2, Trophy, Loader2,
+  CalendarRange, RotateCw, User,
 } from 'lucide-react';
-import { useAuthStore, activeMembership } from '@/store/auth';
+import { useAuthStore, activeMembership, useHideCustomerNames } from '@/store/auth';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 type Stats = {
-  soThisMonth:       { count: number; amount: number };
-  soThisYear:        { count: number; amount: number };
-  pendingProduction: { pcs: number; amount: number };
-  readyDispatch:     { pcs: number; amount: number };
-  dispatchThisMonth: { count: number; pcs: number; weight: number; amount: number };
+  range:             { from: string; to: string };
+  salesOrders:       { count: number; pcs: number; kg: number; customers: number; amount: number };
+  pendingProduction: { pcs: number; kg: number; amount: number };
+  readyDispatch:     { pcs: number; kg: number; amount: number };
+  dispatched:        { count: number; pcs: number; kg: number; amount: number };
   openReturns:       number;
-  topCustomers:      { id: string; name: string; amount: number }[];
+  topCustomers:      {
+    id: string;
+    name: string;
+    customerCode: string | null;
+    amount: number;
+    pcs: number;
+    kg: number;
+    toroidalPcs: number;
+    rectangularPcs: number;
+  }[];
 };
+
+type CustomerListResp = { items: { id: string; name: string; customerCode: string }[] };
 
 type EmployeeRow = {
   rank: number;
@@ -36,11 +49,44 @@ type EmployeeResp = {
   totalPcs: number; totalWeight: number;
 };
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const toISO = (d: Date) => {
+  const off = d.getTimezoneOffset() * 60_000;
+  return new Date(d.getTime() - off).toISOString().slice(0, 10);
+};
+const todayISO = () => toISO(new Date());
 const startOfMonthISO = () => {
   const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+  return toISO(new Date(d.getFullYear(), d.getMonth(), 1));
 };
+const startOfYearISO = () => {
+  const d = new Date();
+  return toISO(new Date(d.getFullYear(), 0, 1));
+};
+const daysAgoISO = (n: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return toISO(d);
+};
+const startOfWeekISO = () => {
+  const d = new Date();
+  const day = (d.getDay() + 6) % 7;     // Mon=0
+  d.setDate(d.getDate() - day);
+  return toISO(d);
+};
+
+type Preset = 'today' | 'week' | 'month' | 'last30' | 'ytd';
+const PRESETS: { key: Preset; label: string; from: () => string; to: () => string }[] = [
+  { key: 'today',  label: 'Today',        from: todayISO,         to: todayISO },
+  { key: 'week',   label: 'This week',    from: startOfWeekISO,   to: todayISO },
+  { key: 'month',  label: 'This month',   from: startOfMonthISO,  to: todayISO },
+  { key: 'last30', label: 'Last 30 days', from: () => daysAgoISO(29), to: todayISO },
+  { key: 'ytd',    label: 'YTD',          from: startOfYearISO,   to: todayISO },
+];
+const detectPreset = (from: string, to: string): Preset | null => {
+  for (const p of PRESETS) if (p.from() === from && p.to() === to) return p.key;
+  return null;
+};
+
 
 const fmtMoney = (n: number) =>
   '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -54,20 +100,47 @@ const fmtCompactMoney = (n: number) => {
 export const DashboardPage = () => {
   const user = useAuthStore((s) => s.user);
   const active = useAuthStore(activeMembership);
+  const hideNames = useHideCustomerNames();
 
-  const { data: stats, isLoading: loadingStats } = useQuery({
-    queryKey: ['dashboard-stats', active?.companyId],
-    queryFn: () => api<Stats>('/dashboard/stats'),
-  });
-
-  /* Employee filter — defaults to month-to-date */
+  /* One date range + one customer filter govern the whole dashboard. */
   const [from, setFrom] = useState(startOfMonthISO());
   const [to, setTo]     = useState(todayISO());
+  const [customerId, setCustomerId] = useState('');
   const [empSearch, setEmpSearch] = useState('');
 
+  const activePreset = detectPreset(from, to);
+  const applyPreset = (p: typeof PRESETS[number]) => {
+    setFrom(p.from());
+    setTo(p.to());
+  };
+  const resetRange = () => {
+    setFrom(startOfMonthISO());
+    setTo(todayISO());
+  };
+
+  /* Customer options for the filter — full list, cheap at this scale. */
+  const { data: customerList } = useQuery({
+    queryKey: ['dashboard-customer-options', active?.companyId],
+    queryFn: () => api<CustomerListResp>('/customers?pageSize=500'),
+  });
+  const customerOptions = [
+    { value: '', label: 'All customers' },
+    ...(customerList?.items ?? []).map((c) => ({
+      value: c.id,
+      label: hideNames ? c.customerCode : `${c.customerCode} · ${c.name}`,
+    })),
+  ];
+
+  const qs = `from=${from}&to=${to}${customerId ? `&customerId=${customerId}` : ''}`;
+
+  const { data: stats, isLoading: loadingStats } = useQuery({
+    queryKey: ['dashboard-stats', from, to, customerId, active?.companyId],
+    queryFn: () => api<Stats>(`/dashboard/stats?${qs}`),
+  });
+
   const { data: empData, isLoading: loadingEmps } = useQuery({
-    queryKey: ['dashboard-employees', from, to, active?.companyId],
-    queryFn: () => api<EmployeeResp>(`/dashboard/employees?from=${from}&to=${to}`),
+    queryKey: ['dashboard-employees', from, to, customerId, active?.companyId],
+    queryFn: () => api<EmployeeResp>(`/dashboard/employees?${qs}`),
   });
 
   const empItems = (empData?.items ?? []).filter((row) =>
@@ -75,61 +148,87 @@ export const DashboardPage = () => {
   );
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
-          Welcome back, {user?.name?.split(' ')[0]}
-        </h1>
-        <p className="mt-1 text-sm text-slate-500">
-          {active?.companyName ? `Snapshot for ${active.companyName}.` : 'Pick a company to see its dashboard.'}
-        </p>
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
+            Welcome back, {user?.name?.split(' ')[0]}
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            {active?.companyName ? `Snapshot for ${active.companyName}.` : 'Pick a company to see its dashboard.'}
+          </p>
+        </div>
+
+        <div className="sm:w-72">
+          <label className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            <User className="h-3.5 w-3.5" /> Customer
+          </label>
+          <div className="mt-1">
+            <SearchableSelect
+              value={customerId}
+              onChange={setCustomerId}
+              options={customerOptions}
+              placeholder="All customers"
+              dense
+            />
+          </div>
+        </div>
       </div>
+
+      <DateRangeFilter
+        from={from} to={to}
+        onFrom={setFrom} onTo={setTo}
+        activePreset={activePreset}
+        onApplyPreset={applyPreset}
+        onReset={resetRange}
+      />
 
       {/* ── KPI cards ── */}
       <section>
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Key metrics</h2>
+        <h2 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <span className="inline-block h-3.5 w-1 rounded-sm bg-brand-400" />
+          Key metrics
+        </h2>
         {loadingStats ? (
           <div className="card flex items-center justify-center gap-2 py-8 text-slate-400">
             <Loader2 className="h-5 w-5 animate-spin" /> Loading…
           </div>
         ) : !stats ? null : (
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3 md:grid-cols-3 lg:grid-cols-5">
             <KpiCard
               icon={FileText} accent="brand"
-              label="Sales Orders (this month)"
-              primary={String(stats.soThisMonth.count)}
-              secondary={fmtCompactMoney(stats.soThisMonth.amount)}
-            />
-            <KpiCard
-              icon={TrendingUp} accent="emerald"
-              label="Sales YTD"
-              primary={String(stats.soThisYear.count)}
-              secondary={fmtCompactMoney(stats.soThisYear.amount)}
+              label="Sales orders"
+              primary={`${stats.salesOrders.pcs.toLocaleString('en-IN')} pcs`}
+              meta={`${stats.salesOrders.kg.toFixed(1)} kg · ${stats.salesOrders.customers} cust.`}
+              amount={fmtCompactMoney(stats.salesOrders.amount)}
             />
             <KpiCard
               icon={Factory} accent="amber"
               label="Pending production"
               primary={`${stats.pendingProduction.pcs.toLocaleString('en-IN')} pcs`}
-              secondary={fmtCompactMoney(stats.pendingProduction.amount)}
+              meta={`${stats.pendingProduction.kg.toFixed(1)} kg`}
+              amount={fmtCompactMoney(stats.pendingProduction.amount)}
             />
             <KpiCard
               icon={Package} accent="blue"
               label="Ready to dispatch"
               primary={`${stats.readyDispatch.pcs.toLocaleString('en-IN')} pcs`}
-              secondary={fmtCompactMoney(stats.readyDispatch.amount)}
+              meta={`${stats.readyDispatch.kg.toFixed(1)} kg`}
+              amount={fmtCompactMoney(stats.readyDispatch.amount)}
             />
             <KpiCard
               icon={Truck} accent="indigo"
-              label="Dispatches (this month)"
-              primary={String(stats.dispatchThisMonth.count)}
-              secondary={`${stats.dispatchThisMonth.pcs} pcs · ${stats.dispatchThisMonth.weight.toFixed(1)} kg`}
-              tertiary={fmtCompactMoney(stats.dispatchThisMonth.amount)}
+              label="Dispatched"
+              primary={`${stats.dispatched.pcs.toLocaleString('en-IN')} pcs`}
+              meta={`${stats.dispatched.kg.toFixed(1)} kg`}
+              amount={fmtCompactMoney(stats.dispatched.amount)}
             />
             <KpiCard
               icon={RotateCcw} accent={stats.openReturns ? 'rose' : 'slate'}
               label="Open returns"
               primary={String(stats.openReturns)}
-              secondary={stats.openReturns ? 'Need attention' : 'All clear'}
+              status={stats.openReturns ? 'Need attention' : 'All clear'}
+              statusTone={stats.openReturns ? 'warn' : 'ok'}
             />
           </div>
         )}
@@ -138,18 +237,40 @@ export const DashboardPage = () => {
       {/* ── Top customers ── */}
       {stats && stats.topCustomers.length > 0 && (
         <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Top customers (year-to-date)</h2>
+          <h2 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <span className="inline-block h-3.5 w-1 rounded-sm bg-amber-400" />
+            Top customers
+          </h2>
           <div className="card divide-y divide-slate-100">
             {stats.topCustomers.map((c, i) => (
-              <div key={c.id} className="flex items-center gap-3 px-4 py-2.5">
+              <div key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
                 <div className={cn(
-                  'grid h-7 w-7 place-items-center rounded-full text-xs font-bold shrink-0',
+                  'grid h-6 w-6 place-items-center rounded-full text-[11px] font-bold shrink-0',
                   i === 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
                 )}>
                   {i + 1}
                 </div>
-                <div className="flex-1 min-w-0 truncate font-medium text-slate-900">{c.name}</div>
-                <div className="font-mono text-sm font-semibold tabular-nums text-slate-700">{fmtCompactMoney(c.amount)}</div>
+                <div className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900">
+                  {hideNames
+                    ? <span className="font-mono text-brand-700">{c.customerCode ?? '—'}</span>
+                    : c.name}
+                </div>
+                <div className="text-xs tabular-nums text-slate-600">
+                  {c.pcs.toLocaleString('en-IN')} pcs · {c.kg.toFixed(1)} kg
+                </div>
+                <div className="flex items-center gap-1">
+                  {c.toroidalPcs > 0 && (
+                    <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-emerald-700 ring-1 ring-emerald-100">
+                      Toro {c.toroidalPcs.toLocaleString('en-IN')}
+                    </span>
+                  )}
+                  {c.rectangularPcs > 0 && (
+                    <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-blue-700 ring-1 ring-blue-100">
+                      Rect {c.rectangularPcs.toLocaleString('en-IN')}
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs font-semibold tabular-nums text-slate-800">{fmtCompactMoney(c.amount)}</div>
               </div>
             ))}
           </div>
@@ -158,24 +279,17 @@ export const DashboardPage = () => {
 
       {/* ── Employee performance ── */}
       <section>
-        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 flex items-center gap-1.5">
-            <Users2 className="h-3.5 w-3.5" /> Employee performance
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 flex items-center gap-2">
+            <span className="inline-block h-3.5 w-1 rounded-sm bg-indigo-400" />
+            <Users2 className="h-3.5 w-3.5 text-indigo-500" /> Employee performance
           </h2>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
-            <label className="block">
-              <span className="text-[10px] uppercase tracking-wide text-slate-500 font-medium">From</span>
-              <input className="input mt-0.5" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-            </label>
-            <label className="block">
-              <span className="text-[10px] uppercase tracking-wide text-slate-500 font-medium">To</span>
-              <input className="input mt-0.5" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-            </label>
-            <label className="col-span-2 sm:col-span-1 block">
-              <span className="text-[10px] uppercase tracking-wide text-slate-500 font-medium">Worker</span>
-              <input className="input mt-0.5" placeholder="Search worker…" value={empSearch} onChange={(e) => setEmpSearch(e.target.value)} />
-            </label>
-          </div>
+          <input
+            className="input h-8 text-xs py-1 w-48 sm:w-56"
+            placeholder="Search worker…"
+            value={empSearch}
+            onChange={(e) => setEmpSearch(e.target.value)}
+          />
         </div>
 
         <div className="card overflow-hidden">
@@ -192,7 +306,7 @@ export const DashboardPage = () => {
               {/* Desktop / tablet — table */}
               <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-sm whitespace-nowrap">
-                  <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <thead className="bg-indigo-50/60 text-left text-xs font-semibold uppercase tracking-wide text-indigo-700/80">
                     <tr>
                       <th className="px-4 py-3 w-12 text-center">Rank</th>
                       <th className="px-4 py-3">Worker</th>
@@ -219,10 +333,10 @@ export const DashboardPage = () => {
                         </td>
                         <td className="px-4 py-3 font-medium">{row.labourName}</td>
                         <td className="px-4 py-3 text-right tabular-nums font-semibold">{row.pcs.toLocaleString('en-IN')}</td>
-                        <td className="px-4 py-3 text-right tabular-nums font-mono text-slate-700">{row.totalWeight.toFixed(3)}</td>
+                        <td className="px-4 py-3 text-right tabular-nums text-slate-700">{row.totalWeight.toFixed(3)}</td>
                         <td className="px-4 py-3 text-right tabular-nums text-slate-500">{row.entries}</td>
                         <td className="px-4 py-3 text-right tabular-nums text-slate-500">{row.distinctSizes}</td>
-                        <td className="px-4 py-3 text-slate-600 font-mono text-xs">
+                        <td className="px-4 py-3 text-xs tabular-nums text-slate-600">
                           {row.topSize ? `${row.topSize} (${row.topSizePcs})` : '—'}
                         </td>
                       </tr>
@@ -232,7 +346,7 @@ export const DashboardPage = () => {
                     <tr className="bg-slate-100 text-xs font-semibold tabular-nums">
                       <td colSpan={2} className="px-4 py-2 text-right uppercase tracking-wide text-slate-500">Total</td>
                       <td className="px-4 py-2 text-right">{empData?.totalPcs.toLocaleString('en-IN')}</td>
-                      <td className="px-4 py-2 text-right font-mono">{empData?.totalWeight.toFixed(3)}</td>
+                      <td className="px-4 py-2 text-right">{empData?.totalWeight.toFixed(3)}</td>
                       <td colSpan={3}></td>
                     </tr>
                   </tfoot>
@@ -257,14 +371,14 @@ export const DashboardPage = () => {
                         <span className="font-semibold text-sm text-slate-900 truncate">{row.labourName}</span>
                       </div>
                       <div className="text-right shrink-0">
-                        <div className="font-mono tabular-nums font-semibold text-sm">{row.pcs.toLocaleString('en-IN')} pcs</div>
-                        <div className="text-[10px] text-slate-500 font-mono tabular-nums">{row.totalWeight.toFixed(3)} kg</div>
+                        <div className="tabular-nums font-semibold text-sm">{row.pcs.toLocaleString('en-IN')} pcs</div>
+                        <div className="text-[10px] text-slate-500 tabular-nums">{row.totalWeight.toFixed(3)} kg</div>
                       </div>
                     </div>
                     {row.topSize && (
                       <div className="mt-1.5 flex flex-wrap gap-1">
                         {row.sizes.slice(0, 4).map((s) => (
-                          <span key={s.measure} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-mono text-slate-700">
+                          <span key={s.measure} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] tabular-nums text-slate-700">
                             {s.measure} <span className="text-slate-500">×{s.pcs}</span>
                           </span>
                         ))}
@@ -274,7 +388,7 @@ export const DashboardPage = () => {
                 ))}
                 <div className="bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-600 flex justify-between">
                   <span>Total</span>
-                  <span className="font-mono tabular-nums">
+                  <span className="tabular-nums">
                     {empData?.totalPcs.toLocaleString('en-IN')} pcs · {empData?.totalWeight.toFixed(3)} kg
                   </span>
                 </div>
@@ -287,6 +401,66 @@ export const DashboardPage = () => {
   );
 };
 
+const DateRangeFilter = ({
+  from, to, onFrom, onTo, activePreset, onApplyPreset, onReset,
+}: {
+  from: string;
+  to: string;
+  onFrom: (v: string) => void;
+  onTo: (v: string) => void;
+  activePreset: Preset | null;
+  onApplyPreset: (p: typeof PRESETS[number]) => void;
+  onReset: () => void;
+}) => (
+  <div className="card flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
+    <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+      <CalendarRange className="h-3.5 w-3.5" /> Range
+    </div>
+    <div className="flex flex-wrap gap-1">
+      {PRESETS.map((p) => (
+        <button
+          key={p.key}
+          type="button"
+          onClick={() => onApplyPreset(p)}
+          className={cn(
+            'rounded-md px-2 py-1 text-[11px] font-medium ring-1 transition',
+            activePreset === p.key
+              ? 'bg-brand-50 text-brand-700 ring-brand-200'
+              : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50',
+          )}
+        >
+          {p.label}
+        </button>
+      ))}
+    </div>
+    <div className="ml-auto flex items-center gap-2">
+      <input
+        className="input h-8 text-xs py-1 w-[140px]"
+        type="date"
+        value={from}
+        max={to}
+        onChange={(e) => onFrom(e.target.value)}
+      />
+      <span className="text-slate-400 text-xs">→</span>
+      <input
+        className="input h-8 text-xs py-1 w-[140px]"
+        type="date"
+        value={to}
+        min={from}
+        onChange={(e) => onTo(e.target.value)}
+      />
+      <button
+        type="button"
+        onClick={onReset}
+        title="Reset to this month"
+        className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-[11px] font-medium text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50"
+      >
+        <RotateCw className="h-3 w-3" /> Reset
+      </button>
+    </div>
+  </div>
+);
+
 const ACCENTS = {
   brand:   'bg-brand-50 text-brand-700 ring-brand-100',
   emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
@@ -297,27 +471,68 @@ const ACCENTS = {
   slate:   'bg-slate-100 text-slate-600 ring-slate-200',
 };
 
+/** Stronger colour for the 3-px stripe at the top of each KPI card. */
+const TOP_BARS = {
+  brand:   'bg-brand-400',
+  emerald: 'bg-emerald-400',
+  amber:   'bg-amber-400',
+  blue:    'bg-blue-400',
+  indigo:  'bg-indigo-400',
+  rose:    'bg-rose-400',
+  slate:   'bg-slate-300',
+};
+
+const STATUS_TONES = {
+  ok:   'bg-emerald-50 text-emerald-700 ring-emerald-100',
+  warn: 'bg-rose-50 text-rose-700 ring-rose-100',
+};
+
 const KpiCard = ({
-  icon: Icon, label, primary, secondary, tertiary, accent = 'slate',
+  icon: Icon, label, primary, amount, meta, status, statusTone = 'ok', accent = 'slate',
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   primary: string;
-  secondary?: string;
-  tertiary?: string;
+  /** Money/value chip pinned to bottom-left. */
+  amount?: string;
+  /** Optional extra line above the chip (e.g. "200 pcs · 197.4 kg"). */
+  meta?: string;
+  /** Text shown in place of the amount when there is no monetary value. */
+  status?: string;
+  statusTone?: keyof typeof STATUS_TONES;
   accent?: keyof typeof ACCENTS;
 }) => (
-  <div className="card p-3 sm:p-4">
-    <div className="flex items-start gap-3">
-      <div className={cn('grid h-9 w-9 place-items-center rounded-lg ring-1 shrink-0', ACCENTS[accent])}>
-        <Icon className="h-4 w-4" />
+  <div className="card relative flex flex-col overflow-hidden p-3 pt-3.5">
+    <span className={cn('absolute inset-x-0 top-0 h-1', TOP_BARS[accent])} />
+    <div className="flex items-center gap-2">
+      <div className={cn('grid h-7 w-7 place-items-center rounded-md ring-1 shrink-0', ACCENTS[accent])}>
+        <Icon className="h-3.5 w-3.5" />
       </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500 truncate">{label}</div>
-        <div className="mt-0.5 text-lg sm:text-xl font-bold tracking-tight text-slate-900 tabular-nums">{primary}</div>
-        {secondary && <div className="text-[11px] text-slate-500 truncate font-mono">{secondary}</div>}
-        {tertiary && <div className="text-[11px] text-slate-400 truncate font-mono">{tertiary}</div>}
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 truncate">
+        {label}
       </div>
+    </div>
+    <div className="mt-1.5 text-lg font-bold tracking-tight text-slate-900 tabular-nums leading-tight">
+      {primary}
+    </div>
+    <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+      {amount && (
+        <span className={cn(
+          'inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1',
+          ACCENTS[accent],
+        )}>
+          {amount}
+        </span>
+      )}
+      {!amount && status && (
+        <span className={cn(
+          'inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold ring-1',
+          STATUS_TONES[statusTone],
+        )}>
+          {status}
+        </span>
+      )}
+      {meta && <span className="text-[10px] text-slate-500 tabular-nums">{meta}</span>}
     </div>
   </div>
 );

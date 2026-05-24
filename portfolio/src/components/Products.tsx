@@ -1,85 +1,46 @@
 import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Eye, ShoppingCart, ArrowRight, Zap, Shield, Cpu, Wrench, Target, Settings } from "lucide-react";
+import { Eye, ArrowRight, Zap, Shield, Cpu, Wrench, Target, Settings, Layers } from "lucide-react";
 import globalProductsData from '../../global_products.json';
 
 const Products = () => {
   const sectionRef = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(false);
-  
-  // Icon mapping for different product categories
+
+  // Icon mapping per product — purely visual.
   const getProductIcon = (productId: string) => {
     const iconMap: Record<string, React.ReactNode> = {
-      'crgo-mother-coils': <Zap className="w-5 h-5" />,
-      'crgo-slit-coils': <Target className="w-5 h-5" />,
-      'crgo-lamination': <Shield className="w-5 h-5" />,
-      'crgo-core-assembly': <Cpu className="w-5 h-5" />,
-      'crgo-core-coil-assembly': <Settings className="w-5 h-5" />,
-      'amorphous-core': <Wrench className="w-5 h-5" />,
-      'oil-immersed-circuit-breaker': <Shield className="w-5 h-5" />,
-      'wound-cores': <Target className="w-5 h-5" />,
-      'toroidal-cores': <Cpu className="w-5 h-5" />
+      'crgo-toroidal-core':             <Cpu className="w-5 h-5" />,
+      'crgo-rectangular-toroidal-core': <Layers className="w-5 h-5" />,
+      'crgo-cut-toroidal-core':         <Wrench className="w-5 h-5" />,
+      'crgo-gap-cores':                 <Settings className="w-5 h-5" />,
+      'cut-cores':                      <Wrench className="w-5 h-5" />,
+      'crgo-slit-coils':                <Target className="w-5 h-5" />,
+      'crgo-lamination-core':           <Shield className="w-5 h-5" />,
+      'crgo-strip-lamination':          <Layers className="w-5 h-5" />,
+      'crgo-built-up-lamination':       <Shield className="w-5 h-5" />,
+      'nanocrystalline-toroidal-core':  <Zap className="w-5 h-5" />,
+      'e-cores':                        <Cpu className="w-5 h-5" />,
+      'step-cores':                     <Wrench className="w-5 h-5" />,
     };
     return iconMap[productId] || <Zap className="w-5 h-5" />;
   };
 
-  // Products data from global_products.json (first 6 products)
-  const products = [
-    {
-      id: 1,
-      slug: 'crgo-mother-coils',
-      src: `/images/crgomothercoils.png`,
-      title: 'CRGO Mother Coils',
-      category: 'Premium Electrical Steel',
-      description: 'High-quality CRGO mother coils are the primary source material for manufacturing transformer cores and electromagnetic devices.',
-      icon: <Zap className="w-5 h-5" />
-    },
-    {
-      id: 2,
-      slug: 'crgo-slit-coils',
-      src: `/images/crgoslitcoils.png`,
-      title: 'CRGO Slit Coils',
-      category: 'Precision-Cut Steel',
-      description: 'Precision-cut CRGO slit coils from mother coils to meet exact width requirements for direct use in manufacturing lines.',
-      icon: <Target className="w-5 h-5" />
-    },
-    {
-      id: 3,
-      slug: 'crgo-lamination',
-      src: `/images/crgocorelamination.png`,
-      title: 'CRGO Lamination',
-      category: 'Transformer Laminations',
-      description: 'High-performance CRGO laminations stamped or laser-cut from electrical steel, designed for optimal magnetic flux.',
-      icon: <Shield className="w-5 h-5" />
-    },
-    {
-      id: 4,
-      slug: 'crgo-core-assembly',
-      src: `/images/CRGOCoreAssembly.png`,
-      title: 'CRGO Core Assembly',
-      category: 'Fully Assembled Cores',
-      description: 'Expertly constructed CRGO core assemblies from high-quality laminations to form the magnetic backbone of transformers.',
-      icon: <Cpu className="w-5 h-5" />
-    },
-    {
-      id: 5,
-      slug: 'amorphous-core',
-      src: `/images/amorphousCore.png`,
-      title: 'Amorphous Core',
-      category: 'Ultra-High Efficiency',
-      description: 'Amorphous metal cores offering significantly lower core losses compared to traditional CRGO steel for high-efficiency transformers.',
-      icon: <Wrench className="w-5 h-5" />
-    },
-    {
-      id: 6,
-      slug: 'wound-cores',
-      src: `/images/woundCore.png`,
-      title: 'Wound Cores',
-      category: 'High-Performance Cores',
-      description: 'Wound cores constructed by winding electrical steel tape, offering closed magnetic path and high efficiency design.',
-      icon: <Settings className="w-5 h-5" />
-    }
-  ];
+  // Single source of truth — same JSON the /products page consumes,
+  // so descriptions never drift between the homepage and the catalogue.
+  const products = globalProductsData.products.map((p, index) => ({
+    id: index + 1,
+    productId: p.id,
+    slug: p.slug,
+    src: p.image,
+    title: p.title,
+    category: p.subtitle,
+    // Trim the description to a one-card-friendly length on the homepage.
+    description: p.description.length > 140
+      ? p.description.substring(0, 140) + '…'
+      : p.description,
+    icon: getProductIcon(p.id),
+  }));
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -136,7 +97,7 @@ const Products = () => {
             Our Products
           </h2>
           <p className="section-subtitle mx-auto opacity-0 fade-in-element">
-            From CRGO laminations to turnkey transformer solutions, we deliver excellence at every stage.
+            Twelve product families covering CRGO cores, laminations, slit coils and nanocrystalline toroids — engineered for transformer manufacturers worldwide.
           </p>
         </div>
         

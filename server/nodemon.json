@@ -3,11 +3,10 @@
     "server.js",
     "routes",
     "lib",
-    "prisma/schema.prisma",
     ".env"
   ],
-  "ext": "js,prisma,env",
-  "exec": "prisma generate && node server.js",
+  "ext": "js,env",
+  "exec": "node server.js",
   "delay": 600,
   "ignore": [
     "node_modules",

@@ -4,7 +4,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Save, Trash2, Loader2, Truck } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { useConfirm } from '@/hooks/useConfirm';
+import { useAuthStore } from '@/store/auth';
 
+type Company = { id: string; name: string };
 type Supplier = {
   id: string;
   name: string;
@@ -15,9 +17,19 @@ type Supplier = {
   state: string | null;
   gstRate: number;
   notes: string | null;
+  companies: { company: Company }[];
 };
 
-type Form = Omit<Supplier, 'id'>;
+type Form = {
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  gstNumber: string;
+  state: string;
+  gstRate: number;
+  notes: string;
+};
 
 const empty: Form = {
   name: '', email: '', phone: '', address: '', gstNumber: '', state: '', gstRate: 0, notes: '',
@@ -29,8 +41,14 @@ export const SupplierFormPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<Form>(empty);
-  const [error, setError] = useState<string | null>(null);
+  const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
+  const [error, setError] = useState<{ message: string; details?: string[] } | null>(null);
   const { confirm, confirmDialog } = useConfirm();
+
+  // Pull company list from the auth store — no extra API call needed.
+  const memberships = useAuthStore((s) => s.memberships);
+  const activeCompanyId = useAuthStore((s) => s.activeCompanyId);
+  const companies: Company[] = memberships.map((m) => ({ id: m.companyId, name: m.companyName }));
 
   const { data: existing } = useQuery({
     queryKey: ['supplier', id],
@@ -39,36 +57,47 @@ export const SupplierFormPage = () => {
   });
 
   useEffect(() => {
-    if (!existing) return;
-    setForm({
-      name: existing.name,
-      email: existing.email ?? '',
-      phone: existing.phone ?? '',
-      address: existing.address ?? '',
-      gstNumber: existing.gstNumber ?? '',
-      state: existing.state ?? '',
-      gstRate: existing.gstRate ?? 0,
-      notes: existing.notes ?? '',
-    });
-  }, [existing]);
+    if (existing) {
+      setForm({
+        name: existing.name,
+        email: existing.email ?? '',
+        phone: existing.phone ?? '',
+        address: existing.address ?? '',
+        gstNumber: existing.gstNumber ?? '',
+        state: existing.state ?? '',
+        gstRate: existing.gstRate ?? 0,
+        notes: existing.notes ?? '',
+      });
+      setSelectedCompanies(existing.companies.map((c) => c.company.id));
+    } else if (!isEdit && activeCompanyId) {
+      // Default: just the active company is checked on a new supplier.
+      setSelectedCompanies([activeCompanyId]);
+    }
+  }, [existing, isEdit, activeCompanyId]);
 
-  const create = useMutation({
-    mutationFn: (body: Form) => api<Supplier>('/suppliers', { method: 'POST', json: body }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['suppliers'] });
-      navigate('/settings/suppliers');
-    },
-    onError: (e) => setError(e instanceof ApiError ? e.message : 'Save failed'),
-  });
-
-  const update = useMutation({
-    mutationFn: (body: Partial<Form>) => api<Supplier>(`/suppliers/${id}`, { method: 'PATCH', json: body }),
+  const save = useMutation({
+    mutationFn: (body: unknown) =>
+      isEdit
+        ? api<Supplier>(`/suppliers/${id}`, { method: 'PATCH', json: body })
+        : api<Supplier>('/suppliers', { method: 'POST', json: body }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
       queryClient.invalidateQueries({ queryKey: ['supplier', id] });
       navigate('/settings/suppliers');
     },
-    onError: (e) => setError(e instanceof ApiError ? e.message : 'Save failed'),
+    onError: (e) => {
+      if (e instanceof ApiError) {
+        const d = (e.details ?? {}) as { fieldErrors?: Record<string, string[]>; formErrors?: string[] };
+        const lines: string[] = [];
+        for (const [field, msgs] of Object.entries(d.fieldErrors ?? {})) {
+          for (const m of msgs ?? []) lines.push(`${field}: ${m}`);
+        }
+        for (const m of d.formErrors ?? []) lines.push(m);
+        setError({ message: e.message, details: lines.length ? lines : undefined });
+      } else {
+        setError({ message: 'Save failed' });
+      }
+    },
   });
 
   const remove = useMutation({
@@ -82,14 +111,26 @@ export const SupplierFormPage = () => {
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (isEdit) update.mutate(form);
-    else create.mutate(form);
+    const missing: string[] = [];
+    if (!form.name.trim()) missing.push('Name is required');
+    if (selectedCompanies.length === 0) missing.push('Assign to at least one company');
+    if (missing.length) {
+      setError({ message: 'Please fix the form', details: missing });
+      return;
+    }
+    save.mutate({ ...form, companyIds: selectedCompanies });
   };
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
-  const busy = create.isPending || update.isPending;
+  const toggleCompany = (cid: string) => {
+    setSelectedCompanies((prev) =>
+      prev.includes(cid) ? prev.filter((x) => x !== cid) : [...prev, cid]
+    );
+  };
+
+  const busy = save.isPending;
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -147,8 +188,38 @@ export const SupplierFormPage = () => {
           </Field>
         </div>
 
+        {/* Company memberships — same supplier can belong to many companies. */}
+        <div className="pt-2 border-t border-slate-200">
+          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+            Available in companies <span className="text-red-500">*</span>
+          </span>
+          <p className="mb-2 text-[11px] text-slate-500">
+            Tick every company that should see this supplier in its Supplier PO dropdown.
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {companies.map((c) => (
+              <label key={c.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300 accent-brand-600"
+                  checked={selectedCompanies.includes(c.id)}
+                  onChange={() => toggleCompany(c.id)}
+                />
+                <span className="text-sm font-medium">{c.name}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
         {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <div className="font-medium">{error.message}</div>
+            {error.details && (
+              <ul className="mt-1 list-disc pl-5 text-xs">
+                {error.details.map((d, i) => <li key={i}>{d}</li>)}
+              </ul>
+            )}
+          </div>
         )}
 
         <div className="flex justify-between gap-3 border-t border-slate-200 pt-4">

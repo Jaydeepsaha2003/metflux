@@ -7,11 +7,13 @@ import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
 import { Pagination } from '@/components/Pagination';
+import { useHideCustomerNames } from '@/store/auth';
 
 type Row = {
   id: string;
   poNumber: string;
   customerName: string;
+  customerCode: string | null;
   coreType: 'TOROIDAL' | 'RECTANGULAR';
   grade: string;
   material: string;
@@ -39,6 +41,7 @@ export const DispatchListPage = () => {
   const [page, setPage] = useState(1);
   useEffect(() => { setPage(1); }, [search]);
   const queryClient = useQueryClient();
+  const hideNames = useHideCustomerNames();
 
   const { data, isLoading } = useQuery({
     queryKey: ['dispatch', search, page],
@@ -114,7 +117,14 @@ export const DispatchListPage = () => {
                 <tr key={d.id} className="border-t border-slate-100 hover:bg-slate-50/60">
                   <td className="px-3 py-2 text-slate-600">{formatDate(d.dispatchDate)}</td>
                   <td className="px-3 py-2 font-mono text-xs">{d.poNumber}</td>
-                  <td className="px-3 py-2">{d.customerName}</td>
+                  <td className="px-3 py-2">
+                    <div className="font-mono text-xs font-semibold text-brand-700">{d.customerCode ?? '—'}</div>
+                    {!hideNames && (
+                      <div className="text-[11px] text-slate-500 truncate max-w-[180px]" title={d.customerName}>
+                        {d.customerName}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-3 py-2">
                     <span className={cn(
                       'rounded-full px-2 py-0.5 text-[11px] font-medium',

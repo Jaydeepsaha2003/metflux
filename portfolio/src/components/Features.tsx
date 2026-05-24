@@ -269,12 +269,12 @@ const TimelineItem = ({ date, description, index }: TimelineItemProps) => {
           if (entry.isIntersecting) {
             setTimeout(() => {
               setIsVisible(true);
-            }, index * 150); // Staggered animation delay
+            }, index * 60); // Staggered animation delay — kept snappy
             observer.unobserve(entry.target);
           }
         });
       },
-      { threshold: 0.2 }
+      { threshold: 0.15 }
     );
     
     if (itemRef.current) {
@@ -291,54 +291,52 @@ const TimelineItem = ({ date, description, index }: TimelineItemProps) => {
   const isEven = index % 2 === 0;
   
   return (
-    <div 
+    <div
       ref={itemRef}
       className={cn(
-        "timeline-item flex items-center gap-4 sm:gap-6 mb-8 sm:mb-12 transition-all duration-700 ease-out",
+        "timeline-item flex items-center gap-4 sm:gap-6 mb-8 sm:mb-12 transition-all duration-300 ease-out",
         isEven ? "flex-row" : "flex-row-reverse",
         isVisible
           ? "opacity-100 translate-y-0"
-          : "opacity-0 translate-y-8"
+          : "opacity-0 translate-y-4"
       )}
     >
       {/* Content */}
       <div className={cn(
-        "flex-1 glass-card p-4 sm:p-6 transition-all duration-700 ease-out transform",
+        "flex-1 glass-card p-4 sm:p-6 transition-all duration-300 ease-out transform",
         "hover:bg-gradient-to-br hover:from-white hover:to-pulse-50",
         "hover:scale-105 hover:shadow-xl",
         isVisible
-          ? isEven
-            ? "translate-x-0 opacity-100"
-            : "translate-x-0 opacity-100"
+          ? "translate-x-0 opacity-100"
           : isEven
-            ? "-translate-x-12 opacity-0"
-            : "translate-x-12 opacity-0"
+            ? "-translate-x-6 opacity-0"
+            : "translate-x-6 opacity-0"
       )}>
         <div className={cn(
-          "text-pulse-600 font-semibold text-sm sm:text-base mb-2 transition-all duration-500",
-          isVisible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
+          "text-pulse-600 font-semibold text-sm sm:text-base mb-2 transition-all duration-200",
+          isVisible ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"
         )}>
           {date}
         </div>
         <p className={cn(
-          "text-gray-700 text-sm sm:text-base leading-relaxed transition-all duration-500 delay-100",
-          isVisible ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
+          "text-gray-700 text-sm sm:text-base leading-relaxed transition-all duration-200 delay-75",
+          isVisible ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"
         )}>
           {description}
         </p>
       </div>
-      
+
       {/* Timeline dot */}
       <div className="flex-shrink-0 relative">
         <div className={cn(
-          "w-4 h-4 bg-pulse-500 rounded-full border-4 border-white shadow-lg z-10 relative transition-all duration-500 transform",
+          "w-4 h-4 bg-pulse-500 rounded-full border-4 border-white shadow-lg z-10 relative transition-all duration-200 transform",
           isVisible
             ? "scale-100 opacity-100"
             : "scale-0 opacity-0"
         )}></div>
         {index < timelineData.length - 1 && (
           <div className={cn(
-            "absolute top-4 left-1/2 transform -translate-x-1/2 w-0.5 bg-gradient-to-b from-pulse-300 to-pulse-100 transition-all duration-700 delay-200",
+            "absolute top-4 left-1/2 transform -translate-x-1/2 w-0.5 bg-gradient-to-b from-pulse-300 to-pulse-100 transition-all duration-300 delay-75",
             isVisible ? "h-16 sm:h-20 opacity-100" : "h-0 opacity-0"
           )}></div>
         )}

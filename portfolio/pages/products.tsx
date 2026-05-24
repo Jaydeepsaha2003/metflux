@@ -1,91 +1,46 @@
-import React, { useEffect, useRef, useState } from "react";
+import React from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import { Eye, ArrowRight, Zap, Shield, Cpu, Wrench, Target, Settings, Power, Layers, Truck } from "lucide-react";
+import {
+  Eye, ArrowRight, MapPin, Globe,
+} from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import globalProductsData from '../global_products.json';
 import transformerProductsData from '../transformer_products.json';
 import siteData from "@/data/siteData.json";
 
-const ProductsPage = () => {
-  const sectionRef = useRef<HTMLDivElement>(null);
-  const [isVisible, setIsVisible] = useState(false);
-  const [isExiting, setIsExiting] = useState(false);
-  
-  // Icon mapping for different product categories
-  const getProductIcon = (productId: string) => {
-    const iconMap: Record<string, React.ReactNode> = {
-      // Original products
-      'crgo-mother-coils': <Zap className="w-5 h-5" />,
-      'crgo-slit-coils': <Target className="w-5 h-5" />,
-      'crgo-lamination': <Shield className="w-5 h-5" />,
-      'crgo-core-assembly': <Cpu className="w-5 h-5" />,
-      'crgo-core-coil-assembly': <Settings className="w-5 h-5" />,
-      'amorphous-core': <Wrench className="w-5 h-5" />,
-      'oil-immersed-circuit-breaker': <Shield className="w-5 h-5" />,
-      'wound-cores': <Target className="w-5 h-5" />,
-      'toroidal-cores': <Cpu className="w-5 h-5" />,
-      // Transformer products
-      'lt-ct': <Zap className="w-5 h-5" />,
-      'lt-pt': <Power className="w-5 h-5" />,
-      'mv-ct': <Shield className="w-5 h-5" />,
-      'mv-pt': <Layers className="w-5 h-5" />,
-      'rvt-earthing-transformer': <Settings className="w-5 h-5" />,
-      'outdoor-transformer': <Truck className="w-5 h-5" />,
-      'control-transformer': <Wrench className="w-5 h-5" />
-    };
-    return iconMap[productId] || <Zap className="w-5 h-5" />;
-  };
+// react-simple-maps is browser-only (fetches topojson at render time), so we
+// keep it out of the static export by deferring it to client mount.
+const MapSkeleton = () => (
+  <div className="aspect-[16/9] w-full animate-pulse rounded-xl bg-slate-100" />
+);
+const IndiaMap = dynamic(() => import('@/components/ReachMaps').then((m) => m.IndiaMap), {
+  ssr: false, loading: () => <MapSkeleton />,
+});
+const WorldMap = dynamic(() => import('@/components/ReachMaps').then((m) => m.WorldMap), {
+  ssr: false, loading: () => <MapSkeleton />,
+});
 
-  // Combine all products from both data sources
+const ProductsPage = () => {
+  // Combine all products from both data sources (transformer file is currently empty).
   const allProductsData = [...globalProductsData.products, ...transformerProductsData.products];
-  
-  // Transform the JSON data to match our component structure
+
+  // Transform the JSON data to match the card structure.
   const products = allProductsData.map((product, index) => ({
     id: index + 1,
     slug: product.slug,
     src: product.image || `/lovable-uploads/5663820f-6c97-4492-9210-9eaa1a8dc415.png`,
     title: product.title,
     category: product.subtitle,
-    description: product.description.length > 120 
-      ? product.description.substring(0, 120) + '...' 
+    description: product.description.length > 120
+      ? product.description.substring(0, 120) + '...'
       : product.description,
-    icon: getProductIcon(product.id),
   }));
 
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setIsVisible(true);
-            setIsExiting(false);
-            
-            const elements = entry.target.querySelectorAll(".fade-in-element");
-            elements.forEach((el, index) => {
-              setTimeout(() => {
-                el.classList.add("animate-fade-in");
-              }, index * 100);
-            });
-          }
-        });
-      },
-      { 
-        threshold: [0.1, 0.9],
-        rootMargin: '50px 0px'
-      }
-    );
-    
-    if (sectionRef.current) {
-      observer.observe(sectionRef.current);
-    }
-    
-    return () => {
-      if (sectionRef.current) {
-        observer.unobserve(sectionRef.current);
-      }
-    };
-  }, [isVisible]);
+  // (Removed the IntersectionObserver glue that drove the entrance
+  // animations — its CSS keyframes lived only in the homepage component,
+  // so on this page the cards stayed at opacity-0 forever.)
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -99,50 +54,32 @@ const ProductsPage = () => {
               Engineering <span className="text-pulse-400">Excellence</span>
             </h1>
             <p className="text-xl text-gray-300 max-w-3xl mx-auto">
-              Discover our comprehensive range of high-performance electrical steel components and transformer solutions for industrial applications worldwide.
+              Our complete range of CRGO cores, laminations and nanocrystalline cores — engineered for efficiency, built for precision. Trusted by transformer manufacturers across India and beyond.
             </p>
           </div>
         </div>
       </section>
       
       {/* Products Grid Section */}
-      <section 
-        className={`py-16 transition-all duration-1000 ${
-          isVisible ? 'section-enter' : isExiting ? 'section-exit' : 'section-hidden'
-        }`}
-        ref={sectionRef}
-      >
+      <section className="py-16">
         <div className="section-container">
           {/* Section Header */}
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-display font-bold text-gray-900 mb-4 opacity-0 fade-in-element">
+            <h2 className="text-3xl md:text-4xl font-display font-bold text-gray-900 mb-4">
               Complete Product Range
             </h2>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto opacity-0 fade-in-element">
-              From raw materials to fully assembled cores, we provide everything you need for transformer manufacturing.
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              Twelve product families covering toroidal cores, cut cores, gap cores, laminations, strip, slit coils, E cores, step cores and nanocrystalline toroids — everything a transformer maker needs.
             </p>
           </div>
-          
+
           {/* Products Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {products.map((product, index) => {
-              const row = Math.floor(index / 3);
-              const position = index % 3;
-              const baseDelay = 0.4;
-              const rowDelay = row * 0.3;
-              const cardDelay = position * 0.15;
-              const totalDelay = baseDelay + rowDelay + cardDelay;
-              
+            {products.map((product) => {
               return (
                 <div
                   key={product.id}
-                  className={`product-card group relative overflow-hidden bg-white rounded-2xl shadow-elegant hover:shadow-elegant-hover transition-all duration-500 transform hover:-translate-y-2 ${
-                    isVisible ? 'card-entrance opacity-0' : isExiting ? 'card-exit' : 'opacity-0'
-                  }`}
-                  style={{ 
-                    animationDelay: isVisible ? `${totalDelay}s` : isExiting ? `${(products.length - 1 - index) * 0.1}s` : '0s',
-                    animationFillMode: 'forwards'
-                  }}
+                  className="product-card group relative overflow-hidden bg-white rounded-2xl shadow-elegant hover:shadow-elegant-hover transition-all duration-500 transform hover:-translate-y-2"
                 >
                   {/* Image Container */}
                   <div className="relative overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 h-64">
@@ -193,19 +130,87 @@ const ProductsPage = () => {
             })}
           </div>
           
-          {/* CTA Section */}
-          <div className="text-center mt-16 opacity-0 fade-in-element" style={{ animationDelay: "1.2s" }}>
-            <p className="text-gray-600 mb-6 text-lg">Need custom specifications or bulk orders?</p>
-            <Link href="#" className="button-primary inline-flex items-center space-x-2">
+        </div>
+      </section>
+
+      {/* ── Where We Reach ───────────────────────────────────────── */}
+      <section className="py-16 bg-white border-t border-gray-100">
+        <div className="section-container">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-display font-bold text-gray-900 mb-3">
+              Where We Reach
+            </h2>
+            <p className="text-lg text-gray-600 max-w-3xl mx-auto">
+              From our manufacturing facility in Vadodara, Gujarat, our CRGO cores
+              and laminations serve transformer manufacturers across India and
+              international markets.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-6 mb-12">
+            {/* Pan India — illustrated map */}
+            <div className="bg-gray-50 rounded-2xl p-6 md:p-8 border border-gray-100 hover:shadow-elegant transition-shadow">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-11 h-11 rounded-xl bg-pulse-100 flex items-center justify-center text-pulse-600">
+                  <MapPin className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-display font-bold text-gray-900">Pan-India Presence</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Active customers in every major industrial belt — north to south, east to west.
+                  </p>
+                </div>
+              </div>
+              <div className="rounded-xl overflow-hidden bg-white border border-gray-100 p-2">
+                <IndiaMap />
+              </div>
+              <div className="mt-3 text-[11px] text-gray-500 leading-relaxed">
+                <span className="font-semibold text-gray-700">17+ cities</span> —
+                hover any marker to see the city / region.
+              </div>
+            </div>
+
+            {/* Global — illustrated map */}
+            <div className="bg-gray-50 rounded-2xl p-6 md:p-8 border border-gray-100 hover:shadow-elegant transition-shadow">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-11 h-11 rounded-xl bg-pulse-100 flex items-center justify-center text-pulse-600">
+                  <Globe className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-display font-bold text-gray-900">Global Reach</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Exporting from Vadodara to transformer makers worldwide.
+                  </p>
+                </div>
+              </div>
+              <div className="rounded-xl overflow-hidden bg-white border border-gray-100 p-2">
+                <WorldMap />
+              </div>
+              <div className="mt-3 text-[11px] text-gray-500 leading-relaxed">
+                <span className="font-semibold text-gray-700">India highlighted</span> —
+                each green dot is an active export market. Hover for the city.
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="pt-4 pb-12 bg-gray-50">
+        <div className="section-container">
+          <div className="text-center">
+            <p className="text-gray-600 mb-4 text-lg">Need custom specifications or a bulk enquiry?</p>
+            <Link href="/contact" className="button-primary inline-flex items-center space-x-2">
               <span>Contact Our Engineering Team</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
         </div>
       </section>
-      
+
       <Footer />
-      
+
     </div>
   );
 };

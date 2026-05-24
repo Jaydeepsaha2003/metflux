@@ -1,38 +1,142 @@
 {
   "products": [
     {
-      "id": "crgo-mother-coils",
-      "slug": "crgo-mother-coils",
-      "title": "CRGO Mother Coils",
-      "subtitle": "Premium Electrical Steel Coils",
-      "description": "High-quality CRGO (Cold-Rolled Grain-Oriented) mother coils are the primary source material for manufacturing transformer cores and other electromagnetic devices. Sourced from world-class mills, our mother coils ensure low core loss and high permeability.",
-      "image": "/images/crgomothercoils.png",
+      "id": "crgo-toroidal-core",
+      "slug": "crgo-toroidal-core",
+      "title": "CRGO Toroidal Core",
+      "subtitle": "High-Efficiency Toroidal Cores for Modern Transformers",
+      "description": "Crafted for exceptional efficiency, our Toroidal cores ensure uniform magnetic flux distribution and minimal losses. Their compact design makes them ideal for modern transformers where space, performance and reliability converge.",
+      "image": "/images/products/crgo-toroidal-core.png",
       "features": [
         {
           "icon": "quality",
-          "title": "Superior Magnetic Properties",
-          "description": "Optimized for low core loss and high efficiency, our CRGO coils are ideal for high-performance transformers."
+          "title": "Uniform Magnetic Flux",
+          "description": "The continuous, gap-free geometry of a toroid keeps the flux path tight and even — driving down stray losses and audible noise."
         },
         {
           "icon": "versatility",
-          "title": "Wide Range of Grades",
-          "description": "Available in various grades and thicknesses to meet diverse manufacturing and performance requirements."
+          "title": "Compact Footprint",
+          "description": "Higher power density than stack-built cores of equivalent rating, ideal for space-constrained equipment and portable transformers."
+        },
+        {
+          "icon": "precision",
+          "title": "Reliable Performance",
+          "description": "Wound from premium CRGO strip, annealed under inert atmosphere to lock in optimum electrical properties."
         }
       ],
-      "stats": {
-        "value": 99,
-        "label": "Purity Grade"
-      },
+      "stats": { "value": 98, "label": "Stacking Factor %" },
       "faqs": [
         {
           "id": 1,
-          "question": "What standards do your CRGO mother coils meet?",
-          "answer": "Our coils comply with major international standards, including IEC, ASTM, and JIS, ensuring they meet global quality and performance benchmarks."
+          "question": "Which CRGO grades do you use for toroidal cores?",
+          "answer": "We routinely use 23H100 (M3), 27P090 and 27HP110 (M4). Other grades from the catalogue table — including ultra-low-loss 0.23 ZDKH and HPDR — are available on request."
         },
         {
           "id": 2,
-          "question": "Can you provide coils with specific dimensions?",
-          "answer": "Yes, we can supply mother coils in various widths and thicknesses. Custom dimensions are available upon request to fit your manufacturing process."
+          "question": "Can you build to a specific weight or OD/ID?",
+          "answer": "Yes. Every core is wound to the customer's ID, OD and height. Share your size and target loss figures and we'll quote against them."
+        }
+      ]
+    },
+    {
+      "id": "crgo-rectangular-toroidal-core",
+      "slug": "crgo-rectangular-toroidal-core",
+      "title": "CRGO Rectangular Toroidal Core",
+      "subtitle": "Toroidal Efficiency with Rectangular Adaptability",
+      "description": "A unique blend of toroidal efficiency and rectangular adaptability — engineered for specialized applications. They deliver reduced magnetising current and quieter operation, a preferred choice for precision-driven industries.",
+      "image": "/images/products/crgo-rectangular-toroidal-core.png",
+      "features": [
+        {
+          "icon": "precision",
+          "title": "Reduced Magnetising Current",
+          "description": "Lower no-load current than equivalent stack cores, useful where reactive draw matters."
+        },
+        {
+          "icon": "quality",
+          "title": "Quiet Operation",
+          "description": "Wound construction damps mechanical buzz versus interleaved laminations."
+        },
+        {
+          "icon": "versatility",
+          "title": "Easy to Mount",
+          "description": "Rectangular profile mates with conventional bobbins and clamping hardware."
+        }
+      ],
+      "stats": { "value": 97, "label": "Stacking Factor %" }
+    },
+    {
+      "id": "crgo-cut-toroidal-core",
+      "slug": "crgo-cut-toroidal-core",
+      "title": "CRGO Cut Toroidal Core",
+      "subtitle": "Wound Performance with Bobbin-Friendly Assembly",
+      "description": "Cores designed for ease of winding and assembly — cut toroidal cores simplify manufacturing without compromising electrical performance. Excellent magnetic properties combined with the flexibility for custom-built transformer solutions.",
+      "image": "/images/products/crgo-cut-toroidal-core.png",
+      "features": [
+        {
+          "icon": "versatility",
+          "title": "Bobbin-Friendly",
+          "description": "Pre-cut halves slide directly onto pre-wound coils, no toroidal-winder needed."
+        },
+        {
+          "icon": "precision",
+          "title": "Vacuum-Impregnated",
+          "description": "Stabilised before cutting to maintain electrical properties across both halves."
+        },
+        {
+          "icon": "quality",
+          "title": "Mirror-Polish Mating Faces",
+          "description": "Fine polishing of the cut surface keeps the effective air gap negligible."
+        }
+      ],
+      "stats": { "value": 96, "label": "Stacking Factor %" }
+    },
+    {
+      "id": "crgo-gap-cores",
+      "slug": "crgo-gap-cores",
+      "title": "CRGO Gap Cores",
+      "subtitle": "Precision Air-Gapped Cores for Reactors & Chokes",
+      "description": "Specially designed with precise air gaps, these cores enable controlled inductance and stable performance under varying loads. Essential for reactors, chokes and specialised transformer designs that demand accuracy and adaptability.",
+      "image": "/images/products/crgo-gap-cores.png",
+      "features": [
+        {
+          "icon": "precision",
+          "title": "Calibrated Air Gap",
+          "description": "Gap dimensions held tight so inductance lands on spec — critical for line reactors and DC-blocking chokes."
+        },
+        {
+          "icon": "quality",
+          "title": "Stable Under Load",
+          "description": "Designed to resist saturation as load current swings."
+        },
+        {
+          "icon": "versatility",
+          "title": "Made to Drawing",
+          "description": "Gap depth, position and core profile customised per the customer's design."
+        }
+      ]
+    },
+    {
+      "id": "cut-cores",
+      "slug": "cut-cores",
+      "title": "Cut Cores",
+      "subtitle": "Toroidal Performance, E&I Convenience",
+      "description": "Cut Cores combine the advantages of Toroidal Cores and conventional E & I laminations. Ideally suited where weight or dimensional requirements are critical and design flexibility matters. Wound from grain-oriented silicon steel strip, annealed under controlled atmosphere, vacuum-impregnated, then precision-cut and fine-polished to keep core loss low and saturation high.",
+      "image": "/images/products/cut-cores.png",
+      "features": [
+        {
+          "icon": "quality",
+          "title": "Low Core Loss",
+          "description": "Wound-strip grain alignment delivers loss figures stack cores can't match."
+        },
+        {
+          "icon": "precision",
+          "title": "High Saturation Point",
+          "description": "Polished mating faces minimise the effective gap, pushing operating flux density higher."
+        },
+        {
+          "icon": "versatility",
+          "title": "Flexible Geometry",
+          "description": "Single, double and three-phase configurations to suit your transformer."
         }
       ]
     },
@@ -40,287 +144,176 @@
       "id": "crgo-slit-coils",
       "slug": "crgo-slit-coils",
       "title": "CRGO Slit Coils",
-      "subtitle": "Precision-Cut Electrical Steel",
-      "description": "Our CRGO slit coils are precision-cut from mother coils to meet your exact width requirements. These custom-sized coils are ready for direct use in your lamination or core manufacturing lines, reducing waste and improving efficiency.",
-      "image": "/images/crgoslitcoils.png",
+      "subtitle": "Precision-Slit Strips for Core Winding",
+      "description": "Produced with high-precision slitting technology, our slit coils guarantee dimensional accuracy and consistency. A superior stacking factor ensures reliable performance in distribution and power transformers across varied load conditions.",
+      "image": "/images/products/crgo-slit-coils.png",
       "features": [
         {
           "icon": "precision",
-          "title": "High-Precision Slitting",
-          "description": "Cut to your exact specifications with minimal burr and tight tolerances, ensuring smooth and efficient processing."
+          "title": "Tight Width Tolerance",
+          "description": "Width held to ±0.05 mm on narrow strip — see the IS 3024 tolerance chart for full range."
         },
         {
-          "icon": "customization",
-          "title": "Fully Customized",
-          "description": "Specify the exact width, weight, and grade you need, and we will deliver coils tailored to your production line."
+          "icon": "quality",
+          "title": "Clean Edges, Low Burr",
+          "description": "Burr held to 0.018–0.035 mm depending on thickness, protecting interlaminar resistance."
+        },
+        {
+          "icon": "versatility",
+          "title": "Width 0–750 mm",
+          "description": "Slit-to-order from 0–750 mm wide in thicknesses 0.20 – 0.35 mm."
         }
       ],
-      "stats": {
-        "value": 100,
-        "label": "Width Accuracy"
-      },
-      "faqs": [
+      "stats": { "value": 98, "label": "Stacking Factor %" }
+    },
+    {
+      "id": "crgo-lamination-core",
+      "slug": "crgo-lamination-core",
+      "title": "CRGO Lamination Core",
+      "subtitle": "The Heart of Reliable Transformers",
+      "description": "Manufactured under strict tolerance control, our lamination cores deliver unmatched insulation resistance and dimensional stability. They form the heart of transformers — built for long-term reliability and consistent performance.",
+      "image": "/images/products/crgo-lamination-core.png",
+      "features": [
         {
-          "id": 1,
-          "question": "What is the minimum and maximum width for slit coils?",
-          "answer": "We can slit coils to a wide range of widths, typically from 20mm up to 1250mm. Contact us to discuss your specific width requirements."
+          "icon": "quality",
+          "title": "Insulation Resistance",
+          "description": "Surface coating preserved through cutting and stacking, keeping interlaminar resistance high."
         },
         {
-          "id": 2,
-          "question": "How are the slit coils packaged?",
-          "answer": "Our slit coils are securely packaged with protective materials and mounted on custom skids to prevent damage during transit and ensure easy handling at your facility."
+          "icon": "precision",
+          "title": "Built to IS 3024",
+          "description": "Width, length, mitre, burr and edge camber all held within IS 3024 tolerance."
+        },
+        {
+          "icon": "versatility",
+          "title": "Any Geometry",
+          "description": "Standard, mitred and stepped laminations cut to your drawing."
         }
       ]
     },
     {
-      "id": "crgo-lamination",
-      "slug": "crgo-lamination",
-      "title": "CRGO Lamination",
-      "subtitle": "High-Performance Transformer Laminations",
-      "description": "CRGO laminations are stamped or laser-cut from electrical steel and form the core of transformers. Our laminations are designed for optimal magnetic flux, minimal energy loss, and long-term reliability.",
-      "image": "/images/crgocorelamination.png",
+      "id": "crgo-strip-lamination",
+      "slug": "crgo-strip-lamination",
+      "title": "CRGO Strip Lamination",
+      "subtitle": "Foundation of Dependable Transformer Construction",
+      "description": "Our strip laminations offer design flexibility and efficiency, letting engineers tailor solutions for diverse transformer requirements. Low watt losses and high durability make them the foundation of dependable transformer construction.",
+      "image": "/images/products/crgo-strip-lamination.png",
       "features": [
         {
-          "icon": "design",
-          "title": "Custom Shapes and Sizes",
-          "description": "We manufacture laminations in standard E&I, UI, and custom shapes to meet your specific transformer design."
+          "icon": "quality",
+          "title": "Low Watt Loss",
+          "description": "Available across the full CRGO grade range — from M5 down to ultra-low-loss HPDR strip."
         },
         {
-          "icon": "performance",
-          "title": "Enhanced Performance",
-          "description": "Designed to minimize eddy currents and hysteresis losses, improving the overall efficiency of the transformer."
-        }
-      ],
-      "stats": {
-        "value": 99,
-        "label": "Stacking Factor"
-      },
-      "faqs": [
-        {
-          "id": 1,
-          "question": "What is the stacking factor of your laminations?",
-          "answer": "Our CRGO laminations are manufactured to achieve a high stacking factor, typically above 98%, which maximizes the iron content in the core and improves performance."
+          "icon": "precision",
+          "title": "Consistent Thickness",
+          "description": "Strip held to ±0.005 mm on 0.20–0.27 mm thicknesses."
         },
         {
-          "id": 2,
-          "question": "Do you offer coating options for laminations?",
-          "answer": "Yes, we provide various insulation coatings (such as C5 and C6) to reduce inter-laminar losses and enhance the durability of the core."
+          "icon": "versatility",
+          "title": "Annealed on Request",
+          "description": "Stress-relieved strip available for the lowest-loss applications."
         }
       ]
     },
     {
-      "id": "crgo-core-assembly",
-      "slug": "crgo-core-assembly",
-      "title": "CRGO Core Assembly",
-      "subtitle": "Fully Assembled Transformer Cores",
-      "description": "Our CRGO core assemblies are expertly constructed from high-quality laminations to form the magnetic backbone of a transformer. Each assembly is precisely built and tested to ensure optimal performance and reliability.",
-      "image": "/images/CRGOCoreAssembly.png",
+      "id": "crgo-built-up-lamination",
+      "slug": "crgo-built-up-lamination",
+      "title": "CRGO Built-Up Lamination Cores",
+      "subtitle": "Heavy-Duty Cores for Large Transformers",
+      "description": "Engineered for large-scale transformer applications, built-up cores deliver the mechanical strength and operational stability heavy-duty industrial environments demand — where resilience is paramount.",
+      "image": "/images/products/crgo-built-up-lamination.png",
       "features": [
-        {
-          "icon": "assembly",
-          "title": "Precision Assembly",
-          "description": "Assembled with meticulous care to ensure tight joints, accurate dimensions, and optimal magnetic performance."
-        },
-        {
-          "icon": "testing",
-          "title": "Rigorous Quality Testing",
-          "description": "Every core assembly undergoes comprehensive testing for core losses, magnetization, and dimensional accuracy."
-        }
-      ],
-      "stats": {
-        "value": 100,
-        "label": "Tested Performance"
-      },
-      "faqs": [
-        {
-          "id": 1,
-          "question": "What types of core assemblies do you manufacture?",
-          "answer": "We manufacture a wide range of core assemblies, including stacked cores, wound cores, and step-lap designs for various types of transformers and reactors."
-        },
-        {
-          "id": 2,
-          "question": "Can you build a core assembly based on our design?",
-          "answer": "Absolutely. We specialize in building custom core assemblies based on customer drawings and specifications to meet unique performance and dimensional requirements."
-        }
-      ]
-    },
-    {
-      "id": "crgo-core-coil-assembly",
-      "slug": "crgo-core-coil-assembly",
-      "title": "CRGO Core Coil Assembly",
-      "subtitle": "Integrated Transformer Assemblies",
-      "description": "A complete, ready-to-use assembly that includes both the CRGO core and the electrical windings (coils). This integrated solution simplifies transformer manufacturing by providing a fully tested and pre-assembled unit.",
-      "image": "/images/CRGOCoreAssembly.png",
-      "features": [
-        {
-          "icon": "integration",
-          "title": "Fully Integrated Solution",
-          "description": "Combines the magnetic core and electrical coils into a single, pre-assembled, and tested unit for easy integration."
-        },
-        {
-          "icon": "reliability",
-          "title": "Enhanced Reliability",
-          "description": "Professionally assembled and tested to ensure perfect compatibility between the core and coils, maximizing performance and lifespan."
-        }
-      ],
-      "stats": {
-        "value": 99,
-        "label": "Integration Success"
-      },
-      "faqs": [
-        {
-          "id": 1,
-          "question": "What type of windings do you use?",
-          "answer": "We use high-quality copper or aluminum windings, depending on the customer's specifications and the application requirements for conductivity and cost-effectiveness."
-        },
-        {
-          "id": 2,
-          "question": "Is the core coil assembly ready to be placed in a tank?",
-          "answer": "Yes, our core coil assemblies are delivered fully assembled and tested, ready for final integration into the transformer tank."
-        }
-      ]
-    },
-    {
-      "id": "amorphous-core",
-      "slug": "amorphous-core",
-      "title": "Amorphous Core",
-      "subtitle": "Ultra-High Efficiency Cores",
-      "description": "Amorphous metal cores offer significantly lower core losses compared to traditional CRGO steel, making them ideal for high-efficiency transformers. Their unique atomic structure results in superior magnetic performance and energy savings.",
-      "image": "/images/amorphousCore.png",
-      "features": [
-        {
-          "icon": "efficiency",
-          "title": "Ultra-Low Core Loss",
-          "description": "Dramatically reduces no-load losses in transformers, leading to significant energy savings over the equipment's lifetime."
-        },
         {
           "icon": "durability",
-          "title": "Robust and Durable",
-          "description": "Constructed to be mechanically strong and resistant to magnetic degradation, ensuring long-term reliability."
-        }
-      ],
-      "stats": {
-        "value": 80,
-        "label": "Energy Savings"
-      },
-      "faqs": [
-        {
-          "id": 1,
-          "question": "How do amorphous cores compare to CRGO cores?",
-          "answer": "Amorphous cores have much lower hysteresis and no-load losses, resulting in higher energy efficiency. However, they have a lower saturation point, making them ideal for distribution transformers."
+          "title": "Mechanical Strength",
+          "description": "Bolted frame and step-lap joints hold the stack rigid through shipping and short-circuit forces."
         },
         {
-          "id": 2,
-          "question": "Are amorphous cores suitable for all transformer types?",
-          "answer": "They are best suited for distribution transformers where no-load losses are a critical factor. For power transformers, CRGO steel is often preferred due to its higher magnetic saturation."
+          "icon": "quality",
+          "title": "Step-Lap Joints",
+          "description": "Reduces no-load loss and inrush current versus traditional butt-lap construction."
+        },
+        {
+          "icon": "versatility",
+          "title": "Distribution & Power",
+          "description": "Built for both distribution transformers and larger power-class units."
         }
       ]
     },
     {
-      "id": "oil-immersed-circuit-breaker",
-      "slug": "oil-immersed-circuit-breaker",
-      "title": "Oil Immersed Circuit Breaker",
-      "subtitle": "Reliable Power System Protection",
-      "description": "Oil-immersed circuit breakers are essential safety devices used to protect electrical circuits from damage caused by overload or short circuits. The oil acts as a coolant and arc-quenching medium, ensuring reliable operation.",
-      "image": "/images/empowement.png",
+      "id": "nanocrystalline-toroidal-core",
+      "slug": "nanocrystalline-toroidal-core",
+      "title": "Nanocrystalline Toroidal Cores",
+      "subtitle": "Ultra-Low Loss for High-Frequency Systems",
+      "description": "Engineered for superior magnetic performance, nanocrystalline toroidal cores deliver high permeability, low core loss and excellent frequency response. Their compact design ensures efficient energy conversion, reduced noise and stable operation across transformers, inductors and electronic components — ideal for high-frequency systems where durability and precision matter.",
+      "image": "/images/products/nanocrystalline-toroidal-core.png",
       "features": [
         {
-          "icon": "safety",
-          "title": "Superior Arc Quenching",
-          "description": "Utilizes high-dielectric mineral oil to effectively extinguish electrical arcs, ensuring safe and reliable circuit interruption."
+          "icon": "precision",
+          "title": "High Permeability",
+          "description": "An order of magnitude higher than CRGO — keeps magnetising current minimal."
         },
         {
-          "icon": "durability",
-          "title": "Durable and Long-Lasting",
-          "description": "Built with a robust tank and high-quality components for long service life and minimal maintenance requirements."
+          "icon": "quality",
+          "title": "Wide Frequency Response",
+          "description": "Stable from 50 Hz up to 100+ kHz, suiting EV chargers, SMPS and inverter chokes."
+        },
+        {
+          "icon": "versatility",
+          "title": "Case Options",
+          "description": "Supplied in stainless-steel case, PBT plastic case, or paper-wrapped per application."
         }
       ],
-      "stats": {
-        "value": 100,
-        "label": "Circuit Protection"
-      },
-      "faqs": [
+      "stats": { "value": 100, "label": "Higher Permeability vs CRGO ×" }
+    },
+    {
+      "id": "e-cores",
+      "slug": "e-cores",
+      "title": "E Cores",
+      "subtitle": "Three-Phase Cutting Cores",
+      "description": "E Core is a three-phase cutting core made from various grades of high-quality CRGO steel — low iron loss and high permeability in the B-direction, available in 0.25, 0.27 and 0.30 mm strip. Backed by our cutting-edge facilities and flexible process, we produce E Cores in any geometry.",
+      "image": "/images/products/e-cores.png",
+      "features": [
         {
-          "id": 1,
-          "question": "What voltage levels are your circuit breakers rated for?",
-          "answer": "We offer oil-immersed circuit breakers for a wide range of medium to high voltage applications. Please provide your specific voltage requirements for a suitable recommendation."
+          "icon": "precision",
+          "title": "Three-Phase Geometry",
+          "description": "E shape designed for three-leg three-phase transformer construction."
         },
         {
-          "id": 2,
-          "question": "What maintenance is required for these circuit breakers?",
-          "answer": "Regular maintenance includes checking the oil level and quality, inspecting contacts, and testing the tripping mechanism to ensure continued reliable operation."
+          "icon": "quality",
+          "title": "Premium CRGO",
+          "description": "Selected from 0.25, 0.27 and 0.30 mm strip — high B-direction permeability."
+        },
+        {
+          "icon": "versatility",
+          "title": "Any E Profile",
+          "description": "Window dimensions, limb width and stack height cut to your drawing."
         }
       ]
     },
     {
-      "id": "wound-cores",
-      "slug": "wound-cores",
-      "title": "Wound Cores",
-      "subtitle": "High-Performance Toroidal and C-Cores",
-      "description": "Wound cores are constructed by winding electrical steel tape into a final shape, such as a toroid or C-core. This design offers a closed magnetic path, resulting in high efficiency, low stray magnetic fields, and a compact size.",
-      "image": "/images/woundCore.png",
+      "id": "step-cores",
+      "slug": "step-cores",
+      "title": "Step Cores",
+      "subtitle": "Stepped Wound Cores for Compact Transformers",
+      "description": "Step Cores combine the advantages of Toroidal Cores and conventional E & I laminations — ideal where weight or dimensional limits are tight and design flexibility matters. Wound from grain-oriented silicon steel strip, annealed under controlled atmosphere, vacuum-impregnated, then precision-cut and fine-polished to deliver very low core loss and a high saturation point.",
+      "image": "/images/products/step-cores.png",
       "features": [
         {
-          "icon": "compact",
-          "title": "Compact and Efficient Design",
-          "description": "The closed magnetic path of wound cores minimizes flux leakage and results in a smaller, lighter, and more efficient design."
+          "icon": "quality",
+          "title": "Stepped Cross-Section",
+          "description": "Closer-to-circular cross-section maximises copper utilisation in the bobbin window."
         },
         {
-          "icon": "low-noise",
-          "title": "Low Noise Operation",
-          "description": "The uniform winding and gapless construction lead to very low audible noise, making them ideal for noise-sensitive applications."
-        }
-      ],
-      "stats": {
-        "value": 99,
-        "label": "Magnetic Efficiency"
-      },
-      "faqs": [
-        {
-          "id": 1,
-          "question": "What is the difference between a wound core and a stacked core?",
-          "answer": "Wound cores have a continuous, unbroken magnetic path, which results in higher efficiency and lower stray fields compared to stacked cores, which are assembled from individual laminations."
+          "icon": "precision",
+          "title": "Polished Cut Surface",
+          "description": "Ensures very low core loss and a high saturation point."
         },
         {
-          "id": 2,
-          "question": "What materials are used for your wound cores?",
-          "answer": "We use a variety of materials, including CRGO steel, amorphous metal, and nanocrystalline alloys, to create wound cores that meet specific performance requirements."
-        }
-      ]
-    },
-    {
-      "id": "toroidal-cores",
-      "slug": "toroidal-cores",
-      "title": "Toroidal Cores",
-      "subtitle": "Efficient and Compact Ring Cores",
-      "description": "Toroidal cores are ring-shaped wound cores that offer the highest possible efficiency and a very low external magnetic field. Their compact shape and superior performance make them ideal for a wide range of applications, including medical devices, audio equipment, and power supplies.",
-      "image": "/images/woundCore.png",
-      "features": [
-        {
-          "icon": "efficiency",
-          "title": "Maximum Efficiency",
-          "description": "The uniform, gapless winding results in a highly efficient magnetic circuit with minimal energy loss and heat generation."
-        },
-        {
-          "icon": "compact",
-          "title": "Compact and Lightweight",
-          "description": "Toroidal cores are smaller and lighter than traditional E-I cores of the same power rating, saving space and weight."
-        }
-      ],
-      "stats": {
-        "value": 98,
-        "label": "Performance Ratio"
-      },
-      "faqs": [
-        {
-          "id": 1,
-          "question": "Why are toroidal cores considered more efficient?",
-          "answer": "Their ring shape and continuous winding create a closed magnetic circuit with no air gaps, which dramatically reduces magnetic flux leakage and energy loss."
-        },
-        {
-          "id": 2,
-          "question": "Do you offer custom-sized toroidal cores?",
-          "answer": "Yes, we can manufacture toroidal cores in a wide range of sizes and with various material options to perfectly match your application's power and performance needs."
+          "icon": "versatility",
+          "title": "Weight-Sensitive Designs",
+          "description": "Best fit for compact, lightweight transformers without sacrificing efficiency."
         }
       ]
     }

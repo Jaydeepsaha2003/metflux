@@ -7,6 +7,7 @@ import { useConfirm } from '@/hooks/useConfirm';
 
 type Customer = {
   id: string;
+  customerCode: string;
   name: string;
   email: string | null;
   phone: string | null;
@@ -20,7 +21,13 @@ type Customer = {
 type Form = Omit<Customer, 'id' | 'gstRate'> & { gstRate: string };
 
 const empty: Form = {
-  name: '', email: '', phone: '', address: '', gstNumber: '', gstRate: '0', state: '', notes: '',
+  customerCode: '', name: '', email: '', phone: '', address: '', gstNumber: '', gstRate: '0', state: '', notes: '',
+};
+
+/** Suggested code from a customer name: first 3 alpha chars (uppercase). */
+const codePrefixFromName = (name: string) => {
+  const letters = name.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
+  return letters.length ? letters : '';
 };
 
 export const CustomerFormPage = () => {
@@ -41,6 +48,7 @@ export const CustomerFormPage = () => {
   useEffect(() => {
     if (!existing) return;
     setForm({
+      customerCode: existing.customerCode ?? '',
       name: existing.name,
       email: existing.email ?? '',
       phone: existing.phone ?? '',
@@ -52,8 +60,11 @@ export const CustomerFormPage = () => {
     });
   }, [existing]);
 
+  // customerCode is owned by the server — never sent from this form.
+  type Payload = Omit<Form, 'customerCode'>;
+
   const create = useMutation({
-    mutationFn: (body: Form) => api<Customer>('/customers', { method: 'POST', json: body }),
+    mutationFn: (body: Payload) => api<Customer>('/customers', { method: 'POST', json: body }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       navigate('/customers');
@@ -62,7 +73,7 @@ export const CustomerFormPage = () => {
   });
 
   const update = useMutation({
-    mutationFn: (body: Partial<Form>) => api<Customer>(`/customers/${id}`, { method: 'PATCH', json: body }),
+    mutationFn: (body: Partial<Payload>) => api<Customer>(`/customers/${id}`, { method: 'PATCH', json: body }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       queryClient.invalidateQueries({ queryKey: ['customer', id] });
@@ -82,8 +93,13 @@ export const CustomerFormPage = () => {
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (isEdit) update.mutate(form);
-    else create.mutate(form);
+    // The customer code is never editable from the UI — server owns it.
+    // Strip it from the payload so the server keeps existing (PATCH) or
+    // auto-generates a fresh one (POST).
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { customerCode: _omit, ...payload } = form;
+    if (isEdit) update.mutate(payload);
+    else create.mutate(payload);
   };
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) =>
@@ -106,7 +122,31 @@ export const CustomerFormPage = () => {
       <form onSubmit={submit} className="card p-5 space-y-5">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Name" required>
-            <input className="input" value={form.name ?? ''} onChange={(e) => set('name', e.target.value)} required />
+            <input
+              className="input"
+              value={form.name ?? ''}
+              onChange={(e) => set('name', e.target.value)}
+              required
+            />
+          </Field>
+          <Field label="Customer Code">
+            <input
+              className="input font-mono uppercase bg-slate-50 text-slate-600 cursor-not-allowed"
+              value={
+                isEdit
+                  ? (form.customerCode || '—')
+                  : (codePrefixFromName(form.name)
+                      ? `${codePrefixFromName(form.name)}-### (auto-assigned)`
+                      : 'Auto-assigned on save')
+              }
+              readOnly
+              tabIndex={-1}
+            />
+            <span className="mt-1 block text-[10px] text-slate-400">
+              {isEdit
+                ? 'Customer codes are permanent — they appear in production, dispatch and exports.'
+                : 'Derived from the first three letters of the name. Assigned automatically when you save.'}
+            </span>
           </Field>
           <Field label="Phone">
             <input className="input" value={form.phone ?? ''} onChange={(e) => set('phone', e.target.value)} placeholder="+91 98765 43210" />

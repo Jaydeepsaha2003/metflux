@@ -4,9 +4,11 @@ import { useQuery } from '@tanstack/react-query';
 import { Search, MessageCircle, Plus, Pencil, Building2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Pagination } from '@/components/Pagination';
+import { useHideCustomerNames } from '@/store/auth';
 
 type Customer = {
   id: string;
+  customerCode: string;
   name: string;
   email: string | null;
   phone: string | null;
@@ -24,6 +26,7 @@ const PAGE_SIZE = 20;
 export const CustomersPage = () => {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const hideNames = useHideCustomerNames();
   // Reset to page 1 when the user changes the search — otherwise an empty page
   // would show because the result count usually shrinks.
   useEffect(() => { setPage(1); }, [search]);
@@ -67,6 +70,7 @@ export const CustomersPage = () => {
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
             <tr>
+              <th className="px-4 py-3">Code</th>
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Email</th>
               <th className="px-4 py-3">Phone</th>
@@ -78,11 +82,11 @@ export const CustomersPage = () => {
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-400">Loading…</td></tr>
+              <tr><td colSpan={8} className="px-4 py-10 text-center text-slate-400">Loading…</td></tr>
             )}
             {!isLoading && data?.items.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
+                <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
                   <div className="flex flex-col items-center gap-2">
                     <Building2 className="h-6 w-6 text-slate-300" />
                     <span>No customers yet.</span>
@@ -95,7 +99,8 @@ export const CustomersPage = () => {
             )}
             {data?.items.map((c) => (
               <tr key={c.id} className="border-t border-slate-100 hover:bg-slate-50">
-                <td className="px-4 py-3 font-medium text-slate-900">{c.name}</td>
+                <td className="px-4 py-3 font-mono text-xs font-semibold text-brand-700">{c.customerCode}</td>
+                <td className="px-4 py-3 font-medium text-slate-900">{hideNames ? '••••••' : c.name}</td>
                 <td className="px-4 py-3 text-slate-600">{c.email ?? '—'}</td>
                 <td className="px-4 py-3 text-slate-600 font-mono text-xs">{c.phone ?? '—'}</td>
                 <td className="px-4 py-3 text-slate-600 font-mono text-xs">{c.gstNumber ?? '—'}</td>

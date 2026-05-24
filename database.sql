@@ -67,6 +67,7 @@ CREATE TABLE `Membership` (
     `permissions` JSON NOT NULL,
     `isPrimary` BOOLEAN NOT NULL DEFAULT false,
     `isActive` BOOLEAN NOT NULL DEFAULT true,
+    `hideCustomerNames` BOOLEAN NOT NULL DEFAULT false,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
@@ -91,6 +92,7 @@ CREATE TABLE `RefreshToken` (
 -- CreateTable
 CREATE TABLE `Customer` (
     `id` VARCHAR(191) NOT NULL,
+    `customerCode` VARCHAR(40) NOT NULL,
     `name` VARCHAR(160) NOT NULL,
     `email` VARCHAR(160) NULL,
     `phone` VARCHAR(40) NULL,
@@ -106,6 +108,7 @@ CREATE TABLE `Customer` (
 
     INDEX `Customer_companyId_createdAt_idx`(`companyId`, `createdAt`),
     INDEX `Customer_companyId_name_idx`(`companyId`, `name`),
+    UNIQUE INDEX `Customer_companyId_customerCode_key`(`companyId`, `customerCode`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -292,6 +295,21 @@ CREATE TABLE `LabourMembership` (
 
     INDEX `LabourMembership_companyId_idx`(`companyId`),
     UNIQUE INDEX `LabourMembership_labourId_companyId_key`(`labourId`, `companyId`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+-- Mirrors LabourMembership: one Supplier can be shared by many companies.
+-- Tenant scoping for suppliers goes through this table (NOT Supplier.companyId,
+-- which is kept for legacy backfill but no longer read by the application).
+CREATE TABLE `SupplierMembership` (
+    `id` VARCHAR(191) NOT NULL,
+    `supplierId` VARCHAR(191) NOT NULL,
+    `companyId` VARCHAR(191) NOT NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    INDEX `SupplierMembership_companyId_idx`(`companyId`),
+    UNIQUE INDEX `SupplierMembership_supplierId_companyId_key`(`supplierId`, `companyId`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -586,6 +604,31 @@ ALTER TABLE `ReturnItem` ADD CONSTRAINT `ReturnItem_returnId_fkey` FOREIGN KEY (
 
 -- AddForeignKey
 ALTER TABLE `ReturnItem` ADD CONSTRAINT `ReturnItem_poOrderItemId_fkey` FOREIGN KEY (`poOrderItemId`) REFERENCES `PoOrderItem`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- =====================================================================
+-- MIGRATION FOR EXISTING DATABASES — Supplier multi-company
+-- =====================================================================
+-- If you already have data and want to enable sharing a supplier across
+-- companies, run these once in phpMyAdmin (in order):
+--
+--   CREATE TABLE `SupplierMembership` (
+--       `id` VARCHAR(191) NOT NULL,
+--       `supplierId` VARCHAR(191) NOT NULL,
+--       `companyId` VARCHAR(191) NOT NULL,
+--       `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+--       INDEX `SupplierMembership_companyId_idx`(`companyId`),
+--       UNIQUE INDEX `SupplierMembership_supplierId_companyId_key`(`supplierId`, `companyId`),
+--       PRIMARY KEY (`id`)
+--   ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+--
+--   -- Backfill — every existing supplier becomes a member of its current company.
+--   INSERT INTO `SupplierMembership` (`id`, `supplierId`, `companyId`)
+--   SELECT UUID(), `id`, `companyId` FROM `Supplier`;
+--
+-- That's it. `Supplier.companyId` is no longer read by the app but is
+-- left in place for safety; you can drop it later once you've confirmed
+-- everything works.
+-- =====================================================================
 
 -- =====================================================================
 -- FIRST-RUN ADMIN

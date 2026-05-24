@@ -3,14 +3,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search, Loader2, Truck, ArrowLeft, CheckCircle2, FileText } from 'lucide-react';
+import { Search, Loader2, Truck, ArrowLeft, CheckCircle2, FileText, Download } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { downloadXlsx, todayStamp } from '@/lib/excel';
+import { useHideCustomerNames } from '@/store/auth';
 
 type ReadyItem = {
   id: string;
   poNumber: string;
   customerName: string;
+  customerCode: string | null;
   deliveryDate: string;
   coreType: 'TOROIDAL' | 'RECTANGULAR';
   grade: string;
@@ -33,6 +36,7 @@ const formatDate = (iso: string) => {
 
 export const DispatchNewPage = () => {
   const queryClient = useQueryClient();
+  const hideNames = useHideCustomerNames();
 
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<ReadyItem | null>(null);
@@ -42,6 +46,30 @@ export const DispatchNewPage = () => {
     queryFn: () => api<{ items: ReadyItem[] }>(`/dispatch/ready?search=${encodeURIComponent(search)}`),
     staleTime: 0,
   });
+
+  /* Export the ready-to-dispatch list as an Excel checklist. */
+  const onExport = () => {
+    const items = readyResp?.items ?? [];
+    if (!items.length) return;
+    const rows = items.map((it) => ({
+      'PO #':              it.poNumber,
+      'Customer Code':     it.customerCode ?? '',
+      ...(hideNames ? {} : { 'Customer': it.customerName }),
+      'Delivery Date':     formatDate(it.deliveryDate),
+      'Type':              it.coreType,
+      'Grade':             it.grade,
+      'Material':          it.material,
+      'Measure':           it.measure,
+      'Wt / pc':           it.weightPerPc,
+      'Ordered':           it.orderedPcs,
+      'Produced':          it.producedPcs,
+      'Already Dispatched': it.dispatchedPcs,
+      'Ready to Dispatch': it.readyPcs,
+      'Ready Wt (kg)':     +(it.readyPcs * it.weightPerPc).toFixed(3),
+      'Ready Amount (₹)':  it.readyAmount,
+    }));
+    downloadXlsx(`ready-to-dispatch-${todayStamp()}`, 'Ready to Dispatch', rows);
+  };
 
   const [dispatchDate, setDispatchDate] = useState(todayISO());
   const [vehicleNo, setVehicleNo] = useState('');
@@ -132,14 +160,26 @@ export const DispatchNewPage = () => {
       <section className="card overflow-hidden">
         <div className="flex flex-col gap-2 border-b border-slate-200 px-3 py-3 sm:flex-row sm:items-center sm:gap-3 sm:px-4">
           <h2 className="text-sm font-semibold text-slate-900">1. Pick a ready item</h2>
-          <div className="relative w-full sm:ml-auto sm:max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              className="input pl-9"
-              placeholder="Search PO#, customer, measure, grade, material"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+          <div className="flex items-center gap-2 w-full sm:ml-auto sm:w-auto">
+            <div className="relative flex-1 sm:w-80">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                className="input pl-9"
+                placeholder="Search PO#, customer, measure, grade, material"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={onExport}
+              disabled={isLoading || !readyResp?.items.length}
+              className="btn-ghost shrink-0 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+              title="Download ready list as Excel"
+            >
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">Excel</span>
+            </button>
           </div>
         </div>
 
@@ -162,7 +202,10 @@ export const DispatchNewPage = () => {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-semibold text-sm text-slate-900 truncate">{it.customerName}</span>
+                      <span className="font-mono text-xs font-semibold text-brand-700">{it.customerCode ?? '—'}</span>
+                      {!hideNames && (
+                        <span className="font-semibold text-sm text-slate-900 truncate">· {it.customerName}</span>
+                      )}
                       <span className={cn(
                         'rounded-full px-1.5 py-0.5 text-[10px] font-medium shrink-0',
                         it.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
@@ -236,7 +279,14 @@ export const DispatchNewPage = () => {
                       {isSel && <CheckCircle2 className="h-4 w-4 text-brand-600" />}
                     </td>
                     <td className="px-3 py-2 font-mono text-xs">{it.poNumber}</td>
-                    <td className="px-3 py-2">{it.customerName}</td>
+                    <td className="px-3 py-2">
+                      <div className="font-mono text-xs font-semibold text-brand-700">{it.customerCode ?? '—'}</div>
+                      {!hideNames && (
+                        <div className="text-[11px] text-slate-500 truncate max-w-[160px]" title={it.customerName}>
+                          {it.customerName}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-slate-600 text-xs">{formatDate(it.deliveryDate)}</td>
                     <td className="px-3 py-2">
                       <span className={cn(
@@ -301,7 +351,12 @@ export const DispatchNewPage = () => {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-3 text-sm sm:grid-cols-4">
               <Stat label="PO #" value={selected.poNumber} />
-              <Stat label="Customer" value={selected.customerName} />
+              <Stat
+                label="Customer"
+                value={hideNames
+                  ? (selected.customerCode ?? '—')
+                  : `${selected.customerCode ?? '—'} · ${selected.customerName}`}
+              />
               <Stat label="Grade · Material" value={`${selected.grade} · ${selected.material}`} />
               <Stat label="Measure" value={selected.measure} mono />
               <Stat label="Wt / pc" value={selected.weightPerPc.toFixed(3)} mono />

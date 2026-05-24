@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Save, Loader2, Plus, Trash2, Truck, Calendar, Hash } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { ItemTypeahead } from '@/components/ItemTypeahead';
 
 type Supplier = { id: string; name: string; gstRate: number; gstNumber: string | null; state: string | null };
 
@@ -135,6 +136,13 @@ export const SupplierOrderEditPage = () => {
         <h1 className="text-lg sm:text-2xl font-bold tracking-tight flex items-center gap-2">
           <Truck className="h-5 w-5 text-brand-600" /> Edit PO — {po.poNumber}
         </h1>
+        <Link
+          to={`/supplier-po/print/${po.id}`}
+          className="ml-auto btn-ghost text-slate-700 hover:bg-slate-100"
+          title="Open the printable / shareable PDF view"
+        >
+          Print / PDF
+        </Link>
       </div>
 
       <section className="card p-3 sm:p-4">
@@ -185,12 +193,28 @@ export const SupplierOrderEditPage = () => {
               {items.map((it, idx) => (
                 <tr key={idx} className="border-t border-slate-100">
                   <td className="px-2 py-1.5">
-                    <input className={inputCls} value={it.description}
-                      onChange={(e) => updateItem(idx, { description: e.target.value.toUpperCase() })} />
+                    <ItemTypeahead
+                      value={it.description}
+                      onChange={(v) => updateItem(idx, { description: v })}
+                      onPick={(s) => updateItem(idx, {
+                        description: s.description,
+                        hsnCode: s.hsnCode ?? it.hsnCode,
+                        unit:    s.unit    || it.unit,
+                      })}
+                      inputClassName={inputCls}
+                    />
                   </td>
                   <td className="px-2 py-1.5">
-                    <input className={inputCls} value={it.hsnCode}
-                      onChange={(e) => updateItem(idx, { hsnCode: e.target.value.toUpperCase() })} />
+                    <ItemTypeahead
+                      value={it.hsnCode}
+                      onChange={(v) => updateItem(idx, { hsnCode: v })}
+                      onPick={(s) => updateItem(idx, {
+                        description: s.description,
+                        hsnCode: s.hsnCode ?? it.hsnCode,
+                        unit:    s.unit    || it.unit,
+                      })}
+                      inputClassName={inputCls}
+                    />
                   </td>
                   <td className="px-2 py-1.5">
                     <input className={`${inputCls} text-right`} type="number" inputMode="decimal" step="any" min={0}

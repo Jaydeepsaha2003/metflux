@@ -92,8 +92,8 @@ const Display = ({
   align?: 'left' | 'center' | 'right'; bold?: boolean;
 }) => (
   <div
-    className={`block w-full h-9 leading-9 px-1 text-[12px] truncate
-      ${align === 'left' ? 'text-left' : align === 'right' ? 'text-right' : 'text-center'}
+    className={`flex w-full min-h-9 items-center px-1 py-1 text-[12px] leading-tight whitespace-normal
+      ${align === 'left' ? 'justify-start text-left' : align === 'right' ? 'justify-end text-right' : 'justify-center text-center'}
       ${bold ? 'font-semibold' : ''}`}
   >
     {value || ' '}
@@ -264,7 +264,11 @@ export const WorkAllotmentBuildPage = () => {
     const el = printRef.current;
     if (!el || !rows.length) return null;
 
-    const A4_USABLE_PX = 734;
+    // Landscape A4 = 297mm wide; with 8mm margins, ~281mm usable.
+    // At ~3.8 px/mm (same DPI ratio the Packing List uses for portrait),
+    // that's ~1068px. We bump slightly above the print container's
+    // `min-w-[1000px]` so the table is never clipped by overflow-hidden.
+    const A4_USABLE_PX = 1080;
     const clone = el.cloneNode(true) as HTMLElement;
 
     const liveInputs = Array.from(el.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select'));
@@ -611,17 +615,17 @@ export const WorkAllotmentBuildPage = () => {
           <table className="w-full text-sm border-collapse table-fixed">
             <colgroup>
               <col style={{ width: '36px' }} />     {/* SR */}
-              <col style={{ width: '15%' }} />      {/* CUSTOMER */}
-              <col style={{ width: '9%' }} />       {/* SO DATE */}
-              <col />                                {/* MEASURE */}
-              <col style={{ width: '9%' }} />       {/* GRADE */}
-              <col style={{ width: '10%' }} />      {/* MATERIAL */}
-              <col style={{ width: '6%' }} />       {/* FLUX */}
-              <col style={{ width: '6%' }} />       {/* TURNS */}
-              <col style={{ width: '7%' }} />       {/* VOLTAGE */}
-              <col style={{ width: '7%' }} />       {/* IEMAX */}
-              <col style={{ width: '6%' }} />       {/* PCS */}
-              <col style={{ width: '12%' }} />      {/* WORKER */}
+              <col style={{ width: '13%' }} />      {/* CUSTOMER — fits "AARTI STEELS" on one line */}
+              <col style={{ width: '9%'  }} />      {/* SO DATE  — fits DD/MM/YYYY on one line */}
+              <col style={{ width: '14%' }} />      {/* MEASURE  — fits "80 x 120 x 30" on one line */}
+              <col style={{ width: '9%'  }} />      {/* GRADE    — fits "CRGO 27M3"     */}
+              <col style={{ width: '10%' }} />      {/* MATERIAL — fits "M3 - 0.27mm"   */}
+              <col style={{ width: '5%'  }} />      {/* FLUX     */}
+              <col style={{ width: '5%'  }} />      {/* TURNS    */}
+              <col style={{ width: '7%'  }} />      {/* VOLTAGE  */}
+              <col style={{ width: '7%'  }} />      {/* IEMAX    */}
+              <col style={{ width: '5%'  }} />      {/* PCS      */}
+              <col style={{ width: '11%' }} />      {/* WORKER   */}
             </colgroup>
             <thead>
               <tr className="bg-slate-100 border-b-2 border-slate-400 text-center font-bold uppercase tracking-wide text-[10px]">
@@ -694,11 +698,11 @@ export const WorkAllotmentBuildPage = () => {
 };
 
 const InfoRow = ({ label, value, border }: { label: string; value: string; border: string }) => (
-  <div className={`flex ${border} border-slate-300`}>
-    <span className="w-28 shrink-0 bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 border-r border-slate-300">
+  <div className={`flex items-stretch ${border} border-slate-300`}>
+    <span className="w-28 shrink-0 flex items-center bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 border-r border-slate-300">
       {label}
     </span>
-    <span className="flex-1 px-3 py-1.5 text-sm font-medium">{value}</span>
+    <span className="flex-1 flex items-center px-3 py-1.5 text-sm font-medium">{value}</span>
   </div>
 );
 

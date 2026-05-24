@@ -60,6 +60,7 @@ const publicMembership = (m) => ({
   companyLogoUrl: m.company?.logoUrl ?? null,
   role: m.role,
   isPrimary: !!m.isPrimary,
+  hideCustomerNames: !!m.hideCustomerNames,
   permissions: effectivePermissions(m.role, sanitizePermissions(parseJson(m.permissions))),
 });
 
@@ -89,6 +90,7 @@ const loadMemberships = async (userId) => {
        m.\`permissions\`  AS permissions,
        m.\`isPrimary\`    AS isPrimary,
        m.\`isActive\`     AS isActive,
+       m.\`hideCustomerNames\` AS hideCustomerNames,
        m.\`createdAt\`    AS createdAt,
        m.\`updatedAt\`    AS updatedAt,
        c.\`id\`           AS c_id,
@@ -110,6 +112,7 @@ const loadMemberships = async (userId) => {
     permissions: parseJson(r.permissions),
     isPrimary: !!r.isPrimary,
     isActive: !!r.isActive,
+    hideCustomerNames: !!r.hideCustomerNames,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
     company: {

@@ -12,7 +12,6 @@ const NewTestimonialsSection = dynamic(() => import("@/components/TestimonialsSe
 const Gallery = dynamic(() => import("@/components/Gallery"), { ssr: false });
 const ReachSection = dynamic(() => import("@/components/ReachSection"), { ssr: false });
 const Products = dynamic(() => import("@/components/Products"), { ssr: false });
-const TransformerProducts = dynamic(() => import("@/components/TransformerProducts"), { ssr: false });
 const FAQ = dynamic(() => import("@/components/FAQ"), { ssr: false });
 const ConnectSection = dynamic(() => import("@/components/ConnectSection"), { ssr: false });
 const QualityLogosMarquee = dynamic(() => import("@/components/QualityLogosMarquee"), { ssr: false });
@@ -88,7 +87,6 @@ const Index = () => {
         <QualityLogosMarquee />
         <ReachSection />
         <Products />
-        <TransformerProducts />
         <FAQ />
         <ConnectSection />
       </main>

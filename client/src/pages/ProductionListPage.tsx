@@ -3,16 +3,19 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Pencil, Trash2, Factory } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Factory, Download, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
 import { Pagination } from '@/components/Pagination';
+import { downloadXlsx, todayStamp } from '@/lib/excel';
+import { useHideCustomerNames } from '@/store/auth';
 
 type Row = {
   id: string;
   poNumber: string;
   customerName: string;
+  customerCode: string | null;
   coreType: 'TOROIDAL' | 'RECTANGULAR';
   grade: string;
   material: string;
@@ -41,6 +44,7 @@ export const ProductionListPage = () => {
   useEffect(() => { setPage(1); }, [search]);
   const queryClient = useQueryClient();
   const { confirm, confirmDialog } = useConfirm();
+  const hideNames = useHideCustomerNames();
 
   const { data, isLoading } = useQuery({
     queryKey: ['production', search, page],
@@ -52,15 +56,56 @@ export const ProductionListPage = () => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['production'] }),
   });
 
+  /* Export every matching production record to Excel — not just current page. */
+  const [exporting, setExporting] = useState(false);
+  const onExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const all = await api<ListResp>(
+        `/production?search=${encodeURIComponent(search)}&page=1&pageSize=10000`
+      );
+      const rows = all.items.map((p) => ({
+        'Date':        formatDate(p.prodDate),
+        'PO #':        p.poNumber,
+        'Customer Code': p.customerCode ?? '',
+        ...(hideNames ? {} : { 'Customer': p.customerName }),
+        'Labour':      p.labourName,
+        'Type':        p.coreType,
+        'Grade':       p.grade,
+        'Material':    p.material,
+        'Measure':     p.measure,
+        'Pcs':         p.pcs,
+        'Wt / pc':     p.weightPerPc,
+        'Total Wt':    p.totalWeight,
+        'Amount (₹)':  p.amount,
+      }));
+      downloadXlsx(`production-${todayStamp()}`, 'Production', rows);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-4 max-w-[1400px]">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <Factory className="h-5 w-5 text-brand-600" /> Production
         </h1>
-        <Link to="/production/new" className="btn-primary">
-          <Plus className="h-4 w-4" /> Record Production
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onExport}
+            disabled={exporting || isLoading || !data?.items.length}
+            className="btn-ghost text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+            title="Download all matching rows as Excel"
+          >
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            <span className="hidden sm:inline">Excel</span>
+          </button>
+          <Link to="/production/new" className="btn-primary">
+            <Plus className="h-4 w-4" /> Record Production
+          </Link>
+        </div>
       </div>
 
       <div className="card overflow-hidden">
@@ -116,7 +161,14 @@ export const ProductionListPage = () => {
                 <tr key={p.id} className="border-t border-slate-100 hover:bg-slate-50/60">
                   <td className="px-3 py-2 text-slate-600">{formatDate(p.prodDate)}</td>
                   <td className="px-3 py-2 font-mono text-xs">{p.poNumber}</td>
-                  <td className="px-3 py-2">{p.customerName}</td>
+                  <td className="px-3 py-2">
+                    <div className="font-mono text-xs font-semibold text-brand-700">{p.customerCode ?? '—'}</div>
+                    {!hideNames && (
+                      <div className="text-[11px] text-slate-500 truncate max-w-[180px]" title={p.customerName}>
+                        {p.customerName}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-3 py-2 font-medium">{p.labourName}</td>
                   <td className="px-3 py-2">
                     <span className={cn(

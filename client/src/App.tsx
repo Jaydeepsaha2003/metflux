@@ -19,6 +19,7 @@ import { SupplierOrderNewPage } from '@/pages/SupplierOrderNewPage';
 import { SupplierOrderManagePage } from '@/pages/SupplierOrderManagePage';
 import { SupplierOrderEditPage } from '@/pages/SupplierOrderEditPage';
 import { SupplierOrderTrackPage } from '@/pages/SupplierOrderTrackPage';
+import { SupplierPOPrintPage } from '@/pages/SupplierPOPrintPage';
 import { ProductionListPage } from '@/pages/ProductionListPage';
 import { ProductionNewPage } from '@/pages/ProductionNewPage';
 import { ProductionEditPage } from '@/pages/ProductionEditPage';
@@ -85,6 +86,7 @@ export const App = () => (
       <Route path="/supplier-po/track"        element={<SupplierOrderTrackPage />} />
       <Route path="/supplier-po/manage"       element={<SupplierOrderManagePage />} />
       <Route path="/supplier-po/manage/:id"   element={<SupplierOrderEditPage />} />
+      <Route path="/supplier-po/print/:id"    element={<SupplierPOPrintPage />} />
 
       <Route path="/customers"      element={<CustomersPage />} />
       <Route path="/customers/new"  element={<CustomerFormPage />} />

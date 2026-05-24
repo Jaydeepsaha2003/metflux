@@ -39,6 +39,7 @@ const publicUser = (u) => ({
     permissions: effectivePermissions(m.role, sanitizePermissions(parseJson(m.permissions))),
     isPrimary: !!m.isPrimary,
     isActive: !!m.isActive,
+    hideCustomerNames: !!m.hideCustomerNames,
   })),
 });
 
@@ -53,6 +54,7 @@ const membershipInputSchema = z.object({
   role: z.enum([ROLES.COMPANY_ADMIN, ROLES.MANAGER, ROLES.STAFF]),
   permissions: z.array(z.enum(PERMISSION_KEYS)).default([]),
   isPrimary: z.boolean().optional().default(false),
+  hideCustomerNames: z.boolean().optional().default(false),
 });
 
 const createSchema = z.object({
@@ -229,6 +231,7 @@ router.post('/', asyncHandler(async (req, res) => {
         role: m.role,
         permissions: m.permissions,
         isPrimary: !!m.isPrimary,
+        hideCustomerNames: !!m.hideCustomerNames,
       });
     }
     return u.id;
@@ -308,6 +311,7 @@ router.post('/:id/memberships', asyncHandler(async (req, res) => {
         permissions: sanitizePermissions(data.permissions),
         isPrimary: !!data.isPrimary,
         isActive: true,
+        hideCustomerNames: !!data.hideCustomerNames,
       });
     } else {
       await tx.insert('Membership', {
@@ -317,6 +321,7 @@ router.post('/:id/memberships', asyncHandler(async (req, res) => {
         permissions: sanitizePermissions(data.permissions),
         isPrimary: !!data.isPrimary,
         isActive: true,
+        hideCustomerNames: !!data.hideCustomerNames,
       });
     }
   });
@@ -343,9 +348,10 @@ router.patch('/:id/memberships/:mid', asyncHandler(async (req, res) => {
       );
     }
     const patch = {};
-    if (data.role        !== undefined) patch.role = data.role;
-    if (data.permissions !== undefined) patch.permissions = sanitizePermissions(data.permissions);
-    if (data.isPrimary   !== undefined) patch.isPrimary = !!data.isPrimary;
+    if (data.role              !== undefined) patch.role = data.role;
+    if (data.permissions       !== undefined) patch.permissions = sanitizePermissions(data.permissions);
+    if (data.isPrimary         !== undefined) patch.isPrimary = !!data.isPrimary;
+    if (data.hideCustomerNames !== undefined) patch.hideCustomerNames = !!data.hideCustomerNames;
     if (Object.keys(patch).length > 0) await tx.update('Membership', m.id, patch);
   });
 

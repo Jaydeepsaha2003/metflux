@@ -22,6 +22,7 @@ export type Membership = {
   role: Role;
   permissions: PermissionKey[];
   isPrimary: boolean;
+  hideCustomerNames?: boolean;
 };
 
 // Server response shape for /auth/login, /auth/refresh, /auth/switch-company.
@@ -84,6 +85,16 @@ export const useAuthStore = create<AuthState>()(
 
 export const activeMembership = (s: AuthState) =>
   s.memberships.find((m) => m.companyId === s.activeCompanyId) ?? null;
+
+// Reactive selector: true when the active membership has the
+// "hide customer names" privacy toggle ON. Platform admin overrides — they
+// always see names so they can administer customer records cleanly.
+export const useHideCustomerNames = () =>
+  useAuthStore((s) => {
+    if (s.user?.isPlatformAdmin) return false;
+    const m = s.memberships.find((mm) => mm.companyId === s.activeCompanyId);
+    return !!m?.hideCustomerNames;
+  });
 
 // Permission check used everywhere in the UI. Platform admin and COMPANY_ADMIN
 // implicitly have every permission.

@@ -55,6 +55,7 @@ const DISPATCH_ROW_SQL = `
          po.\`orderDate\`   AS po_orderDate,
          po.\`customerId\`  AS customer_id,
          c.\`name\`         AS customer_name,
+         c.\`customerCode\` AS customer_code,
          c.\`state\`        AS customer_state,
          c.\`phone\`        AS customer_phone
     FROM \`Dispatch\` d
@@ -74,6 +75,7 @@ const flatten = (r) => {
     orderDate: r.po_orderDate,
     customerId: r.customer_id,
     customerName: r.customer_name,
+    customerCode: r.customer_code,
     customerState: r.customer_state ?? null,
     customerPhone: r.customer_phone ?? null,
     coreType: r.item_coreType,
@@ -124,6 +126,7 @@ router.get('/ready', requirePermission('dispatch'), asyncHandler(async (req, res
             po.\`poNumber\`     AS po_number,
             po.\`deliveryDate\` AS po_deliveryDate,
             c.\`name\`          AS customer_name,
+            c.\`customerCode\`  AS customer_code,
             (SELECT COALESCE(SUM(pp.\`pcs\`),0) FROM \`Production\` pp WHERE pp.\`poOrderItemId\` = it.\`id\`) AS produced,
             (SELECT COALESCE(SUM(dd.\`pcs\`),0) FROM \`Dispatch\`   dd WHERE dd.\`poOrderItemId\` = it.\`id\`) AS dispatched
        FROM \`PoOrderItem\` it
@@ -145,6 +148,7 @@ router.get('/ready', requirePermission('dispatch'), asyncHandler(async (req, res
       id: it.id,
       poNumber: it.po_number,
       customerName: it.customer_name,
+      customerCode: it.customer_code,
       deliveryDate: it.po_deliveryDate,
       coreType: it.coreType, grade: it.grade, material: it.material, measure: it.measure,
       weightPerPc: it.weightPerPc,

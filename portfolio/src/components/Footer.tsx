@@ -118,9 +118,15 @@ const Footer = () => {
               </h4>
               <ul className="space-y-2 md:space-y-3">
                 <li>
-                  <Link href="/products/crgo-mother-coils" className="text-gray-300 hover:text-pulse-400 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base">
+                  <Link href="/products/crgo-toroidal-core" className="text-gray-300 hover:text-pulse-400 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base">
                     <ArrowRight className="w-3 h-3 md:w-4 md:h-4 transform group-hover:translate-x-1 transition-transform duration-200" />
-                    <span>CRGO Mother Coils</span>
+                    <span>CRGO Toroidal Cores</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/products/cut-cores" className="text-gray-300 hover:text-pulse-400 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base">
+                    <ArrowRight className="w-3 h-3 md:w-4 md:h-4 transform group-hover:translate-x-1 transition-transform duration-200" />
+                    <span>Cut Cores</span>
                   </Link>
                 </li>
                 <li>
@@ -130,15 +136,21 @@ const Footer = () => {
                   </Link>
                 </li>
                 <li>
-                  <Link href="/products/crgo-lamination" className="text-gray-300 hover:text-pulse-400 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base">
+                  <Link href="/products/crgo-lamination-core" className="text-gray-300 hover:text-pulse-400 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base">
                     <ArrowRight className="w-3 h-3 md:w-4 md:h-4 transform group-hover:translate-x-1 transition-transform duration-200" />
                     <span>CRGO Laminations</span>
                   </Link>
                 </li>
                 <li>
-                  <Link href="/products/crgo-core-assembly" className="text-gray-300 hover:text-pulse-400 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base">
+                  <Link href="/products/nanocrystalline-toroidal-core" className="text-gray-300 hover:text-pulse-400 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base">
                     <ArrowRight className="w-3 h-3 md:w-4 md:h-4 transform group-hover:translate-x-1 transition-transform duration-200" />
-                    <span>Core Assemblies</span>
+                    <span>Nanocrystalline Cores</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/products" className="text-gray-300 hover:text-pulse-400 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base font-semibold">
+                    <ArrowRight className="w-3 h-3 md:w-4 md:h-4 transform group-hover:translate-x-1 transition-transform duration-200" />
+                    <span>View all 12 products →</span>
                   </Link>
                 </li>
               </ul>

@@ -58,12 +58,56 @@ const loadOne = async (id, companyId) => {
   return { ...po, items, supplier };
 };
 
+/* GET /item-suggestions
+   Distinct (description, hsnCode, unit) tuples used previously by this
+   company — feeds the typeahead on the New / Edit Supplier PO pages so
+   users can re-pick already-entered items without retyping the HSN. */
+router.get('/item-suggestions', requirePermission('add_supplier_po'), asyncHandler(async (req, res) => {
+  const { search } = z.object({
+    search: z.string().trim().max(120).optional(),
+  }).parse(req.query);
+
+  let where = 'so.`companyId` = ?';
+  const params = [req.tenant.companyId];
+  if (search) {
+    where += ' AND (soi.`description` LIKE ? OR soi.`hsnCode` LIKE ?)';
+    const like = `%${search}%`;
+    params.push(like, like);
+  }
+
+  const rows = await q(
+    `SELECT soi.\`description\` AS description,
+            soi.\`hsnCode\`     AS hsnCode,
+            soi.\`unit\`        AS unit,
+            COUNT(*)            AS uses,
+            MAX(so.\`createdAt\`) AS lastUsedAt
+       FROM \`SupplierOrderItem\` soi
+       INNER JOIN \`SupplierOrder\` so ON so.\`id\` = soi.\`supplierOrderId\`
+      WHERE ${where}
+      GROUP BY soi.\`description\`, soi.\`hsnCode\`, soi.\`unit\`
+      ORDER BY uses DESC, lastUsedAt DESC
+      LIMIT 200`,
+    params
+  );
+
+  res.json({
+    items: rows.map((r) => ({
+      description: r.description,
+      hsnCode:     r.hsnCode,
+      unit:        r.unit,
+      uses:        Number(r.uses),
+    })),
+  });
+}));
+
 /* POST / */
 router.post('/', requirePermission('add_supplier_po'), asyncHandler(async (req, res) => {
   const data = createSchema.parse(req.body);
 
   const supplier = await qOne(
-    'SELECT * FROM `Supplier` WHERE `id` = ? AND `companyId` = ?',
+    `SELECT s.* FROM \`Supplier\` s
+       INNER JOIN \`SupplierMembership\` sm ON sm.\`supplierId\` = s.\`id\`
+      WHERE s.\`id\` = ? AND sm.\`companyId\` = ? LIMIT 1`,
     [data.supplierId, req.tenant.companyId]
   );
   if (!supplier) throw new AppError('Supplier not found', 400, 'BAD_SUPPLIER');
@@ -159,7 +203,9 @@ router.put('/:id', requirePermission('add_supplier_po'), asyncHandler(async (req
   if (!existing) throw new AppError('Supplier order not found', 404, 'NOT_FOUND');
 
   const supplier = await qOne(
-    'SELECT * FROM `Supplier` WHERE `id` = ? AND `companyId` = ?',
+    `SELECT s.* FROM \`Supplier\` s
+       INNER JOIN \`SupplierMembership\` sm ON sm.\`supplierId\` = s.\`id\`
+      WHERE s.\`id\` = ? AND sm.\`companyId\` = ? LIMIT 1`,
     [data.supplierId, req.tenant.companyId]
   );
   if (!supplier) throw new AppError('Supplier not found', 400, 'BAD_SUPPLIER');

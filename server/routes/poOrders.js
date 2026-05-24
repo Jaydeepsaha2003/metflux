@@ -210,6 +210,7 @@ const flattenItem = (it) => {
     poNumber: it.poNumber,
     customerId: it.customerId,
     customerName: it.customerName,
+    customerCode: it.customerCode,
     orderDate: it.orderDate,
     deliveryDate: it.deliveryDate,
     coreType: it.coreType,
@@ -251,6 +252,7 @@ const itemRowSql = `
          po.\`deliveryDate\` AS deliveryDate,
          po.\`customerId\`   AS customerId,
          c.\`name\`          AS customerName,
+         c.\`customerCode\`  AS customerCode,
          (SELECT COALESCE(SUM(p.\`pcs\`),0) FROM \`Production\` p WHERE p.\`poOrderItemId\` = it.\`id\`) AS pcsProduced,
          (SELECT COALESCE(SUM(d.\`pcs\`),0) FROM \`Dispatch\`   d WHERE d.\`poOrderItemId\` = it.\`id\`) AS pcsDispatched
     FROM \`PoOrderItem\` it
@@ -443,6 +445,7 @@ router.get('/summary', requirePermission('po_summary'), asyncHandler(async (req,
     orderDate:     it.orderDate,
     deliveryDate:  it.deliveryDate,
     customerName:  it.customerName,
+    customerCode:  it.customerCode,
     coreType:      it.coreType,
     grade:         it.grade,
     material:      it.material,

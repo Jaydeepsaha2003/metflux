@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, Plus, Loader2, Pencil, Trash2, RotateCcw } from 'lucide-react';
+import { Search, Plus, Loader2, Pencil, Trash2, RotateCcw, Download } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
 import { Pagination } from '@/components/Pagination';
+import { downloadXlsx, todayStamp } from '@/lib/excel';
 
 type ReturnStatus = 'PENDING' | 'RECEIVED' | 'IN_REWORK' | 'REDISPATCHED' | 'CLOSED' | 'CANCELLED';
 
@@ -80,6 +81,33 @@ export const ReturnsListPage = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['returns'] }),
   });
 
+  /* Export every matching return to Excel — not just the current page. */
+  const [exporting, setExporting] = useState(false);
+  const onExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const all = await api<{ items: ReturnRow[]; total: number }>(
+        `/returns?status=${status}&page=1&pageSize=10000${search ? `&search=${encodeURIComponent(search)}` : ''}`,
+      );
+      const rows = all.items.map((r) => ({
+        'Return #':       r.returnNumber,
+        'Return Date':    fmt(r.returnDate),
+        'Customer':       r.customerName ?? '',
+        'Reference Type': REF_LABEL[r.referenceType],
+        'Reference #':    r.referenceValue,
+        'Items':          r.itemCount,
+        'Total Pcs':      r.totalPcs,
+        'Status':         STATUS_LABEL[r.status],
+        'Reason':         r.reason ?? '',
+        'Logged On':      fmt(r.createdAt),
+      }));
+      downloadXlsx(`returns-${status === 'ALL' ? 'all' : status.toLowerCase()}-${todayStamp()}`, 'Returns', rows);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleDelete = async (row: ReturnRow) => {
     const ok = await confirm({
       title: 'Delete return?',
@@ -96,9 +124,21 @@ export const ReturnsListPage = () => {
         <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
           <RotateCcw className="h-5 w-5 text-brand-600" /> Returns
         </h1>
-        <Link to="/returns/new" className="btn-primary w-full sm:w-auto justify-center">
-          <Plus className="h-4 w-4" /> New Return
-        </Link>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={onExport}
+            disabled={exporting || isLoading || !data?.items.length}
+            className="btn-ghost text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+            title="Download all matching rows as Excel"
+          >
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            <span className="hidden sm:inline">Excel</span>
+          </button>
+          <Link to="/returns/new" className="btn-primary w-full sm:w-auto justify-center">
+            <Plus className="h-4 w-4" /> New Return
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}

@@ -6,7 +6,6 @@ import { useRouter } from "next/router";
 import { cn } from "@/lib/utils";
 import { Menu, X, ChevronDown } from "lucide-react";
 import globalProductsData from '../../global_products.json';
-import transformerProductsData from '../../transformer_products.json';
 
 interface NavItem {
   label: string;
@@ -33,11 +32,9 @@ const Navbar: React.FC<NavbarProps> = ({ navData, siteInfo }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isCRGODropdownOpen, setIsCRGODropdownOpen] = useState(false);
-  const [isTransformerDropdownOpen, setIsTransformerDropdownOpen] = useState(false);
-  
-  // Timeout refs for managing dropdown close delays
+
+  // Timeout ref for managing dropdown close delay
   const crgoTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const transformerTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -49,24 +46,16 @@ const Navbar: React.FC<NavbarProps> = ({ navData, siteInfo }) => {
       if (!target.closest('.crgo-dropdown-container')) {
         setIsCRGODropdownOpen(false);
       }
-      if (!target.closest('.transformer-dropdown-container')) {
-        setIsTransformerDropdownOpen(false);
-      }
     };
-    
+
     window.addEventListener("scroll", handleScroll, { passive: true });
     document.addEventListener('click', handleClickOutside);
-    
+
     return () => {
       window.removeEventListener("scroll", handleScroll);
       document.removeEventListener('click', handleClickOutside);
-      
-      // Clean up any pending timeouts
       if (crgoTimeoutRef.current) {
         clearTimeout(crgoTimeoutRef.current);
-      }
-      if (transformerTimeoutRef.current) {
-        clearTimeout(transformerTimeoutRef.current);
       }
     };
   }, []);
@@ -95,35 +84,17 @@ const Navbar: React.FC<NavbarProps> = ({ navData, siteInfo }) => {
 
   const toggleCRGODropdown = () => {
     setIsCRGODropdownOpen(!isCRGODropdownOpen);
-    // Only close other dropdown if we're opening this one
-    if (!isCRGODropdownOpen) {
-      setIsTransformerDropdownOpen(false);
-    }
-  };
-
-  const toggleTransformerDropdown = () => {
-    setIsTransformerDropdownOpen(!isTransformerDropdownOpen);
-    // Only close other dropdown if we're opening this one
-    if (!isTransformerDropdownOpen) {
-      setIsCRGODropdownOpen(false);
-    }
   };
 
   const closeCRGODropdown = () => {
     setIsCRGODropdownOpen(false);
   };
 
-  const closeTransformerDropdown = () => {
-    setIsTransformerDropdownOpen(false);
-  };
-
   const closeAllDropdowns = () => {
     setIsCRGODropdownOpen(false);
-    setIsTransformerDropdownOpen(false);
   };
 
   const handleCRGOMouseEnter = () => {
-    // Clear any existing timeout
     if (crgoTimeoutRef.current) {
       clearTimeout(crgoTimeoutRef.current);
       crgoTimeoutRef.current = null;
@@ -132,25 +103,8 @@ const Navbar: React.FC<NavbarProps> = ({ navData, siteInfo }) => {
   };
 
   const handleCRGOMouseLeave = () => {
-    // Set a timeout to close the dropdown
     crgoTimeoutRef.current = setTimeout(() => {
       setIsCRGODropdownOpen(false);
-    }, 300);
-  };
-
-  const handleTransformerMouseEnter = () => {
-    // Clear any existing timeout
-    if (transformerTimeoutRef.current) {
-      clearTimeout(transformerTimeoutRef.current);
-      transformerTimeoutRef.current = null;
-    }
-    setIsTransformerDropdownOpen(true);
-  };
-
-  const handleTransformerMouseLeave = () => {
-    // Set a timeout to close the dropdown
-    transformerTimeoutRef.current = setTimeout(() => {
-      setIsTransformerDropdownOpen(false);
     }, 300);
   };
 
@@ -304,68 +258,6 @@ const Navbar: React.FC<NavbarProps> = ({ navData, siteInfo }) => {
               </div>
             )}
           </div>
-          
-          {/* Transformer Products Dropdown */}
-          <div 
-            className="relative transformer-dropdown-container"
-            onMouseEnter={handleTransformerMouseEnter}
-            onMouseLeave={handleTransformerMouseLeave}
-          >
-            <button 
-              className={cn(
-                "flex items-center space-x-1 bg-transparent border-none cursor-pointer transition-colors duration-300 text-base font-medium px-2 py-2 whitespace-nowrap",
-                "text-gray-700 hover:text-pulse-600 focus:outline-none"
-              )}
-              onClick={toggleTransformerDropdown}
-            >
-              <span>Transformers</span>
-              <ChevronDown className={cn(
-                "w-4 h-4 transition-transform duration-200",
-                isTransformerDropdownOpen ? "rotate-180" : ""
-              )} />
-            </button>
-            
-            {/* Transformer Products Dropdown */}
-            {isTransformerDropdownOpen && (
-              <div 
-                className="absolute top-full right-0 mt-2 bg-white rounded-xl shadow-2xl border border-gray-200/50 overflow-hidden w-[420px] max-w-[95vw] z-50 backdrop-blur-sm"
-              >
-                <div className="p-5">
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4 px-1">Transformer Products</h3>
-                  <div className="space-y-1 max-h-[60vh] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
-                    {transformerProductsData.products.map((product) => (
-                      <Link
-                        key={product.id}
-                        href={`/products/${product.slug}`}
-                        className="block p-3 rounded-lg hover:bg-gray-50/80 transition-all duration-150 group border border-transparent hover:border-gray-100"
-                        onClick={closeTransformerDropdown}
-                      >
-                        <div className="flex items-start space-x-3">
-                          <div className="flex-shrink-0">
-                            <Image
-                              src={product.image}
-                              alt={product.title}
-                              width={44}
-                              height={44}
-                              className="w-11 h-11 rounded-lg object-cover bg-gray-100 ring-1 ring-gray-200/50"
-                            />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-gray-900 group-hover:text-pulse-600 transition-colors mb-1 leading-snug truncate">
-                              {product.title}
-                            </p>
-                            <p className="text-xs text-gray-500 leading-relaxed line-clamp-1">
-                              {product.subtitle}
-                            </p>
-                          </div>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
         </nav>
 
         {/* Mobile menu button - increased touch target */}
@@ -454,41 +346,6 @@ const Navbar: React.FC<NavbarProps> = ({ navData, siteInfo }) => {
             CRGO Products
           </button>
           
-          <button 
-            className="text-xl font-medium py-3 px-6 w-full text-center rounded-lg hover:bg-gray-100 transition-colors duration-150 text-gray-900"
-            onClick={() => {
-              closeMobileMenu();
-              // Scroll to transformers section on homepage
-              if (router.pathname === '/') {
-                setTimeout(() => {
-                  const transformersSection = document.getElementById('transformers');
-                  if (transformersSection) {
-                    const offset = 80; // Account for fixed header
-                    window.scrollTo({
-                      top: transformersSection.offsetTop - offset,
-                      behavior: 'smooth'
-                    });
-                  }
-                }, 100);
-              } else {
-                // Navigate to homepage and then scroll
-                router.push('/').then(() => {
-                  setTimeout(() => {
-                    const transformersSection = document.getElementById('transformers');
-                    if (transformersSection) {
-                      const offset = 80;
-                      window.scrollTo({
-                        top: transformersSection.offsetTop - offset,
-                        behavior: 'smooth'
-                      });
-                    }
-                  }, 200);
-                });
-              }
-            }}
-          >
-            Transformers
-          </button>
             </nav>
           </div>
         </div>

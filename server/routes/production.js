@@ -44,7 +44,8 @@ const PROD_ROW_SQL = `
          it.\`totalAmount\` AS item_totalAmount,
          po.\`poNumber\`    AS po_number,
          po.\`orderDate\`   AS po_orderDate,
-         c.\`name\`         AS customer_name
+         c.\`name\`         AS customer_name,
+         c.\`customerCode\` AS customer_code
     FROM \`Production\` p
     INNER JOIN \`PoOrderItem\` it ON it.\`id\` = p.\`poOrderItemId\`
     INNER JOIN \`PoOrder\`    po ON po.\`id\` = it.\`poOrderId\`
@@ -60,6 +61,7 @@ const flatten = (r) => {
     poOrderItemId: r.poOrderItemId,
     poNumber: r.po_number,
     customerName: r.customer_name,
+    customerCode: r.customer_code,
     orderDate: r.po_orderDate,
     coreType: r.item_coreType,
     grade: r.item_grade,
@@ -101,6 +103,7 @@ router.get('/pending', requirePermission('rec_production'), asyncHandler(async (
             po.\`orderDate\`    AS po_orderDate,
             po.\`deliveryDate\` AS po_deliveryDate,
             c.\`name\`          AS customer_name,
+            c.\`customerCode\`  AS customer_code,
             (SELECT COALESCE(SUM(pp.\`pcs\`),0) FROM \`Production\` pp WHERE pp.\`poOrderItemId\` = it.\`id\`) AS produced
        FROM \`PoOrderItem\` it
        INNER JOIN \`PoOrder\`  po ON po.\`id\` = it.\`poOrderId\`
@@ -120,6 +123,7 @@ router.get('/pending', requirePermission('rec_production'), asyncHandler(async (
       id: it.id,
       poNumber: it.po_number,
       customerName: it.customer_name,
+      customerCode: it.customer_code,
       orderDate: it.po_orderDate,
       deliveryDate: it.po_deliveryDate,
       coreType: it.coreType, grade: it.grade, material: it.material, measure: it.measure,

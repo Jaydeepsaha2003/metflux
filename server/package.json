@@ -9,7 +9,11 @@
     "start": "node server.js",
     "build:copy-client": "node scripts/copy-client.js",
     "build:copy-portfolio": "node scripts/copy-portfolio.js",
-    "seed": "node scripts/seed.js"
+    "seed": "node scripts/seed.js",
+    "migrate:customer-code":       "node scripts/migrate-customer-code.js",
+    "migrate:supplier-membership": "node scripts/migrate-supplier-membership.js",
+    "migrate:hide-customer-names": "node scripts/migrate-hide-customer-names.js",
+    "migrate":                     "npm run migrate:supplier-membership && npm run migrate:customer-code && npm run migrate:hide-customer-names"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
