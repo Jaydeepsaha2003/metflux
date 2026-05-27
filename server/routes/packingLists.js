@@ -263,11 +263,13 @@ router.put('/:plId', requirePermission('dispatch'), asyncHandler(async (req, res
   if (!pl) throw new AppError('Packing list not found', 404, 'NOT_FOUND');
 
   await update('PackingList', pl.id, {
-    plNumber:   data.plNumber,
-    plDate:     data.plDate,
-    testedBy:   data.testedBy ?? null,
-    approvedBy: data.approvedBy ?? null,
-    remarks:    data.remarks ?? null,
+    plNumber:    data.plNumber,
+    plDate:      data.plDate,
+    invoiceNo:   data.invoiceNo   ?? null,
+    invoiceDate: data.invoiceDate ?? null,
+    testedBy:    data.testedBy    ?? null,
+    approvedBy:  data.approvedBy  ?? null,
+    remarks:     data.remarks     ?? null,
   });
 
   const fresh = await qOne('SELECT * FROM `PackingList` WHERE `id` = ?', [pl.id]);

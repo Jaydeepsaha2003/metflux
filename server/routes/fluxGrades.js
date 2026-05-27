@@ -177,19 +177,22 @@ router.post('/seed', requirePermission('add_material'), asyncHandler(async (req,
     { grade: 'ZDMH',     flux: 1.7, ateCm: 0.30  },
   ];
 
+  let inserted = 0;
+  let skipped  = 0;
   await txn(async (tx) => {
     for (const d of DEFAULTS) {
       const existing = await tx.qOne(
         'SELECT `id` FROM `FluxGrade` WHERE `companyId` = ? AND `grade` = ? AND `flux` = ? AND `coreType` = ?',
         [req.tenant.companyId, d.grade, d.flux, 'TOROIDAL']
       );
-      if (existing) continue;
+      if (existing) { skipped += 1; continue; }
       await tx.insert('FluxGrade', {
         ...d, coreType: 'TOROIDAL', companyId: req.tenant.companyId, notes: null,
       });
+      inserted += 1;
     }
   });
-  res.json({ inserted: DEFAULTS.length, note: 'Toroidal defaults — clone to Rectangular if needed' });
+  res.json({ inserted, skipped, note: 'Toroidal defaults — clone to Rectangular if needed' });
 }));
 
 export default router;

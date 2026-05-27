@@ -209,7 +209,12 @@ router.post('/refresh', authLimiter, asyncHandler(async (req, res) => {
     [new Date(), payload.jti]
   );
 
-  const tokens = await issueTokens({ user, companyId: active?.companyId, role: active?.role });
+  const tokens = await issueTokens({
+    user,
+    companyId: active?.companyId,
+    role: active?.role,
+    permissions: active?.permissions,
+  });
   setRefreshCookie(res, tokens.refreshToken);
   res.json({ ...buildAuthPayload(user, memberships, active), accessToken: tokens.accessToken });
 }));
