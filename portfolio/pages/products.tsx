@@ -8,7 +8,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import globalProductsData from '../global_products.json';
 import transformerProductsData from '../transformer_products.json';
-import siteData from "@/data/siteData.json";
+import siteData from "@/data/siteData";
 
 // react-simple-maps is browser-only (fetches topojson at render time), so we
 // keep it out of the static export by deferring it to client mount.

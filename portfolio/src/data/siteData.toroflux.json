@@ -1,0 +1,368 @@
+{
+  "site": {
+    "name": "Toroflux",
+    "logo": "/logo-toroflux/LOGO-01.png",
+    "wordmark": "/logo-toroflux/wordmark2-01.png",
+    "description": "Leading manufacturer of CRGO electrical steel, transformer cores, and specialized electrical components for industrial applications worldwide.",
+    "keywords": "CRGO electrical steel, transformer cores, electrical components, industrial manufacturing, power transformers, electrical engineering",
+    "url": "https://torofluxindustries.com",
+    "email": "contact@torofluxindustries.com",
+    "phone": "+91-xxx-xxx-xxxx"
+  },
+  "navigation": {
+    "main": [
+      { "label": "Home", "href": "/", "type": "internal" },
+      { "label": "Products", "href": "/products", "type": "internal" },
+      { "label": "About", "href": "/about", "type": "internal" },
+      { "label": "Contact", "href": "/contact", "type": "internal" }
+    ]
+  },
+  "hero": {
+    "badge": {
+      "icon": "⚡",
+      "text": "Electrical Excellence"
+    },
+    "title": "Powering Progress",
+    "subtitle": "Precision Electrical Solutions",
+    "description": "Leading manufacturer of CRGO electrical steel, transformer cores, and specialized electrical components for industrial applications worldwide.",
+    "backgroundImage": "/images/CRGOCoreAssembly.png",
+    "cta": {
+      "primary": {
+        "text": "Explore Products",
+        "href": "#products"
+      },
+      "secondary": {
+        "text": "Get in Touch",
+        "href": "#connect"
+      }
+    }
+  },
+  "sections": {
+    "humanoid": {
+      "badge": {
+        "icon": "🚀",
+        "text": "Innovation"
+      },
+      "title": "Beyond Human Capability",
+      "subtitle": "Advanced Humanoid Technology",
+      "description": "Atlas combines cutting-edge AI with precision engineering to deliver unmatched performance in complex environments.",
+      "image": "/images/amorphousCore.png",
+      "features": [
+        {
+          "title": "AI-Powered Intelligence",
+          "description": "Advanced machine learning algorithms enable autonomous decision-making and adaptive behavior."
+        },
+        {
+          "title": "Precision Engineering",
+          "description": "Military-grade components ensure reliability and performance in demanding conditions."
+        },
+        {
+          "title": "Human-Like Mobility",
+          "description": "Dynamic balance and fluid movement capabilities for natural interaction with environments."
+        }
+      ]
+    },
+    "specs": {
+      "badge": {
+        "icon": "⚡",
+        "text": "Specifications"
+      },
+      "title": "Technical Excellence",
+      "description": "Built with precision engineering and cutting-edge technology for optimal performance.",
+      "stats": [
+        {
+          "value": "1.8m",
+          "label": "Height",
+          "description": "Optimal human-scale proportions"
+        },
+        {
+          "value": "75kg",
+          "label": "Weight",
+          "description": "Balanced for mobility and stability"
+        },
+        {
+          "value": "28",
+          "label": "Joints",
+          "description": "Full-body articulation system"
+        },
+        {
+          "value": "8h",
+          "label": "Battery",
+          "description": "Continuous operation time"
+        }
+      ]
+    },
+    "features": {
+      "badge": {
+        "icon": "✨",
+        "text": "Features"
+      },
+      "title": "Advanced Capabilities",
+      "description": "Discover the powerful features that make Atlas the most advanced humanoid robot.",
+      "items": [
+        {
+          "icon": "🧠",
+          "title": "Artificial Intelligence",
+          "description": "Advanced neural networks for learning and adaptation in real-time environments."
+        },
+        {
+          "icon": "👁️",
+          "title": "Computer Vision",
+          "description": "High-resolution cameras and LIDAR for precise environmental awareness."
+        },
+        {
+          "icon": "🤝",
+          "title": "Human Interaction",
+          "description": "Natural language processing and gesture recognition for seamless collaboration."
+        },
+        {
+          "icon": "🔧",
+          "title": "Tool Integration",
+          "description": "Modular end-effectors for specialized tasks across different industries."
+        },
+        {
+          "icon": "🛡️",
+          "title": "Safety Systems",
+          "description": "Multiple redundant safety mechanisms ensure secure operation around humans."
+        },
+        {
+          "icon": "📡",
+          "title": "Connectivity",
+          "description": "5G and WiFi connectivity for remote monitoring and fleet coordination."
+        }
+      ]
+    },
+    "testimonials": {
+      "badge": {
+        "icon": "💬",
+        "text": "Testimonials"
+      },
+      "title": "What Our Clients Say",
+      "description": "Trusted by industry leaders worldwide for transforming their operations.",
+      "items": [
+        {
+          "quote": "Atlas has revolutionized our manufacturing process. The precision and reliability are unmatched.",
+          "author": "Sarah Chen",
+          "role": "Production Manager",
+          "company": "TechCorp Industries",
+          "avatar": "/testimonial-1.png"
+        },
+        {
+          "quote": "Integration was seamless and the results exceeded our expectations. Productivity increased by 40%.",
+          "author": "Michael Rodriguez",
+          "role": "Operations Director",
+          "company": "Future Manufacturing",
+          "avatar": "/testimonial-2.png"
+        },
+        {
+          "quote": "The safety features and human-robot collaboration capabilities are truly impressive.",
+          "author": "Dr. Emily Watson",
+          "role": "Research Lead",
+          "company": "Innovation Labs",
+          "avatar": "/testimonial-3.png"
+        }
+      ]
+    },
+    "gallery": {
+      "badge": {
+        "icon": "📸",
+        "text": "Gallery"
+      },
+      "title": "Atlas in Action",
+      "description": "See how Atlas is transforming industries and creating new possibilities across different sectors.",
+      "images": [
+        {
+          "src": "/images/crgocorelamination.png",
+          "title": "CRGO Core Lamination",
+          "description": "Precision laminated cores for optimal electrical performance"
+        },
+        {
+          "src": "/images/crgomothercoils.png",
+          "title": "CRGO Mother Coils",
+          "description": "High-quality mother coils for transformer manufacturing"
+        },
+        {
+          "src": "/images/woundCore.png",
+          "title": "Wound Core Technology",
+          "description": "Advanced wound core solutions for efficient power transmission"
+        },
+        {
+          "src": "/images/crgoslitcoils.png",
+          "title": "CRGO Slit Coils",
+          "description": "Precision slit coils for specialized electrical applications"
+        },
+        {
+          "src": "/images/empowement.png",
+          "title": "Empowerment Through Innovation",
+          "description": "Empowering industries with cutting-edge electrical solutions"
+        },
+        {
+          "src": "/images/environment.png",
+          "title": "Environmental Responsibility",
+          "description": "Sustainable manufacturing practices for a better future"
+        },
+        {
+          "src": "/images/sustainabiliy.png",
+          "title": "Sustainability Focus",
+          "description": "Committed to sustainable electrical steel production"
+        }
+      ]
+    },
+    "reach": {
+      "badge": {
+        "icon": "🌍",
+        "text": "Global Reach"
+      },
+      "title": "Worldwide Impact",
+      "description": "Trusted by organizations across the globe to transform their operations.",
+      "stats": [
+        {
+          "value": "50+",
+          "label": "Countries"
+        },
+        {
+          "value": "500+",
+          "label": "Robots Deployed"
+        },
+        {
+          "value": "100+",
+          "label": "Industry Partners"
+        },
+        {
+          "value": "99.9%",
+          "label": "Uptime"
+        }
+      ]
+    },
+    "faq": {
+      "badge": {
+        "icon": "❓",
+        "text": "FAQ"
+      },
+      "title": "Frequently Asked Questions",
+      "description": "Find answers to common questions about Atlas and our robotics solutions.",
+      "items": [
+        {
+          "question": "What industries can Atlas be deployed in?",
+          "answer": "Atlas is designed for versatile deployment across manufacturing, healthcare, research, logistics, and many other industries requiring precision automation and human-robot collaboration."
+        },
+        {
+          "question": "How long does implementation typically take?",
+          "answer": "Implementation timelines vary based on complexity, but most deployments are completed within 4-8 weeks, including training, integration, and optimization phases."
+        },
+        {
+          "question": "What safety certifications does Atlas have?",
+          "answer": "Atlas meets or exceeds international safety standards including ISO 10218, ISO/TS 15066, and various industry-specific certifications for collaborative robotics."
+        },
+        {
+          "question": "Can Atlas work alongside human workers?",
+          "answer": "Yes, Atlas is specifically designed for safe human-robot collaboration with advanced sensors, AI-powered situational awareness, and multiple safety systems."
+        },
+        {
+          "question": "What kind of support and maintenance is available?",
+          "answer": "We provide comprehensive support including 24/7 remote monitoring, preventive maintenance, software updates, and on-site technical assistance when needed."
+        }
+      ]
+    }
+  },
+  "company": {
+    "about": {
+      "story": {
+        "title": "Innovation Meets Purpose",
+        "content": "Founded with a vision to bridge the gap between human potential and robotic capabilities, we have been at the forefront of humanoid robotics for over a decade. Our journey began with a simple belief: technology should enhance human capabilities, not replace them."
+      },
+      "mission": {
+        "title": "Our Mission",
+        "content": "To develop intelligent humanoid robots that augment human capabilities, enhance productivity, and create safer working environments across industries."
+      },
+      "vision": {
+        "title": "Our Vision",
+        "content": "To be the global leader in humanoid robotics, creating a future where humans and robots collaborate seamlessly to solve the world's greatest challenges."
+      },
+      "stats": [
+        { "value": "10+", "label": "Years Experience" },
+        { "value": "500+", "label": "Robots Deployed" },
+        { "value": "50+", "label": "Industry Partners" },
+        { "value": "25+", "label": "Countries Served" }
+      ]
+    }
+  },
+  "contact": {
+    "info": {
+      "title": "Let's Start a Conversation",
+      "description": "Whether you're interested in our electrical products, need technical support, or want to explore partnership opportunities, we're here to help.",
+      "details": [
+        {
+          "type": "email",
+          "icon": "✉️",
+          "title": "Email Us",
+          "content": ["contact@torofluxindustries.com", "sales@torofluxindustries.com"]
+        },
+        {
+          "type": "phone",
+          "icon": "📞",
+          "title": "Call Us",
+          "content": ["+91-xxx-xxx-xxxx", "+91-xxx-xxx-xxxx"]
+        },
+        {
+          "type": "address",
+          "icon": "📍",
+          "title": "Visit Us",
+          "content": ["Industrial Area", "Hyderabad, Telangana", "India"]
+        }
+      ]
+    },
+    "form": {
+      "title": "Send us a Message",
+      "fields": [
+        { "name": "name", "label": "Name", "type": "text", "required": true, "placeholder": "Your full name" },
+        { "name": "email", "label": "Email", "type": "email", "required": true, "placeholder": "your.email@example.com" },
+        { "name": "subject", "label": "Subject", "type": "text", "required": true, "placeholder": "What's this about?" },
+        { "name": "message", "label": "Message", "type": "textarea", "required": true, "placeholder": "Tell us more about your inquiry..." }
+      ],
+      "submitText": "Send Message"
+    }
+  },
+  "footer": {
+    "description": "Leading manufacturer of CRGO electrical steel, transformer cores, and specialized electrical components for industrial applications worldwide.",
+    "sections": [
+      {
+        "title": "Product",
+        "links": [
+          { "label": "Atlas Robot", "href": "/products" },
+          { "label": "Specifications", "href": "/products" },
+          { "label": "Applications", "href": "/products" },
+          { "label": "Support", "href": "/contact" }
+        ]
+      },
+      {
+        "title": "Company",
+        "links": [
+          { "label": "About Us", "href": "/about" },
+          { "label": "Careers", "href": "/contact" },
+          { "label": "Partners", "href": "/contact" },
+          { "label": "News", "href": "/gallery" }
+        ]
+      },
+      {
+        "title": "Resources",
+        "links": [
+          { "label": "Documentation", "href": "/contact" },
+          { "label": "Gallery", "href": "/gallery" },
+          { "label": "Case Studies", "href": "/gallery" },
+          { "label": "White Papers", "href": "/contact" }
+        ]
+      },
+      {
+        "title": "Connect",
+        "links": [
+          { "label": "Contact", "href": "/contact" },
+          { "label": "Support", "href": "/contact" },
+          { "label": "LinkedIn", "href": "#", "external": true },
+          { "label": "Twitter", "href": "#", "external": true }
+        ]
+      }
+    ],
+    "copyright": "© 2025 Toroflux Electrical Industries. All rights reserved."
+  }
+}

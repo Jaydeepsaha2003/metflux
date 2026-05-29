@@ -1,3 +1,4 @@
+import siteData from "@/data/siteData";
 import React, { useEffect, useState } from "react";
 
 interface LoadingScreenProps {
@@ -102,8 +103,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="bg-white rounded-full p-4 shadow-lg">
               <img
-                src="/logo/LOGO-01.png"
-                alt="Metflux Logo"
+                src={siteData.site.logo} alt={`${siteData.site.name} Logo`}
                 className="h-12 w-12 object-contain"
               />
             </div>
@@ -112,7 +112,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({
 
         {/* Company Info */}
         <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold text-white">Metflux</h1>
+          <h1 className="text-3xl font-bold text-white">{siteData.site.name}</h1>
           <p className="text-pulse-400 text-lg font-medium">Electrical Excellence</p>
           <p className="text-gray-400 text-sm max-w-md">
             Powering progress with precision electrical solutions

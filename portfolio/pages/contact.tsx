@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowRight, Home, ChevronRight, Mail, Phone, MapPin, Send, MessageCircle } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import siteData from "@/data/siteData.json";
+import siteData from "@/data/siteData";
 
 const Contact = () => {
   const sectionRef = useRef<HTMLDivElement>(null);

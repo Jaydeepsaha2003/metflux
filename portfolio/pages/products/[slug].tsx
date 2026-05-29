@@ -14,7 +14,7 @@ import MultiTextImageSection from "@/components/MultiTextImageSection";
 import ConnectSection from "@/components/ConnectSection";
 import globalProductsData from '../../global_products.json';
 import transformerProductsData from '../../transformer_products.json';
-import siteData from "@/data/siteData.json";
+import siteData from "@/data/siteData";
 
 interface Product {
   slug: string;

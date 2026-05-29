@@ -8,7 +8,7 @@ import SpecsSection from "@/components/SpecsSection";
 import FeaturesSection from "@/components/reusable/FeaturesSection";
 import TestimonialsSection from "@/components/reusable/TestimonialsSection";
 import StatsSection from "@/components/reusable/StatsSection";
-import siteData from "@/data/siteData.json";
+import siteData from "@/data/siteData";
 
 const About = () => {
   const sectionRef = useRef<HTMLDivElement>(null);

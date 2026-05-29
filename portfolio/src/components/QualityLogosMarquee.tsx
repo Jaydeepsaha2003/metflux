@@ -1,3 +1,4 @@
+import siteData from "@/data/siteData";
 import React from 'react';
 import Badge from "./reusable/Badge";
 
@@ -115,7 +116,7 @@ const QualityLogosMarquee = () => {
           </h2>
           
           <p className="text-lg md:text-xl text-gray-600 max-w-4xl mx-auto leading-relaxed">
-            At Metflux, we uphold the highest standards of quality and reliability. Our Quality Approval Logos represent our commitment to excellence, ensuring that every product meets rigorous industry benchmarks. Trust our certified quality for unmatched performance and durability.
+            At {siteData.site.name}, we uphold the highest standards of quality and reliability. Our Quality Approval Logos represent our commitment to excellence, ensuring that every product meets rigorous industry benchmarks. Trust our certified quality for unmatched performance and durability.
           </p>
         </div>
       

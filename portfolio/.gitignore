@@ -1,9 +1,12 @@
 node_modules/
 .next/
-# NOTE: out/ is intentionally NOT ignored. We pre-build the portfolio locally
-# (via `npm run build:portfolio`) and commit `portfolio/out/` so Hostinger
-# doesn't need to run `next build` — it ships into server/public/portfolio/
-# via copy-portfolio.js as part of the root `npm run build`.
+# Intermediate next-build dir — build-brand.mjs renames it to out-<brand>/.
+out/
+# NOTE: out-metflux/ and out-toroflux/ are intentionally NOT ignored — pre-built
+# locally via `npm run build:portfolio` and committed so Hostinger doesn't have
+# to run `next build` on every deploy. server/scripts/copy-portfolio.js ships
+# them into server/public/portfolio-<brand>/ at deploy time; hostRouter.js
+# picks the right brand per request hostname.
 # .next/ stays ignored — it's only used during `next build` itself.
 .env*
 !.env.example

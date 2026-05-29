@@ -7,10 +7,15 @@ dist/
 build/
 server/public/admin/
 server/public/portfolio/
+server/public/portfolio-metflux/
+server/public/portfolio-toroflux/
 client/dist/
 portfolio/.next/
-# NOTE: portfolio/out/ is intentionally NOT ignored — committed so Hostinger
-# can skip `next build` (see portfolio/.gitignore for context).
+# Intermediate next-build output — build-brand.mjs renames out/ to out-<brand>/.
+portfolio/out/
+# NOTE: portfolio/out-metflux/ and portfolio/out-toroflux/ are intentionally
+# NOT ignored — committed so Hostinger can skip `next build` for both brands.
+# See portfolio/.gitignore for context.
 
 # Env / secrets
 .env

@@ -55,6 +55,11 @@
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Brand accent (hex) — defaults to Metflux green. When NEXT_PUBLIC_BRAND
+       is set, pages/_app.tsx injects an inline <style> in <Head> overriding
+       --primary / --ring / --brand-accent-hex for the active brand. */
+    --brand-accent-hex: #2cab4a;
   }
 
   .dark {
@@ -275,7 +280,7 @@
 }
 
 .typewriter-text span {
-  color: #2cab4a;
+  color: var(--brand-accent-hex);
   font-weight: bold;
 }
 

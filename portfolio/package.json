@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/build-brand.mjs metflux && node scripts/build-brand.mjs toroflux",
+    "build:metflux": "node scripts/build-brand.mjs metflux",
+    "build:toroflux": "node scripts/build-brand.mjs toroflux",
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit"

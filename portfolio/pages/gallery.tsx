@@ -4,7 +4,7 @@ import { Home, ChevronRight, Camera, Image as ImageIcon } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import Gallery from "@/components/Gallery";
-import siteData from "@/data/siteData.json";
+import siteData from "@/data/siteData";
 
 const GalleryPage = () => {
   const sectionRef = useRef<HTMLDivElement>(null);

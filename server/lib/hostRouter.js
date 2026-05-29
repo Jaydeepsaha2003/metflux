@@ -1,49 +1,55 @@
-// Static asset routing:
-//   /s/admin/*  → React admin SPA (with SPA fallback)
-//   /*          → static portfolio
+// Static asset routing for the marketing portfolio + admin SPA.
+//
+//   /s/admin/*       → React admin SPA (with SPA fallback)
+//   torofluxindustries.com/* → server/public/portfolio-toroflux/
+//   metfluxelectrical.com/*  → server/public/portfolio-metflux/
+//   anything else            → server/public/portfolio-metflux/  (default)
+//
+// Brand resolution is by request Host header (case-insensitive substring).
+// Adding a new brand: drop its build into server/public/portfolio-<brand>/
+// and add a match in HOSTNAME_TO_BRAND below.
 import path from 'node:path';
 import express from 'express';
 import fs from 'node:fs';
 
 const ADMIN_MOUNT = '/s/admin';
 
+// Substring (case-insensitive) → brand folder under server/public/.
+// First match wins; default is 'metflux'.
+const HOSTNAME_TO_BRAND = [
+  { match: 'toroflux',   brand: 'toroflux' },
+  { match: 'metflux',    brand: 'metflux'  },
+];
+const DEFAULT_BRAND = 'metflux';
+
+const brandForHost = (hostHeader) => {
+  const h = String(hostHeader ?? '').toLowerCase();
+  for (const rule of HOSTNAME_TO_BRAND) {
+    if (h.includes(rule.match)) return rule.brand;
+  }
+  return DEFAULT_BRAND;
+};
+
 export const hostRouter = ({ adminDir, publicDir }) => {
-  const portfolioDir = path.join(publicDir, 'portfolio');
   const hasAdmin = fs.existsSync(path.join(adminDir, 'index.html'));
-  const hasPortfolio = fs.existsSync(path.join(portfolioDir, 'index.html'));
 
-  // Hashed bundles (anything under /_next/static/, /assets/, /static/) get
-  // a year of cache — their filenames change on every build. HTML files get
-  // no-cache so the browser always asks the server, which is essential when
-  // the build is replaced (otherwise stale HTML keeps pointing at JS chunks
-  // that no longer exist).
-  const staticOpts = {
-    index: false,
-    // `extensions: ['html']` makes /products resolve to products.html, so
-    // the Next.js static export's per-page HTML files are reachable by
-    // their clean URLs (without this, /products fell through to the home
-    // page, and a hard refresh on a product page would show the home).
-    extensions: ['html'],
-    setHeaders: (res, filePath) => {
-      const isHashed = /[\\/](_next[\\/]static|assets|static)[\\/]/i.test(filePath);
-      if (filePath.endsWith('.html')) {
-        // HTML: never cache, so a redeploy is picked up immediately.
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      } else if (isHashed) {
-        // Hashed Next bundles: filename changes on every build, cache forever.
-        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-      } else {
-        // Unhashed assets (images under /images/, /maps/, /logo/, etc.):
-        // 60-second cache + must-revalidate. Browsers may keep the bytes but
-        // they'll always check the server for freshness — so when you swap
-        // a PNG with the same filename, a plain reload picks it up.
-        res.setHeader('Cache-Control', 'public, max-age=60, must-revalidate');
-      }
-    },
-  };
+  // Build a static-server pair per brand directory we find on disk. Brands
+  // without a built portfolio are simply not registered — requests for that
+  // host fall through to the default brand below.
+  const brandStatics = {};
+  for (const brand of ['metflux', 'toroflux']) {
+    const dir = path.join(publicDir, `portfolio-${brand}`);
+    if (fs.existsSync(path.join(dir, 'index.html'))) {
+      brandStatics[brand] = { dir, static: express.static(dir, staticOpts()) };
+    }
+  }
+  // Back-compat fallback: server/public/portfolio/ (the pre-multi-brand path).
+  const legacyDir = path.join(publicDir, 'portfolio');
+  if (fs.existsSync(path.join(legacyDir, 'index.html')) && !brandStatics.metflux) {
+    brandStatics.metflux = { dir: legacyDir, static: express.static(legacyDir, staticOpts()) };
+  }
 
-  const adminStatic     = hasAdmin     ? express.static(adminDir,     staticOpts) : null;
-  const portfolioStatic = hasPortfolio ? express.static(portfolioDir, staticOpts) : null;
+  const adminStatic = hasAdmin ? express.static(adminDir, staticOpts()) : null;
 
   /** Try to serve a static file for a request — including trailing-slash
       variants like /products/ → products.html. Returns true if served. */
@@ -65,6 +71,7 @@ export const hostRouter = ({ adminDir, publicDir }) => {
 
   const router = express.Router();
 
+  // Admin SPA — same for every brand. Mounted at /s/admin.
   router.use(ADMIN_MOUNT, async (req, res, next) => {
     if (!adminStatic) {
       return res
@@ -76,19 +83,44 @@ export const hostRouter = ({ adminDir, publicDir }) => {
     res.sendFile(path.join(adminDir, 'index.html'));
   });
 
+  // Brand-aware portfolio — pick the static folder per request hostname.
   router.use(async (req, res, next) => {
-    if (!portfolioStatic) {
+    const brand = brandForHost(req.headers.host);
+    // Resolve to the requested brand, or fall back to the default brand if
+    // its build is missing on disk. If neither is built, show a placeholder.
+    const target = brandStatics[brand] ?? brandStatics[DEFAULT_BRAND];
+    if (!target) {
       return res
         .status(200)
         .type('html')
         .send(
-          `<h1>Metflux</h1><p>Portfolio coming soon. Admin: <a href="${ADMIN_MOUNT}">${ADMIN_MOUNT}</a></p>`
+          `<h1>Site</h1><p>Portfolio not built. Admin: <a href="${ADMIN_MOUNT}">${ADMIN_MOUNT}</a></p>`
         );
     }
-    if (await tryStatic(portfolioStatic, portfolioDir, req, res)) return;
+    if (await tryStatic(target.static, target.dir, req, res)) return;
     if (req.method !== 'GET') return next();
-    res.sendFile(path.join(portfolioDir, 'index.html'));
+    res.sendFile(path.join(target.dir, 'index.html'));
   });
 
   return router;
 };
+
+// Static-file middleware options. Identical for every brand + the admin SPA:
+// hashed bundles cache forever, HTML never caches (so redeploys land
+// immediately), other assets re-validate every 60 s.
+function staticOpts() {
+  return {
+    index: false,
+    extensions: ['html'],
+    setHeaders: (res, filePath) => {
+      const isHashed = /[\\/](_next[\\/]static|assets|static)[\\/]/i.test(filePath);
+      if (filePath.endsWith('.html')) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      } else if (isHashed) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      } else {
+        res.setHeader('Cache-Control', 'public, max-age=60, must-revalidate');
+      }
+    },
+  };
+}

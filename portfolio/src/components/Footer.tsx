@@ -1,4 +1,5 @@
 
+import siteData from "@/data/siteData";
 import React from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -28,14 +29,14 @@ const Footer = () => {
             <div className="md:col-span-2 lg:col-span-1 space-y-4 md:space-y-6">
               <div className="flex items-center space-x-3 md:space-x-4">
                 <Image
-                  src="/logo/LOGO-01.png" 
-                  alt="Metflux logo" 
+                  src={siteData.site.logo}
+                  alt={`${siteData.site.name} logo`} 
                   width={48}
                   height={48}
                   className="h-12 w-12 md:h-16 md:w-16 object-contain"
                 />
                 <div>
-                  <h3 className="text-xl md:text-2xl font-bold text-white">Metflux</h3>
+                  <h3 className="text-xl md:text-2xl font-bold text-white">{siteData.site.name}</h3>
                   <p className="text-pulse-400 text-xs md:text-sm font-medium">Electrical Excellence</p>
                 </div>
               </div>
@@ -200,7 +201,7 @@ const Footer = () => {
             <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
               <div className="text-center md:text-left">
                 <p className="text-gray-400 text-xs md:text-sm">
-                  &copy; 2025 Metflux Electrical Industries. All rights reserved.
+                  {siteData.footer.copyright}
                 </p>
               </div>
               

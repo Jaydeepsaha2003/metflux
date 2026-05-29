@@ -1,6 +1,13 @@
 
 import type { Config } from "tailwindcss";
 import tailwindcssAnimate from "tailwindcss-animate";
+import { BRAND, BRAND_PALETTES } from "./src/brand/brand.config";
+
+// `pulse` was a hardcoded green palette baked into utility classes (bg-pulse-500,
+// text-pulse-600, etc.). It now resolves from the active brand's palette at
+// build time, so the same utility classes produce the right brand colour for
+// every component. See src/brand/brand.config.ts for the palette definitions.
+const brandPalette = BRAND_PALETTES[BRAND];
 
 export default {
 	darkMode: ["class"],
@@ -64,30 +71,23 @@ export default {
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
 				},
-				// Custom colors for Atlas Robot - Green theme
-				pulse: {
-					"50": "#f0fdf4",
-					"100": "#dcfce7",
-					"200": "#bbf7d0",
-					"300": "#86efac",
-					"400": "#4ade80",
-					"500": "#2cab4a", // Primary green
-					"600": "#16a34a",
-					"700": "#15803d",
-					"800": "#166534",
-					"900": "#14532d",
-					"950": "#052e16",
-				},
+				// Brand palette — sourced from src/brand/brand.config.ts so the
+				// same utility classes (bg-pulse-500 etc.) work for any brand.
+				// `pulse` name kept for backwards compatibility with existing
+				// components; "pulse" is just the brand's primary palette.
+				pulse: brandPalette,
 				dark: {
 					"900": "#121212", // Almost black
 					"800": "#1e1e1e",
 					"700": "#2d2d2d",
 					"600": "#3d3d3d",
 				},
-				// Custom gray colors
+				// Custom palette — gray is brand-agnostic; `green` is kept as a
+				// legacy alias for `brand.500` for any old components still using
+				// `text-custom-green` / `bg-custom-green`.
 				custom: {
-					"gray": "#393a39", // Custom gray
-					"green": "#2cab4a", // Custom green
+					"gray":  "#393a39",
+					"green": brandPalette[500],
 				},
 			},
 			borderRadius: {
@@ -148,9 +148,10 @@ export default {
 				'marquee': 'marquee 12s linear infinite'
 			},
 			backgroundImage: {
-				'hero-gradient': 'linear-gradient(90deg, hsla(147, 62%, 44%, 1) 0%, hsla(147, 62%, 54%, 1) 100%)',
-				'hero-gradient-2': 'linear-gradient(90deg, hsla(147, 62%, 64%, 1) 0%, hsla(147, 62%, 44%, 1) 100%)',
-				'pulse-gradient': 'linear-gradient(180deg, rgba(44,171,74,0.8) 0%, rgba(44,171,74,0) 100%)',
+				// Brand gradients — sample two adjacent shades from the active palette.
+				'hero-gradient':   `linear-gradient(90deg, ${brandPalette[500]} 0%, ${brandPalette[400]} 100%)`,
+				'hero-gradient-2': `linear-gradient(90deg, ${brandPalette[400]} 0%, ${brandPalette[500]} 100%)`,
+				'pulse-gradient':  `linear-gradient(180deg, ${brandPalette[500]}cc 0%, ${brandPalette[500]}00 100%)`,
 			},
 			fontFamily: {
 				'sans': ['Inter', 'sans-serif'],

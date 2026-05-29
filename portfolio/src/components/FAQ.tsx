@@ -1,3 +1,4 @@
+import siteData from "@/data/siteData";
 import React, { useEffect, useRef } from "react";
 import {
   Accordion,
@@ -41,8 +42,8 @@ const FAQ = () => {
   const faqData = [
     {
       id: "item-1",
-      question: "What types of transformers does Metflux manufacture?",
-      answer: "Metflux specializes in a wide range of transformers including distribution transformers, power transformers, dry-type transformers, oil-filled transformers, and custom-designed specialty transformers. We serve voltage ratings from 1kV to 220kV for various industrial and commercial applications."
+      question: `What types of transformers does ${siteData.site.name} manufacture?`,
+      answer: `${siteData.site.name} specializes in a wide range of transformers including distribution transformers, power transformers, dry-type transformers, oil-filled transformers, and custom-designed specialty transformers. We serve voltage ratings from 1kV to 220kV for various industrial and commercial applications.`
     },
     {
       id: "item-2",
@@ -52,12 +53,12 @@ const FAQ = () => {
     {
       id: "item-3",
       question: "What quality standards do your transformers meet?",
-      answer: "All Metflux transformers are manufactured to meet or exceed IEC, IEEE, and ANSI standards. We maintain ISO 9001:2015 quality certification and conduct rigorous testing including impulse, partial discharge, and temperature rise tests to ensure superior performance and longevity."
+      answer: `All ${siteData.site.name} transformers are manufactured to meet or exceed IEC, IEEE, and ANSI standards. We maintain ISO 9001:2015 quality certification and conduct rigorous testing including impulse, partial discharge, and temperature rise tests to ensure superior performance and longevity.`
     },
     {
       id: "item-4",
       question: "Do you provide installation and commissioning services?",
-      answer: "Yes, Metflux offers complete turnkey solutions including professional installation, commissioning, and startup services. Our certified technicians ensure proper installation according to safety standards and provide comprehensive testing and documentation upon completion."
+      answer: `Yes, ${siteData.site.name} offers complete turnkey solutions including professional installation, commissioning, and startup services. Our certified technicians ensure proper installation according to safety standards and provide comprehensive testing and documentation upon completion.`
     },
     {
       id: "item-5",
@@ -67,7 +68,7 @@ const FAQ = () => {
     {
       id: "item-6",
       question: "Do you offer maintenance and repair services?",
-      answer: "Absolutely. Metflux provides comprehensive maintenance programs including routine inspections, oil analysis, condition monitoring, and emergency repair services. Our maintenance contracts help extend transformer life and prevent costly unplanned outages through proactive care."
+      answer: `Absolutely. ${siteData.site.name} provides comprehensive maintenance programs including routine inspections, oil analysis, condition monitoring, and emergency repair services. Our maintenance contracts help extend transformer life and prevent costly unplanned outages through proactive care.`
     },
     {
       id: "item-7",
@@ -77,7 +78,7 @@ const FAQ = () => {
     {
       id: "item-8",
       question: "What warranty coverage do you provide on transformers?",
-      answer: "Metflux provides comprehensive warranty coverage including 2 years on materials and workmanship for standard transformers, with extended warranty options available. We stand behind our products with responsive technical support and rapid replacement services when needed."
+      answer: `${siteData.site.name} provides comprehensive warranty coverage including 2 years on materials and workmanship for standard transformers, with extended warranty options available. We stand behind our products with responsive technical support and rapid replacement services when needed.`
     }
   ];
 

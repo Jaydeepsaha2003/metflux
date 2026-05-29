@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import dynamic from 'next/dynamic';
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import siteData from "@/data/siteData.json";
+import siteData from "@/data/siteData";
 
 // Dynamic imports to prevent SSR issues
 const Hero = dynamic(() => import("@/components/Hero"), { ssr: false });
