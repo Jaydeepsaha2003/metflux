@@ -65,7 +65,18 @@ router.post('/pdf', upload.single('file'), asyncHandler(async (req, res) => {
   sweepStale();
 
   const relUrl = `/uploads/shared/${req.file.filename}`;
-  const absUrl = `${env.PUBLIC_BASE_URL.replace(/\/$/, '')}${relUrl}`;
+  // Derive the absolute URL from the request itself so multi-brand deploys
+  // (metfluxelectrical.com vs torofluxindustries.com) each get a share link
+  // matching the brand the user was browsing. Express `trust proxy` is set
+  // in server.js, so req.protocol and req.get('host') already honour the
+  // X-Forwarded-* headers Hostinger's LiteSpeed sets. Falls back to
+  // PUBLIC_BASE_URL if the host header is somehow missing (shouldn't happen
+  // for real browser traffic).
+  const host = req.get('host');
+  const baseUrl = host
+    ? `${req.protocol}://${host}`
+    : env.PUBLIC_BASE_URL.replace(/\/$/, '');
+  const absUrl = `${baseUrl}${relUrl}`;
   const expiresAt = new Date(Date.now() + SEVEN_DAYS_MS).toISOString();
 
   res.status(201).json({ url: absUrl, path: relUrl, expiresAt });
