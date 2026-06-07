@@ -66,7 +66,7 @@ const buildIemaxRows = (
     return (seed >>> 0) / 0x100000000;   // uniform in [0, 1)
   };
   return Array.from({ length: n }, () => {
-    const pct = -0.01 + rng() * 0.025;  // uniform in [−1%, +1.5%]
+    const pct = -0.025 * rng();          // uniform in [−2.5%, 0%] — never exceeds spec
     return +(base * (1 + pct)).toFixed(1);
   });
 };
@@ -499,8 +499,6 @@ export const TestingReportPage = () => {
                                   <span className="font-semibold uppercase tracking-wide">Max Allowable Current (Spec):</span>{' '}
                                   <strong className="text-slate-900 tabular-nums">{d.testCurrent.toFixed(1)} mA</strong>
                                 </span>
-                                <span className="text-slate-400">·</span>
-                                <span className="text-slate-500">Tolerance: −1.0% to +1.5% of spec</span>
                               </div>
                             )}
                             <table className="w-full text-sm border-collapse table-fixed">
