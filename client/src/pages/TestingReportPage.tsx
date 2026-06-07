@@ -8,7 +8,7 @@
 // Packing List, but the title bar reads "TESTING REPORT". Per group the user
 // can edit WO No, WO Date, Invoice No, Invoice Date, Tested By, Approved By,
 // and per-row Sample Pcs.
-import { useRef, useState, useEffect, useMemo, Fragment } from 'react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueries } from '@tanstack/react-query';
 import { ArrowLeft, Download, ClipboardCheck, Loader2, MessageCircle } from 'lucide-react';
@@ -452,51 +452,53 @@ export const TestingReportPage = () => {
                 {/* Expanded sample-piece table — one row per sampled piece */}
                 <table className="w-full text-sm border-collapse table-fixed">
                   <colgroup>
-                    <col style={{ width: '54px' }} />   {/* SR */}
-                    <col />                              {/* MAX ALLOWABLE CURRENT — auto width */}
+                    <col style={{ width: '36px' }} />    {/* SN */}
+                    <col />                               {/* MEASURE — auto */}
+                    <col style={{ width: '11%' }} />     {/* GRADE */}
+                    <col style={{ width: '8%' }} />      {/* TURNS */}
+                    <col style={{ width: '13%' }} />     {/* APPLIED VOLTAGE */}
+                    <col style={{ width: '7%' }} />      {/* PCS */}
+                    <col style={{ width: '18%' }} />     {/* MAX ALLOWABLE CURRENT */}
                   </colgroup>
                   <thead>
                     <tr className="bg-slate-100 border-b-2 border-slate-400 text-center font-bold uppercase tracking-wide text-[10px]">
-                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">SR</th>
+                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">SN</th>
+                      <th className="px-1 py-1.5 border-r border-slate-300 text-left align-middle">Measure</th>
+                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Grade</th>
+                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Turns</th>
+                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Applied Voltage (V)</th>
+                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Pcs</th>
                       <th className="px-1 py-1.5 align-middle">Max Allowable Current (mA)</th>
                     </tr>
                   </thead>
                   <tbody>
                     {g.rows.map((d) => {
-                      const n       = calcSamplePcs(d.pcs);
-                      const mAVals  = sampleRowsByDispatch[d.id] ?? [];
-                      return (
-                        <Fragment key={d.id}>
-                          {/* Item sub-header — specs that are common to all sample rows */}
-                          <tr className="no-break bg-slate-50 border-y border-slate-300">
-                            <td colSpan={2} className="px-4 py-1.5">
-                              <div className="flex flex-wrap gap-x-5 gap-y-0.5 text-[10px] text-slate-700">
-                                <span><span className="font-semibold">Measure:</span> {d.measure}</span>
-                                <span><span className="font-semibold">Grade:</span> {d.grade}</span>
-                                {d.turns != null && (
-                                  <span><span className="font-semibold">Turns:</span> {d.turns}</span>
-                                )}
-                                {d.testVoltage != null && (
-                                  <span><span className="font-semibold">Applied Voltage:</span> {d.testVoltage.toFixed(3)} V</span>
-                                )}
-                                <span><span className="font-semibold">Pcs:</span> {d.pcs}</span>
-                                <span><span className="font-semibold">Sample Pcs:</span> {n} ({samplingRate(d.pcs)})</span>
-                              </div>
-                            </td>
-                          </tr>
-                          {/* N sample rows — each with a unique Max Allowable Current */}
-                          {mAVals.map((mA, i) => (
-                            <tr key={i} className="h-7 border-b border-slate-100">
-                              <td className="px-1 border-r border-slate-200 text-center text-[11px] font-medium text-slate-500 align-middle">
-                                {i + 1}
-                              </td>
-                              <td className="px-1 text-center text-[11px] tabular-nums align-middle">
-                                {mA != null ? mA.toFixed(2) : '—'}
-                              </td>
-                            </tr>
-                          ))}
-                        </Fragment>
-                      );
+                      const mAVals = sampleRowsByDispatch[d.id] ?? [];
+                      return mAVals.map((mA, i) => (
+                        <tr key={`${d.id}-${i}`} className="h-8 border-b border-slate-100">
+                          <td className="px-1 border-r border-slate-200 text-center text-[11px] font-medium text-slate-500 align-middle">
+                            {i + 1}
+                          </td>
+                          <td className="px-1 border-r border-slate-200 text-left text-[11px] align-middle truncate">
+                            {d.measure}
+                          </td>
+                          <td className="px-1 border-r border-slate-200 text-center text-[11px] align-middle">
+                            {d.grade}
+                          </td>
+                          <td className="px-1 border-r border-slate-200 text-center text-[11px] tabular-nums align-middle">
+                            {d.turns != null ? d.turns : '—'}
+                          </td>
+                          <td className="px-1 border-r border-slate-200 text-center text-[11px] tabular-nums align-middle">
+                            {d.testVoltage != null ? d.testVoltage.toFixed(3) : '—'}
+                          </td>
+                          <td className="px-1 border-r border-slate-200 text-center text-[11px] font-semibold tabular-nums align-middle">
+                            {d.pcs}
+                          </td>
+                          <td className="px-1 text-center text-[11px] tabular-nums align-middle">
+                            {mA != null ? mA.toFixed(2) : '—'}
+                          </td>
+                        </tr>
+                      ));
                     })}
                   </tbody>
                 </table>
