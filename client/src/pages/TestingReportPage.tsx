@@ -66,8 +66,8 @@ const buildIemaxRows = (
     return (seed >>> 0) / 0x100000000;   // uniform in [0, 1)
   };
   return Array.from({ length: n }, () => {
-    const pct = -0.025 * rng();          // uniform in [−2.5%, 0%] — never exceeds spec
-    return +(base * (1 + pct)).toFixed(1);
+    const pct = -0.03 * rng();            // uniform in [−3%, 0%] — never exceeds spec
+    return +(base * (1 + pct)).toFixed(2);
   });
 };
 type PlDispatchDetail = DispatchDetail;
@@ -534,7 +534,7 @@ export const TestingReportPage = () => {
                                       1
                                     </td>
                                     <td className="px-1 text-center text-[11px] tabular-nums align-middle">
-                                      {mA != null ? mA.toFixed(1) : '—'}
+                                      {mA != null ? mA.toFixed(2) : '—'}
                                     </td>
                                   </tr>
                                 ))}
