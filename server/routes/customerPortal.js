@@ -68,8 +68,9 @@ router.get('/:token', asyncHandler(async (req, res) => {
   const { search } = z.object({ search: z.string().trim().max(120).optional() })
     .parse(req.query);
 
-  let where = 'po.`customerId` = ? AND po.`status` != ?';
-  const params = [customer.id, 'CANCELLED'];
+  // PoOrder has no status column — filter is on PoOrderItem.status instead.
+  let where = 'po.`customerId` = ? AND it.`status` = ?';
+  const params = [customer.id, 'ACTIVE'];
   if (search) {
     where += ' AND po.`poNumber` LIKE ?';
     params.push(`%${search}%`);
