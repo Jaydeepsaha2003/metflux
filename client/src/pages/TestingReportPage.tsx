@@ -476,7 +476,7 @@ export const TestingReportPage = () => {
                         <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Turns</th>
                         <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Applied Voltage (V)</th>
                         <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Pcs</th>
-                        <th className="px-1 py-1.5 align-middle">Max Allowed Current (mA)</th>
+                        <th className="px-1 py-1.5 align-middle">Actual LeMax (mA)</th>
                       </tr>
                     </thead>
                   );
