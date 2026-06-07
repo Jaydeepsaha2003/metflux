@@ -5,6 +5,7 @@ import { q, qOne, insert, update, del } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requireRole } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
+import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
 
@@ -117,6 +118,7 @@ router.post('/', requireRole('STAFF'), asyncHandler(async (req, res) => {
   const created = await insert('Customer', {
     ...data,
     customerCode,
+    shareToken: uuidv4(),
     companyId: req.tenant.companyId,
     createdById: req.auth.userId,
   });

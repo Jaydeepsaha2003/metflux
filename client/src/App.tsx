@@ -36,12 +36,14 @@ import { ReturnsListPage } from '@/pages/ReturnsListPage';
 import { ReturnFormPage } from '@/pages/ReturnFormPage';
 import { TestingReportPage } from '@/pages/TestingReportPage';
 import { DataCleanupPage } from '@/pages/DataCleanupPage';
+import { CustomerPortalPage } from '@/pages/CustomerPortalPage';
 import { AppLayout } from '@/components/AppLayout';
 import { RequireAuth } from '@/components/RequireAuth';
 
 export const App = () => (
   <Routes>
-    <Route path="/login" element={<AuthPage />} />
+    <Route path="/login"            element={<AuthPage />} />
+    <Route path="/portal/:token"   element={<CustomerPortalPage />} />
     <Route
       element={
         <RequireAuth>

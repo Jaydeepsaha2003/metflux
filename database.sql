@@ -101,6 +101,7 @@ CREATE TABLE `Customer` (
     `gstRate` DOUBLE NOT NULL DEFAULT 0,
     `state` VARCHAR(80) NULL,
     `notes` TEXT NULL,
+    `shareToken` VARCHAR(64) NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
     `companyId` VARCHAR(191) NOT NULL,

@@ -10,11 +10,12 @@
     "build:copy-client": "node scripts/copy-client.js",
     "build:copy-portfolio": "node scripts/copy-portfolio.js",
     "seed": "node scripts/seed.js",
-    "migrate:customer-code":       "node scripts/migrate-customer-code.js",
+    "migrate:customer-code": "node scripts/migrate-customer-code.js",
     "migrate:supplier-membership": "node scripts/migrate-supplier-membership.js",
     "migrate:hide-customer-names": "node scripts/migrate-hide-customer-names.js",
-    "migrate:logo-column":         "node scripts/migrate-logo-column.js",
-    "migrate":                     "npm run migrate:supplier-membership && npm run migrate:customer-code && npm run migrate:hide-customer-names && npm run migrate:logo-column"
+    "migrate:logo-column": "node scripts/migrate-logo-column.js",
+    "migrate:share-token": "node scripts/migrate-customer-share-token.js",
+    "migrate": "npm run migrate:supplier-membership && npm run migrate:customer-code && npm run migrate:hide-customer-names && npm run migrate:logo-column && npm run migrate:share-token"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -32,6 +33,7 @@
     "pdfkit": "^0.15.2",
     "uuid": "^11.0.3",
     "web-push": "^3.6.7",
+    "xlsx": "^0.18.5",
     "zod": "^3.23.8"
   },
   "devDependencies": {

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Search, MessageCircle, Plus, Pencil, Building2 } from 'lucide-react';
+import { Search, MessageCircle, Plus, Pencil, Building2, Link2, Check } from 'lucide-react';
+import { useState } from 'react';
 import { api } from '@/lib/api';
 import { Pagination } from '@/components/Pagination';
 import { useHideCustomerNames } from '@/store/auth';
@@ -16,6 +17,7 @@ type Customer = {
   state: string | null;
   gstNumber: string | null;
   gstRate: number;
+  shareToken: string | null;
   createdAt: string;
 };
 
@@ -26,6 +28,15 @@ const PAGE_SIZE = 20;
 export const CustomersPage = () => {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const copyPortalLink = async (c: Customer) => {
+    if (!c.shareToken) return;
+    const url = `${window.location.origin}/s/admin/portal/${c.shareToken}`;
+    await navigator.clipboard.writeText(url);
+    setCopiedId(c.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
   const hideNames = useHideCustomerNames();
   // Reset to page 1 when the user changes the search — otherwise an empty page
   // would show because the result count usually shrinks.
@@ -77,7 +88,7 @@ export const CustomersPage = () => {
               <th className="px-4 py-3">GSTIN</th>
               <th className="px-4 py-3 text-right">GST %</th>
               <th className="px-4 py-3">State</th>
-              <th className="px-4 py-3 w-32 text-right">Actions</th>
+              <th className="px-4 py-3 w-40 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -115,6 +126,22 @@ export const CustomersPage = () => {
                         title="Share via WhatsApp"
                       >
                         <MessageCircle className="h-4 w-4" />
+                      </button>
+                    )}
+                    {c.shareToken && (
+                      <button
+                        onClick={() => copyPortalLink(c)}
+                        className={`btn-ghost transition-colors ${
+                          copiedId === c.id
+                            ? 'text-emerald-600 hover:bg-emerald-50'
+                            : 'text-slate-500 hover:bg-slate-100'
+                        }`}
+                        title={copiedId === c.id ? 'Link copied!' : 'Copy customer portal link'}
+                      >
+                        {copiedId === c.id
+                          ? <Check className="h-4 w-4" />
+                          : <Link2 className="h-4 w-4" />
+                        }
                       </button>
                     )}
                     <Link

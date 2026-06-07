@@ -22,6 +22,7 @@ import returnsRouter from './returns.js';
 import dashboardRouter from './dashboard.js';
 import adminRouter from './admin.js';
 import publicRouter from './public.js';
+import customerPortalRouter from './customerPortal.js';
 
 export const apiRouter = Router();
 
@@ -29,7 +30,8 @@ apiRouter.use(apiLimiter);
 
 // Public, unauthenticated endpoints — must come BEFORE any router that uses
 // requireAuth at the module level. Has its own per-IP rate limit inside.
-apiRouter.use('/public', publicRouter);
+apiRouter.use('/public',  publicRouter);
+apiRouter.use('/portal',  customerPortalRouter);
 
 apiRouter.use('/auth', authRouter);
 apiRouter.use('/users', usersRouter);
