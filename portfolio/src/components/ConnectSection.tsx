@@ -145,38 +145,58 @@ const ConnectSection = () => {
                 </p>
               </div>
 
-              {/* Factory Address */}
-              <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
-                <div className="flex items-start space-x-4">
-                  <div className="w-10 h-10 bg-pulse-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <MapPin className="w-5 h-5 text-white" />
+              {/* Factory Address — from siteData so it changes per brand */}
+              {(() => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const contactData = siteData as any;
+                const addr = contactData?.contact?.info?.details?.find((d: { type: string }) => d.type === 'address') as { content: string[] } | undefined;
+                if (!addr) return null;
+                return (
+                  <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
+                    <div className="flex items-start space-x-4">
+                      <div className="w-10 h-10 bg-pulse-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <MapPin className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="text-white font-semibold text-lg mb-2">Factory Address</h4>
+                        <p className="text-gray-300 text-sm leading-relaxed">
+                          {addr.content.map((line, i, arr) => (
+                            <React.Fragment key={i}>{line}{i < arr.length - 1 && <br />}</React.Fragment>
+                          ))}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-white font-semibold text-lg mb-2">Factory Address</h4>
-                    <p className="text-gray-300 text-sm leading-relaxed">
-                      Plot No. 290, Sector 57, Phase IV,<br />
-                      HSIIDC Kundli Industrial Area,<br />
-                      Sonepat, Haryana &mdash; 131028
-                    </p>
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
 
-              {/* Phone */}
-              <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
-                <div className="flex items-start space-x-4">
-                  <div className="w-10 h-10 bg-pulse-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Phone className="w-5 h-5 text-white" />
+              {/* Phone — from siteData so it changes per brand */}
+              {(() => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const contactData = siteData as any;
+                const ph = contactData?.contact?.info?.details?.find((d: { type: string }) => d.type === 'phone') as { content: string[] } | undefined;
+                if (!ph) return null;
+                return (
+                  <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
+                    <div className="flex items-start space-x-4">
+                      <div className="w-10 h-10 bg-pulse-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Phone className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <h4 className="text-white font-semibold text-lg mb-2">Call Us</h4>
+                        <p className="text-gray-300 text-sm leading-relaxed">
+                          {ph.content.map((num, i, arr) => (
+                            <React.Fragment key={i}>
+                              <a href={`tel:${num.replace(/[\s-]/g, '')}`} className="hover:text-pulse-400 transition-colors">{num}</a>
+                              {i < arr.length - 1 && <br />}
+                            </React.Fragment>
+                          ))}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-white font-semibold text-lg mb-2">Call Us</h4>
-                    <p className="text-gray-300 text-sm leading-relaxed">
-                      <a href="tel:+919971856222" className="hover:text-pulse-400 transition-colors">+91 9971856222</a><br />
-                      <a href="tel:+919667476222" className="hover:text-pulse-400 transition-colors">+91 9667476222</a>
-                    </p>
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Email + Web */}
               <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">

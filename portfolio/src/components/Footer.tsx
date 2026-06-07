@@ -174,8 +174,17 @@ const Footer = () => {
                   <div>
                     <p className="text-white font-medium text-sm md:text-base">Call Us</p>
                     <p className="text-gray-300 text-xs md:text-sm leading-relaxed">
-                      <a href="tel:+919971856222" className="hover:text-pulse-400 transition-colors">+91 9971856222</a><br />
-                      <a href="tel:+919667476222" className="hover:text-pulse-400 transition-colors">+91 9667476222</a>
+                      {(() => {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        const ph = (siteData as any)?.contact?.info?.details?.find((d: { type: string }) => d.type === 'phone') as { content: string[] } | undefined;
+                        const phones: string[] = ph?.content ?? (siteData.site.phone ? [siteData.site.phone] : []);
+                        return phones.map((num, i) => (
+                          <React.Fragment key={i}>
+                            <a href={`tel:${num.replace(/[\s-]/g, '')}`} className="hover:text-pulse-400 transition-colors">{num}</a>
+                            {i < phones.length - 1 && <br />}
+                          </React.Fragment>
+                        ));
+                      })()}
                     </p>
                   </div>
                 </div>
