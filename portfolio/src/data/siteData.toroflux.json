@@ -1,8 +1,8 @@
 {
   "site": {
     "name": "Toroflux",
-    "logo": "/logo/toroflux-logo.png",
-    "wordmark": "/logo/toroflux-wordmark.png",
+    "logo": "/logo-toroflux/toroflux-logo.png",
+    "wordmark": "/logo-toroflux/toroflux-wordmark.png",
     "description": "Leading manufacturer of CRGO electrical steel, transformer cores, and specialized electrical components for industrial applications worldwide.",
     "keywords": "CRGO electrical steel, transformer cores, electrical components, industrial manufacturing, power transformers, electrical engineering",
     "url": "https://torofluxindustries.com",
@@ -25,7 +25,7 @@
     "title": "Powering Progress",
     "subtitle": "Precision Electrical Solutions",
     "description": "Leading manufacturer of CRGO electrical steel, transformer cores, and specialized electrical components for industrial applications worldwide.",
-    "backgroundImage": "/images/CRGOCoreAssembly.png",
+    "backgroundImage": "/images-toroflux/CRGOCoreAssembly.png",
     "cta": {
       "primary": {
         "text": "Explore Products",
@@ -46,7 +46,7 @@
       "title": "Beyond Human Capability",
       "subtitle": "Advanced Humanoid Technology",
       "description": "Atlas combines cutting-edge AI with precision engineering to deliver unmatched performance in complex environments.",
-      "image": "/images/amorphousCore.png",
+      "image": "/images-toroflux/amorphousCore.png",
       "features": [
         {
           "title": "AI-Powered Intelligence",
@@ -172,37 +172,37 @@
       "description": "See how Atlas is transforming industries and creating new possibilities across different sectors.",
       "images": [
         {
-          "src": "/images/crgocorelamination.png",
+          "src": "/images-toroflux/crgocorelamination.png",
           "title": "CRGO Core Lamination",
           "description": "Precision laminated cores for optimal electrical performance"
         },
         {
-          "src": "/images/crgomothercoils.png",
+          "src": "/images-toroflux/crgomothercoils.png",
           "title": "CRGO Mother Coils",
           "description": "High-quality mother coils for transformer manufacturing"
         },
         {
-          "src": "/images/woundCore.png",
+          "src": "/images-toroflux/woundCore.png",
           "title": "Wound Core Technology",
           "description": "Advanced wound core solutions for efficient power transmission"
         },
         {
-          "src": "/images/crgoslitcoils.png",
+          "src": "/images-toroflux/crgoslitcoils.png",
           "title": "CRGO Slit Coils",
           "description": "Precision slit coils for specialized electrical applications"
         },
         {
-          "src": "/images/empowement.png",
+          "src": "/images-toroflux/empowement.png",
           "title": "Empowerment Through Innovation",
           "description": "Empowering industries with cutting-edge electrical solutions"
         },
         {
-          "src": "/images/environment.png",
+          "src": "/images-toroflux/environment.png",
           "title": "Environmental Responsibility",
           "description": "Sustainable manufacturing practices for a better future"
         },
         {
-          "src": "/images/sustainabiliy.png",
+          "src": "/images-toroflux/sustainabiliy.png",
           "title": "Sustainability Focus",
           "description": "Committed to sustainable electrical steel production"
         }
