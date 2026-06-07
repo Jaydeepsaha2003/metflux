@@ -30,17 +30,17 @@ const Footer = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 md:gap-12">
             {/* Company Info */}
             <div className="md:col-span-2 lg:col-span-1 space-y-4 md:space-y-6">
-              <div className="flex items-center space-x-3 md:space-x-4">
+              <div className="flex items-center space-x-3">
                 <Image
                   src={siteData.site.logo}
-                  alt={`${siteData.site.name} logo`} 
+                  alt={`${siteData.site.name} logo`}
                   width={48}
                   height={48}
-                  className="h-12 w-12 md:h-16 md:w-16 object-contain"
+                  className="h-10 w-10 md:h-12 md:w-12 object-contain shrink-0"
                 />
-                <div>
-                  <h3 className="text-xl md:text-2xl font-bold text-white">{siteData.site.name}</h3>
-                  <p className="text-pulse-400 text-xs md:text-sm font-medium">Electrical Excellence</p>
+                <div className="min-w-0">
+                  <h3 className="text-base md:text-lg font-bold text-white leading-tight">{siteData.site.name}</h3>
+                  <p className="text-pulse-400 text-xs font-medium mt-0.5">Electrical Excellence</p>
                 </div>
               </div>
               <p className="text-gray-300 leading-relaxed text-sm md:text-base">

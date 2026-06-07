@@ -128,8 +128,8 @@ const ReachSection: React.FC = () => {
 
                 <defs>
                   <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%"   stopColor={palette[600]} />
-                    <stop offset="50%"  stopColor={palette[500]} />
+                    <stop offset="0%"   stopColor={palette[500]} />
+                    <stop offset="50%"  stopColor={palette[600]} />
                     <stop offset="100%" stopColor={palette[700]} />
                   </linearGradient>
                 </defs>
@@ -138,10 +138,10 @@ const ReachSection: React.FC = () => {
               {/* Center content */}
               <div className="absolute inset-0 flex flex-col items-center justify-center select-none">
                 <div className="text-center">
-                  <h2 className="text-4xl font-bold bg-gradient-to-r from-pulse-300 to-pulse-400 bg-clip-text text-transparent mb-2 tracking-wider">
+                  <h2 className="text-4xl font-bold bg-gradient-to-r from-pulse-600 to-pulse-500 bg-clip-text text-transparent mb-2 tracking-wider">
                     SERVE & CONSERVE
                   </h2>
-                  <p className="text-xs text-gray-500 uppercase tracking-wide">
+                  <p className="text-xs text-gray-600 uppercase tracking-wide">
                     Sustainability Commitment
                   </p>
                 </div>
@@ -155,7 +155,7 @@ const ReachSection: React.FC = () => {
             {/* Header */}
             <div className="text-center mb-16">
               <h3 className="text-4xl md:text-5xl font-bold mb-6">
-                Responsible <span className="bg-gradient-to-r from-pulse-300 to-pulse-400 bg-clip-text text-transparent">Manufacturing</span>
+                Responsible <span className="bg-gradient-to-r from-pulse-600 to-pulse-500 bg-clip-text text-transparent">Manufacturing</span>
               </h3>
               <p className="text-xl text-gray-600 max-w-3xl mx-auto">
                 Our commitment to sustainability drives every aspect of our operations. From energy-efficient production processes to recyclable materials, we're building a greener future through responsible manufacturing practices and environmental stewardship.
@@ -186,7 +186,7 @@ const ReachSection: React.FC = () => {
                     </h4>
                     
                     <div className="mb-4">
-                      <div className="text-3xl font-bold bg-gradient-to-r from-pulse-300 to-pulse-400 bg-clip-text text-transparent mb-1">
+                      <div className="text-3xl font-bold bg-gradient-to-r from-pulse-600 to-pulse-500 bg-clip-text text-transparent mb-1">
                         {stat.value}
                       </div>
                       <div className="text-gray-500 text-sm font-medium uppercase tracking-wide">
