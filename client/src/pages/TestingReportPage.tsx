@@ -57,12 +57,12 @@ const buildIemaxRows = (
   n: number,
 ): (number | null)[] => {
   if (!dispatch.testCurrent || n <= 0) return Array(n).fill(null);
-  const base = +(dispatch.testCurrent * 0.97).toFixed(2);
+  const base = +(dispatch.testCurrent * 0.97).toFixed(3);
   const values: number[] = [];
   for (let i = 0; i < n; i++) {
     const halfIdx = Math.ceil(i / 2);
     const sign = i % 2 === 0 ? -1 : 1;
-    values.push(+(base + sign * halfIdx * 0.02).toFixed(2));
+    values.push(+(base + sign * halfIdx * 0.002).toFixed(3));
   }
   let seed = dispatch.id.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0);
   for (let i = values.length - 1; i > 0; i--) {
@@ -527,7 +527,7 @@ export const TestingReportPage = () => {
                                       {d.pcs}
                                     </td>
                                     <td className="px-1 text-center text-[11px] tabular-nums align-middle">
-                                      {mA != null ? mA.toFixed(2) : '—'}
+                                      {mA != null ? mA.toFixed(3) : '—'}
                                     </td>
                                   </tr>
                                 ))}
