@@ -13,7 +13,8 @@
     "migrate:customer-code":       "node scripts/migrate-customer-code.js",
     "migrate:supplier-membership": "node scripts/migrate-supplier-membership.js",
     "migrate:hide-customer-names": "node scripts/migrate-hide-customer-names.js",
-    "migrate":                     "npm run migrate:supplier-membership && npm run migrate:customer-code && npm run migrate:hide-customer-names"
+    "migrate:logo-column":         "node scripts/migrate-logo-column.js",
+    "migrate":                     "npm run migrate:supplier-membership && npm run migrate:customer-code && npm run migrate:hide-customer-names && npm run migrate:logo-column"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

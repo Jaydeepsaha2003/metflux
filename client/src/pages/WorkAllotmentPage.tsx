@@ -15,7 +15,7 @@ import { useConfirm } from '@/hooks/useConfirm';
 type PendingItem = {
   id: string;
   poNumber: string;
-  customerName: string;
+  customerCode: string;
   orderDate: string;
   coreType: 'TOROIDAL' | 'RECTANGULAR';
   grade: string;
@@ -149,7 +149,7 @@ export const WorkAllotmentPage = () => {
                         <input type="checkbox" checked={allChecked} onChange={toggleAll}
                           className="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
                       </th>
-                      <th className="px-4 py-3 text-left">Customer</th>
+                      <th className="px-4 py-3 text-left">Cust Code</th>
                       <th className="px-4 py-3 text-left">SO Date</th>
                       <th className="px-4 py-3 text-left">Measure</th>
                       <th className="px-4 py-3 text-left">Grade</th>
@@ -172,7 +172,7 @@ export const WorkAllotmentPage = () => {
                               onChange={() => toggleRow(it.id)} onClick={(e) => e.stopPropagation()}
                               className="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
                           </td>
-                          <td className="px-4 py-3 font-medium">{it.customerName}</td>
+                          <td className="px-4 py-3 font-medium">{it.customerCode}</td>
                           <td className="px-4 py-3 text-slate-600">{fmt(it.orderDate)}</td>
                           <td className="px-4 py-3 text-slate-600">{it.measure}</td>
                           <td className="px-4 py-3 text-slate-600">{it.grade}</td>
@@ -215,7 +215,7 @@ export const WorkAllotmentPage = () => {
                       <div className="flex-1 min-w-0">
                         {/* Top line: customer + pending pcs badge */}
                         <div className="flex items-start justify-between gap-2">
-                          <div className="font-semibold text-sm text-slate-900 truncate">{it.customerName}</div>
+                          <div className="font-semibold text-sm text-slate-900 truncate">{it.customerCode}</div>
                           <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-semibold text-brand-700 shrink-0 tabular-nums">
                             {it.remainingPcs} pcs
                           </span>

@@ -69,13 +69,16 @@ const Cell = ({
 
 /* ── Display cell — read-only twin of <Cell> for the static columns ─ */
 const Display = ({
-  value, align = 'center', bold,
+  value, align = 'center', bold, wrap,
 }: {
   value: string;
-  align?: 'left' | 'center' | 'right'; bold?: boolean;
+  align?: 'left' | 'center' | 'right'; bold?: boolean; wrap?: boolean;
 }) => (
   <div
-    className={`block w-full h-9 leading-9 px-1 text-[12px] truncate
+    className={`block w-full px-1 text-[12px]
+      ${wrap
+        ? 'min-h-9 py-1 leading-snug whitespace-normal break-words'
+        : 'h-9 leading-9 truncate'}
       ${align === 'left' ? 'text-left' : align === 'right' ? 'text-right' : 'text-center'}
       ${bold ? 'font-semibold' : ''}`}
   >
@@ -511,7 +514,7 @@ export const PackingListPage = () => {
                                 <Display value={row.poDate} />
                               </td>
                               <td className="px-0.5 border-r border-slate-200 align-middle">
-                                <Display value={row.description} align="left" />
+                                <Display value={row.description} align="left" wrap />
                               </td>
                               <td className="px-0.5 border-r border-slate-200 align-middle">
                                 <Display value={row.qty} />

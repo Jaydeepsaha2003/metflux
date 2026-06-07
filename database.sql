@@ -31,7 +31,7 @@ CREATE TABLE `Company` (
     `phone` VARCHAR(40) NULL,
     `whatsappNumber` VARCHAR(40) NULL,
     `email` VARCHAR(160) NULL,
-    `logoUrl` VARCHAR(400) NULL,
+    `logoUrl` MEDIUMTEXT NULL,
     `defaultShareTarget` ENUM('PROMPT', 'CUSTOMER', 'COMPANY') NOT NULL DEFAULT 'PROMPT',
     `isActive` BOOLEAN NOT NULL DEFAULT true,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),

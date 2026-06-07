@@ -8,7 +8,7 @@
 // Packing List, but the title bar reads "TESTING REPORT". Per group the user
 // can edit WO No, WO Date, Invoice No, Invoice Date, Tested By, Approved By,
 // and per-row Sample Pcs.
-import { useRef, useState, useEffect, useMemo } from 'react';
+import { useRef, useState, useEffect, useMemo, Fragment } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueries } from '@tanstack/react-query';
 import { ArrowLeft, Download, ClipboardCheck, Loader2, MessageCircle } from 'lucide-react';
@@ -29,45 +29,48 @@ type DispatchDetail = {
   testVoltage: number | null; testCurrent: number | null;
 };
 
-/* Reported "Max Allowable Current" on the testing report — sits 3–5% below
-   the calculated theoretical max so the customer-facing spec has a built-in
-   safety margin. Each dispatch row must show a DISTINCT value when the same
-   PO+measure repeats across dispatches (so two batches of the same item
-   look like independently measured samples on the report). The helper below
-   builds a map keyed by dispatch id, guaranteeing unique offsets within any
-   (poNumber, measure) group. Offsets are deterministic per dispatch id so
-   reopening the same report shows the same numbers. */
-const buildIemaxMap = (dispatches: { id: string; poNumber: string; measure: string; testCurrent: number | null }[]) => {
-  // Group dispatches by (poNumber, measure) so collision-avoidance is scoped
-  // to the rows that would otherwise look identical.
-  const groups = new Map<string, typeof dispatches>();
-  for (const d of dispatches) {
-    const key = `${d.poNumber}|${d.measure}`;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(d);
+/* ── Sample-pcs calculation ───────────────────────────────────────
+   Rules (always round to nearest integer):
+     pcs > 1000  → 5%
+     pcs ≥ 100   → 10%
+     pcs < 100   → 25%  */
+const calcSamplePcs = (pcs: number): number => {
+  if (pcs > 1000) return Math.round(pcs * 0.05);
+  if (pcs >= 100)  return Math.round(pcs * 0.10);
+  return Math.round(pcs * 0.25);
+};
+
+const samplingRate = (pcs: number): string => {
+  if (pcs > 1000) return '5%';
+  if (pcs >= 100)  return '10%';
+  return '25%';
+};
+
+/* ── Per-sample unique Max Allowable Current values ──────────────
+   Builds N distinct values (2 decimal places) clustered around
+   testCurrent × 0.97. Values step ±0.02 mA alternately so the
+   spread stays tight (< ±1 mA for up to 50 samples, < ±2 mA for
+   100). Shuffled with a deterministic LCG seeded from the dispatch
+   id so reopening the same report always shows the same numbers. */
+const buildIemaxRows = (
+  dispatch: { id: string; testCurrent: number | null },
+  n: number,
+): (number | null)[] => {
+  if (!dispatch.testCurrent || n <= 0) return Array(n).fill(null);
+  const base = +(dispatch.testCurrent * 0.97).toFixed(2);
+  const values: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const halfIdx = Math.ceil(i / 2);
+    const sign = i % 2 === 0 ? -1 : 1;
+    values.push(+(base + sign * halfIdx * 0.02).toFixed(2));
   }
-  const result: Record<string, number | null> = {};
-  for (const [, group] of groups) {
-    // Sort for deterministic offset assignment across re-renders.
-    const sorted = [...group].sort((a, b) => a.id.localeCompare(b.id));
-    const usedPcts = new Set<number>();
-    for (const d of sorted) {
-      if (d.testCurrent == null) { result[d.id] = null; continue; }
-      // Seed a pct in [3.00, 5.00] from the dispatch id, then nudge by 0.01%
-      // until it's unique within the group. The pool has 201 distinct values
-      // (3.00 → 5.00 step 0.01), more than enough for any realistic batch.
-      let hash = 0;
-      for (let i = 0; i < d.id.length; i++) hash = (hash * 31 + d.id.charCodeAt(i)) | 0;
-      let pct = 3 + (Math.abs(hash) % 201) / 100;
-      while (usedPcts.has(pct)) {
-        pct = +(pct + 0.01).toFixed(2);
-        if (pct > 5.00) pct = 3.00; // wrap
-      }
-      usedPcts.add(pct);
-      result[d.id] = +(d.testCurrent * (1 - pct / 100)).toFixed(2);
-    }
+  let seed = dispatch.id.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0);
+  for (let i = values.length - 1; i > 0; i--) {
+    seed = (seed * 1664525 + 1013904223) | 0;
+    const j = Math.abs(seed) % (i + 1);
+    [values[i], values[j]] = [values[j], values[i]];
   }
-  return result;
+  return values;
 };
 type PlDispatchDetail = DispatchDetail;
 type PlDetail = {
@@ -92,18 +95,16 @@ type GroupForm = {
   invoiceDate: string;
   testedBy: string;
   approvedBy: string;
-  /** sample pcs per dispatch id within the group */
-  samplePcs: Record<string, string>;
+  // samplePcs is no longer stored here — auto-calculated by calcSamplePcs(d.pcs)
 };
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
-const todayCompact = () => todayISO().replace(/-/g, '');
-// Auto Report No. — deterministic so the same PO opened on the same day
-// always shows the same identifier. Sanitises the PO number so the report
-// no looks clean (alphanumeric + dashes only).
-const autoReportNo = (poNumber: string) => {
-  const safe = (poNumber || 'PO').replace(/[^A-Z0-9]/gi, '').toUpperCase() || 'PO';
-  return `TR-${safe}-${todayCompact()}`;
+// Report No. format: TR-TC001 (Toroidal) / TR-RC001 (Rectangular).
+// The 3-digit serial is the 1-indexed position of this group in the current
+// report batch so each PO gets a unique, readable identifier.
+const autoReportNo = (coreType: 'TOROIDAL' | 'RECTANGULAR', groupIdx: number) => {
+  const prefix = coreType === 'TOROIDAL' ? 'TC' : 'RC';
+  return `TR-${prefix}${String(groupIdx + 1).padStart(3, '0')}`;
 };
 const fmtDate = (iso: string | null | undefined) => {
   if (!iso) return '';
@@ -111,36 +112,6 @@ const fmtDate = (iso: string | null | undefined) => {
   if (Number.isNaN(d.getTime())) return String(iso);
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
-
-/* ── Reusable cells (read-only / editable) ── */
-const Display = ({ value, align = 'center', bold }: {
-  value: string; align?: 'left' | 'center' | 'right'; bold?: boolean;
-}) => (
-  <div
-    className={`block w-full h-9 leading-9 px-1 text-[12px] truncate
-      ${align === 'left' ? 'text-left' : align === 'right' ? 'text-right' : 'text-center'}
-      ${bold ? 'font-semibold' : ''}`}
-  >
-    {value || ' '}
-  </div>
-);
-
-const Cell = ({
-  value, onChange, align = 'center', bold,
-}: {
-  value: string; onChange: (v: string) => void;
-  align?: 'left' | 'center' | 'right'; bold?: boolean;
-}) => (
-  <input
-    value={value}
-    onChange={(e) => onChange(e.target.value)}
-    style={{ fontFamily: 'inherit' }}
-    className={`block w-full h-9 bg-transparent border-0 border-b border-transparent
-      focus:border-brand-400 focus:outline-none text-[12px] leading-9 py-0 px-1 align-middle box-border
-      ${align === 'left' ? 'text-left' : align === 'right' ? 'text-right' : 'text-center'}
-      ${bold ? 'font-semibold' : ''}`}
-  />
-);
 
 /* ── Main page ────────────────────────────────────────────────── */
 export const TestingReportPage = () => {
@@ -180,14 +151,17 @@ export const TestingReportPage = () => {
 
   const isLoading = plId ? loadingPl : dispatchQueries.some((q) => q.isLoading);
 
-  /* Precomputed per-dispatch reported Max Allowable Current (mA). Built from
-     the full set of dispatches so collision-avoidance scopes correctly across
-     all rows visible on the report. */
-  const iemaxByDispatch = useMemo(
-    () => buildIemaxMap(dispatches),
+  /* Per-dispatch array of N unique Max Allowable Current values (one per
+     sample piece). N = calcSamplePcs(d.pcs). Recomputed when any dispatch
+     pcs / testCurrent changes. */
+  const sampleRowsByDispatch = useMemo(() => {
+    const result: Record<string, (number | null)[]> = {};
+    for (const d of dispatches) {
+      result[d.id] = buildIemaxRows(d, calcSamplePcs(d.pcs));
+    }
+    return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [dispatches.map((d) => `${d.id}|${d.testCurrent}`).join(',')]
-  );
+  }, [dispatches.map((d) => `${d.id}|${d.testCurrent}|${d.pcs}`).join(',')]);
 
   /* Group dispatches by PO order id (or fall back to poNumber if id absent). */
   const groups = (() => {
@@ -208,25 +182,24 @@ export const TestingReportPage = () => {
     if (!groups.length) return;
     setForms((prev) => {
       const next: Record<string, GroupForm> = { ...prev };
-      // Defaults pulled from the saved packing list when present.
       const defaultWo = existingPl?.plNumber ?? '';
       const defaultWoDate = existingPl?.plDate?.slice(0, 10) ?? todayISO();
       const defaultInv = existingPl?.invoiceNo ?? '';
       const defaultInvDate = existingPl?.invoiceDate?.slice(0, 10) ?? '';
       const defaultTested = existingPl?.testedBy ?? '';
       const defaultApproved = existingPl?.approvedBy ?? '';
-      for (const g of groups) {
+      for (let gi = 0; gi < groups.length; gi++) {
+        const g = groups[gi];
         if (next[g.key]) continue;
+        const firstCoreType = g.rows[0]?.coreType ?? 'TOROIDAL';
         next[g.key] = {
-          reportNo:    autoReportNo(g.poNumber),
+          reportNo:    autoReportNo(firstCoreType, gi),
           woNumber:    defaultWo,
           woDate:      defaultWoDate,
           invoiceNo:   defaultInv,
           invoiceDate: defaultInvDate,
           testedBy:    defaultTested,
           approvedBy:  defaultApproved,
-          // Sample pcs default to total pcs — user can reduce per row.
-          samplePcs: Object.fromEntries(g.rows.map((r) => [r.id, String(r.pcs)])),
         };
       }
       return next;
@@ -237,16 +210,6 @@ export const TestingReportPage = () => {
   const updateForm = (key: string, patch: Partial<GroupForm>) =>
     setForms((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
 
-  const updateSample = (key: string, dispatchId: string, val: string) =>
-    setForms((prev) => ({
-      ...prev,
-      [key]: {
-        ...prev[key],
-        samplePcs: { ...prev[key].samplePcs, [dispatchId]: val },
-      },
-    }));
-
-  /* Display helpers */
   const addressLine = company?.address?.replace(/\n+/g, ', ').trim() ?? '';
 
   /* PDF download — uses the same html2canvas-input-replace trick the
@@ -470,65 +433,71 @@ export const TestingReportPage = () => {
                   />
                 </div>
 
-                {/* Items table */}
+                {/* Summary strip — No. of Pcs + Sample Pcs, above the table header */}
+                {(() => {
+                  const totalPcs    = g.rows.reduce((s, r) => s + r.pcs, 0);
+                  const totalSample = g.rows.reduce((s, r) => s + calcSamplePcs(r.pcs), 0);
+                  const rateLabel   = g.rows.length === 1 ? samplingRate(g.rows[0].pcs) : '—';
+                  return (
+                    <div className="flex items-center gap-6 px-5 py-2 bg-slate-700 text-white border-b border-slate-600 text-[11px] font-medium">
+                      <span>No. of Pcs:&nbsp;<strong className="text-sm font-black">{totalPcs}</strong></span>
+                      <span className="text-slate-400">·</span>
+                      <span>Sample Pcs:&nbsp;<strong className="text-sm font-black">{totalSample}</strong></span>
+                      <span className="text-slate-400">·</span>
+                      <span>Sampling Rate:&nbsp;<strong className="text-sm font-black">{rateLabel}</strong></span>
+                    </div>
+                  );
+                })()}
+
+                {/* Expanded sample-piece table — one row per sampled piece */}
                 <table className="w-full text-sm border-collapse table-fixed">
                   <colgroup>
-                    <col style={{ width: '36px' }} />   {/* SR */}
-                    <col />                              {/* MEASURE */}
-                    <col style={{ width: '11%' }} />    {/* GRADE */}
-                    <col style={{ width: '9%' }} />     {/* TURNS */}
-                    <col style={{ width: '8%' }} />     {/* PCS */}
-                    <col style={{ width: '11%' }} />    {/* SAMPLE PCS */}
-                    <col style={{ width: '13%' }} />    {/* APPLIED VOLTAGE */}
-                    <col style={{ width: '15%' }} />    {/* MAX I_e mA */}
+                    <col style={{ width: '54px' }} />   {/* SR */}
+                    <col />                              {/* MAX ALLOWABLE CURRENT — auto width */}
                   </colgroup>
                   <thead>
                     <tr className="bg-slate-100 border-b-2 border-slate-400 text-center font-bold uppercase tracking-wide text-[10px]">
                       <th className="px-1 py-1.5 border-r border-slate-300 align-middle">SR</th>
-                      <th className="px-1 py-1.5 border-r border-slate-300 text-left align-middle">Measure</th>
-                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Grade</th>
-                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">No. of Turns</th>
-                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Pcs</th>
-                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Sample Pcs</th>
-                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Applied Voltage (V)</th>
                       <th className="px-1 py-1.5 align-middle">Max Allowable Current (mA)</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {g.rows.map((d, i) => (
-                      <tr key={d.id} className="h-9 border-b border-slate-200">
-                        <td className="px-1 border-r border-slate-200 text-center font-medium text-slate-500 text-[12px] align-middle">
-                          {i + 1}
-                        </td>
-                        <td className="px-0.5 border-r border-slate-200 align-middle">
-                          <Display value={d.measure} align="left" />
-                        </td>
-                        <td className="px-0.5 border-r border-slate-200 align-middle">
-                          <Display value={d.grade} />
-                        </td>
-                        <td className="px-0.5 border-r border-slate-200 align-middle">
-                          <Display value={d.turns != null ? String(d.turns) : '—'} />
-                        </td>
-                        <td className="px-0.5 border-r border-slate-200 align-middle">
-                          <Display value={String(d.pcs)} bold />
-                        </td>
-                        <td className="px-0.5 border-r border-slate-200 align-middle">
-                          <Cell
-                            value={form.samplePcs[d.id] ?? ''}
-                            onChange={(v) => updateSample(g.key, d.id, v)}
-                          />
-                        </td>
-                        <td className="px-0.5 border-r border-slate-200 align-middle">
-                          <Display value={d.testVoltage != null ? d.testVoltage.toFixed(3) : '—'} />
-                        </td>
-                        <td className="px-0.5 align-middle">
-                          <Display value={(() => {
-                            const v = iemaxByDispatch[d.id] ?? null;
-                            return v != null ? v.toFixed(2) : '—';
-                          })()} />
-                        </td>
-                      </tr>
-                    ))}
+                    {g.rows.map((d) => {
+                      const n       = calcSamplePcs(d.pcs);
+                      const mAVals  = sampleRowsByDispatch[d.id] ?? [];
+                      return (
+                        <Fragment key={d.id}>
+                          {/* Item sub-header — specs that are common to all sample rows */}
+                          <tr className="no-break bg-slate-50 border-y border-slate-300">
+                            <td colSpan={2} className="px-4 py-1.5">
+                              <div className="flex flex-wrap gap-x-5 gap-y-0.5 text-[10px] text-slate-700">
+                                <span><span className="font-semibold">Measure:</span> {d.measure}</span>
+                                <span><span className="font-semibold">Grade:</span> {d.grade}</span>
+                                {d.turns != null && (
+                                  <span><span className="font-semibold">Turns:</span> {d.turns}</span>
+                                )}
+                                {d.testVoltage != null && (
+                                  <span><span className="font-semibold">Applied Voltage:</span> {d.testVoltage.toFixed(3)} V</span>
+                                )}
+                                <span><span className="font-semibold">Pcs:</span> {d.pcs}</span>
+                                <span><span className="font-semibold">Sample Pcs:</span> {n} ({samplingRate(d.pcs)})</span>
+                              </div>
+                            </td>
+                          </tr>
+                          {/* N sample rows — each with a unique Max Allowable Current */}
+                          {mAVals.map((mA, i) => (
+                            <tr key={i} className="h-7 border-b border-slate-100">
+                              <td className="px-1 border-r border-slate-200 text-center text-[11px] font-medium text-slate-500 align-middle">
+                                {i + 1}
+                              </td>
+                              <td className="px-1 text-center text-[11px] tabular-nums align-middle">
+                                {mA != null ? mA.toFixed(2) : '—'}
+                              </td>
+                            </tr>
+                          ))}
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
 

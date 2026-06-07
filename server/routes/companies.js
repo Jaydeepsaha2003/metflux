@@ -7,27 +7,18 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import multer from 'multer';
-import path from 'node:path';
-import fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { q, qOne, insert, update, txn } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth } from '../lib/auth.js';
 import { ROLES } from '../lib/constants.js';
 import { ALL_PERMISSIONS } from '../lib/permissions.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const LOGOS_DIR = path.resolve(__dirname, '..', 'public', 'uploads', 'logos');
-fs.mkdirSync(LOGOS_DIR, { recursive: true });
-
+// Logos are stored as base64 data URLs directly in the DB so they survive
+// Hostinger deployments (the public/uploads directory is git-ignored and gets
+// wiped on a fresh clone). memoryStorage keeps the buffer in RAM; we never
+// write the file to disk.
 const logoUpload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, LOGOS_DIR),
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase() || '.png';
-      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-    },
-  }),
+  storage: multer.memoryStorage(),
   limits: { fileSize: 2 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const ok = ['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'].includes(file.mimetype);
@@ -210,12 +201,7 @@ router.post('/:id/logo', logoUpload.single('logo'), asyncHandler(async (req, res
   if (!c) throw new AppError('Company not found', 404, 'NOT_FOUND');
   if (!req.file) throw new AppError('No file uploaded', 400, 'NO_FILE');
 
-  if (c.logoUrl) {
-    const oldFile = path.join(LOGOS_DIR, path.basename(c.logoUrl));
-    fs.unlink(oldFile, () => {});
-  }
-
-  const logoUrl = `/uploads/logos/${req.file.filename}`;
+  const logoUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
   const updated = await update('Company', c.id, { logoUrl });
   res.json(publicCompany(updated));
 }));
@@ -224,10 +210,6 @@ router.post('/:id/logo', logoUpload.single('logo'), asyncHandler(async (req, res
 router.delete('/:id/logo', asyncHandler(async (req, res) => {
   const c = await qOne('SELECT * FROM `Company` WHERE `id` = ?', [req.params.id]);
   if (!c) throw new AppError('Company not found', 404, 'NOT_FOUND');
-  if (c.logoUrl) {
-    const oldFile = path.join(LOGOS_DIR, path.basename(c.logoUrl));
-    fs.unlink(oldFile, () => {});
-  }
   await update('Company', c.id, { logoUrl: null });
   res.status(204).end();
 }));

@@ -14,7 +14,7 @@ import html2pdf from 'html2pdf.js';
 type PendingItem = {
   id: string;
   poNumber: string;
-  customerName: string;
+  customerCode: string;
   orderDate: string;
   coreType: 'TOROIDAL' | 'RECTANGULAR';
   grade: string;
@@ -33,7 +33,7 @@ type WaItemDetail = {
   poOrderItemId: string;
   poNumber: string | null;
   orderDate: string | null;
-  customerName: string | null;
+  customerCode: string | null;
   coreType: 'TOROIDAL' | 'RECTANGULAR' | null;
   grade: string | null;
   material: string | null;
@@ -60,7 +60,7 @@ type LabourOption = { id: string; name: string };
 
 type RowState = {
   poOrderItemId: string;
-  customerName: string;
+  customerCode: string;
   orderDate: string;
   measure: string;
   grade: string;
@@ -175,7 +175,7 @@ export const WorkAllotmentBuildPage = () => {
       if (!existingWa) return;
       setRows(existingWa.items.map((it) => ({
         poOrderItemId: it.poOrderItemId,
-        customerName:  it.customerName ?? '',
+        customerCode:  it.customerCode ?? '',
         orderDate:     it.orderDate ?? '',
         measure:       it.measure ?? '',
         grade:         it.grade ?? '',
@@ -194,7 +194,7 @@ export const WorkAllotmentBuildPage = () => {
       const wanted = pendingList.items.filter((p) => stateIds.includes(p.id));
       setRows(wanted.map((p) => ({
         poOrderItemId: p.id,
-        customerName:  p.customerName,
+        customerCode:  p.customerCode,
         orderDate:     p.orderDate,
         measure:       p.measure,
         grade:         p.grade,
@@ -461,7 +461,7 @@ export const WorkAllotmentBuildPage = () => {
               <tbody className="divide-y divide-slate-100">
                 {rows.map((r) => (
                   <tr key={r.poOrderItemId} className="hover:bg-slate-50">
-                    <td className="px-3 py-2 font-medium">{r.customerName}</td>
+                    <td className="px-3 py-2 font-medium">{r.customerCode}</td>
                     <td className="px-3 py-2 text-slate-600">{fmtDate(r.orderDate)}</td>
                     <td className="px-3 py-2 text-slate-600">{r.measure}</td>
                     <td className="px-3 py-2 text-slate-600">{r.grade}</td>
@@ -507,7 +507,7 @@ export const WorkAllotmentBuildPage = () => {
                     <div className="text-[10px] uppercase tracking-wide text-slate-400 font-medium">
                       Item {idx + 1} · {fmtDate(r.orderDate)}
                     </div>
-                    <div className="font-semibold text-sm text-slate-900 truncate">{r.customerName}</div>
+                    <div className="font-semibold text-sm text-slate-900 truncate">{r.customerCode}</div>
                   </div>
                 </div>
 
@@ -615,7 +615,7 @@ export const WorkAllotmentBuildPage = () => {
           <table className="w-full text-sm border-collapse table-fixed">
             <colgroup>
               <col style={{ width: '36px' }} />     {/* SR */}
-              <col style={{ width: '13%' }} />      {/* CUSTOMER — fits "AARTI STEELS" on one line */}
+              <col style={{ width: '10%' }} />      {/* CUST CODE — codes are short e.g. AAR-001 */}
               <col style={{ width: '9%'  }} />      {/* SO DATE  — fits DD/MM/YYYY on one line */}
               <col style={{ width: '14%' }} />      {/* MEASURE  — fits "80 x 120 x 30" on one line */}
               <col style={{ width: '9%'  }} />      {/* GRADE    — fits "CRGO 27M3"     */}
@@ -630,7 +630,7 @@ export const WorkAllotmentBuildPage = () => {
             <thead>
               <tr className="bg-slate-100 border-b-2 border-slate-400 text-center font-bold uppercase tracking-wide text-[10px]">
                 <th className="px-1 py-1.5 border-r border-slate-300 align-middle">SR</th>
-                <th className="px-1 py-1.5 border-r border-slate-300 align-middle text-left">Customer</th>
+                <th className="px-1 py-1.5 border-r border-slate-300 align-middle text-left">Cust Code</th>
                 <th className="px-1 py-1.5 border-r border-slate-300 align-middle">SO Date</th>
                 <th className="px-1 py-1.5 border-r border-slate-300 align-middle text-left">Measure</th>
                 <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Grade</th>
@@ -649,7 +649,7 @@ export const WorkAllotmentBuildPage = () => {
                   <td className="px-1 border-r border-slate-200 text-center font-medium text-slate-500 text-[12px] align-middle">
                     {idx + 1}
                   </td>
-                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.customerName} align="left" /></td>
+                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.customerCode} align="left" /></td>
                   <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={fmtDate(r.orderDate)} /></td>
                   <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.measure} align="left" /></td>
                   <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.grade} /></td>

@@ -30,7 +30,7 @@ const flattenItem = (it) => ({
   poOrderItemId: it.poOrderItemId,
   poNumber:     it.po_number ?? null,
   orderDate:    it.po_orderDate ?? null,
-  customerName: it.customer_name ?? null,
+  customerCode: it.customer_code ?? null,
   coreType:     it.item_coreType ?? null,
   grade:        it.item_grade ?? null,
   material:     it.item_material ?? null,
@@ -57,10 +57,10 @@ const loadItemsForWas = async (waIds) => {
             it.\`turns\`       AS item_turns,
             it.\`testVoltage\` AS item_testVoltage,
             it.\`testCurrent\` AS item_testCurrent,
-            po.\`poNumber\`    AS po_number,
-            po.\`orderDate\`   AS po_orderDate,
-            c.\`name\`         AS customer_name,
-            l.\`name\`         AS labour_name
+            po.\`poNumber\`      AS po_number,
+            po.\`orderDate\`     AS po_orderDate,
+            c.\`customerCode\`   AS customer_code,
+            l.\`name\`           AS labour_name
        FROM \`WorkAllotmentItem\` wai
        INNER JOIN \`PoOrderItem\` it ON it.\`id\` = wai.\`poOrderItemId\`
        INNER JOIN \`PoOrder\`     po ON po.\`id\` = it.\`poOrderId\`
@@ -109,9 +109,9 @@ router.get('/pending', requirePermission('assign_work'), asyncHandler(async (req
 
   const rows = await q(
     `SELECT it.*,
-            po.\`poNumber\`  AS po_number,
-            po.\`orderDate\` AS po_orderDate,
-            c.\`name\`       AS customer_name,
+            po.\`poNumber\`    AS po_number,
+            po.\`orderDate\`   AS po_orderDate,
+            c.\`customerCode\` AS customer_code,
             (SELECT COALESCE(SUM(pp.\`pcs\`),0) FROM \`Production\` pp WHERE pp.\`poOrderItemId\` = it.\`id\`) AS produced
        FROM \`PoOrderItem\` it
        INNER JOIN \`PoOrder\`  po ON po.\`id\` = it.\`poOrderId\`
@@ -127,7 +127,7 @@ router.get('/pending', requirePermission('assign_work'), asyncHandler(async (req
     return {
       id:           it.id,
       poNumber:     it.po_number,
-      customerName: it.customer_name,
+      customerCode: it.customer_code,
       orderDate:    it.po_orderDate,
       coreType:     it.coreType, grade: it.grade, material: it.material, measure: it.measure,
       flux:         it.flux, turns: it.turns,
