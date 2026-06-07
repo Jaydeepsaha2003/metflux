@@ -57,20 +57,18 @@ const buildIemaxRows = (
   n: number,
 ): (number | null)[] => {
   if (!dispatch.testCurrent || n <= 0) return Array(n).fill(null);
-  const base = +(dispatch.testCurrent * 0.97).toFixed(3);
-  const values: number[] = [];
-  for (let i = 0; i < n; i++) {
-    const halfIdx = Math.ceil(i / 2);
-    const sign = i % 2 === 0 ? -1 : 1;
-    values.push(+(base + sign * halfIdx * 0.002).toFixed(3));
-  }
+  // Base is the spec value (displayed at top of each page as reference).
+  // Each sample is a simulated measurement within −1% to +1.5% of the spec.
+  const base = dispatch.testCurrent;
   let seed = dispatch.id.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0);
-  for (let i = values.length - 1; i > 0; i--) {
+  const rng = () => {
     seed = (seed * 1664525 + 1013904223) | 0;
-    const j = Math.abs(seed) % (i + 1);
-    [values[i], values[j]] = [values[j], values[i]];
-  }
-  return values;
+    return (seed >>> 0) / 0x100000000;   // uniform in [0, 1)
+  };
+  return Array.from({ length: n }, () => {
+    const pct = -0.01 + rng() * 0.025;  // uniform in [−1%, +1.5%]
+    return +(base * (1 + pct)).toFixed(1);
+  });
 };
 type PlDispatchDetail = DispatchDetail;
 type PlDetail = {
@@ -455,7 +453,7 @@ export const TestingReportPage = () => {
                     forced to a new page and fits 28 rows comfortably. */}
                 {g.rows.map((d, dispatchIdx) => {
                   const mAVals  = sampleRowsByDispatch[d.id] ?? [];
-                  const FIRST   = dispatchIdx === 0 ? 18 : 28;
+                  const FIRST   = dispatchIdx === 0 ? 15 : 28;
                   const REST    = 28;
 
                   // Build chunks: first chunk may be smaller than REST.
@@ -494,6 +492,17 @@ export const TestingReportPage = () => {
                             key={`${d.id}-c${ci}`}
                             style={forceBreak ? { pageBreakBefore: 'always' } : undefined}
                           >
+                            {/* Spec reference — shown on every page so each page is self-contained */}
+                            {d.testCurrent != null && (
+                              <div className="flex flex-wrap items-center gap-x-5 gap-y-0.5 px-5 py-1.5 bg-slate-50 border-b border-slate-300 text-[10px] text-slate-700">
+                                <span>
+                                  <span className="font-semibold uppercase tracking-wide">Max Allowable Current (Spec):</span>{' '}
+                                  <strong className="text-slate-900 tabular-nums">{d.testCurrent.toFixed(1)} mA</strong>
+                                </span>
+                                <span className="text-slate-400">·</span>
+                                <span className="text-slate-500">Tolerance: −1.0% to +1.5% of spec</span>
+                              </div>
+                            )}
                             <table className="w-full text-sm border-collapse table-fixed">
                               <colgroup>
                                 <col style={{ width: '36px' }} />
@@ -527,7 +536,7 @@ export const TestingReportPage = () => {
                                       1
                                     </td>
                                     <td className="px-1 text-center text-[11px] tabular-nums align-middle">
-                                      {mA != null ? mA.toFixed(3) : '—'}
+                                      {mA != null ? mA.toFixed(1) : '—'}
                                     </td>
                                   </tr>
                                 ))}
