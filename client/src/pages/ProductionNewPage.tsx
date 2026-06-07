@@ -9,6 +9,7 @@ import { Search, Save, Loader2, Factory, ArrowLeft, CheckCircle2 } from 'lucide-
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { useConfirm } from '@/hooks/useConfirm';
 
 type PendingItem = {
   id: string;
@@ -36,6 +37,7 @@ const formatDate = (iso: string) => {
 
 export const ProductionNewPage = () => {
   const queryClient = useQueryClient();
+  const { confirm, confirmDialog } = useConfirm();
 
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<PendingItem | null>(null);
@@ -106,7 +108,7 @@ export const ProductionNewPage = () => {
     },
   });
 
-  const onSave = () => {
+  const onSave = async () => {
     setError(null);
     if (!selected) {
       setError({ message: 'Pick a pending PO item from the list first' });
@@ -119,6 +121,32 @@ export const ProductionNewPage = () => {
       setError({ message: 'Please fix the form', details: missing });
       return;
     }
+
+    if (pcs > selected.remainingPcs) {
+      const excessPcs = pcs - selected.remainingPcs;
+      const ok = await confirm({
+        title: 'Excess Production',
+        tone: 'warning',
+        confirmLabel: 'Yes, Record Excess',
+        cancelLabel: 'Go Back',
+        message: (
+          <div className="space-y-2 text-sm">
+            <p>
+              You are recording <strong>{pcs} pcs</strong> but only{' '}
+              <strong>{selected.remainingPcs} pcs</strong> remain on this PO
+              (ordered: {selected.orderedPcs}).
+            </p>
+            <p>
+              This will produce <strong>{excessPcs} extra pcs</strong> beyond the order. The
+              full {pcs} pcs will be available for dispatch.
+            </p>
+            <p className="text-slate-500">Are you sure you want to proceed?</p>
+          </div>
+        ),
+      });
+      if (!ok) return;
+    }
+
     submit.mutate({
       poOrderItemId: selected.id,
       prodDate,
@@ -360,6 +388,7 @@ export const ProductionNewPage = () => {
           </div>
         )}
       </section>
+      {confirmDialog}
     </div>
   );
 };
