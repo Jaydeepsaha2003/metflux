@@ -207,10 +207,8 @@ router.post('/', requirePermission('rec_production'), asyncHandler(async (req, r
   if (item.status === 'CANCELLED') throw new AppError('PO item is cancelled', 400, 'ITEM_CANCELLED');
 
   const produced = Number(item.produced ?? 0);
-  const remaining = Math.max(item.pcs - produced, 0);
-  if (data.pcs > remaining) {
-    throw new AppError(`Production pcs (${data.pcs}) exceeds remaining (${remaining}).`, 400, 'PCS_EXCEEDS');
-  }
+  // Excess production is allowed — more pcs than ordered can be recorded and
+  // will be available for dispatch (readyPcs = produced - dispatched, uncapped).
   if (new Date(data.prodDate) < new Date(item.po_orderDate)) {
     throw new AppError('Production date cannot be before order date', 400, 'BAD_DATE');
   }

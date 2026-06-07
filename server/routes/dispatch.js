@@ -156,6 +156,7 @@ router.get('/ready', requirePermission('dispatch'), asyncHandler(async (req, res
       producedPcs: produced,
       dispatchedPcs: dispatched,
       readyPcs,
+      excessPcs: Math.max(produced - Number(it.pcs), 0),
       rateBasis:   it.rateBasis   ?? null,
       rateValue:   it.rateValue   ?? null,
       totalAmount: it.totalAmount ?? null,

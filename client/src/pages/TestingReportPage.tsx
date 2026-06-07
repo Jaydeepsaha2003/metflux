@@ -8,7 +8,7 @@
 // Packing List, but the title bar reads "TESTING REPORT". Per group the user
 // can edit WO No, WO Date, Invoice No, Invoice Date, Tested By, Approved By,
 // and per-row Sample Pcs.
-import { useRef, useState, useEffect, useMemo } from 'react';
+import { useRef, useState, useEffect, useMemo, Fragment } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueries } from '@tanstack/react-query';
 import { ArrowLeft, Download, ClipboardCheck, Loader2, MessageCircle } from 'lucide-react';
@@ -269,7 +269,7 @@ export const TestingReportPage = () => {
         windowWidth: A4_USABLE_PX,
       },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak: { mode: ['css', 'legacy'], before: '.tr-page-break' },
+      pagebreak: { mode: ['css', 'legacy'], before: '.tr-page-break', avoid: ['tr'] },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).from(clone);
 
@@ -449,59 +449,96 @@ export const TestingReportPage = () => {
                   );
                 })()}
 
-                {/* Expanded sample-piece table — one row per sampled piece */}
-                <table className="w-full text-sm border-collapse table-fixed">
-                  <colgroup>
-                    <col style={{ width: '36px' }} />    {/* SN */}
-                    <col />                               {/* MEASURE — auto */}
-                    <col style={{ width: '11%' }} />     {/* GRADE */}
-                    <col style={{ width: '8%' }} />      {/* TURNS */}
-                    <col style={{ width: '13%' }} />     {/* APPLIED VOLTAGE */}
-                    <col style={{ width: '7%' }} />      {/* PCS */}
-                    <col style={{ width: '18%' }} />     {/* MAX ALLOWABLE CURRENT */}
-                  </colgroup>
-                  <thead>
-                    <tr className="bg-slate-100 border-b-2 border-slate-400 text-center font-bold uppercase tracking-wide text-[10px]">
-                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">SN</th>
-                      <th className="px-1 py-1.5 border-r border-slate-300 text-left align-middle">Measure</th>
-                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Grade</th>
-                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Turns</th>
-                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Applied Voltage (V)</th>
-                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Pcs</th>
-                      <th className="px-1 py-1.5 align-middle">Max Allowable Current (mA)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {g.rows.map((d) => {
-                      const mAVals = sampleRowsByDispatch[d.id] ?? [];
-                      return mAVals.map((mA, i) => (
-                        <tr key={`${d.id}-${i}`} className="h-8 border-b border-slate-100">
-                          <td className="px-1 border-r border-slate-200 text-center text-[11px] font-medium text-slate-500 align-middle">
-                            {i + 1}
-                          </td>
-                          <td className="px-1 border-r border-slate-200 text-left text-[11px] align-middle truncate">
-                            {d.measure}
-                          </td>
-                          <td className="px-1 border-r border-slate-200 text-center text-[11px] align-middle">
-                            {d.grade}
-                          </td>
-                          <td className="px-1 border-r border-slate-200 text-center text-[11px] tabular-nums align-middle">
-                            {d.turns != null ? d.turns : '—'}
-                          </td>
-                          <td className="px-1 border-r border-slate-200 text-center text-[11px] tabular-nums align-middle">
-                            {d.testVoltage != null ? d.testVoltage.toFixed(3) : '—'}
-                          </td>
-                          <td className="px-1 border-r border-slate-200 text-center text-[11px] font-semibold tabular-nums align-middle">
-                            {d.pcs}
-                          </td>
-                          <td className="px-1 text-center text-[11px] tabular-nums align-middle">
-                            {mA != null ? mA.toFixed(2) : '—'}
-                          </td>
-                        </tr>
-                      ));
-                    })}
-                  </tbody>
-                </table>
+                {/* Sample-piece tables — split into page-sized chunks so every
+                    PDF page gets a fresh column header. First dispatch on page 1
+                    has company-header overhead → 18 rows. Every other chunk is
+                    forced to a new page and fits 28 rows comfortably. */}
+                {g.rows.map((d, dispatchIdx) => {
+                  const mAVals  = sampleRowsByDispatch[d.id] ?? [];
+                  const FIRST   = dispatchIdx === 0 ? 18 : 28;
+                  const REST    = 28;
+
+                  // Build chunks: first chunk may be smaller than REST.
+                  const chunks: Array<(number | null)[]> = [];
+                  if (mAVals.length > 0) {
+                    chunks.push(mAVals.slice(0, FIRST));
+                    for (let pos = FIRST; pos < mAVals.length; pos += REST) {
+                      chunks.push(mAVals.slice(pos, pos + REST));
+                    }
+                  } else {
+                    chunks.push([]);
+                  }
+
+                  const tableHead = (
+                    <thead>
+                      <tr className="bg-slate-100 border-b-2 border-slate-400 text-center font-bold uppercase tracking-wide text-[10px]">
+                        <th className="px-1 py-1.5 border-r border-slate-300 align-middle">SN</th>
+                        <th className="px-1 py-1.5 border-r border-slate-300 text-left align-middle">Measure</th>
+                        <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Grade</th>
+                        <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Turns</th>
+                        <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Applied Voltage (V)</th>
+                        <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Pcs</th>
+                        <th className="px-1 py-1.5 align-middle">Max Allowable Current (mA)</th>
+                      </tr>
+                    </thead>
+                  );
+
+                  return (
+                    <Fragment key={d.id}>
+                      {chunks.map((chunk, ci) => {
+                        // Offset = total rows in all earlier chunks of this item.
+                        const snOffset = chunks.slice(0, ci).reduce((s, c) => s + c.length, 0);
+                        const forceBreak = dispatchIdx > 0 || ci > 0;
+                        return (
+                          <div
+                            key={`${d.id}-c${ci}`}
+                            style={forceBreak ? { pageBreakBefore: 'always' } : undefined}
+                          >
+                            <table className="w-full text-sm border-collapse table-fixed">
+                              <colgroup>
+                                <col style={{ width: '36px' }} />
+                                <col />
+                                <col style={{ width: '11%' }} />
+                                <col style={{ width: '8%' }} />
+                                <col style={{ width: '13%' }} />
+                                <col style={{ width: '7%' }} />
+                                <col style={{ width: '18%' }} />
+                              </colgroup>
+                              {tableHead}
+                              <tbody>
+                                {chunk.map((mA, i) => (
+                                  <tr key={i} className="h-8 border-b border-slate-100">
+                                    <td className="px-1 border-r border-slate-200 text-center text-[11px] font-medium text-slate-500 align-middle">
+                                      {snOffset + i + 1}
+                                    </td>
+                                    <td className="px-1 border-r border-slate-200 text-left text-[11px] align-middle truncate">
+                                      {d.measure}
+                                    </td>
+                                    <td className="px-1 border-r border-slate-200 text-center text-[11px] align-middle">
+                                      {d.grade}
+                                    </td>
+                                    <td className="px-1 border-r border-slate-200 text-center text-[11px] tabular-nums align-middle">
+                                      {d.turns != null ? d.turns : '—'}
+                                    </td>
+                                    <td className="px-1 border-r border-slate-200 text-center text-[11px] tabular-nums align-middle">
+                                      {d.testVoltage != null ? d.testVoltage.toFixed(3) : '—'}
+                                    </td>
+                                    <td className="px-1 border-r border-slate-200 text-center text-[11px] font-semibold tabular-nums align-middle">
+                                      {d.pcs}
+                                    </td>
+                                    <td className="px-1 text-center text-[11px] tabular-nums align-middle">
+                                      {mA != null ? mA.toFixed(2) : '—'}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        );
+                      })}
+                    </Fragment>
+                  );
+                })}
 
                 {/* Signature footer — editable per PO group */}
                 <div className="grid grid-cols-2 border-t-2 border-slate-400">

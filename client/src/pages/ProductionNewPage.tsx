@@ -115,7 +115,6 @@ export const ProductionNewPage = () => {
     const missing: string[] = [];
     if (!labourName.trim()) missing.push('Labour name');
     if (pcs <= 0) missing.push('Pcs > 0');
-    if (pcs > selected.remainingPcs) missing.push(`Pcs ≤ remaining (${selected.remainingPcs})`);
     if (missing.length) {
       setError({ message: 'Please fix the form', details: missing });
       return;
@@ -325,13 +324,12 @@ export const ProductionNewPage = () => {
                   placeholder="Select worker…"
                 />
               </Field>
-              <Field label={`Pcs (max ${selected.remainingPcs})`}>
+              <Field label={`Pcs (${selected.remainingPcs} remaining)`}>
                 <input
                   className="input"
                   type="number"
                   inputMode="numeric"
                   min={1}
-                  max={selected.remainingPcs}
                   value={pcs || ''}
                   onChange={(e) => setPcs(parseInt(e.target.value || '0', 10))}
                 />

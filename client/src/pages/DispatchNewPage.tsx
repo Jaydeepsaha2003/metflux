@@ -24,6 +24,7 @@ type ReadyItem = {
   producedPcs: number;
   dispatchedPcs: number;
   readyPcs: number;
+  excessPcs: number;
   readyAmount: number | null;
 };
 
@@ -220,9 +221,16 @@ export const DispatchNewPage = () => {
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <span className="rounded-md bg-green-50 px-2 py-0.5 text-xs font-semibold text-green-800 tabular-nums">
-                      {it.readyPcs} ready
-                    </span>
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span className="rounded-md bg-green-50 px-2 py-0.5 text-xs font-semibold text-green-800 tabular-nums">
+                        {it.readyPcs} ready
+                      </span>
+                      {it.excessPcs > 0 && (
+                        <span className="rounded-md bg-orange-50 px-2 py-0.5 text-[10px] font-semibold text-orange-700 tabular-nums">
+                          +{it.excessPcs} excess
+                        </span>
+                      )}
+                    </div>
                     {it.readyAmount != null && (
                       <div className="mt-0.5 text-[10px] text-brand-700 font-mono tabular-nums">
                         ₹{it.readyAmount.toFixed(2)}
@@ -303,9 +311,16 @@ export const DispatchNewPage = () => {
                     <td className="px-3 py-2 text-right tabular-nums text-slate-600">{it.producedPcs}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-500">{it.dispatchedPcs}</td>
                     <td className="px-3 py-2 text-right tabular-nums">
-                      <span className="rounded-md bg-green-50 px-2 py-0.5 font-semibold text-green-800">
-                        {it.readyPcs}
-                      </span>
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span className="rounded-md bg-green-50 px-2 py-0.5 font-semibold text-green-800">
+                          {it.readyPcs}
+                        </span>
+                        {it.excessPcs > 0 && (
+                          <span className="rounded-md bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700">
+                            +{it.excessPcs} excess
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-3 py-2 text-right font-mono tabular-nums text-brand-700">
                       {it.readyAmount != null ? `₹${it.readyAmount.toFixed(2)}` : '—'}

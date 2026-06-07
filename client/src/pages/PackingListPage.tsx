@@ -508,7 +508,7 @@ export const PackingListPage = () => {
                                 {idx + 1}
                               </td>
                               <td className="px-0.5 border-r border-slate-200 align-middle">
-                                <Display value={row.poNo} />
+                                <Display value={row.poNo} wrap />
                               </td>
                               <td className="px-0.5 border-r border-slate-200 align-middle">
                                 <Display value={row.poDate} />
