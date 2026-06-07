@@ -174,13 +174,13 @@ const OrderCard = ({ order, token, featured }: { order: Order; token: string; fe
 const StatChip = ({ icon: Icon, label, value, color }: {
   icon: typeof Package; label: string; value: number; color: string;
 }) => (
-  <div className="flex items-center gap-3 bg-white rounded-2xl border border-slate-200 shadow-sm px-4 py-3 min-w-[130px]">
-    <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
-      <Icon className="h-4.5 w-4.5" />
+  <div className="flex items-center gap-2.5 bg-white rounded-2xl border border-slate-200 shadow-sm px-3 py-3 sm:px-4">
+    <div className={`h-8 w-8 sm:h-9 sm:w-9 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
+      <Icon className="h-4 w-4" />
     </div>
-    <div>
-      <div className="text-xl font-black text-slate-900 tabular-nums leading-tight">{value}</div>
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 leading-tight">{label}</div>
+    <div className="min-w-0">
+      <div className="text-lg sm:text-xl font-black text-slate-900 tabular-nums leading-tight">{value}</div>
+      <div className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wide text-slate-400 leading-tight truncate">{label}</div>
     </div>
   </div>
 );
@@ -280,47 +280,45 @@ export const CustomerPortalPage = () => {
         {/* ── Customer card ── */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="h-1.5 bg-gradient-to-r from-emerald-500 to-teal-400" />
-          <div className="p-5">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-emerald-600 mb-1">Welcome</p>
-                <h1 className="text-2xl font-black text-slate-900 leading-tight">{customer.name}</h1>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5 text-[11px] font-mono font-semibold text-slate-700">
-                    {customer.customerCode}
-                  </span>
-                  {customer.state && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5 text-[11px] font-medium text-slate-600">
-                      <MapPin className="h-2.5 w-2.5 text-slate-400" />{customer.state}
-                    </span>
-                  )}
+          <div className="p-4 sm:p-5">
+            {/* Name row */}
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-emerald-600 mb-1">Welcome</p>
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 leading-tight">{customer.name}</h1>
+            <div className="flex flex-wrap gap-2 mt-2 mb-4">
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5 text-[11px] font-mono font-semibold text-slate-700">
+                {customer.customerCode}
+              </span>
+              {customer.state && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5 text-[11px] font-medium text-slate-600">
+                  <MapPin className="h-2.5 w-2.5 text-slate-400" />{customer.state}
+                </span>
+              )}
+            </div>
+            {/* Contact row — stacks on mobile, side-by-side on sm+ */}
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-1.5 sm:gap-4 pt-3 border-t border-slate-100">
+              {company.phone && (
+                <div className="flex items-center gap-1.5 text-[12px] text-slate-500">
+                  <Phone className="h-3 w-3 text-slate-400 shrink-0" />{company.phone}
                 </div>
-              </div>
-              <div className="text-right space-y-1">
-                {company.phone && (
-                  <div className="flex items-center justify-end gap-1.5 text-[12px] text-slate-500">
-                    <Phone className="h-3 w-3 text-slate-400" />{company.phone}
-                  </div>
-                )}
-                {company.email && (
-                  <div className="flex items-center justify-end gap-1.5 text-[12px] text-slate-500">
-                    <Mail className="h-3 w-3 text-slate-400" />{company.email}
-                  </div>
-                )}
-                {company.address && (
-                  <div className="flex items-center justify-end gap-1.5 text-[12px] text-slate-500 max-w-[200px] text-right">
-                    <MapPin className="h-3 w-3 text-slate-400 shrink-0" />
-                    <span className="leading-snug">{company.address.replace(/\n/g, ', ')}</span>
-                  </div>
-                )}
-              </div>
+              )}
+              {company.email && (
+                <div className="flex items-center gap-1.5 text-[12px] text-slate-500">
+                  <Mail className="h-3 w-3 text-slate-400 shrink-0" />{company.email}
+                </div>
+              )}
+              {company.address && (
+                <div className="flex items-start gap-1.5 text-[12px] text-slate-500 sm:text-right sm:justify-end sm:max-w-[220px]">
+                  <MapPin className="h-3 w-3 text-slate-400 shrink-0 mt-0.5" />
+                  <span className="leading-snug">{company.address.replace(/\n/g, ', ')}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* ── Stats row ── */}
+        {/* ── Stats row — 2×2 on mobile, 4 across on sm+ ── */}
         {stats && (
-          <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <StatChip icon={Package}      label="Total Orders"  value={stats.total}      color="bg-slate-100 text-slate-600" />
             <StatChip icon={Factory}      label="In Production" value={stats.production} color="bg-amber-100 text-amber-600" />
             <StatChip icon={CheckCircle2} label="Dispatched"    value={stats.dispatched} color="bg-emerald-100 text-emerald-600" />
