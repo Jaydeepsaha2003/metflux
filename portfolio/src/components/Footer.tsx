@@ -187,8 +187,8 @@ const Footer = () => {
                   <div>
                     <p className="text-white font-medium text-sm md:text-base">Email &amp; Web</p>
                     <p className="text-gray-300 text-xs md:text-sm leading-relaxed">
-                      <a href="mailto:info@metfluxelectrical.com" className="hover:text-pulse-400 transition-colors">info@metfluxelectrical.com</a><br />
-                      <a href="https://www.metfluxelectrical.com" className="hover:text-pulse-400 transition-colors">www.metfluxelectrical.com</a>
+                      <a href={`mailto:${siteData.site.email}`} className="hover:text-pulse-400 transition-colors">{siteData.site.email}</a><br />
+                      <a href={siteData.site.url} className="hover:text-pulse-400 transition-colors">{siteData.site.url.replace('https://', '')}</a>
                     </p>
                   </div>
                 </div>

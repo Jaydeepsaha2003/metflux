@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Mail, Phone, Globe, MapPin, Send, User, MessageSquare, Building, Package, CheckCircle, AlertCircle } from "lucide-react";
+import siteData from "@/data/siteData";
 
 const ConnectSection = () => {
   const [formData, setFormData] = useState({
@@ -147,7 +148,7 @@ const ConnectSection = () => {
               {/* Factory Address */}
               <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
                 <div className="flex items-start space-x-4">
-                  <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 bg-pulse-500 rounded-lg flex items-center justify-center flex-shrink-0">
                     <MapPin className="w-5 h-5 text-white" />
                   </div>
                   <div>
@@ -164,14 +165,14 @@ const ConnectSection = () => {
               {/* Phone */}
               <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
                 <div className="flex items-start space-x-4">
-                  <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 bg-pulse-500 rounded-lg flex items-center justify-center flex-shrink-0">
                     <Phone className="w-5 h-5 text-white" />
                   </div>
                   <div>
                     <h4 className="text-white font-semibold text-lg mb-2">Call Us</h4>
                     <p className="text-gray-300 text-sm leading-relaxed">
-                      <a href="tel:+919971856222" className="hover:text-green-400 transition-colors">+91 9971856222</a><br />
-                      <a href="tel:+919667476222" className="hover:text-green-400 transition-colors">+91 9667476222</a>
+                      <a href="tel:+919971856222" className="hover:text-pulse-400 transition-colors">+91 9971856222</a><br />
+                      <a href="tel:+919667476222" className="hover:text-pulse-400 transition-colors">+91 9667476222</a>
                     </p>
                   </div>
                 </div>
@@ -180,14 +181,14 @@ const ConnectSection = () => {
               {/* Email + Web */}
               <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
                 <div className="flex items-start space-x-4">
-                  <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <div className="w-10 h-10 bg-pulse-500 rounded-lg flex items-center justify-center flex-shrink-0">
                     <Mail className="w-5 h-5 text-white" />
                   </div>
                   <div>
                     <h4 className="text-white font-semibold text-lg mb-2">Email &amp; Web</h4>
                     <p className="text-gray-300 text-sm leading-relaxed">
-                      <a href="mailto:info@metfluxelectrical.com" className="hover:text-green-400 transition-colors">info@metfluxelectrical.com</a><br />
-                      <a href="https://www.metfluxelectrical.com" className="hover:text-green-400 transition-colors">www.metfluxelectrical.com</a>
+                      <a href={`mailto:${siteData.site.email}`} className="hover:text-pulse-400 transition-colors">{siteData.site.email}</a><br />
+                      <a href={siteData.site.url} className="hover:text-pulse-400 transition-colors">{siteData.site.url.replace('https://', '')}</a>
                     </p>
                   </div>
                 </div>
@@ -199,13 +200,13 @@ const ConnectSection = () => {
           <div className={`transition-all duration-1000 transform ${
             isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
           }`}>
-            <div className="bg-white rounded-lg p-4 border-2 border-green-500 shadow-lg">
+            <div className="bg-white rounded-lg p-4 border-2 border-pulse-500 shadow-lg">
             <h3 className="text-lg font-bold mb-3 text-gray-900">Send us a Message</h3>
             {/* Status Message */}
             {submitStatus !== 'idle' && (
               <div className={`mb-6 p-4 rounded-lg border flex items-center gap-3 ${
                 submitStatus === 'success' 
-                  ? 'bg-green-50 border-green-200 text-green-800'
+                  ? 'bg-pulse-50 border-pulse-200 text-pulse-800'
                   : 'bg-red-50 border-red-200 text-red-800'
               }`}>
                 {submitStatus === 'success' ? (
@@ -235,7 +236,7 @@ const ConnectSection = () => {
                       value={formData.firstName}
                       onChange={handleInputChange}
                       required
-                      className="w-full pl-8 pr-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
+                      className="w-full pl-8 pr-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-pulse-500 focus:border-transparent transition-all duration-200"
                       placeholder="John"
                     />
                   </div>
@@ -255,7 +256,7 @@ const ConnectSection = () => {
                       value={formData.lastName}
                       onChange={handleInputChange}
                       required
-                      className="w-full pl-8 pr-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
+                      className="w-full pl-8 pr-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-pulse-500 focus:border-transparent transition-all duration-200"
                       placeholder="Doe"
                     />
                   </div>
@@ -278,7 +279,7 @@ const ConnectSection = () => {
                     value={formData.email}
                     onChange={handleInputChange}
                     required
-                    className="w-full pl-8 pr-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
+                    className="w-full pl-8 pr-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-pulse-500 focus:border-transparent transition-all duration-200"
                     placeholder="Enter your email address"
                   />
                 </div>
@@ -301,7 +302,7 @@ const ConnectSection = () => {
                       value={formData.phone}
                       onChange={handleInputChange}
                       required
-                      className="w-full pl-8 pr-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
+                      className="w-full pl-8 pr-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-pulse-500 focus:border-transparent transition-all duration-200"
                       placeholder="+91 12345 67890"
                     />
                   </div>
@@ -320,7 +321,7 @@ const ConnectSection = () => {
                       name="company"
                       value={formData.company}
                       onChange={handleInputChange}
-                      className="w-full pl-8 pr-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
+                      className="w-full pl-8 pr-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-pulse-500 focus:border-transparent transition-all duration-200"
                       placeholder="Your company name"
                     />
                   </div>
@@ -344,7 +345,7 @@ const ConnectSection = () => {
                       value={formData.subject}
                       onChange={handleInputChange}
                       required
-                      className="w-full pl-8 pr-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
+                      className="w-full pl-8 pr-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-pulse-500 focus:border-transparent transition-all duration-200"
                       placeholder="Brief subject"
                     />
                   </div>
@@ -362,7 +363,7 @@ const ConnectSection = () => {
                       name="inquiryType"
                       value={formData.inquiryType}
                       onChange={handleInputChange}
-                      className="w-full pl-8 pr-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 appearance-none"
+                      className="w-full pl-8 pr-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-900 focus:ring-2 focus:ring-pulse-500 focus:border-transparent transition-all duration-200 appearance-none"
                     >
                       <option value="general">General</option>
                       <option value="product">Product Info</option>
@@ -390,7 +391,7 @@ const ConnectSection = () => {
                     onChange={handleInputChange}
                     required
                     rows={3}
-                    className="w-full pl-8 pr-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 resize-none"
+                    className="w-full pl-8 pr-3 py-2 bg-white border border-gray-300 rounded-md text-sm text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-pulse-500 focus:border-transparent transition-all duration-200 resize-none"
                     placeholder="Tell us about your requirements..."
                   />
                 </div>
@@ -400,7 +401,7 @@ const ConnectSection = () => {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className={`w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white py-2 px-4 rounded-md text-sm font-semibold hover:from-green-600 hover:to-emerald-600 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-white transition-all duration-200 flex items-center justify-center space-x-2 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100`}
+                className={`w-full bg-gradient-to-r from-pulse-500 to-pulse-600 text-white py-2 px-4 rounded-md text-sm font-semibold hover:from-pulse-600 hover:to-pulse-700 focus:ring-2 focus:ring-pulse-500 focus:ring-offset-2 focus:ring-offset-white transition-all duration-200 flex items-center justify-center space-x-2 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100`}
               >
                 {isSubmitting ? (
                   <>

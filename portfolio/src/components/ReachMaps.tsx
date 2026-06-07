@@ -207,7 +207,7 @@ export const WorldMap = () => {
                   textAnchor={off.textAnchor}
                   className={
                     highlight
-                      ? 'pointer-events-none select-none fill-emerald-800 text-[11px] font-bold'
+                      ? 'pointer-events-none select-none fill-pulse-800 text-[11px] font-bold'
                       : labelClass
                   }
                   style={labelHaloStyle}

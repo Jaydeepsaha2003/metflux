@@ -200,7 +200,7 @@ const InnovationSection = () => {
                   }}
                 >
                   <div
-                    className="absolute inset-0 z-0 bg-gradient-to-b from-emerald-600/90 to-teal-700/90"
+                    className="absolute inset-0 z-0 bg-gradient-to-b from-pulse-600/90 to-pulse-700/90"
                     style={{
                       backgroundImage: "url('https://images.unsplash.com/photo-1485827404703-89b55fcc595e?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80')",
                       backgroundSize: "cover",
