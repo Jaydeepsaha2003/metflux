@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Search, MessageCircle, Plus, Pencil, Building2, Link2, Check } from 'lucide-react';
-import { useState } from 'react';
 import { api } from '@/lib/api';
 import { Pagination } from '@/components/Pagination';
 import { useHideCustomerNames } from '@/store/auth';
