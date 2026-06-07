@@ -9,7 +9,7 @@ import { MapPin, Phone, Mail, ArrowRight, Linkedin, Twitter, Facebook, Instagram
 const Footer = () => {
 
   return (
-    <footer className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white overflow-hidden">
+    <footer className="relative bg-gradient-to-br from-pulse-950 via-gray-900 to-pulse-950 text-white overflow-hidden">
       {/* Background Pattern */}
       <div className="absolute inset-0 opacity-5">
         <div 
@@ -20,6 +20,9 @@ const Footer = () => {
         />
       </div>
       
+      {/* Brand accent stripe at top */}
+      <div className="h-1 w-full bg-gradient-to-r from-pulse-600 via-pulse-400 to-pulse-600" />
+
       {/* Main Footer Content */}
       <div className="relative z-10">
         {/* Top Section */}
@@ -46,16 +49,16 @@ const Footer = () => {
               
               {/* Social Links */}
               <div className="flex space-x-3 md:space-x-4">
-                <a href="#" className="w-9 h-9 md:w-10 md:h-10 bg-gray-800 hover:bg-pulse-500 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:shadow-pulse-500/25">
+                <a href="#" className="w-9 h-9 md:w-10 md:h-10 bg-pulse-900/60 hover:bg-pulse-500 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:shadow-pulse-500/25">
                   <Linkedin className="w-4 h-4 md:w-5 md:h-5" />
                 </a>
-                <a href="#" className="w-9 h-9 md:w-10 md:h-10 bg-gray-800 hover:bg-pulse-500 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:shadow-pulse-500/25">
+                <a href="#" className="w-9 h-9 md:w-10 md:h-10 bg-pulse-900/60 hover:bg-pulse-500 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:shadow-pulse-500/25">
                   <Twitter className="w-4 h-4 md:w-5 md:h-5" />
                 </a>
-                <a href="#" className="w-9 h-9 md:w-10 md:h-10 bg-gray-800 hover:bg-pulse-500 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:shadow-pulse-500/25">
+                <a href="#" className="w-9 h-9 md:w-10 md:h-10 bg-pulse-900/60 hover:bg-pulse-500 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:shadow-pulse-500/25">
                   <Facebook className="w-4 h-4 md:w-5 md:h-5" />
                 </a>
-                <a href="#" className="w-9 h-9 md:w-10 md:h-10 bg-gray-800 hover:bg-pulse-500 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:shadow-pulse-500/25">
+                <a href="#" className="w-9 h-9 md:w-10 md:h-10 bg-pulse-900/60 hover:bg-pulse-500 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:shadow-pulse-500/25">
                   <Instagram className="w-4 h-4 md:w-5 md:h-5" />
                 </a>
               </div>
@@ -165,7 +168,7 @@ const Footer = () => {
               </h4>
               <div className="space-y-3 md:space-y-4">
                 <div className="flex items-start space-x-3 group">
-                  <div className="w-8 h-8 md:w-10 md:h-10 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-pulse-500 transition-colors duration-200">
+                  <div className="w-8 h-8 md:w-10 md:h-10 bg-pulse-900/60 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-pulse-500 transition-colors duration-200">
                     <Phone className="w-4 h-4 md:w-5 md:h-5 text-pulse-400 group-hover:text-white" />
                   </div>
                   <div>
@@ -178,7 +181,7 @@ const Footer = () => {
                 </div>
 
                 <div className="flex items-start space-x-3 group">
-                  <div className="w-8 h-8 md:w-10 md:h-10 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-pulse-500 transition-colors duration-200">
+                  <div className="w-8 h-8 md:w-10 md:h-10 bg-pulse-900/60 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-pulse-500 transition-colors duration-200">
                     <Mail className="w-4 h-4 md:w-5 md:h-5 text-pulse-400 group-hover:text-white" />
                   </div>
                   <div>
@@ -196,7 +199,7 @@ const Footer = () => {
         </div>
         
         {/* Bottom Bar */}
-        <div className="border-t border-gray-700/50 backdrop-blur-sm">
+        <div className="border-t border-pulse-800/40 backdrop-blur-sm">
           <div className="section-container py-4 md:py-6">
             <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
               <div className="text-center md:text-left">

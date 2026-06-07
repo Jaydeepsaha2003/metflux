@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Leaf, Recycle, Shield, Award, Target, Factory } from 'lucide-react';
+import { BRAND_PALETTES, BRAND } from '@/brand/brand.config';
+
+const palette = BRAND_PALETTES[BRAND];
 
 const ReachSection: React.FC = () => {
   const [showContent, setShowContent] = useState(false);
@@ -89,7 +92,7 @@ const ReachSection: React.FC = () => {
           {/* Simple Header Circle */}
           <div className="relative flex items-center justify-center mb-16">
             {/* Outer glow effect */}
-            <div className="absolute inset-0 rounded-full bg-gradient-to-r from-green-500/20 to-emerald-500/20 blur-xl scale-150"></div>
+            <div className="absolute inset-0 rounded-full bg-gradient-to-r from-pulse-500/20 to-pulse-400/20 blur-xl scale-150"></div>
             
             {/* Simple Circle */}
             <div className="relative flex items-center justify-center w-80 h-80">
@@ -119,15 +122,15 @@ const ReachSection: React.FC = () => {
                   strokeDasharray={`${2 * Math.PI * 45}`}
                   strokeDashoffset={0}
                   style={{
-                    filter: 'drop-shadow(0 0 8px rgba(44, 171, 74, 0.6))'
+                    filter: `drop-shadow(0 0 8px ${palette[500]}99)`
                   }}
                 />
-                
+
                 <defs>
                   <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#16a34a" />
-                    <stop offset="50%" stopColor="#2cab4a" />
-                    <stop offset="100%" stopColor="#15803d" />
+                    <stop offset="0%"   stopColor={palette[600]} />
+                    <stop offset="50%"  stopColor={palette[500]} />
+                    <stop offset="100%" stopColor={palette[700]} />
                   </linearGradient>
                 </defs>
               </svg>
@@ -135,7 +138,7 @@ const ReachSection: React.FC = () => {
               {/* Center content */}
               <div className="absolute inset-0 flex flex-col items-center justify-center select-none">
                 <div className="text-center">
-                  <h2 className="text-4xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent mb-2 tracking-wider">
+                  <h2 className="text-4xl font-bold bg-gradient-to-r from-pulse-300 to-pulse-400 bg-clip-text text-transparent mb-2 tracking-wider">
                     SERVE & CONSERVE
                   </h2>
                   <p className="text-xs text-gray-400 uppercase tracking-wide">
@@ -152,7 +155,7 @@ const ReachSection: React.FC = () => {
             {/* Header */}
             <div className="text-center mb-16">
               <h3 className="text-4xl md:text-5xl font-bold mb-6">
-                Responsible <span className="bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">Manufacturing</span>
+                Responsible <span className="bg-gradient-to-r from-pulse-300 to-pulse-400 bg-clip-text text-transparent">Manufacturing</span>
               </h3>
               <p className="text-xl text-gray-300 max-w-3xl mx-auto">
                 Our commitment to sustainability drives every aspect of our operations. From energy-efficient production processes to recyclable materials, we're building a greener future through responsible manufacturing practices and environmental stewardship.
@@ -173,7 +176,7 @@ const ReachSection: React.FC = () => {
                 >
                   <div>
                     {/* Icon */}
-                    <div className="flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 mb-6">
+                    <div className="flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-pulse-500 to-pulse-400 mb-6">
                       <Icon className="w-8 h-8 text-white" />
                     </div>
                     
@@ -183,7 +186,7 @@ const ReachSection: React.FC = () => {
                     </h4>
                     
                     <div className="mb-4">
-                      <div className="text-3xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent mb-1">
+                      <div className="text-3xl font-bold bg-gradient-to-r from-pulse-300 to-pulse-400 bg-clip-text text-transparent mb-1">
                         {stat.value}
                       </div>
                       <div className="text-gray-400 text-sm font-medium uppercase tracking-wide">
@@ -207,7 +210,7 @@ const ReachSection: React.FC = () => {
             {[...Array(20)].map((_, i) => (
               <div
                 key={i}
-                className="absolute w-1 h-1 bg-green-400 rounded-full animate-pulse"
+                className="absolute w-1 h-1 bg-pulse-400 rounded-full animate-pulse"
                 style={{
                   left: `${Math.random() * 100}%`,
                   top: `${Math.random() * 100}%`,
