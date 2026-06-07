@@ -524,7 +524,7 @@ export const TestingReportPage = () => {
                                       {d.testVoltage != null ? d.testVoltage.toFixed(3) : '—'}
                                     </td>
                                     <td className="px-1 border-r border-slate-200 text-center text-[11px] font-semibold tabular-nums align-middle">
-                                      {d.pcs}
+                                      1
                                     </td>
                                     <td className="px-1 text-center text-[11px] tabular-nums align-middle">
                                       {mA != null ? mA.toFixed(3) : '—'}
