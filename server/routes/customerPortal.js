@@ -3,7 +3,7 @@
 // and download testing reports as Excel.
 import { Router } from 'express';
 import { z } from 'zod';
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx';
 import { q, qOne } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 
@@ -97,7 +97,7 @@ router.get('/:token', asyncHandler(async (req, res) => {
      FROM \`PoOrder\` po
      INNER JOIN \`PoOrderItem\` it ON it.\`poOrderId\` = po.\`id\`
      WHERE ${where}
-     ORDER BY po.\`orderDate\` DESC, it.\`createdAt\` ASC
+     ORDER BY po.\`orderDate\` DESC
      LIMIT 500`,
     params
   );

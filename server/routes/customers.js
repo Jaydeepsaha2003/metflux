@@ -115,10 +115,14 @@ router.post('/', requireRole('STAFF'), asyncHandler(async (req, res) => {
     if (dup) throw new AppError('Customer code already in use', 409, 'CODE_DUPLICATE');
   }
 
+  // Generate the ID upfront so shareToken can equal it — the portal URL
+  // is /<customerId> and never changes for the lifetime of the customer.
+  const customerId = uuidv4();
   const created = await insert('Customer', {
+    id: customerId,
     ...data,
     customerCode,
-    shareToken: uuidv4(),
+    shareToken: customerId,
     companyId: req.tenant.companyId,
     createdById: req.auth.userId,
   });

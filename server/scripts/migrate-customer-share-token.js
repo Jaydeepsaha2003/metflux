@@ -1,12 +1,11 @@
-// Adds Customer.shareToken (VARCHAR 64) and backfills existing rows with a
-// fresh UUID v4. Safe to re-run — skips the ALTER if column already exists and
-// skips individual rows that already have a token.
+// Sets Customer.shareToken = Customer.id so the portal link is stable forever
+// (the customer ID never changes, so the share URL never changes either).
+// Safe to re-run — idempotent.
 //
 // Run with:
 //   npm --workspace server run migrate:share-token
 import 'dotenv/config';
-import { pool, q, qOne } from '../lib/db.js';
-import { v4 as uuidv4 } from 'uuid';
+import { pool, qOne } from '../lib/db.js';
 
 const columnExists = async (table, col) => {
   const row = await qOne(
@@ -25,20 +24,12 @@ const main = async () => {
     console.log('[migrate] Customer.shareToken already exists — skipping ALTER');
   }
 
-  const blanks = await q('SELECT `id` FROM `Customer` WHERE `shareToken` IS NULL');
-  if (blanks.length === 0) {
-    console.log('[migrate] all customers already have a share token');
-  } else {
-    console.log(`[migrate] generating tokens for ${blanks.length} customer(s)…`);
-    for (const c of blanks) {
-      await pool.query(
-        'UPDATE `Customer` SET `shareToken` = ? WHERE `id` = ?',
-        [uuidv4(), c.id]
-      );
-    }
-    console.log('[migrate] tokens generated');
-  }
-
+  // Always set shareToken = id so the portal URL equals the customer ID
+  // and is therefore stable across environments and deployments.
+  const [result] = await pool.query(
+    'UPDATE `Customer` SET `shareToken` = `id`'
+  );
+  console.log(`[migrate] shareToken = id applied to ${result.affectedRows} customer(s)`);
   console.log('[migrate] done.');
 };
 
