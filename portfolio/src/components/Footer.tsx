@@ -9,7 +9,7 @@ import { MapPin, Phone, Mail, ArrowRight, Linkedin, Twitter, Facebook, Instagram
 const Footer = () => {
 
   return (
-    <footer className="relative bg-gradient-to-br from-pulse-950 via-gray-900 to-pulse-950 text-white overflow-hidden">
+    <footer className="relative bg-white text-gray-900 overflow-hidden">
       {/* Background Pattern */}
       <div className="absolute inset-0 opacity-5">
         <div 
@@ -39,26 +39,26 @@ const Footer = () => {
                   className="h-10 w-10 md:h-12 md:w-12 object-contain shrink-0"
                 />
                 <div className="min-w-0">
-                  <h3 className="text-base md:text-lg font-bold text-white leading-tight">{siteData.site.name}</h3>
+                  <h3 className="text-base md:text-lg font-bold text-gray-900 leading-tight">{siteData.site.name}</h3>
                   <p className="text-pulse-400 text-xs font-medium mt-0.5">Electrical Excellence</p>
                 </div>
               </div>
-              <p className="text-gray-300 leading-relaxed text-sm md:text-base">
+              <p className="text-gray-600 leading-relaxed text-sm md:text-base">
                 Leading manufacturer of CRGO electrical steel, transformer cores, and specialized electrical components for industrial applications worldwide.
               </p>
               
               {/* Social Links */}
               <div className="flex space-x-3 md:space-x-4">
-                <a href="#" className="w-9 h-9 md:w-10 md:h-10 bg-pulse-900/60 hover:bg-pulse-500 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:shadow-pulse-500/25">
+                <a href="#" className="w-9 h-9 md:w-10 md:h-10 bg-slate-100 hover:bg-pulse-500 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:shadow-pulse-500/25">
                   <Linkedin className="w-4 h-4 md:w-5 md:h-5" />
                 </a>
-                <a href="#" className="w-9 h-9 md:w-10 md:h-10 bg-pulse-900/60 hover:bg-pulse-500 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:shadow-pulse-500/25">
+                <a href="#" className="w-9 h-9 md:w-10 md:h-10 bg-slate-100 hover:bg-pulse-500 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:shadow-pulse-500/25">
                   <Twitter className="w-4 h-4 md:w-5 md:h-5" />
                 </a>
-                <a href="#" className="w-9 h-9 md:w-10 md:h-10 bg-pulse-900/60 hover:bg-pulse-500 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:shadow-pulse-500/25">
+                <a href="#" className="w-9 h-9 md:w-10 md:h-10 bg-slate-100 hover:bg-pulse-500 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:shadow-pulse-500/25">
                   <Facebook className="w-4 h-4 md:w-5 md:h-5" />
                 </a>
-                <a href="#" className="w-9 h-9 md:w-10 md:h-10 bg-pulse-900/60 hover:bg-pulse-500 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:shadow-pulse-500/25">
+                <a href="#" className="w-9 h-9 md:w-10 md:h-10 bg-slate-100 hover:bg-pulse-500 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg hover:shadow-pulse-500/25">
                   <Instagram className="w-4 h-4 md:w-5 md:h-5" />
                 </a>
               </div>
@@ -66,19 +66,19 @@ const Footer = () => {
             
             {/* Quick Links */}
             <div className="space-y-4 md:space-y-6">
-              <h4 className="text-base md:text-lg font-bold text-white relative">
+              <h4 className="text-base md:text-lg font-bold text-gray-900 relative">
                 Quick Links
                 <div className="absolute -bottom-1 left-0 w-8 h-0.5 bg-pulse-500 rounded-full"></div>
               </h4>
               <ul className="space-y-2 md:space-y-3">
                 <li>
-                  <Link href="/" className="text-gray-300 hover:text-pulse-400 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base">
+                  <Link href="/" className="text-gray-600 hover:text-pulse-600 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base">
                     <ArrowRight className="w-3 h-3 md:w-4 md:h-4 transform group-hover:translate-x-1 transition-transform duration-200" />
                     <span>Home</span>
                   </Link>
                 </li>
                 <li>
-                  <Link href="/about" className="text-gray-300 hover:text-pulse-400 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base">
+                  <Link href="/about" className="text-gray-600 hover:text-pulse-600 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base">
                     <ArrowRight className="w-3 h-3 md:w-4 md:h-4 transform group-hover:translate-x-1 transition-transform duration-200" />
                     <span>About Us</span>
                   </Link>
@@ -86,7 +86,7 @@ const Footer = () => {
                 <li>
                   <a 
                     href="/#products" 
-                    className="text-gray-300 hover:text-pulse-400 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base"
+                    className="text-gray-600 hover:text-pulse-600 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base"
                   onClick={(e) => {
                     e.preventDefault();
                     if (typeof window !== 'undefined') {
@@ -106,7 +106,7 @@ const Footer = () => {
                   </a>
                 </li>
                 <li>
-                  <Link href="/contact" className="text-gray-300 hover:text-pulse-400 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base">
+                  <Link href="/contact" className="text-gray-600 hover:text-pulse-600 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base">
                     <ArrowRight className="w-3 h-3 md:w-4 md:h-4 transform group-hover:translate-x-1 transition-transform duration-200" />
                     <span>Contact</span>
                   </Link>
@@ -116,43 +116,43 @@ const Footer = () => {
             
             {/* Products */}
             <div className="space-y-4 md:space-y-6">
-              <h4 className="text-base md:text-lg font-bold text-white relative">
+              <h4 className="text-base md:text-lg font-bold text-gray-900 relative">
                 Our Products
                 <div className="absolute -bottom-1 left-0 w-8 h-0.5 bg-pulse-500 rounded-full"></div>
               </h4>
               <ul className="space-y-2 md:space-y-3">
                 <li>
-                  <Link href="/products/crgo-toroidal-core" className="text-gray-300 hover:text-pulse-400 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base">
+                  <Link href="/products/crgo-toroidal-core" className="text-gray-600 hover:text-pulse-600 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base">
                     <ArrowRight className="w-3 h-3 md:w-4 md:h-4 transform group-hover:translate-x-1 transition-transform duration-200" />
                     <span>CRGO Toroidal Cores</span>
                   </Link>
                 </li>
                 <li>
-                  <Link href="/products/cut-cores" className="text-gray-300 hover:text-pulse-400 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base">
+                  <Link href="/products/cut-cores" className="text-gray-600 hover:text-pulse-600 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base">
                     <ArrowRight className="w-3 h-3 md:w-4 md:h-4 transform group-hover:translate-x-1 transition-transform duration-200" />
                     <span>Cut Cores</span>
                   </Link>
                 </li>
                 <li>
-                  <Link href="/products/crgo-slit-coils" className="text-gray-300 hover:text-pulse-400 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base">
+                  <Link href="/products/crgo-slit-coils" className="text-gray-600 hover:text-pulse-600 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base">
                     <ArrowRight className="w-3 h-3 md:w-4 md:h-4 transform group-hover:translate-x-1 transition-transform duration-200" />
                     <span>CRGO Slit Coils</span>
                   </Link>
                 </li>
                 <li>
-                  <Link href="/products/crgo-lamination-core" className="text-gray-300 hover:text-pulse-400 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base">
+                  <Link href="/products/crgo-lamination-core" className="text-gray-600 hover:text-pulse-600 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base">
                     <ArrowRight className="w-3 h-3 md:w-4 md:h-4 transform group-hover:translate-x-1 transition-transform duration-200" />
                     <span>CRGO Laminations</span>
                   </Link>
                 </li>
                 <li>
-                  <Link href="/products/nanocrystalline-toroidal-core" className="text-gray-300 hover:text-pulse-400 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base">
+                  <Link href="/products/nanocrystalline-toroidal-core" className="text-gray-600 hover:text-pulse-600 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base">
                     <ArrowRight className="w-3 h-3 md:w-4 md:h-4 transform group-hover:translate-x-1 transition-transform duration-200" />
                     <span>Nanocrystalline Cores</span>
                   </Link>
                 </li>
                 <li>
-                  <Link href="/products" className="text-gray-300 hover:text-pulse-400 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base font-semibold">
+                  <Link href="/products" className="text-gray-600 hover:text-pulse-600 transition-colors duration-200 flex items-center space-x-2 group text-sm md:text-base font-semibold">
                     <ArrowRight className="w-3 h-3 md:w-4 md:h-4 transform group-hover:translate-x-1 transition-transform duration-200" />
                     <span>View all 12 products →</span>
                   </Link>
@@ -162,18 +162,18 @@ const Footer = () => {
             
             {/* Let's Connect */}
             <div className="md:col-span-2 lg:col-span-1 space-y-4 md:space-y-6">
-              <h4 className="text-base md:text-lg font-bold text-white relative">
+              <h4 className="text-base md:text-lg font-bold text-gray-900 relative">
                 Let's Connect
                 <div className="absolute -bottom-1 left-0 w-8 h-0.5 bg-pulse-500 rounded-full"></div>
               </h4>
               <div className="space-y-3 md:space-y-4">
                 <div className="flex items-start space-x-3 group">
-                  <div className="w-8 h-8 md:w-10 md:h-10 bg-pulse-900/60 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-pulse-500 transition-colors duration-200">
-                    <Phone className="w-4 h-4 md:w-5 md:h-5 text-pulse-400 group-hover:text-white" />
+                  <div className="w-8 h-8 md:w-10 md:h-10 bg-slate-100 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-pulse-500 transition-colors duration-200">
+                    <Phone className="w-4 h-4 md:w-5 md:h-5 text-pulse-600 group-hover:text-white" />
                   </div>
                   <div>
-                    <p className="text-white font-medium text-sm md:text-base">Call Us</p>
-                    <p className="text-gray-300 text-xs md:text-sm leading-relaxed">
+                    <p className="text-gray-900 font-medium text-sm md:text-base">Call Us</p>
+                    <p className="text-gray-600 text-xs md:text-sm leading-relaxed">
                       {(() => {
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         const ph = (siteData as any)?.contact?.info?.details?.find((d: { type: string }) => d.type === 'phone') as { content: string[] } | undefined;
@@ -190,12 +190,12 @@ const Footer = () => {
                 </div>
 
                 <div className="flex items-start space-x-3 group">
-                  <div className="w-8 h-8 md:w-10 md:h-10 bg-pulse-900/60 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-pulse-500 transition-colors duration-200">
-                    <Mail className="w-4 h-4 md:w-5 md:h-5 text-pulse-400 group-hover:text-white" />
+                  <div className="w-8 h-8 md:w-10 md:h-10 bg-slate-100 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-pulse-500 transition-colors duration-200">
+                    <Mail className="w-4 h-4 md:w-5 md:h-5 text-pulse-600 group-hover:text-white" />
                   </div>
                   <div>
-                    <p className="text-white font-medium text-sm md:text-base">Email &amp; Web</p>
-                    <p className="text-gray-300 text-xs md:text-sm leading-relaxed">
+                    <p className="text-gray-900 font-medium text-sm md:text-base">Email &amp; Web</p>
+                    <p className="text-gray-600 text-xs md:text-sm leading-relaxed">
                       <a href={`mailto:${siteData.site.email}`} className="hover:text-pulse-400 transition-colors">{siteData.site.email}</a><br />
                       <a href={siteData.site.url} className="hover:text-pulse-400 transition-colors">{siteData.site.url.replace('https://', '')}</a>
                     </p>
@@ -208,27 +208,27 @@ const Footer = () => {
         </div>
         
         {/* Bottom Bar */}
-        <div className="border-t border-pulse-800/40 backdrop-blur-sm">
+        <div className="border-t border-slate-200 backdrop-blur-sm">
           <div className="section-container py-4 md:py-6">
             <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
               <div className="text-center md:text-left">
-                <p className="text-gray-400 text-xs md:text-sm">
+                <p className="text-gray-500 text-xs md:text-sm">
                   {siteData.footer.copyright}
                 </p>
               </div>
               
               <div className="flex flex-wrap items-center justify-center gap-3 md:gap-6 text-xs md:text-sm">
-                <a href="#" className="text-gray-400 hover:text-pulse-400 transition-colors duration-200 flex items-center space-x-1 group">
+                <a href="#" className="text-gray-500 hover:text-pulse-600 transition-colors duration-200 flex items-center space-x-1 group">
                   <span>Privacy Policy</span>
                   <ExternalLink className="w-2 h-2 md:w-3 md:h-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
                 </a>
-                <span className="text-gray-600 hidden sm:inline">|</span>
-                <a href="#" className="text-gray-400 hover:text-pulse-400 transition-colors duration-200 flex items-center space-x-1 group">
+                <span className="text-gray-300 hidden sm:inline">|</span>
+                <a href="#" className="text-gray-500 hover:text-pulse-600 transition-colors duration-200 flex items-center space-x-1 group">
                   <span>Terms of Service</span>
                   <ExternalLink className="w-2 h-2 md:w-3 md:h-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
                 </a>
-                <span className="text-gray-600 hidden sm:inline">|</span>
-                <a href="#" className="text-gray-400 hover:text-pulse-400 transition-colors duration-200 flex items-center space-x-1 group">
+                <span className="text-gray-300 hidden sm:inline">|</span>
+                <a href="#" className="text-gray-500 hover:text-pulse-600 transition-colors duration-200 flex items-center space-x-1 group">
                   <span>Cookie Policy</span>
                   <ExternalLink className="w-2 h-2 md:w-3 md:h-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
                 </a>
