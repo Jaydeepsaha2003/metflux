@@ -6,9 +6,17 @@ import { useAuthStore } from '@/store/auth';
 import type { LoginPayload } from '@/store/auth';
 import { cn } from '@/lib/cn';
 
+const getBrand = () => {
+  const h = typeof window !== 'undefined' ? window.location.hostname.toLowerCase() : '';
+  return h.includes('toroflux')
+    ? { name: 'Toroflux Industries', short: 'TOROFLUX', color: '#0f50e5' }
+    : { name: 'Metflux', short: 'METFLUX', color: '#2cab4a' };
+};
+
 export const AuthPage = () => {
   const navigate = useNavigate();
   const setSession = useAuthStore((s) => s.setSession);
+  const brand = getBrand();
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -61,6 +69,22 @@ export const AuthPage = () => {
 
       <div className="w-full max-w-sm animate-fade-in">
         <div className="rounded-2xl border border-white/15 bg-white/95 p-6 shadow-2xl backdrop-blur-xl sm:p-7">
+          {/* Brand header */}
+          <div className="mb-5 text-center">
+            <div
+              className="inline-flex items-center justify-center h-10 w-10 rounded-xl mb-3 text-white text-sm font-black tracking-tight"
+              style={{ backgroundColor: brand.color }}
+            >
+              {brand.short.slice(0, 2)}
+            </div>
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-0.5">
+              Admin Portal
+            </div>
+            <div className="text-base font-bold text-slate-900" style={{ fontFamily: 'Poppins, sans-serif' }}>
+              {brand.name}
+            </div>
+          </div>
+
           <form onSubmit={submit} className="space-y-4 animate-fade-up">
             <h1 className="text-xl font-bold tracking-tight text-slate-900">Sign in</h1>
 

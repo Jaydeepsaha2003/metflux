@@ -294,27 +294,35 @@ export const CustomerPortalPage = () => {
                 </span>
               )}
             </div>
-            {/* Contact — always stacked, left-aligned, clean on every screen size */}
+            {/* Company contact block — Poppins, compact, labelled */}
             {(company.phone || company.email || company.address) && (
-              <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
-                {company.phone && (
-                  <div className="flex items-center gap-2 text-[12px] text-slate-600">
-                    <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                    <span>{company.phone}</span>
-                  </div>
-                )}
-                {company.email && (
-                  <div className="flex items-center gap-2 text-[12px] text-slate-600">
-                    <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                    <span className="break-all">{company.email}</span>
-                  </div>
-                )}
-                {company.address && (
-                  <div className="flex items-start gap-2 text-[12px] text-slate-600">
-                    <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" />
-                    <span className="leading-relaxed">{company.address.replace(/\n/g, ', ')}</span>
-                  </div>
-                )}
+              <div className="mt-3 pt-3 border-t border-slate-100" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-400 mb-2">
+                  Supplied by
+                </p>
+                <p className="text-[11px] font-semibold text-emerald-700 mb-2.5 leading-tight">
+                  {company.name}
+                </p>
+                <div className="space-y-1.5">
+                  {company.phone && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-3 w-3 text-slate-400 shrink-0" />
+                      <span className="text-[11px] font-medium text-slate-600 tracking-tight">{company.phone}</span>
+                    </div>
+                  )}
+                  {company.email && (
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-3 w-3 text-slate-400 shrink-0" />
+                      <span className="text-[11px] font-medium text-slate-600 break-all">{company.email}</span>
+                    </div>
+                  )}
+                  {company.address && (
+                    <div className="flex items-start gap-2">
+                      <MapPin className="h-3 w-3 text-slate-400 shrink-0 mt-0.5" />
+                      <span className="text-[11px] text-slate-500 leading-relaxed">{company.address.replace(/\n/g, ', ')}</span>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
