@@ -84,7 +84,7 @@ const ReachSection: React.FC = () => {
   return (
     <section 
       ref={sectionRef}
-      className="py-20 bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white overflow-hidden"
+      className="py-20 bg-gray-50 text-gray-900 overflow-hidden"
     >
       <div className="container mx-auto px-4">
         <div className="flex flex-col items-center justify-center relative">
@@ -105,7 +105,7 @@ const ReachSection: React.FC = () => {
                   cx="50"
                   cy="50"
                   r="45"
-                  stroke="rgba(255,255,255,0.1)"
+                  stroke="rgba(0,0,0,0.08)"
                   strokeWidth="2"
                   fill="none"
                 />
@@ -141,7 +141,7 @@ const ReachSection: React.FC = () => {
                   <h2 className="text-4xl font-bold bg-gradient-to-r from-pulse-300 to-pulse-400 bg-clip-text text-transparent mb-2 tracking-wider">
                     SERVE & CONSERVE
                   </h2>
-                  <p className="text-xs text-gray-400 uppercase tracking-wide">
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">
                     Sustainability Commitment
                   </p>
                 </div>
@@ -157,7 +157,7 @@ const ReachSection: React.FC = () => {
               <h3 className="text-4xl md:text-5xl font-bold mb-6">
                 Responsible <span className="bg-gradient-to-r from-pulse-300 to-pulse-400 bg-clip-text text-transparent">Manufacturing</span>
               </h3>
-              <p className="text-xl text-gray-300 max-w-3xl mx-auto">
+              <p className="text-xl text-gray-600 max-w-3xl mx-auto">
                 Our commitment to sustainability drives every aspect of our operations. From energy-efficient production processes to recyclable materials, we're building a greener future through responsible manufacturing practices and environmental stewardship.
               </p>
             </div>
@@ -169,7 +169,7 @@ const ReachSection: React.FC = () => {
               return (
                 <div
                   key={stat.title}
-                  className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-sm rounded-2xl p-8 border border-gray-700/50"
+                  className="bg-white rounded-2xl p-8 border border-gray-100 shadow-sm"
                   style={{
                     animationDelay: `${index * 200}ms`
                   }}
@@ -181,7 +181,7 @@ const ReachSection: React.FC = () => {
                     </div>
                     
                     {/* Content */}
-                    <h4 className="text-xl font-bold text-white mb-2">
+                    <h4 className="text-xl font-bold text-gray-900 mb-2">
                       {stat.title}
                     </h4>
                     
@@ -189,12 +189,12 @@ const ReachSection: React.FC = () => {
                       <div className="text-3xl font-bold bg-gradient-to-r from-pulse-300 to-pulse-400 bg-clip-text text-transparent mb-1">
                         {stat.value}
                       </div>
-                      <div className="text-gray-400 text-sm font-medium uppercase tracking-wide">
+                      <div className="text-gray-500 text-sm font-medium uppercase tracking-wide">
                         {stat.label}
                       </div>
                     </div>
                     
-                    <p className="text-gray-300 text-sm leading-relaxed">
+                    <p className="text-gray-600 text-sm leading-relaxed">
                       {stat.description}
                     </p>
                   </div>

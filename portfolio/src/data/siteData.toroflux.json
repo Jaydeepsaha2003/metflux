@@ -1,20 +1,36 @@
 {
   "site": {
-    "name": "Toroflux",
+    "name": "TOROFLUX INDUSTRIES",
     "logo": "/logo-toroflux/toroflux-logo.png",
     "wordmark": "/logo-toroflux/toroflux-wordmark.png",
     "description": "Leading manufacturer of CRGO electrical steel, transformer cores, and specialized electrical components for industrial applications worldwide.",
     "keywords": "CRGO electrical steel, transformer cores, electrical components, industrial manufacturing, power transformers, electrical engineering",
     "url": "https://torofluxindustries.com",
     "email": "contact@torofluxindustries.com",
-    "phone": "+91-xxx-xxx-xxxx"
+    "phone": "+91 9971856222"
   },
   "navigation": {
     "main": [
-      { "label": "Home", "href": "/", "type": "internal" },
-      { "label": "Products", "href": "/products", "type": "internal" },
-      { "label": "About", "href": "/about", "type": "internal" },
-      { "label": "Contact", "href": "/contact", "type": "internal" }
+      {
+        "label": "Home",
+        "href": "/",
+        "type": "internal"
+      },
+      {
+        "label": "Products",
+        "href": "/products",
+        "type": "internal"
+      },
+      {
+        "label": "About",
+        "href": "/about",
+        "type": "internal"
+      },
+      {
+        "label": "Contact",
+        "href": "/contact",
+        "type": "internal"
+      }
     ]
   },
   "hero": {
@@ -280,10 +296,22 @@
         "content": "To be the global leader in humanoid robotics, creating a future where humans and robots collaborate seamlessly to solve the world's greatest challenges."
       },
       "stats": [
-        { "value": "10+", "label": "Years Experience" },
-        { "value": "500+", "label": "Robots Deployed" },
-        { "value": "50+", "label": "Industry Partners" },
-        { "value": "25+", "label": "Countries Served" }
+        {
+          "value": "10+",
+          "label": "Years Experience"
+        },
+        {
+          "value": "500+",
+          "label": "Robots Deployed"
+        },
+        {
+          "value": "50+",
+          "label": "Industry Partners"
+        },
+        {
+          "value": "25+",
+          "label": "Countries Served"
+        }
       ]
     }
   },
@@ -296,29 +324,63 @@
           "type": "email",
           "icon": "✉️",
           "title": "Email Us",
-          "content": ["contact@torofluxindustries.com", "sales@torofluxindustries.com"]
+          "content": [
+            "contact@torofluxindustries.com",
+            "sales@torofluxindustries.com"
+          ]
         },
         {
           "type": "phone",
           "icon": "📞",
           "title": "Call Us",
-          "content": ["+91-xxx-xxx-xxxx", "+91-xxx-xxx-xxxx"]
+          "content": [
+            "+91 9971856222",
+            "+91 9898484467"
+          ]
         },
         {
           "type": "address",
           "icon": "📍",
           "title": "Visit Us",
-          "content": ["Industrial Area", "Hyderabad, Telangana", "India"]
+          "content": [
+            "PLOT NO. 360, AATMIYA 2 INDUSTRIAL PARK",
+            "POR - GIDC, MANGLEJ, VADODARA",
+            "GUJRAT - 391243"
+          ]
         }
       ]
     },
     "form": {
       "title": "Send us a Message",
       "fields": [
-        { "name": "name", "label": "Name", "type": "text", "required": true, "placeholder": "Your full name" },
-        { "name": "email", "label": "Email", "type": "email", "required": true, "placeholder": "your.email@example.com" },
-        { "name": "subject", "label": "Subject", "type": "text", "required": true, "placeholder": "What's this about?" },
-        { "name": "message", "label": "Message", "type": "textarea", "required": true, "placeholder": "Tell us more about your inquiry..." }
+        {
+          "name": "name",
+          "label": "Name",
+          "type": "text",
+          "required": true,
+          "placeholder": "Your full name"
+        },
+        {
+          "name": "email",
+          "label": "Email",
+          "type": "email",
+          "required": true,
+          "placeholder": "your.email@example.com"
+        },
+        {
+          "name": "subject",
+          "label": "Subject",
+          "type": "text",
+          "required": true,
+          "placeholder": "What's this about?"
+        },
+        {
+          "name": "message",
+          "label": "Message",
+          "type": "textarea",
+          "required": true,
+          "placeholder": "Tell us more about your inquiry..."
+        }
       ],
       "submitText": "Send Message"
     }
@@ -329,37 +391,87 @@
       {
         "title": "Product",
         "links": [
-          { "label": "Atlas Robot", "href": "/products" },
-          { "label": "Specifications", "href": "/products" },
-          { "label": "Applications", "href": "/products" },
-          { "label": "Support", "href": "/contact" }
+          {
+            "label": "Atlas Robot",
+            "href": "/products"
+          },
+          {
+            "label": "Specifications",
+            "href": "/products"
+          },
+          {
+            "label": "Applications",
+            "href": "/products"
+          },
+          {
+            "label": "Support",
+            "href": "/contact"
+          }
         ]
       },
       {
         "title": "Company",
         "links": [
-          { "label": "About Us", "href": "/about" },
-          { "label": "Careers", "href": "/contact" },
-          { "label": "Partners", "href": "/contact" },
-          { "label": "News", "href": "/gallery" }
+          {
+            "label": "About Us",
+            "href": "/about"
+          },
+          {
+            "label": "Careers",
+            "href": "/contact"
+          },
+          {
+            "label": "Partners",
+            "href": "/contact"
+          },
+          {
+            "label": "News",
+            "href": "/gallery"
+          }
         ]
       },
       {
         "title": "Resources",
         "links": [
-          { "label": "Documentation", "href": "/contact" },
-          { "label": "Gallery", "href": "/gallery" },
-          { "label": "Case Studies", "href": "/gallery" },
-          { "label": "White Papers", "href": "/contact" }
+          {
+            "label": "Documentation",
+            "href": "/contact"
+          },
+          {
+            "label": "Gallery",
+            "href": "/gallery"
+          },
+          {
+            "label": "Case Studies",
+            "href": "/gallery"
+          },
+          {
+            "label": "White Papers",
+            "href": "/contact"
+          }
         ]
       },
       {
         "title": "Connect",
         "links": [
-          { "label": "Contact", "href": "/contact" },
-          { "label": "Support", "href": "/contact" },
-          { "label": "LinkedIn", "href": "#", "external": true },
-          { "label": "Twitter", "href": "#", "external": true }
+          {
+            "label": "Contact",
+            "href": "/contact"
+          },
+          {
+            "label": "Support",
+            "href": "/contact"
+          },
+          {
+            "label": "LinkedIn",
+            "href": "#",
+            "external": true
+          },
+          {
+            "label": "Twitter",
+            "href": "#",
+            "external": true
+          }
         ]
       }
     ],

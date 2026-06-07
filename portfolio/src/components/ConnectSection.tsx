@@ -116,17 +116,16 @@ const ConnectSection = () => {
   };
 
   return (
-    <section className="w-full py-12 md:py-16 bg-gradient-to-br from-gray-900 via-gray-800 to-black" id="connect" ref={sectionRef}>
+    <section className="w-full py-12 md:py-16 bg-white" id="connect" ref={sectionRef}>
       <div className="container px-6 lg:px-8 mx-auto">
         {/* Section Header */}
         <div className="text-center mb-12">
-          
-          <h2 className="section-title text-3xl sm:text-4xl md:text-5xl font-display font-bold mb-6 text-white">
-            Let's Connect
+          <h2 className="section-title text-3xl sm:text-4xl md:text-5xl font-display font-bold mb-6 text-gray-900">
+            Let&apos;s Connect
           </h2>
-          <p className="text-xl text-gray-300 leading-relaxed max-w-4xl mx-auto">
-            Ready to transform your power infrastructure with our premium transformer cores and electrical solutions? 
-            We're here to help you with custom engineering, project consultation, and tailored solutions that meet 
+          <p className="text-xl text-gray-500 leading-relaxed max-w-4xl mx-auto">
+            Ready to transform your power infrastructure with our premium transformer cores and electrical solutions?
+            We&apos;re here to help you with custom engineering, project consultation, and tailored solutions that meet
             your specific requirements.
           </p>
         </div>
@@ -139,8 +138,8 @@ const ConnectSection = () => {
           }`}>
             <div className="space-y-6">
               <div>
-                <h3 className="text-2xl font-bold text-white mb-3">Our Factory Location</h3>
-                <p className="text-gray-300">
+                <h3 className="text-2xl font-bold text-gray-900 mb-3">Our Factory Location</h3>
+                <p className="text-gray-500">
                   Visit us at our state-of-the-art manufacturing facility. Site visits and tours are welcome by appointment.
                 </p>
               </div>
@@ -152,14 +151,14 @@ const ConnectSection = () => {
                 const addr = contactData?.contact?.info?.details?.find((d: { type: string }) => d.type === 'address') as { content: string[] } | undefined;
                 if (!addr) return null;
                 return (
-                  <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
+                  <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
                     <div className="flex items-start space-x-4">
                       <div className="w-10 h-10 bg-pulse-500 rounded-lg flex items-center justify-center flex-shrink-0">
                         <MapPin className="w-5 h-5 text-white" />
                       </div>
                       <div>
-                        <h4 className="text-white font-semibold text-lg mb-2">Factory Address</h4>
-                        <p className="text-gray-300 text-sm leading-relaxed">
+                        <h4 className="text-gray-900 font-semibold text-lg mb-2">Factory Address</h4>
+                        <p className="text-gray-600 text-sm leading-relaxed">
                           {addr.content.map((line, i, arr) => (
                             <React.Fragment key={i}>{line}{i < arr.length - 1 && <br />}</React.Fragment>
                           ))}
@@ -177,14 +176,14 @@ const ConnectSection = () => {
                 const ph = contactData?.contact?.info?.details?.find((d: { type: string }) => d.type === 'phone') as { content: string[] } | undefined;
                 if (!ph) return null;
                 return (
-                  <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
+                  <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
                     <div className="flex items-start space-x-4">
                       <div className="w-10 h-10 bg-pulse-500 rounded-lg flex items-center justify-center flex-shrink-0">
                         <Phone className="w-5 h-5 text-white" />
                       </div>
                       <div>
-                        <h4 className="text-white font-semibold text-lg mb-2">Call Us</h4>
-                        <p className="text-gray-300 text-sm leading-relaxed">
+                        <h4 className="text-gray-900 font-semibold text-lg mb-2">Call Us</h4>
+                        <p className="text-gray-600 text-sm leading-relaxed">
                           {ph.content.map((num, i, arr) => (
                             <React.Fragment key={i}>
                               <a href={`tel:${num.replace(/[\s-]/g, '')}`} className="hover:text-pulse-400 transition-colors">{num}</a>
@@ -199,14 +198,14 @@ const ConnectSection = () => {
               })()}
 
               {/* Email + Web */}
-              <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
+              <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
                 <div className="flex items-start space-x-4">
                   <div className="w-10 h-10 bg-pulse-500 rounded-lg flex items-center justify-center flex-shrink-0">
                     <Mail className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h4 className="text-white font-semibold text-lg mb-2">Email &amp; Web</h4>
-                    <p className="text-gray-300 text-sm leading-relaxed">
+                    <h4 className="text-gray-900 font-semibold text-lg mb-2">Email &amp; Web</h4>
+                    <p className="text-gray-600 text-sm leading-relaxed">
                       <a href={`mailto:${siteData.site.email}`} className="hover:text-pulse-400 transition-colors">{siteData.site.email}</a><br />
                       <a href={siteData.site.url} className="hover:text-pulse-400 transition-colors">{siteData.site.url.replace('https://', '')}</a>
                     </p>
