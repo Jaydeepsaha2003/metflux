@@ -71,23 +71,8 @@ export const hostRouter = ({ adminDir, publicDir }) => {
 
   const router = express.Router();
 
-  // Admin SPA — only served when the request comes from an admin hostname
-  // (host contains "admin") or from localhost / an IP (dev environment).
-  // Portfolio domains like metfluxelectrical.com must not expose the admin
-  // panel even if someone manually visits /s/admin on them.
-  const isAdminHost = (req) => {
-    const host = String(req.headers.host ?? '').toLowerCase().split(':')[0];
-    return (
-      host.includes('admin') ||
-      host === 'localhost' ||
-      /^127\.|^::1$|^0\.0\.0\.0$/.test(host)
-    );
-  };
-
+  // Admin SPA — accessible at /s/admin on any domain this server handles.
   router.use(ADMIN_MOUNT, async (req, res, next) => {
-    // Block admin access from non-admin hostnames.
-    if (!isAdminHost(req)) return next();
-
     if (!adminStatic) {
       return res
         .status(503)
