@@ -294,25 +294,29 @@ export const CustomerPortalPage = () => {
                 </span>
               )}
             </div>
-            {/* Contact row — stacks on mobile, side-by-side on sm+ */}
-            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-1.5 sm:gap-4 pt-3 border-t border-slate-100">
-              {company.phone && (
-                <div className="flex items-center gap-1.5 text-[12px] text-slate-500">
-                  <Phone className="h-3 w-3 text-slate-400 shrink-0" />{company.phone}
-                </div>
-              )}
-              {company.email && (
-                <div className="flex items-center gap-1.5 text-[12px] text-slate-500">
-                  <Mail className="h-3 w-3 text-slate-400 shrink-0" />{company.email}
-                </div>
-              )}
-              {company.address && (
-                <div className="flex items-start gap-1.5 text-[12px] text-slate-500 sm:text-right sm:justify-end sm:max-w-[220px]">
-                  <MapPin className="h-3 w-3 text-slate-400 shrink-0 mt-0.5" />
-                  <span className="leading-snug">{company.address.replace(/\n/g, ', ')}</span>
-                </div>
-              )}
-            </div>
+            {/* Contact — always stacked, left-aligned, clean on every screen size */}
+            {(company.phone || company.email || company.address) && (
+              <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
+                {company.phone && (
+                  <div className="flex items-center gap-2 text-[12px] text-slate-600">
+                    <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                    <span>{company.phone}</span>
+                  </div>
+                )}
+                {company.email && (
+                  <div className="flex items-center gap-2 text-[12px] text-slate-600">
+                    <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                    <span className="break-all">{company.email}</span>
+                  </div>
+                )}
+                {company.address && (
+                  <div className="flex items-start gap-2 text-[12px] text-slate-600">
+                    <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" />
+                    <span className="leading-relaxed">{company.address.replace(/\n/g, ', ')}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
