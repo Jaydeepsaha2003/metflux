@@ -476,7 +476,7 @@ export const TestingReportPage = () => {
                         <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Turns</th>
                         <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Applied Voltage (V)</th>
                         <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Pcs</th>
-                        <th className="px-1 py-1.5 align-middle">Actual LeMax (mA)</th>
+                        <th className="px-1 py-1.5 align-middle">Max Allowed Current (mA)</th>
                       </tr>
                     </thead>
                   );
@@ -496,7 +496,7 @@ export const TestingReportPage = () => {
                             {d.testCurrent != null && (
                               <div className="flex flex-wrap items-center gap-x-5 gap-y-0.5 px-5 py-1.5 bg-slate-50 border-b border-slate-300 text-[10px] text-slate-700">
                                 <span>
-                                  <span className="font-semibold uppercase tracking-wide">Actual LeMax (Spec):</span>{' '}
+                                  <span className="font-semibold uppercase tracking-wide">Max Allowed Current (mA):</span>{' '}
                                   <strong className="text-slate-900 tabular-nums">{d.testCurrent.toFixed(1)} mA</strong>
                                 </span>
                               </div>
