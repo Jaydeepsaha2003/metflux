@@ -264,11 +264,10 @@ export const WorkAllotmentBuildPage = () => {
     const el = printRef.current;
     if (!el || !rows.length) return null;
 
-    // Landscape A4 = 297mm wide; with 8mm margins, ~281mm usable.
-    // At ~3.8 px/mm (same DPI ratio the Packing List uses for portrait),
-    // that's ~1068px. We bump slightly above the print container's
-    // `min-w-[1000px]` so the table is never clipped by overflow-hidden.
-    const A4_USABLE_PX = 1080;
+    // Landscape A4 = 297mm wide; with 8mm margins = 281mm usable.
+    // At 3.7795 px/mm (96 dpi) that's ~1062px. Use 1040 for a small safety
+    // margin so the last table column is never clipped.
+    const A4_USABLE_PX = 1040;
     const clone = el.cloneNode(true) as HTMLElement;
 
     const liveInputs = Array.from(el.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select'));
@@ -315,6 +314,7 @@ export const WorkAllotmentBuildPage = () => {
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
+        width: A4_USABLE_PX,
         windowWidth: A4_USABLE_PX,
       },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
@@ -385,7 +385,7 @@ export const WorkAllotmentBuildPage = () => {
   );
 
   return (
-    <div className="space-y-4 max-w-6xl">
+    <div className="space-y-4">
 
       {/* ── Control bar (hidden in print) ── */}
       <div className="no-print rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm space-y-3">
@@ -611,21 +611,21 @@ export const WorkAllotmentBuildPage = () => {
             <InfoRow label="Total Pcs" value={String(totalPcs)} border="" />
           </div>
 
-          {/* Items table */}
+          {/* Items table — column order: SR | Cust Code | SO Date | Measure | Grade | Material | Pcs | Flux | Turns | Voltage | Iemax | Worker */}
           <table className="w-full text-sm border-collapse table-fixed">
             <colgroup>
-              <col style={{ width: '36px' }} />     {/* SR */}
-              <col style={{ width: '10%' }} />      {/* CUST CODE — codes are short e.g. AAR-001 */}
-              <col style={{ width: '9%'  }} />      {/* SO DATE  — fits DD/MM/YYYY on one line */}
-              <col style={{ width: '14%' }} />      {/* MEASURE  — fits "80 x 120 x 30" on one line */}
-              <col style={{ width: '9%'  }} />      {/* GRADE    — fits "CRGO 27M3"     */}
-              <col style={{ width: '10%' }} />      {/* MATERIAL — fits "M3 - 0.27mm"   */}
-              <col style={{ width: '5%'  }} />      {/* FLUX     */}
-              <col style={{ width: '5%'  }} />      {/* TURNS    */}
-              <col style={{ width: '7%'  }} />      {/* VOLTAGE  */}
-              <col style={{ width: '7%'  }} />      {/* IEMAX    */}
-              <col style={{ width: '5%'  }} />      {/* PCS      */}
-              <col style={{ width: '11%' }} />      {/* WORKER   */}
+              <col style={{ width: '3%'  }} />  {/* SR */}
+              <col style={{ width: '10%' }} />  {/* CUST CODE */}
+              <col style={{ width: '8%'  }} />  {/* SO DATE */}
+              <col style={{ width: '15%' }} />  {/* MEASURE */}
+              <col style={{ width: '8%'  }} />  {/* GRADE */}
+              <col style={{ width: '9%'  }} />  {/* MATERIAL */}
+              <col style={{ width: '5%'  }} />  {/* PCS  ← moved here */}
+              <col style={{ width: '5%'  }} />  {/* FLUX */}
+              <col style={{ width: '5%'  }} />  {/* TURNS */}
+              <col style={{ width: '7%'  }} />  {/* VOLTAGE */}
+              <col style={{ width: '7%'  }} />  {/* IEMAX */}
+              <col style={{ width: '18%' }} />  {/* WORKER */}
             </colgroup>
             <thead>
               <tr className="bg-slate-100 border-b-2 border-slate-400 text-center font-bold uppercase tracking-wide text-[10px]">
@@ -635,11 +635,11 @@ export const WorkAllotmentBuildPage = () => {
                 <th className="px-1 py-1.5 border-r border-slate-300 align-middle text-left">Measure</th>
                 <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Grade</th>
                 <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Material</th>
+                <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Pcs</th>
                 <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Flux</th>
                 <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Turns</th>
                 <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Voltage</th>
                 <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Iemax</th>
-                <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Pcs</th>
                 <th className="px-1 py-1.5 align-middle text-left">Worker</th>
               </tr>
             </thead>
@@ -654,22 +654,23 @@ export const WorkAllotmentBuildPage = () => {
                   <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.measure} align="left" /></td>
                   <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.grade} /></td>
                   <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.material} /></td>
+                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.pcs} bold /></td>
                   <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.flux} /></td>
                   <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.turns} /></td>
                   <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.voltage} /></td>
                   <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.iemax} /></td>
-                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.pcs} bold /></td>
                   <td className="px-0.5 align-middle"><Display value={labourName(r.labourId)} align="left" /></td>
                 </tr>
               ))}
               {/* Total row */}
               <tr className="h-8 border-t-2 border-slate-500 bg-slate-200">
-                <td colSpan={10} className="px-2 border-r border-slate-400 text-right text-[10px] font-black uppercase tracking-widest text-slate-600 align-middle">
+                <td colSpan={6} className="px-2 border-r border-slate-400 text-right text-[10px] font-black uppercase tracking-widest text-slate-600 align-middle">
                   Grand Total
                 </td>
                 <td className="px-1 border-r border-slate-400 text-center text-xs font-black text-slate-800 align-middle">
                   {totalPcs}
                 </td>
+                <td colSpan={4} className="border-r border-slate-400 align-middle" />
                 <td className="align-middle" />
               </tr>
             </tbody>

@@ -12,6 +12,7 @@ import { CompanyFormPage } from '@/pages/CompanyFormPage';
 import { POOrderNewPage } from '@/pages/POOrderNewPage';
 import { POManagePage } from '@/pages/POManagePage';
 import { POEditPage } from '@/pages/POEditPage';
+import { POOrderEditPage } from '@/pages/POOrderEditPage';
 import { SOSummaryPage } from '@/pages/SOSummaryPage';
 import { SuppliersPage } from '@/pages/SuppliersPage';
 import { SupplierFormPage } from '@/pages/SupplierFormPage';
@@ -57,6 +58,7 @@ export const App = () => (
       <Route path="/po/new"          element={<POOrderNewPage />} />
       <Route path="/po/manage"       element={<POManagePage />} />
       <Route path="/po/manage/:id"   element={<POEditPage />} />
+      <Route path="/po/edit/:poId"   element={<POOrderEditPage />} />
       <Route path="/po/summary"      element={<SOSummaryPage />} />
 
       {/* Production */}

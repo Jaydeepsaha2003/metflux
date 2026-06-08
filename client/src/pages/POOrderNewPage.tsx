@@ -15,7 +15,7 @@ import { useConfirm } from '@/hooks/useConfirm';
 /* ---------- types ---------- */
 type CoreType = 'TOROIDAL' | 'RECTANGULAR';
 
-type Item = {
+export type Item = {
   coreType: CoreType;
   grade: string;
   material: string;
@@ -45,6 +45,7 @@ type FluxPoint = { flux: number; ateCm: number };
 type FluxGroup = { grade: string; points: FluxPoint[] };
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
+const DRAFT_KEY = 'po_draft_new';
 const addDays = (iso: string, days: number) => {
   const d = new Date(iso); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10);
 };
@@ -77,6 +78,49 @@ export const POOrderNewPage = () => {
   const [coreType, setCoreType] = useState<CoreType | ''>('');
   const [items, setItems] = useState<Item[]>([]);
 
+  /* ----- localStorage draft: restore on mount, auto-save on change ----- */
+  const [draftAvailable, setDraftAvailable] = useState(false);
+  const [draftData, setDraftData] = useState<null | {
+    poNumber: string; customerId: string; orderDate: string; deliveryDays: number; items: Item[];
+  }>(null);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.poNumber || parsed?.customerId || (parsed?.items?.length ?? 0) > 0) {
+          setDraftData(parsed);
+          setDraftAvailable(true);
+        }
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!poNumber && !customerId && items.length === 0) return;
+    const id = setTimeout(() => {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ poNumber, customerId, orderDate, deliveryDays, items }));
+    }, 1500);
+    return () => clearTimeout(id);
+  }, [poNumber, customerId, orderDate, deliveryDays, items]);
+
+  const restoreDraft = () => {
+    if (!draftData) return;
+    setPoNumber(draftData.poNumber ?? '');
+    setCustomerId(draftData.customerId ?? '');
+    setOrderDate(draftData.orderDate ?? todayISO());
+    setDeliveryDays(draftData.deliveryDays ?? 0);
+    setItems(draftData.items ?? []);
+    setDraftAvailable(false);
+  };
+
+  const discardDraft = () => {
+    localStorage.removeItem(DRAFT_KEY);
+    setDraftAvailable(false);
+  };
+
   /* ----- dropdown data ----- */
   const { data: customersResp } = useQuery({
     queryKey: ['customers', 'all'],
@@ -101,6 +145,7 @@ export const POOrderNewPage = () => {
   const submit = useMutation({
     mutationFn: (body: unknown) => api('/po-orders', { method: 'POST', json: body }),
     onSuccess: () => {
+      localStorage.removeItem(DRAFT_KEY);
       queryClient.invalidateQueries({ queryKey: ['po-orders'] });
       navigate('/po/manage');
     },
@@ -159,7 +204,26 @@ export const POOrderNewPage = () => {
   const fmtMoney = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
-    <div className="space-y-4 max-w-7xl pb-4">
+    <div className="space-y-4 pb-4">
+      {/* ============ DRAFT RESTORE BANNER ============ */}
+      {draftAvailable && draftData && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+          <div className="text-sm text-amber-800">
+            <span className="font-semibold">Unsaved draft found</span>
+            {draftData.poNumber && <span className="ml-2 font-mono text-amber-700">{draftData.poNumber}</span>}
+            {(draftData.items?.length ?? 0) > 0 && (
+              <span className="ml-2 text-xs text-amber-600">({draftData.items.length} item{draftData.items.length !== 1 ? 's' : ''})</span>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={discardDraft} className="btn-ghost text-sm text-amber-700 hover:bg-amber-100">Discard</button>
+            <button onClick={restoreDraft} className="btn-primary text-sm bg-amber-600 hover:bg-amber-700 text-white border-amber-600">
+              Restore draft
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ============ TITLE ============ */}
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-slate-900">New Sales Order</h1>
@@ -557,7 +621,7 @@ const Stat = ({ label, value, accent }: { label: string; value: string; accent?:
 );
 
 /* ---------- TOROIDAL ---------- */
-const ToroidalForm = ({
+export const ToroidalForm = ({
   grades, fluxGrades, onAdd,
 }: {
   grades: GradeRow[];
@@ -733,7 +797,7 @@ const ToroidalForm = ({
 };
 
 /* ---------- RECTANGULAR ---------- */
-const RectangularForm = ({
+export const RectangularForm = ({
   grades, fluxGrades, onAdd,
 }: {
   grades: GradeRow[];

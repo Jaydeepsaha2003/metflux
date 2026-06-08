@@ -2,7 +2,7 @@
 // Header (PoOrder) + many lines (PoOrderItem) saved in one transaction.
 import { Router } from 'express';
 import { z } from 'zod';
-import { q, qOne, insert, update, txn } from '../lib/db.js';
+import { q, qOne, insert, update, txn, del, newId } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
@@ -261,17 +261,19 @@ const itemRowSql = `
 
 /* GET /api/po-orders/items — paginated flat list */
 router.get('/items', requirePermission('view_po'), asyncHandler(async (req, res) => {
-  const { page, pageSize, search, status } = z.object({
+  const { page, pageSize, search, status, poOrderId } = z.object({
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(200).default(50),
     search: z.string().trim().max(120).optional(),
     status: z.enum(['ACTIVE', 'CANCELLED', 'ALL']).default('ACTIVE'),
+    poOrderId: z.string().trim().optional(),
   }).parse(req.query);
   const skip = (page - 1) * pageSize;
 
   let where = 'po.`companyId` = ?';
   const params = [req.tenant.companyId];
   if (status !== 'ALL') { where += ' AND it.`status` = ?'; params.push(status); }
+  if (poOrderId)        { where += ' AND it.`poOrderId` = ?'; params.push(poOrderId); }
   if (search) {
     const like = `%${search}%`;
     where += ' AND (po.`poNumber` LIKE ? OR c.`name` LIKE ? OR it.`grade` LIKE ? OR it.`material` LIKE ? OR it.`measure` LIKE ?)';
@@ -453,7 +455,7 @@ router.get('/summary', requirePermission('po_summary'), asyncHandler(async (req,
     pcsOrdered:    it.pcs,
     pcsProduced:   Number(it.pcsProduced ?? 0),
     pcsDispatched: Number(it.pcsDispatched ?? 0),
-    pcsPending:    Math.max(it.pcs - Number(it.pcsDispatched ?? 0), 0),
+    pcsPending:    Math.max(it.pcs - Number(it.pcsProduced ?? 0), 0),
     weightPerPc:   it.weightPerPc,
     totalWeight:   it.totalWeight,
     turns:         it.turns       ?? null,
@@ -468,7 +470,31 @@ router.get('/summary', requirePermission('po_summary'), asyncHandler(async (req,
     totalAmount:   it.totalAmount ?? null,
     status:        it.status,
   }));
-  res.json({ items: enriched, total: Number(totalRow?.n ?? 0), page, pageSize });
+
+  // Aggregate totals for the full filtered dataset (not just the current page).
+  const aggRow = await qOne(
+    `SELECT
+       COALESCE(SUM(it.\`pcs\`), 0) AS totalOrdered,
+       COALESCE(SUM(
+         (SELECT COALESCE(SUM(pp.\`pcs\`),0) FROM \`Production\` pp WHERE pp.\`poOrderItemId\` = it.\`id\`)
+       ), 0) AS totalProduced,
+       COALESCE(SUM(
+         (SELECT COALESCE(SUM(dd.\`pcs\`),0) FROM \`Dispatch\` dd WHERE dd.\`poOrderItemId\` = it.\`id\`)
+       ), 0) AS totalDispatched
+     FROM \`PoOrderItem\` it
+       INNER JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
+       INNER JOIN \`Customer\` c ON c.\`id\` = po.\`customerId\`
+     WHERE ${where}`,
+    params
+  );
+  const aggregates = {
+    pcsOrdered:    Number(aggRow?.totalOrdered    ?? 0),
+    pcsProduced:   Number(aggRow?.totalProduced   ?? 0),
+    pcsDispatched: Number(aggRow?.totalDispatched ?? 0),
+    pcsPending:    Math.max(Number(aggRow?.totalOrdered ?? 0) - Number(aggRow?.totalProduced ?? 0), 0),
+  };
+
+  res.json({ items: enriched, total: Number(totalRow?.n ?? 0), page, pageSize, aggregates });
 }));
 
 /* GET /api/po-orders/:id */
@@ -552,6 +578,108 @@ router.patch('/:id', requirePermission('add_po'), asyncHandler(async (req, res) 
   const fresh = await qOne('SELECT * FROM `PoOrder` WHERE `id` = ?', [po.id]);
   const customer = await qOne('SELECT * FROM `Customer` WHERE `id` = ?', [fresh.customerId]);
   res.json({ ...fresh, customer });
+}));
+
+/* POST /api/po-orders/:poId/items — add a new item to an existing PO */
+router.post('/:poId/items', requirePermission('add_po'), asyncHandler(async (req, res) => {
+  const data = itemSchema.parse(req.body);
+
+  const po = await qOne(
+    'SELECT * FROM `PoOrder` WHERE `id` = ? AND `companyId` = ?',
+    [req.params.poId, req.tenant.companyId]
+  );
+  if (!po) throw new AppError('PO not found', 404, 'NOT_FOUND');
+
+  const derived = deriveRate(data);
+  const inserted = await insert('PoOrderItem', {
+    poOrderId:   po.id,
+    coreType:    data.coreType,
+    grade:       data.grade,
+    material:    data.material,
+    measure:     data.measure,
+    id1: data.id1, id2: data.id2 ?? null,
+    od1: data.od1, od2: data.od2 ?? null,
+    ht: data.ht,   builtup: data.builtup ?? null,
+    weightPerPc: data.weightPerPc, pcs: data.pcs, totalWeight: data.totalWeight,
+    coreAc: data.coreAc ?? null, coreMl: data.coreMl ?? null, d13: data.d13 ?? null,
+    turns:       data.turns       ?? null,
+    flux:        data.flux        ?? null,
+    ateCm:       data.ateCm       ?? null,
+    testVoltage: data.testVoltage ?? null,
+    testCurrent: data.testCurrent ?? null,
+    rateBasis:   data.rateBasis   ?? null,
+    rateValue:   data.rateValue   ?? null,
+    ratePerKg:   derived.ratePerKg,
+    ratePerPc:   derived.ratePerPc,
+    totalAmount: derived.totalAmount,
+  });
+  res.status(201).json(inserted);
+}));
+
+/* DELETE /api/po-orders/items/:id — permanently delete (no production/dispatch) */
+router.delete('/items/:id', requirePermission('add_po'), asyncHandler(async (req, res) => {
+  const row = await qOne(
+    `${itemRowSql} WHERE it.\`id\` = ? AND po.\`companyId\` = ?`,
+    [req.params.id, req.tenant.companyId]
+  );
+  if (!row) throw new AppError('Item not found', 404, 'NOT_FOUND');
+
+  const produced   = Number(row.pcsProduced ?? 0);
+  const dispatched = Number(row.pcsDispatched ?? 0);
+  if (produced > 0 || dispatched > 0) {
+    throw new AppError(
+      `Cannot delete — ${produced} pcs produced and ${dispatched} pcs dispatched are already recorded.`,
+      400, 'HAS_PRODUCTION'
+    );
+  }
+
+  await q('DELETE FROM `PoOrderItem` WHERE `id` = ?', [row.id]);
+  res.status(204).end();
+}));
+
+/* POST /api/po-orders/items/:id/restore — restore a cancelled item */
+router.post('/items/:id/restore', requirePermission('add_po'), asyncHandler(async (req, res) => {
+  const row = await qOne(
+    `${itemRowSql} WHERE it.\`id\` = ? AND po.\`companyId\` = ?`,
+    [req.params.id, req.tenant.companyId]
+  );
+  if (!row) throw new AppError('Item not found', 404, 'NOT_FOUND');
+  if (row.status === 'ACTIVE') return res.json({ message: 'Already active' });
+
+  await update('PoOrderItem', row.id, { status: 'ACTIVE' });
+  res.json({ message: 'Restored' });
+}));
+
+/* DELETE /api/po-orders/:id — permanently delete an entire PO */
+router.delete('/:id', requirePermission('add_po'), asyncHandler(async (req, res) => {
+  const po = await qOne(
+    'SELECT * FROM `PoOrder` WHERE `id` = ? AND `companyId` = ?',
+    [req.params.id, req.tenant.companyId]
+  );
+  if (!po) throw new AppError('PO not found', 404, 'NOT_FOUND');
+
+  // Block if any item has production or dispatch records.
+  const processedRow = await qOne(
+    `SELECT COUNT(*) AS n FROM \`PoOrderItem\` it
+      WHERE it.\`poOrderId\` = ?
+        AND (
+          EXISTS (SELECT 1 FROM \`Production\` p WHERE p.\`poOrderItemId\` = it.\`id\`)
+          OR EXISTS (SELECT 1 FROM \`Dispatch\`   d WHERE d.\`poOrderItemId\` = it.\`id\`)
+        )`,
+    [po.id]
+  );
+  if (Number(processedRow?.n ?? 0) > 0) {
+    throw new AppError(
+      'Cannot delete this PO — one or more items have production or dispatch records.',
+      400, 'HAS_PRODUCTION'
+    );
+  }
+
+  await txn(async (tx) => {
+    await tx.q('DELETE FROM `PoOrderItem` WHERE `poOrderId` = ?', [po.id]);
+    await tx.q('DELETE FROM `PoOrder` WHERE `id` = ?', [po.id]);
+  });
+  res.status(204).end();
 }));
 
 export default router;

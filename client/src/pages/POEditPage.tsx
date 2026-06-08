@@ -77,7 +77,7 @@ export const POEditPage = () => {
   });
 
   return (
-    <div className="space-y-4 max-w-5xl">
+    <div className="space-y-4">
       <div className="flex items-center gap-3">
         <Link to="/po/manage" className="btn-ghost text-slate-600">
           <ArrowLeft className="h-4 w-4" /> Back

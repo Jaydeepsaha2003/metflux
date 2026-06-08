@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Search, Pencil, Ban, FileText, CheckCircle2, XCircle,
+  Search, Pencil, Ban, FileText, CheckCircle2, XCircle, RotateCcw, Trash2,
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
@@ -51,8 +51,10 @@ export const POManagePage = () => {
   useEffect(() => { setPage(1); }, [search, status]);
   const queryClient = useQueryClient();
 
-  const [cancelTarget, setCancelTarget] = useState<Item | null>(null);
-  const [errorMsg, setErrorMsg]         = useState<string | null>(null);
+  const [cancelTarget,  setCancelTarget]  = useState<Item | null>(null);
+  const [deleteTarget,  setDeleteTarget]  = useState<Item | null>(null);
+  const [restoreTarget, setRestoreTarget] = useState<Item | null>(null);
+  const [errorMsg, setErrorMsg]           = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['po-items', search, status, page],
@@ -72,8 +74,32 @@ export const POManagePage = () => {
     },
   });
 
+  const deleteItem = useMutation({
+    mutationFn: (id: string) => api(`/po-orders/items/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['po-items'] });
+      setDeleteTarget(null);
+    },
+    onError: (e) => {
+      setDeleteTarget(null);
+      setErrorMsg(e instanceof ApiError ? e.message : 'Could not delete the item.');
+    },
+  });
+
+  const restoreItem = useMutation({
+    mutationFn: (id: string) => api(`/po-orders/items/${id}/restore`, { method: 'POST' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['po-items'] });
+      setRestoreTarget(null);
+    },
+    onError: (e) => {
+      setRestoreTarget(null);
+      setErrorMsg(e instanceof ApiError ? e.message : 'Could not restore the item.');
+    },
+  });
+
   return (
-    <div className="space-y-4 max-w-[1400px]">
+    <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Modify Sales Order</h1>
         <Link to="/po/new" className="btn-primary w-full sm:w-auto">
@@ -179,10 +205,6 @@ export const POManagePage = () => {
                               to={`/po/manage/${it.id}`}
                               className={cn(
                                 'btn-ghost',
-                                // The page still opens when production has
-                                // started — it just renders the locked banner
-                                // instead of the form. Greying the icon makes
-                                // that obvious before the user clicks.
                                 (it.pcsProduced ?? 0) > 0
                                   ? 'text-slate-300 hover:bg-slate-50'
                                   : 'text-brand-700 hover:bg-brand-50'
@@ -195,13 +217,33 @@ export const POManagePage = () => {
                             </Link>
                             <button
                               onClick={() => setCancelTarget(it)}
-                              className="btn-ghost text-red-600 hover:bg-red-50"
-                              title="Cancel"
+                              className="btn-ghost text-amber-600 hover:bg-amber-50"
+                              title="Cancel item"
                               disabled={cancel.isPending}
                             >
                               <Ban className="h-4 w-4" />
                             </button>
                           </>
+                        )}
+                        {it.status === 'CANCELLED' && (
+                          <button
+                            onClick={() => setRestoreTarget(it)}
+                            className="btn-ghost text-emerald-700 hover:bg-emerald-50"
+                            title="Restore cancelled item"
+                            disabled={restoreItem.isPending}
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </button>
+                        )}
+                        {(it.pcsProduced ?? 0) === 0 && (it.pcsDispatched ?? 0) === 0 && (
+                          <button
+                            onClick={() => setDeleteTarget(it)}
+                            className="btn-ghost text-red-600 hover:bg-red-50"
+                            title="Delete permanently"
+                            disabled={deleteItem.isPending}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         )}
                       </div>
                     </td>
@@ -263,11 +305,31 @@ export const POManagePage = () => {
                     </Link>
                     <button
                       onClick={() => setCancelTarget(it)}
-                      className="btn-ghost border border-red-200 text-red-600 text-sm flex-1 justify-center hover:bg-red-50"
+                      className="btn-ghost border border-amber-200 text-amber-700 text-sm flex-1 justify-center hover:bg-amber-50"
                       disabled={cancel.isPending}
                     >
                       <Ban className="h-4 w-4" /> Cancel
                     </button>
+                  </div>
+                )}
+                {it.status === 'CANCELLED' && (
+                  <div className="flex justify-end gap-2 border-t border-slate-100 pt-2">
+                    <button
+                      onClick={() => setRestoreTarget(it)}
+                      className="btn-ghost border border-emerald-200 text-emerald-700 text-sm flex-1 justify-center hover:bg-emerald-50"
+                      disabled={restoreItem.isPending}
+                    >
+                      <RotateCcw className="h-4 w-4" /> Restore
+                    </button>
+                    {(it.pcsProduced ?? 0) === 0 && (it.pcsDispatched ?? 0) === 0 && (
+                      <button
+                        onClick={() => setDeleteTarget(it)}
+                        className="btn-ghost border border-red-200 text-red-600 text-sm flex-1 justify-center hover:bg-red-50"
+                        disabled={deleteItem.isPending}
+                      >
+                        <Trash2 className="h-4 w-4" /> Delete
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -280,6 +342,49 @@ export const POManagePage = () => {
           )}
         </div>
       )}
+
+      {/* Delete confirmation */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete item permanently?"
+        tone="danger"
+        confirmLabel="Delete"
+        cancelLabel="Keep"
+        loading={deleteItem.isPending}
+        onConfirm={() => deleteTarget && deleteItem.mutate(deleteTarget.id)}
+        onCancel={() => setDeleteTarget(null)}
+        message={deleteTarget ? (
+          <div className="space-y-2 text-sm">
+            <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs">
+              <div className="font-semibold text-slate-900">{deleteTarget.poNumber}</div>
+              <div className="text-slate-600">{deleteTarget.grade} · {deleteTarget.material}</div>
+              <div className="font-mono text-slate-700">{deleteTarget.measure}</div>
+            </div>
+            <div className="text-xs text-red-700 rounded-md border border-red-200 bg-red-50 px-3 py-2">
+              This item will be permanently removed. This cannot be undone.
+            </div>
+          </div>
+        ) : null}
+      />
+
+      {/* Restore confirmation */}
+      <ConfirmDialog
+        open={!!restoreTarget}
+        title="Restore cancelled item?"
+        tone="warning"
+        confirmLabel="Restore"
+        cancelLabel="Cancel"
+        loading={restoreItem.isPending}
+        onConfirm={() => restoreTarget && restoreItem.mutate(restoreTarget.id)}
+        onCancel={() => setRestoreTarget(null)}
+        message={restoreTarget ? (
+          <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm">
+            <div className="font-semibold text-slate-900">{restoreTarget.poNumber}</div>
+            <div className="text-slate-600 text-xs">{restoreTarget.grade} · {restoreTarget.material}</div>
+            <div className="font-mono text-xs text-slate-700">{restoreTarget.measure}</div>
+          </div>
+        ) : null}
+      />
 
       {/* Cancel confirmation modal */}
       <ConfirmDialog
