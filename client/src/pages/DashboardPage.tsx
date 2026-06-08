@@ -4,20 +4,28 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Factory, Truck, Package, RotateCcw, FileText, Users2, Trophy, Loader2,
-  CalendarRange, RotateCw, User,
+  CalendarRange, RotateCw, User, TrendingUp, AlertTriangle,
 } from 'lucide-react';
 import { useAuthStore, activeMembership, useHideCustomerNames } from '@/store/auth';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { SearchableSelect } from '@/components/SearchableSelect';
 
+type MonthlyPoint = {
+  month: string;        // 'YYYY-MM'
+  totalPcs: number;
+  totalAmount: number;
+  orderCount: number;
+};
+
 type Stats = {
   range:             { from: string; to: string };
-  salesOrders:       { count: number; pcs: number; kg: number; customers: number; amount: number };
+  salesOrders:       { count: number; pcs: number; kg: number; customers: number; amount: number; toroidalPcs: number; rectangularPcs: number };
   pendingProduction: { pcs: number; kg: number; amount: number };
   readyDispatch:     { pcs: number; kg: number; amount: number };
   dispatched:        { count: number; pcs: number; kg: number; amount: number };
   openReturns:       number;
+  overdueItems:      number;
   topCustomers:      {
     id: string;
     name: string;
@@ -138,6 +146,11 @@ export const DashboardPage = () => {
     queryFn: () => api<Stats>(`/dashboard/stats?${qs}`),
   });
 
+  const { data: monthlyData } = useQuery({
+    queryKey: ['dashboard-monthly', customerId, active?.companyId],
+    queryFn: () => api<{ data: MonthlyPoint[] }>(`/dashboard/monthly${customerId ? `?customerId=${customerId}` : ''}`),
+  });
+
   const { data: empData, isLoading: loadingEmps } = useQuery({
     queryKey: ['dashboard-employees', from, to, customerId, active?.companyId],
     queryFn: () => api<EmployeeResp>(`/dashboard/employees?${qs}`),
@@ -194,6 +207,7 @@ export const DashboardPage = () => {
             <Loader2 className="h-5 w-5 animate-spin" /> Loading…
           </div>
         ) : !stats ? null : (
+          <div className="space-y-2.5">
           <div className="grid grid-cols-2 gap-2.5 sm:gap-3 md:grid-cols-3 lg:grid-cols-5">
             <KpiCard
               icon={FileText} accent="brand"
@@ -201,6 +215,8 @@ export const DashboardPage = () => {
               primary={`${stats.salesOrders.pcs.toLocaleString('en-IN')} pcs`}
               meta={`${stats.salesOrders.kg.toFixed(1)} kg · ${stats.salesOrders.customers} cust.`}
               amount={fmtCompactMoney(stats.salesOrders.amount)}
+              split={{ toroidal: stats.salesOrders.toroidalPcs, rectangular: stats.salesOrders.rectangularPcs }}
+              info="Pcs from active Sales Orders created within the selected date range. Use the date filter above to change the period."
             />
             <KpiCard
               icon={Factory} accent="amber"
@@ -208,6 +224,7 @@ export const DashboardPage = () => {
               primary={`${stats.pendingProduction.pcs.toLocaleString('en-IN')} pcs`}
               meta={`${stats.pendingProduction.kg.toFixed(1)} kg`}
               amount={fmtCompactMoney(stats.pendingProduction.amount)}
+              info="Total pcs not yet produced — across ALL Sales Orders regardless of date. This is your current full production backlog."
             />
             <KpiCard
               icon={Package} accent="blue"
@@ -215,6 +232,7 @@ export const DashboardPage = () => {
               primary={`${stats.readyDispatch.pcs.toLocaleString('en-IN')} pcs`}
               meta={`${stats.readyDispatch.kg.toFixed(1)} kg`}
               amount={fmtCompactMoney(stats.readyDispatch.amount)}
+              info="Pcs produced but not yet dispatched — across ALL Sales Orders regardless of date. These are ready to ship right now."
             />
             <KpiCard
               icon={Truck} accent="indigo"
@@ -222,6 +240,7 @@ export const DashboardPage = () => {
               primary={`${stats.dispatched.pcs.toLocaleString('en-IN')} pcs`}
               meta={`${stats.dispatched.kg.toFixed(1)} kg`}
               amount={fmtCompactMoney(stats.dispatched.amount)}
+              info="Pcs dispatched within the selected date range. Use the date filter above to change the period."
             />
             <KpiCard
               icon={RotateCcw} accent={stats.openReturns ? 'rose' : 'slate'}
@@ -229,7 +248,18 @@ export const DashboardPage = () => {
               primary={String(stats.openReturns)}
               status={stats.openReturns ? 'Need attention' : 'All clear'}
               statusTone={stats.openReturns ? 'warn' : 'ok'}
+              info="Total open return requests — across all time, not filtered by date."
             />
+          </div>
+          {stats.overdueItems > 0 && (
+            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+              <span>
+                <span className="font-semibold">{stats.overdueItems} item{stats.overdueItems !== 1 ? 's' : ''}</span>
+                {' '}past their delivery date with production still pending.
+              </span>
+            </div>
+          )}
           </div>
         )}
       </section>
@@ -273,6 +303,30 @@ export const DashboardPage = () => {
                 <div className="text-xs font-semibold tabular-nums text-slate-800">{fmtCompactMoney(c.amount)}</div>
               </div>
             ))}
+          </div>
+        </section>
+      )}
+
+      {/* ── Monthly chart ── */}
+      {monthlyData && (
+        <section>
+          <h2 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <span className="inline-block h-3.5 w-1 rounded-sm bg-indigo-400" />
+            <TrendingUp className="h-3.5 w-3.5 text-indigo-500" />
+            Monthly orders — last 12 months
+          </h2>
+          <div className="card p-3 sm:p-4">
+            <div className="mb-3 flex flex-wrap items-center gap-4 text-xs text-slate-600">
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-3 w-5 rounded-sm bg-indigo-400/80" />
+                Pcs ordered
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-0.5 w-5 rounded bg-emerald-500" />
+                Order amount (₹)
+              </span>
+            </div>
+            <MonthlyChart data={monthlyData.data} />
           </div>
         </section>
       )}
@@ -487,20 +541,45 @@ const STATUS_TONES = {
   warn: 'bg-rose-50 text-rose-700 ring-rose-100',
 };
 
+/* ── InfoTip — hoverable (i) button with tooltip ── */
+const InfoTip = ({ text }: { text: string }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative inline-flex shrink-0" style={{ lineHeight: 0 }}>
+      <button
+        type="button"
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex h-[14px] w-[14px] items-center justify-center rounded-full bg-slate-200 text-slate-500 hover:bg-slate-300 text-[9px] font-bold leading-none transition"
+      >
+        i
+      </button>
+      {open && (
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-60 rounded-lg bg-slate-800 text-white text-[11px] px-3 py-2 shadow-xl leading-snug pointer-events-none">
+          {text}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-slate-800" />
+        </div>
+      )}
+    </div>
+  );
+};
+
 const KpiCard = ({
-  icon: Icon, label, primary, amount, meta, status, statusTone = 'ok', accent = 'slate',
+  icon: Icon, label, primary, amount, meta, status, statusTone = 'ok', accent = 'slate', info, split,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   primary: string;
-  /** Money/value chip pinned to bottom-left. */
   amount?: string;
-  /** Optional extra line above the chip (e.g. "200 pcs · 197.4 kg"). */
   meta?: string;
-  /** Text shown in place of the amount when there is no monetary value. */
   status?: string;
   statusTone?: keyof typeof STATUS_TONES;
   accent?: keyof typeof ACCENTS;
+  /** Tooltip text for the (i) button. */
+  info?: string;
+  /** Toroidal / Rectangular pcs breakdown shown as small tags. */
+  split?: { toroidal: number; rectangular: number };
 }) => (
   <div className="card relative flex flex-col overflow-hidden p-3 pt-3.5">
     <span className={cn('absolute inset-x-0 top-0 h-1', TOP_BARS[accent])} />
@@ -508,13 +587,28 @@ const KpiCard = ({
       <div className={cn('grid h-7 w-7 place-items-center rounded-md ring-1 shrink-0', ACCENTS[accent])}>
         <Icon className="h-3.5 w-3.5" />
       </div>
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 truncate">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 truncate flex-1 min-w-0">
         {label}
       </div>
+      {info && <InfoTip text={info} />}
     </div>
     <div className="mt-1.5 text-lg font-bold tracking-tight text-slate-900 tabular-nums leading-tight">
       {primary}
     </div>
+    {split && (split.toroidal > 0 || split.rectangular > 0) && (
+      <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+        {split.toroidal > 0 && (
+          <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-amber-700 ring-1 ring-amber-100">
+            Toro {split.toroidal.toLocaleString('en-IN')}
+          </span>
+        )}
+        {split.rectangular > 0 && (
+          <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-rose-700 ring-1 ring-rose-100">
+            Rect {split.rectangular.toLocaleString('en-IN')}
+          </span>
+        )}
+      </div>
+    )}
     <div className="mt-2 flex items-center gap-1.5 flex-wrap">
       {amount && (
         <span className={cn(
@@ -536,3 +630,153 @@ const KpiCard = ({
     </div>
   </div>
 );
+
+/* ── MonthlyChart — pure SVG bar + line chart ── */
+const MonthlyChart = ({ data }: { data: MonthlyPoint[] }) => {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  if (!data.length) return null;
+
+  const VW = 600, VH = 210;
+  const PL = 52, PR = 62, PT = 18, PB = 38;
+  const IW = VW - PL - PR;
+  const IH = VH - PT - PB;
+
+  const maxPcs = Math.max(...data.map((d) => d.totalPcs), 1);
+  const maxAmt = Math.max(...data.map((d) => d.totalAmount), 1);
+  const N      = data.length;
+  const slotW  = IW / N;
+  const barW   = Math.max(slotW * 0.52, 6);
+
+  const xc  = (i: number) => PL + i * slotW + slotW / 2;
+  const xb  = (i: number) => PL + i * slotW + (slotW - barW) / 2;
+  const yp  = (v: number) => PT + IH * (1 - v / maxPcs);
+  const ya  = (v: number) => PT + IH * (1 - v / maxAmt);
+
+  const linePath = data
+    .map((d, i) => `${i === 0 ? 'M' : 'L'}${xc(i).toFixed(1)},${ya(d.totalAmount).toFixed(1)}`)
+    .join(' ');
+
+  const areaPath = [
+    ...data.map((d, i) => `${i === 0 ? 'M' : 'L'}${xc(i).toFixed(1)},${ya(d.totalAmount).toFixed(1)}`),
+    `L${xc(N - 1).toFixed(1)},${(PT + IH).toFixed(1)}`,
+    `L${xc(0).toFixed(1)},${(PT + IH).toFixed(1)}`,
+    'Z',
+  ].join(' ');
+
+  const fmtN = (v: number) =>
+    v === 0 ? '0' : v >= 1000 ? `${+(v / 1000).toFixed(1)}k` : String(Math.round(v));
+  const fmtA = (v: number) =>
+    v === 0 ? '0'
+    : v >= 1e7 ? `₹${(v / 1e7).toFixed(1)}Cr`
+    : v >= 1e5 ? `₹${(v / 1e5).toFixed(1)}L`
+    : v >= 1e3 ? `₹${(v / 1e3).toFixed(0)}k`
+    : `₹${v}`;
+
+  const monthShort = (m: string) => {
+    const [y, mo] = m.split('-');
+    return new Date(+y, +mo - 1, 1).toLocaleDateString('en-GB', { month: 'short' });
+  };
+
+  const ticks = [0.25, 0.5, 0.75, 1];
+  const hovered = hoverIdx !== null ? data[hoverIdx] : null;
+  const tipX    = hoverIdx !== null
+    ? Math.max(66, Math.min(VW - 66, xc(hoverIdx)))
+    : 0;
+
+  return (
+    <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full select-none" style={{ height: VH }}>
+      <defs>
+        <linearGradient id="amtGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#10b981" stopOpacity="0.18" />
+          <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+
+      {/* Grid */}
+      {ticks.map((f) => (
+        <line key={f} x1={PL} y1={PT + IH * (1 - f)} x2={PL + IW} y2={PT + IH * (1 - f)}
+          stroke="#e2e8f0" strokeWidth="0.5" />
+      ))}
+      <line x1={PL} y1={PT + IH} x2={PL + IW} y2={PT + IH} stroke="#cbd5e1" strokeWidth="1" />
+      <line x1={PL} y1={PT}      x2={PL}       y2={PT + IH} stroke="#cbd5e1" strokeWidth="1" />
+
+      {/* Bars — pcs */}
+      {data.map((d, i) => {
+        const barH = Math.max(1, PT + IH - yp(d.totalPcs));
+        return (
+          <rect key={i}
+            x={xb(i).toFixed(1)} y={yp(d.totalPcs).toFixed(1)}
+            width={barW} height={barH}
+            fill={hoverIdx === i ? '#4f46e5' : '#818cf8'}
+            rx="2"
+            style={{ transition: 'fill 0.1s' }}
+          />
+        );
+      })}
+
+      {/* Area under amount line */}
+      <path d={areaPath} fill="url(#amtGrad)" />
+
+      {/* Amount line */}
+      <path d={linePath} fill="none" stroke="#10b981" strokeWidth="2" strokeLinejoin="round" />
+      {data.map((d, i) => (
+        <circle key={i}
+          cx={xc(i).toFixed(1)} cy={ya(d.totalAmount).toFixed(1)} r="3"
+          fill={hoverIdx === i ? '#059669' : '#10b981'}
+          style={{ transition: 'fill 0.1s' }}
+        />
+      ))}
+
+      {/* Hover capture zones */}
+      {data.map((_, i) => (
+        <rect key={`hz${i}`}
+          x={PL + i * slotW} y={PT} width={slotW} height={IH}
+          fill="transparent"
+          onMouseEnter={() => setHoverIdx(i)}
+          onMouseLeave={() => setHoverIdx(null)}
+        />
+      ))}
+
+      {/* X labels */}
+      {data.map((d, i) => (
+        <text key={i} x={xc(i).toFixed(1)} y={VH - 8}
+          textAnchor="middle" fontSize="10" fill="#94a3b8">
+          {monthShort(d.month)}
+        </text>
+      ))}
+
+      {/* Left Y (pcs) */}
+      {[0, ...ticks].map((f, j) => (
+        <text key={j} x={PL - 6} y={(PT + IH * (1 - f) + 4).toFixed(1)}
+          textAnchor="end" fontSize="9" fill="#6366f1">
+          {fmtN(maxPcs * f)}
+        </text>
+      ))}
+
+      {/* Right Y (amount) */}
+      {[0, ...ticks].map((f, j) => (
+        <text key={j} x={PL + IW + 6} y={(PT + IH * (1 - f) + 4).toFixed(1)}
+          textAnchor="start" fontSize="9" fill="#10b981">
+          {fmtA(maxAmt * f)}
+        </text>
+      ))}
+
+      {/* Tooltip */}
+      {hovered && (
+        <g>
+          <line x1={tipX} y1={PT} x2={tipX} y2={PT + IH}
+            stroke="#64748b" strokeWidth="1" strokeDasharray="3,2" />
+          <rect x={tipX - 62} y={PT} width={124} height={40} rx="5"
+            fill="rgba(15,23,42,0.88)" />
+          <text x={tipX} y={PT + 14} textAnchor="middle" fontSize="10.5" fill="white" fontWeight="600">
+            {monthShort(hovered.month)}: {hovered.totalPcs.toLocaleString('en-IN')} pcs
+          </text>
+          <text x={tipX} y={PT + 29} textAnchor="middle" fontSize="10" fill="#6ee7b7">
+            ₹{hovered.totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+            {hovered.orderCount > 0 && ` · ${hovered.orderCount} SO`}
+          </text>
+        </g>
+      )}
+    </svg>
+  );
+};

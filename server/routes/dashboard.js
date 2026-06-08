@@ -49,10 +49,10 @@ router.get('/stats', asyncHandler(async (req, res) => {
     customerId ? [companyId, 'ACTIVE', customerId] : [companyId, 'ACTIVE']
   );
 
-  /* Sales orders in range — pcs, kg, amount, unique customers. */
+  /* Sales orders in range — pcs, kg, amount, unique customers, core-type split. */
   let salesPcs = 0, salesKg = 0, salesAmount = 0;
+  let toroidalPcs = 0, rectangularPcs = 0;
   const salesCustomers = new Set();
-  const salesOrderIds  = new Set();
   for (const it of activeItems) {
     const od = new Date(it.orderDate);
     if (od >= rangeStart && od <= rangeEnd) {
@@ -60,7 +60,8 @@ router.get('/stats', asyncHandler(async (req, res) => {
       salesKg     += Number(it.totalWeight ?? 0);
       salesAmount += Number(it.totalAmount ?? 0);
       salesCustomers.add(it.customerId);
-      // count distinct PO orders too — re-query? Easier: collect from items.
+      if (it.coreType === 'TOROIDAL')         toroidalPcs    += it.pcs;
+      else if (it.coreType === 'RECTANGULAR') rectangularPcs += it.pcs;
     }
   }
 
@@ -162,6 +163,22 @@ router.get('/stats', asyncHandler(async (req, res) => {
     }
   }
 
+  /* Items past delivery date with remaining production. */
+  const overdueRow = await qOne(
+    `SELECT COUNT(*) AS n
+       FROM \`PoOrderItem\` it
+       INNER JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
+       WHERE po.\`companyId\` = ?
+         AND it.\`status\` = 'ACTIVE'
+         AND po.\`deliveryDate\` < CURDATE()
+         AND it.\`pcs\` > (
+           SELECT COALESCE(SUM(pp.\`pcs\`),0)
+             FROM \`Production\` pp WHERE pp.\`poOrderItemId\` = it.\`id\`
+         )
+         ${customerId ? 'AND po.`customerId` = ?' : ''}`,
+    customerId ? [companyId, customerId] : [companyId]
+  );
+
   /* Open returns. */
   const openReturnsRow = await qOne(
     `SELECT COUNT(*) AS n FROM \`Return\`
@@ -173,12 +190,15 @@ router.get('/stats', asyncHandler(async (req, res) => {
   res.json({
     range: { from: rangeStart.toISOString(), to: rangeEnd.toISOString() },
     salesOrders: {
-      count:     Number(soCountRow?.n ?? 0),
-      pcs:       salesPcs,
-      kg:        +salesKg.toFixed(3),
-      customers: salesCustomers.size,
-      amount:    +salesAmount.toFixed(2),
+      count:          Number(soCountRow?.n ?? 0),
+      pcs:            salesPcs,
+      kg:             +salesKg.toFixed(3),
+      customers:      salesCustomers.size,
+      amount:         +salesAmount.toFixed(2),
+      toroidalPcs,
+      rectangularPcs,
     },
+    overdueItems: Number(overdueRow?.n ?? 0),
     pendingProduction: {
       pcs:    pendingPcs,
       kg:     +pendingKg.toFixed(3),
@@ -198,6 +218,47 @@ router.get('/stats', asyncHandler(async (req, res) => {
     openReturns: Number(openReturnsRow?.n ?? 0),
     topCustomers,
   });
+}));
+
+/* GET /api/dashboard/monthly?customerId=
+   Returns last 12 calendar months of ordered pcs + amount for the bar/line chart. */
+router.get('/monthly', asyncHandler(async (req, res) => {
+  const companyId = req.tenant.companyId;
+  const { customerId } = filterQuery.parse(req.query);
+
+  const rows = await q(
+    `SELECT
+       DATE_FORMAT(po.\`orderDate\`, '%Y-%m') AS month,
+       COALESCE(SUM(it.\`pcs\`), 0)           AS totalPcs,
+       COALESCE(SUM(it.\`totalAmount\`), 0)    AS totalAmount,
+       COUNT(DISTINCT po.\`id\`)               AS orderCount
+     FROM \`PoOrderItem\` it
+     INNER JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
+     WHERE po.\`companyId\` = ?
+       AND it.\`status\` = 'ACTIVE'
+       AND po.\`orderDate\` >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 11 MONTH), '%Y-%m-01')
+       ${customerId ? 'AND po.`customerId` = ?' : ''}
+     GROUP BY DATE_FORMAT(po.\`orderDate\`, '%Y-%m')
+     ORDER BY month ASC`,
+    customerId ? [companyId, customerId] : [companyId]
+  );
+
+  /* Fill every month in the window with 0 if no data. */
+  const months = [];
+  const now = new Date();
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  const byMonth = new Map(rows.map((r) => [r.month, r]));
+  const data = months.map((m) => ({
+    month:       m,
+    totalPcs:    Number(byMonth.get(m)?.totalPcs    ?? 0),
+    totalAmount: Number(byMonth.get(m)?.totalAmount ?? 0),
+    orderCount:  Number(byMonth.get(m)?.orderCount  ?? 0),
+  }));
+
+  res.json({ data });
 }));
 
 /* GET /api/dashboard/employees?from=&to=&customerId= */
