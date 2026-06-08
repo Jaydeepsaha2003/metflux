@@ -476,9 +476,9 @@ const DateRangeFilter = ({
         </button>
       ))}
     </div>
-    <div className="ml-auto flex items-center gap-2">
+    <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
       <input
-        className="input h-8 text-xs py-1 w-[140px]"
+        className="input h-8 text-xs py-1 flex-1 min-w-[130px] sm:flex-none sm:w-[140px]"
         type="date"
         value={from}
         max={to}
@@ -486,7 +486,7 @@ const DateRangeFilter = ({
       />
       <span className="text-slate-400 text-xs">→</span>
       <input
-        className="input h-8 text-xs py-1 w-[140px]"
+        className="input h-8 text-xs py-1 flex-1 min-w-[130px] sm:flex-none sm:w-[140px]"
         type="date"
         value={to}
         min={from}

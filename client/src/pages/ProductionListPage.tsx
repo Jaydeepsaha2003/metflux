@@ -103,7 +103,7 @@ export const ProductionListPage = () => {
             <span className="hidden sm:inline">Excel</span>
           </button>
           <Link to="/production/new" className="btn-primary">
-            <Plus className="h-4 w-4" /> Record Production
+            <Plus className="h-4 w-4" /> Record<span className="hidden sm:inline"> Production</span>
           </Link>
         </div>
       </div>
@@ -124,7 +124,7 @@ export const ProductionListPage = () => {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500">
               <tr>
@@ -215,6 +215,79 @@ export const ProductionListPage = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Mobile — card per record */}
+        <div className="md:hidden divide-y divide-slate-100">
+          {isLoading && (
+            <div className="px-4 py-10 text-center text-slate-400 text-sm">Loading…</div>
+          )}
+          {!isLoading && data?.items.length === 0 && (
+            <div className="px-4 py-10 text-center text-slate-400 text-sm">
+              No production records yet.{' '}
+              <Link to="/production/new" className="text-brand-700 hover:text-brand-800 font-medium">
+                Record your first one →
+              </Link>
+            </div>
+          )}
+          {data?.items.map((p) => (
+            <div key={p.id} className="px-3 py-3 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono text-xs font-semibold text-slate-800">{p.poNumber}</span>
+                    <span className={cn(
+                      'rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+                      p.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
+                    )}>
+                      {p.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
+                    </span>
+                    <span className="text-xs text-slate-700 font-medium">{p.grade}</span>
+                  </div>
+                  <div className="mt-0.5 text-sm font-medium text-slate-900 truncate">
+                    {hideNames
+                      ? <span className="font-mono text-brand-700">{p.customerCode ?? '—'}</span>
+                      : p.customerName}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-slate-500">
+                    {formatDate(p.prodDate)} · {p.material} · <span className="font-medium text-slate-600">{p.labourName}</span>
+                  </div>
+                  <div className="mt-0.5 font-mono text-xs text-slate-600 truncate">{p.measure}</div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="tabular-nums font-semibold text-sm">{p.pcs} pcs</div>
+                  <div className="text-[10px] text-slate-500 tabular-nums">{p.totalWeight.toFixed(3)} kg</div>
+                  {p.amount != null && (
+                    <div className="text-[11px] font-mono text-brand-700 tabular-nums">₹{p.amount.toFixed(2)}</div>
+                  )}
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 border-t border-slate-100 pt-2">
+                <Link
+                  to={`/production/${p.id}`}
+                  className="btn-ghost border border-slate-300 text-sm flex-1 justify-center"
+                >
+                  <Pencil className="h-4 w-4" /> Edit
+                </Link>
+                <button
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: 'Delete production entry?',
+                      message: <>Delete production entry of <strong>{p.pcs} pcs</strong> by <strong>{p.labourName}</strong>?</>,
+                      tone: 'danger',
+                      confirmLabel: 'Delete',
+                    });
+                    if (ok) remove.mutate(p.id);
+                  }}
+                  className="btn-ghost border border-red-200 text-red-600 text-sm flex-1 justify-center hover:bg-red-50"
+                  disabled={remove.isPending}
+                >
+                  <Trash2 className="h-4 w-4" /> Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
         {data && (
           <Pagination page={page} pageSize={PAGE_SIZE} total={data.total} onPageChange={setPage} />
         )}
