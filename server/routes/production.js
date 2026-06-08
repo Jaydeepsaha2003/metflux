@@ -188,7 +188,12 @@ router.get('/:id', requirePermission('view_po'), asyncHandler(async (req, res) =
     [req.params.id, req.tenant.companyId]
   );
   if (!row) throw new AppError('Production record not found', 404, 'NOT_FOUND');
-  res.json(flatten(row));
+  // othersPcs = sum of OTHER production records for the same PO item (needed for excess-production check on edit).
+  const othersRow = await qOne(
+    'SELECT COALESCE(SUM(`pcs`),0) AS n FROM `Production` WHERE `poOrderItemId` = ? AND `id` <> ?',
+    [row.poOrderItemId, row.id]
+  );
+  res.json({ ...flatten(row), othersPcs: Number(othersRow?.n ?? 0) });
 }));
 
 /* POST / */
@@ -241,12 +246,7 @@ router.patch('/:id', requirePermission('modify_prod_qty'), asyncHandler(async (r
   );
   if (!row) throw new AppError('Production record not found', 404, 'NOT_FOUND');
 
-  if (data.pcs !== undefined) {
-    const maxAllowed = row.item_pcs - Number(row.others ?? 0);
-    if (data.pcs > maxAllowed) {
-      throw new AppError(`New pcs (${data.pcs}) exceeds remaining capacity (${maxAllowed}) for this PO item.`, 400, 'PCS_EXCEEDS');
-    }
-  }
+  // Excess production is allowed (confirmed by the user on the frontend).
   if (data.prodDate !== undefined && new Date(data.prodDate) < new Date(row.po_orderDate)) {
     throw new AppError('Production date cannot be before order date', 400, 'BAD_DATE');
   }

@@ -8,6 +8,7 @@ import { ArrowLeft, Save, Loader2, Factory, Hash, User2 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useHideCustomerNames } from '@/store/auth';
+import { useConfirm } from '@/hooks/useConfirm';
 
 type Item = {
   id: string;
@@ -19,6 +20,7 @@ type Item = {
   material: string;
   measure: string;
   itemPcs: number;
+  othersPcs: number;
   prodDate: string;
   pcs: number;
   weightPerPc: number;
@@ -31,6 +33,7 @@ export const ProductionEditPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const hideNames = useHideCustomerNames();
+  const { confirm, confirmDialog } = useConfirm();
 
   const { data: item, isLoading } = useQuery({
     queryKey: ['production-item', id],
@@ -82,7 +85,7 @@ export const ProductionEditPage = () => {
     },
   });
 
-  const onSave = () => {
+  const onSave = async () => {
     setError(null);
     if (!item) return;
     const missing: string[] = [];
@@ -92,6 +95,33 @@ export const ProductionEditPage = () => {
       setError({ message: 'Please fix the form', details: missing });
       return;
     }
+
+    const maxAllowed = item.itemPcs - item.othersPcs;
+    if (pcs > maxAllowed) {
+      const excessPcs = pcs - maxAllowed;
+      const ok = await confirm({
+        title: 'Excess Production',
+        tone: 'warning',
+        confirmLabel: 'Yes, Save Excess',
+        cancelLabel: 'Go Back',
+        message: (
+          <div className="space-y-2 text-sm">
+            <p>
+              You are saving <strong>{pcs} pcs</strong> but only{' '}
+              <strong>{maxAllowed} pcs</strong> remain for this PO item
+              (ordered: {item.itemPcs}).
+            </p>
+            <p>
+              This will produce <strong>{excessPcs} extra pcs</strong> beyond the
+              order. The full {pcs} pcs will be available for dispatch.
+            </p>
+            <p className="text-slate-500">Are you sure you want to proceed?</p>
+          </div>
+        ),
+      });
+      if (!ok) return;
+    }
+
     save.mutate({
       prodDate,
       pcs,
@@ -142,7 +172,7 @@ export const ProductionEditPage = () => {
                   placeholder="Select worker…"
                 />
               </Field>
-              <Field label={`Pcs (item ordered: ${item.itemPcs})`}>
+              <Field label={`Pcs (${item.itemPcs - item.othersPcs} remaining)`}>
                 <input
                   className="input" type="number" inputMode="numeric" min={1}
                   value={pcs || ''} onChange={(e) => setPcs(parseInt(e.target.value || '0', 10))}
@@ -177,6 +207,7 @@ export const ProductionEditPage = () => {
           </section>
         </>
       )}
+      {confirmDialog}
     </div>
   );
 };
