@@ -20,6 +20,7 @@ type Item = {
   unit: string;
   rate: number;
   amount: number;
+  notes: string;
 };
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -278,9 +279,14 @@ export const SupplierOrderNewPage = () => {
               )}
               {items.map((it, idx) => (
                 <tr key={idx} className="border-t border-slate-100 hover:bg-slate-50/60">
-                  <td className="px-3 py-2 font-mono text-xs text-slate-500">{idx + 1}</td>
-                  <td className="px-3 py-2">{it.description}</td>
-                  <td className="px-3 py-2 font-mono text-xs text-slate-600">{it.hsnCode || '—'}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-slate-500 align-top">{idx + 1}</td>
+                  <td className="px-3 py-2 align-top">
+                    {it.description}
+                    {it.notes && (
+                      <div className="mt-0.5 text-[11px] italic text-slate-500 whitespace-pre-wrap">{it.notes}</div>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 font-mono text-xs text-slate-600 align-top">{it.hsnCode || '—'}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{it.qty}</td>
                   <td className="px-3 py-2 text-slate-600">{it.unit}</td>
                   <td className="px-3 py-2 text-right font-mono tabular-nums">{it.rate.toFixed(2)}</td>
@@ -350,11 +356,12 @@ const ItemEntry = ({ onAdd }: { onAdd: (item: Item) => void }) => {
   const [qty, setQty] = useState(0);
   const [unit, setUnit] = useState('KG');
   const [rate, setRate] = useState(0);
+  const [notes, setNotes] = useState('');
 
   const amount = useMemo(() => +(qty * rate).toFixed(2), [qty, rate]);
   const { alert: showAlert, confirmDialog: alertDialog } = useConfirm();
 
-  const reset = () => { setDescription(''); setHsnCode(''); setQty(0); setUnit('KG'); setRate(0); };
+  const reset = () => { setDescription(''); setHsnCode(''); setQty(0); setUnit('KG'); setRate(0); setNotes(''); };
 
   const add = async () => {
     if (!description.trim()) {
@@ -373,6 +380,7 @@ const ItemEntry = ({ onAdd }: { onAdd: (item: Item) => void }) => {
       description: description.trim().toUpperCase(),
       hsnCode: hsnCode.trim().toUpperCase(),
       qty, unit: unit.trim().toUpperCase(), rate, amount,
+      notes: notes.trim(),
     });
     reset();
   };
@@ -417,6 +425,10 @@ const ItemEntry = ({ onAdd }: { onAdd: (item: Item) => void }) => {
         <Field label="Rate">
           <input className={inputCls} type="number" inputMode="decimal" step="any" min={0}
             value={rate || ''} onChange={(e) => setRate(parseFloat(e.target.value) || 0)} placeholder="0.00" />
+        </Field>
+        <Field label="Notes (optional)" className="col-span-2 sm:col-span-3 md:col-span-6">
+          <input className={inputCls} value={notes} onChange={(e) => setNotes(e.target.value)}
+            placeholder="e.g. special instruction, grade spec, packing note…" />
         </Field>
       </div>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

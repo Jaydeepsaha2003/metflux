@@ -16,6 +16,7 @@ const itemSchema = z.object({
   unit:        z.string().trim().min(1).max(20),
   rate:        z.coerce.number().nonnegative(),
   amount:      z.coerce.number().nonnegative(),
+  notes:       z.string().trim().max(500).optional().nullable(),
 });
 
 const createSchema = z.object({
@@ -137,6 +138,7 @@ router.post('/', requirePermission('add_supplier_po'), asyncHandler(async (req, 
         unit:        it.unit,
         rate:        it.rate,
         amount:      it.amount,
+        notes:       it.notes || null,
       });
     }
     return po.id;
@@ -229,6 +231,7 @@ router.put('/:id', requirePermission('add_supplier_po'), asyncHandler(async (req
         unit:        it.unit,
         rate:        it.rate,
         amount:      it.amount,
+        notes:       it.notes || null,
       });
     }
   });

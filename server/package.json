@@ -15,7 +15,8 @@
     "migrate:hide-customer-names": "node scripts/migrate-hide-customer-names.js",
     "migrate:logo-column": "node scripts/migrate-logo-column.js",
     "migrate:share-token": "node scripts/migrate-customer-share-token.js",
-    "migrate": "npm run migrate:supplier-membership && npm run migrate:customer-code && npm run migrate:hide-customer-names && npm run migrate:logo-column && npm run migrate:share-token"
+    "migrate:supplier-item-notes": "node scripts/migrate-supplier-item-notes.js",
+    "migrate": "npm run migrate:supplier-membership && npm run migrate:customer-code && npm run migrate:hide-customer-names && npm run migrate:logo-column && npm run migrate:share-token && npm run migrate:supplier-item-notes"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

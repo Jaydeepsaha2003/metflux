@@ -413,6 +413,7 @@ CREATE TABLE `SupplierOrderItem` (
     `unit` VARCHAR(20) NOT NULL,
     `rate` DOUBLE NOT NULL,
     `amount` DOUBLE NOT NULL,
+    `notes` TEXT NULL,
     `receivedQty` DOUBLE NOT NULL DEFAULT 0,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 

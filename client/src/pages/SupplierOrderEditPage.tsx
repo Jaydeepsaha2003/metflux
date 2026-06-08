@@ -17,6 +17,7 @@ type Item = {
   unit: string;
   rate: number;
   amount: number;
+  notes: string;
 };
 
 type SupplierOrder = {
@@ -27,7 +28,7 @@ type SupplierOrder = {
   status: 'PENDING' | 'PARTIAL' | 'RECEIVED' | 'CANCELLED';
   notes: string | null;
   supplier: Supplier;
-  items: Array<{ id: string; description: string; hsnCode: string | null; qty: number; unit: string; rate: number; amount: number }>;
+  items: Array<{ id: string; description: string; hsnCode: string | null; qty: number; unit: string; rate: number; amount: number; notes: string | null }>;
 };
 
 const inputCls =
@@ -72,6 +73,7 @@ export const SupplierOrderEditPage = () => {
       unit: it.unit,
       rate: it.rate,
       amount: it.amount,
+      notes: it.notes ?? '',
     })));
   }, [po]);
 
@@ -122,7 +124,7 @@ export const SupplierOrderEditPage = () => {
     }));
 
   const addBlank = () =>
-    setItems((prev) => [...prev, { description: '', hsnCode: '', qty: 0, unit: 'KG', rate: 0, amount: 0 }]);
+    setItems((prev) => [...prev, { description: '', hsnCode: '', qty: 0, unit: 'KG', rate: 0, amount: 0, notes: '' }]);
 
   if (isLoading) return <div className="card p-10 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-slate-400" /></div>;
   if (!po)       return <div className="card p-10 text-center text-slate-400">PO not found.</div>;
@@ -202,6 +204,12 @@ export const SupplierOrderEditPage = () => {
                         unit:    s.unit    || it.unit,
                       })}
                       inputClassName={inputCls}
+                    />
+                    <input
+                      className={`${inputCls} mt-1 h-8 text-xs`}
+                      value={it.notes}
+                      onChange={(e) => updateItem(idx, { notes: e.target.value })}
+                      placeholder="Notes (optional)"
                     />
                   </td>
                   <td className="px-2 py-1.5">
