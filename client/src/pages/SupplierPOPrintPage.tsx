@@ -164,7 +164,9 @@ export const SupplierPOPrintPage = () => {
     const el = printRef.current;
     if (!el || !po) return null;
 
-    const A4_USABLE_PX = 760;
+    // A4 portrait with 8 mm margins: usable = 194 mm = 194/25.4*96 ≈ 733 px.
+    // Use 720 px for a safe 13 px buffer so nothing clips at the right edge.
+    const A4_USABLE_PX = 720;
     const clone = el.cloneNode(true) as HTMLElement;
 
     // Replace live form controls (inputs / textareas) with static spans
@@ -213,6 +215,7 @@ export const SupplierPOPrintPage = () => {
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
+        width: A4_USABLE_PX,
         windowWidth: A4_USABLE_PX,
       },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
@@ -308,7 +311,7 @@ export const SupplierPOPrintPage = () => {
       {/* ── Printable A4 sheet ── */}
       <div className="overflow-x-auto rounded-xl shadow-md print:overflow-visible print:shadow-none print:rounded-none">
         <div ref={printRef} id="po-print-doc"
-             className="bg-white text-slate-900 min-w-[820px] rounded-xl overflow-hidden print:min-w-0 print:rounded-none print:overflow-visible">
+             className="bg-white text-slate-900 min-w-[760px] rounded-xl overflow-hidden print:min-w-0 print:rounded-none print:overflow-visible">
 
           {/* Company letterhead */}
           <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-4 border-b-2 border-slate-900">
@@ -376,18 +379,28 @@ export const SupplierPOPrintPage = () => {
             </div>
           </div>
 
-          {/* Items table */}
-          <table className="w-full text-[12px] border-collapse">
+          {/* Items table — percentage columns so content always fits A4 width */}
+          <table className="w-full text-[12px] border-collapse" style={{ tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: '4%' }} />   {/* No. */}
+              <col style={{ width: '33%' }} />  {/* Item Details */}
+              <col style={{ width: '11%' }} />  {/* HSN/SAC */}
+              <col style={{ width: '7%' }} />   {/* GST % */}
+              <col style={{ width: '7%' }} />   {/* UOM */}
+              <col style={{ width: '11%' }} />  {/* Quantity */}
+              <col style={{ width: '13%' }} />  {/* Rate */}
+              <col style={{ width: '14%' }} />  {/* Amount (INR) */}
+            </colgroup>
             <thead>
               <tr className="bg-slate-100 border-b-2 border-slate-400">
-                <th className="px-2 py-1.5 border-r border-slate-300 w-8 text-center font-bold">No.</th>
+                <th className="px-2 py-1.5 border-r border-slate-300 text-center font-bold">No.</th>
                 <th className="px-2 py-1.5 border-r border-slate-300 text-left font-bold">Item Details</th>
-                <th className="px-2 py-1.5 border-r border-slate-300 w-20 text-center font-bold">HSN/SAC</th>
-                <th className="px-2 py-1.5 border-r border-slate-300 w-14 text-center font-bold">GST %</th>
-                <th className="px-2 py-1.5 border-r border-slate-300 w-14 text-center font-bold">UOM</th>
-                <th className="px-2 py-1.5 border-r border-slate-300 w-20 text-right font-bold">Quantity</th>
-                <th className="px-2 py-1.5 border-r border-slate-300 w-20 text-right font-bold">Rate</th>
-                <th className="px-2 py-1.5 w-24 text-right font-bold">Amount (INR)</th>
+                <th className="px-2 py-1.5 border-r border-slate-300 text-center font-bold">HSN/SAC</th>
+                <th className="px-2 py-1.5 border-r border-slate-300 text-center font-bold">GST %</th>
+                <th className="px-2 py-1.5 border-r border-slate-300 text-center font-bold">UOM</th>
+                <th className="px-2 py-1.5 border-r border-slate-300 text-right font-bold">Quantity</th>
+                <th className="px-2 py-1.5 border-r border-slate-300 text-right font-bold">Rate</th>
+                <th className="px-2 py-1.5 text-right font-bold">Amount (INR)</th>
               </tr>
             </thead>
             <tbody>
