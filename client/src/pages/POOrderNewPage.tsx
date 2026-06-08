@@ -2,8 +2,8 @@
 // Header (PO#, customer, dates) + per-item entry (toroidal OR rectangular)
 // with live calculations + accumulated items list. Submit creates one PoOrder
 // with many PoOrderItems in a single API call.
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Save, Loader2, Calendar, Hash, User2, Package } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
@@ -16,6 +16,10 @@ import { useConfirm } from '@/hooks/useConfirm';
 type CoreType = 'TOROIDAL' | 'RECTANGULAR';
 
 export type Item = {
+  /** Set when the item came from the DB (edit mode). Not sent to the server — Zod strips it. */
+  _dbId?: string;
+  /** True when DB item has production/dispatch — remove button is disabled. */
+  _locked?: boolean;
   coreType: CoreType;
   grade: string;
   material: string;
@@ -66,6 +70,11 @@ const readonlyInputCls = inputCls + ' bg-slate-50 text-slate-600';
 export const POOrderNewPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { poId } = useParams<{ poId?: string }>();
+  const isEdit = !!poId;
+
+  /* Track DB item IDs that were removed during editing (need DELETE on submit). */
+  const removedDbIds = useRef<Set<string>>(new Set());
 
   /* ----- header state ----- */
   const [poNumber, setPoNumber] = useState('');
@@ -99,12 +108,13 @@ export const POOrderNewPage = () => {
   }, []);
 
   useEffect(() => {
+    if (isEdit) return; // no draft in edit mode
     if (!poNumber && !customerId && items.length === 0) return;
     const id = setTimeout(() => {
       localStorage.setItem(DRAFT_KEY, JSON.stringify({ poNumber, customerId, orderDate, deliveryDays, items }));
     }, 1500);
     return () => clearTimeout(id);
-  }, [poNumber, customerId, orderDate, deliveryDays, items]);
+  }, [isEdit, poNumber, customerId, orderDate, deliveryDays, items]);
 
   const restoreDraft = () => {
     if (!draftData) return;
@@ -140,6 +150,64 @@ export const POOrderNewPage = () => {
     queryFn: () => api<{ grades: FluxGroup[] }>('/flux-grades/grouped?coreType=RECTANGULAR'),
   });
 
+  /* ----- edit mode: fetch existing PO header + items ----- */
+  type ExistingPo = {
+    poNumber: string; customerId: string; orderDate: string; deliveryDays: number;
+    customer: { id: string; name: string };
+  };
+  type ExistingItem = {
+    id: string; coreType: CoreType; grade: string; material: string; measure: string;
+    id1: number; id2: number | null; od1: number; od2: number | null; ht: number;
+    builtup: number | null; weightPerPc: number; pcs: number; totalWeight: number;
+    coreAc: number | null; coreMl: number | null; d13: number | null;
+    turns: number | null; flux: number | null; ateCm: number | null;
+    testVoltage: number | null; testCurrent: number | null;
+    rateBasis: 'PER_KG' | 'PER_PCS' | null; rateValue: number | null;
+    ratePerKg: number | null; ratePerPc: number | null; totalAmount: number | null;
+    pcsProduced: number; pcsDispatched: number;
+  };
+  const { data: existingPo } = useQuery({
+    queryKey: ['po-orders', 'header', poId],
+    queryFn: () => api<ExistingPo>(`/po-orders/${poId}`),
+    enabled: isEdit,
+  });
+  const { data: existingItemsResp } = useQuery({
+    queryKey: ['po-orders', 'items-for-edit', poId],
+    queryFn: () => api<{ items: ExistingItem[] }>(`/po-orders/items?poOrderId=${poId}&pageSize=500&status=ACTIVE`),
+    enabled: isEdit,
+  });
+  const [editLoaded, setEditLoaded] = useState(false);
+  useEffect(() => {
+    if (!isEdit || !existingPo || !existingItemsResp || editLoaded) return;
+    const po = existingPo;
+    setPoNumber(po.poNumber ?? '');
+    setCustomerId(po.customerId ?? '');
+    setOrderDate(po.orderDate ? String(po.orderDate).slice(0, 10) : todayISO());
+    setDeliveryDays(po.deliveryDays ?? 0);
+    const mapped: Item[] = (existingItemsResp.items ?? []).map((it) => ({
+      _dbId: it.id,
+      _locked: (it.pcsProduced ?? 0) > 0 || (it.pcsDispatched ?? 0) > 0,
+      coreType: it.coreType,
+      grade: it.grade,
+      material: it.material,
+      measure: it.measure,
+      id1: it.id1, id2: it.id2 ?? undefined,
+      od1: it.od1, od2: it.od2 ?? undefined,
+      ht: it.ht,   builtup: it.builtup ?? undefined,
+      weightPerPc: it.weightPerPc, pcs: it.pcs, totalWeight: it.totalWeight,
+      coreAc: it.coreAc ?? undefined, coreMl: it.coreMl ?? undefined, d13: it.d13 ?? undefined,
+      turns: it.turns ?? undefined, flux: it.flux ?? undefined, ateCm: it.ateCm ?? undefined,
+      testVoltage: it.testVoltage ?? undefined, testCurrent: it.testCurrent ?? undefined,
+      rateBasis: (it.rateBasis ?? undefined) as 'PER_KG' | 'PER_PCS' | undefined,
+      rateValue: it.rateValue ?? undefined,
+      ratePerKg: it.ratePerKg ?? undefined,
+      ratePerPc: it.ratePerPc ?? undefined,
+      totalAmount: it.totalAmount ?? undefined,
+    }));
+    setItems(mapped);
+    setEditLoaded(true);
+  }, [isEdit, existingPo, existingItemsResp, editLoaded]);
+
   /* ----- submit mutation ----- */
   const [error, setError] = useState<{ message: string; details?: string[] } | null>(null);
   const submit = useMutation({
@@ -165,6 +233,51 @@ export const POOrderNewPage = () => {
     },
   });
 
+  /* Edit-mode submit: PATCH header → DELETE removed items → POST new items */
+  const editSubmit = useMutation({
+    mutationFn: async () => {
+      await api(`/po-orders/${poId}`, { method: 'PATCH', json: {
+        poNumber: poNumber.trim(), customerId, orderDate, deliveryDays, deliveryDate,
+      }});
+      for (const dbId of removedDbIds.current) {
+        try { await api(`/po-orders/items/${dbId}`, { method: 'DELETE' }); }
+        catch { /* server will reject if item has production — silently skip */ }
+      }
+      for (const item of items) {
+        if (!item._dbId) {
+          await api(`/po-orders/${poId}/items`, { method: 'POST', json: item });
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['po-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['po-summary'] });
+      navigate('/po/summary');
+    },
+    onError: (e) => {
+      if (e instanceof ApiError) {
+        const d = (e.details ?? {}) as { fieldErrors?: Record<string, string[]>; formErrors?: string[] };
+        const lines: string[] = [];
+        for (const [field, msgs] of Object.entries(d.fieldErrors ?? {})) {
+          for (const m of msgs ?? []) lines.push(`${field}: ${m}`);
+        }
+        for (const m of d.formErrors ?? []) lines.push(m);
+        setError({ message: e.message, details: lines.length ? lines : undefined });
+      } else {
+        setError({ message: 'Save failed' });
+      }
+    },
+  });
+
+  /* Remove item — tracks DB IDs for deletion in edit mode. */
+  const removeItem = (idx: number) => {
+    const item = items[idx];
+    if (!item) return;
+    if (item._locked) return; // has production — can't remove
+    if (item._dbId) removedDbIds.current.add(item._dbId);
+    setItems((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   const onSubmit = () => {
     setError(null);
 
@@ -181,15 +294,29 @@ export const POOrderNewPage = () => {
       return;
     }
 
-    submit.mutate({
-      poNumber: poNumber.trim(),
-      customerId,
-      orderDate,
-      deliveryDays,
-      deliveryDate,
-      items,
-    });
+    if (isEdit) {
+      editSubmit.mutate();
+    } else {
+      submit.mutate({
+        poNumber: poNumber.trim(),
+        customerId,
+        orderDate,
+        deliveryDays,
+        deliveryDate,
+        items,
+      });
+    }
   };
+
+  /* Show spinner while fetching existing PO data in edit mode. */
+  if (isEdit && !editLoaded && (!existingPo || !existingItemsResp)) {
+    return (
+      <div className="card p-10 text-center">
+        <Loader2 className="h-5 w-5 animate-spin mx-auto text-slate-400" />
+        <div className="mt-2 text-sm text-slate-500">Loading sales order…</div>
+      </div>
+    );
+  }
 
   const totalWeight = items.reduce((s, x) => s + x.totalWeight, 0);
 
@@ -206,7 +333,7 @@ export const POOrderNewPage = () => {
   return (
     <div className="space-y-4 pb-4">
       {/* ============ DRAFT RESTORE BANNER ============ */}
-      {draftAvailable && draftData && (
+      {!isEdit && draftAvailable && draftData && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
           <div className="text-sm text-amber-800">
             <span className="font-semibold">Unsaved draft found</span>
@@ -226,7 +353,9 @@ export const POOrderNewPage = () => {
 
       {/* ============ TITLE ============ */}
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-slate-900">New Sales Order</h1>
+        <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-slate-900">
+          {isEdit ? 'Edit Sales Order' : 'New Sales Order'}
+        </h1>
         {items.length > 0 && (
           <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500">
             <Package className="h-3.5 w-3.5" />
@@ -387,8 +516,15 @@ export const POOrderNewPage = () => {
               </div>
               <button
                 type="button"
-                onClick={() => setItems((prev) => prev.filter((_, i) => i !== idx))}
-                className="flex-shrink-0 rounded-md p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+                onClick={() => removeItem(idx)}
+                disabled={it._locked}
+                title={it._locked ? 'Cannot remove — production already recorded' : 'Remove item'}
+                className={cn(
+                  'flex-shrink-0 rounded-md p-1.5 transition',
+                  it._locked
+                    ? 'text-slate-300 cursor-not-allowed'
+                    : 'text-slate-400 hover:bg-red-50 hover:text-red-600'
+                )}
                 aria-label="Remove item"
               >
                 <Trash2 className="h-4 w-4" />
@@ -447,8 +583,15 @@ export const POOrderNewPage = () => {
                   <td className="px-3 py-2 text-right">
                     <button
                       type="button"
-                      onClick={() => setItems((prev) => prev.filter((_, i) => i !== idx))}
-                      className="rounded-md p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+                      onClick={() => removeItem(idx)}
+                      disabled={it._locked}
+                      title={it._locked ? 'Cannot remove — production already recorded' : 'Remove item'}
+                      className={cn(
+                        'rounded-md p-1.5 transition',
+                        it._locked
+                          ? 'text-slate-300 cursor-not-allowed'
+                          : 'text-slate-400 hover:bg-red-50 hover:text-red-600'
+                      )}
                       aria-label="Remove item"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -510,7 +653,7 @@ export const POOrderNewPage = () => {
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
         <button
           type="button"
-          onClick={() => navigate('/')}
+          onClick={() => navigate(isEdit ? '/po/summary' : '/')}
           className="btn-ghost w-full sm:w-auto"
         >
           Cancel
@@ -518,11 +661,13 @@ export const POOrderNewPage = () => {
         <button
           type="button"
           onClick={onSubmit}
-          disabled={submit.isPending}
+          disabled={submit.isPending || editSubmit.isPending}
           className="btn-primary w-full sm:w-auto"
         >
-          {submit.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          Submit Sales Order
+          {(submit.isPending || editSubmit.isPending)
+            ? <Loader2 className="h-4 w-4 animate-spin" />
+            : <Save className="h-4 w-4" />}
+          {isEdit ? 'Save Changes' : 'Submit Sales Order'}
         </button>
       </div>
     </div>

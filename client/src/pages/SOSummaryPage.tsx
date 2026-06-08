@@ -333,7 +333,7 @@ export const SOSummaryPage = () => {
                       <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="inline-flex items-center gap-1">
                           <Link
-                            to={`/po/edit/${group.poOrderId}`}
+                            to={`/po/new/${group.poOrderId}`}
                             className="btn-ghost text-brand-700 hover:bg-brand-50 text-xs"
                             title="Edit whole PO (add/remove items)"
                           >
@@ -486,7 +486,7 @@ export const SOSummaryPage = () => {
                         {group.items.length} item{group.items.length !== 1 ? 's' : ''}
                       </span>
                       <Link
-                        to={`/po/edit/${group.poOrderId}`}
+                        to={`/po/new/${group.poOrderId}`}
                         className="btn-ghost text-xs text-brand-700 hover:bg-brand-50"
                       >
                         <Pencil className="h-3.5 w-3.5" /> Edit PO

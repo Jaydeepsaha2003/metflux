@@ -56,6 +56,7 @@ export const App = () => (
 
       {/* PO Order group */}
       <Route path="/po/new"          element={<POOrderNewPage />} />
+      <Route path="/po/new/:poId"    element={<POOrderNewPage />} />
       <Route path="/po/manage"       element={<POManagePage />} />
       <Route path="/po/manage/:id"   element={<POEditPage />} />
       <Route path="/po/edit/:poId"   element={<POOrderEditPage />} />

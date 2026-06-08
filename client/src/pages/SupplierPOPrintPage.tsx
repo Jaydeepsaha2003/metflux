@@ -186,7 +186,12 @@ export const SupplierPOPrintPage = () => {
       // Preserve newlines from textareas.
       span.style.whiteSpace = 'pre-wrap';
       span.style.display    = 'block';
-      span.textContent      = val.length ? val : ' ';
+      // Strip all borders so input underlines / textarea boxes don't appear in PDF.
+      span.style.border       = 'none';
+      span.style.borderBottom = 'none';
+      span.style.outline      = 'none';
+      span.style.minHeight    = 'auto';
+      span.textContent        = val.length ? val : ' ';
       ci.replaceWith(span);
     });
 
