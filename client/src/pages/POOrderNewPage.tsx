@@ -24,6 +24,8 @@ export type Item = {
   grade: string;
   material: string;
   measure: string;
+  /** Optional free-text note shown under the line item. */
+  description?: string;
   id1: number; id2?: number;
   od1: number; od2?: number;
   ht: number;
@@ -157,6 +159,7 @@ export const POOrderNewPage = () => {
   };
   type ExistingItem = {
     id: string; coreType: CoreType; grade: string; material: string; measure: string;
+    description: string | null;
     id1: number; id2: number | null; od1: number; od2: number | null; ht: number;
     builtup: number | null; weightPerPc: number; pcs: number; totalWeight: number;
     coreAc: number | null; coreMl: number | null; d13: number | null;
@@ -191,6 +194,7 @@ export const POOrderNewPage = () => {
       grade: it.grade,
       material: it.material,
       measure: it.measure,
+      description: it.description ?? undefined,
       id1: it.id1, id2: it.id2 ?? undefined,
       od1: it.od1, od2: it.od2 ?? undefined,
       ht: it.ht,   builtup: it.builtup ?? undefined,
@@ -499,6 +503,9 @@ export const POOrderNewPage = () => {
                   </span>
                 </div>
                 <div className="font-mono text-[11px] text-slate-700 break-all">{it.measure}</div>
+                {it.description && (
+                  <div className="mt-0.5 text-[11px] italic text-slate-500 break-words">{it.description}</div>
+                )}
                 <div className="mt-1 flex justify-between text-xs">
                   <span className="text-slate-500 tabular-nums">
                     {it.pcs} × {it.weightPerPc.toFixed(3)}
@@ -579,7 +586,12 @@ export const POOrderNewPage = () => {
                   </td>
                   <td className="px-3 py-2">{it.grade}</td>
                   <td className="px-3 py-2">{it.material}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{it.measure}</td>
+                  <td className="px-3 py-2 font-mono text-xs">
+                    {it.measure}
+                    {it.description && (
+                      <div className="mt-0.5 font-sans text-[10px] italic text-slate-500 normal-case">{it.description}</div>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-right font-mono tabular-nums">{it.weightPerPc.toFixed(3)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{it.pcs}</td>
                   <td className="px-3 py-2 text-right font-mono font-semibold tabular-nums">{it.totalWeight.toFixed(3)}</td>
@@ -797,6 +809,7 @@ export const ToroidalForm = ({
 }) => {
   const [grade, setGrade] = useState('');
   const [material, setMaterial] = useState('');
+  const [description, setDescription] = useState('');
   const [id, setId] = useState(0);
   const [od, setOd] = useState(0);
   const [ht, setHt] = useState(0);
@@ -837,7 +850,7 @@ export const ToroidalForm = ({
   const { alert: showAlert, confirmDialog: alertDialog } = useConfirm();
 
   const reset = () => {
-    setGrade(''); setMaterial('');
+    setGrade(''); setMaterial(''); setDescription('');
     setId(0); setOd(0); setHt(0); setPcs(0);
     setTurns(0); setFlux(0);
     setRateValue(0);
@@ -854,6 +867,7 @@ export const ToroidalForm = ({
     }
     onAdd({
       coreType: 'TOROIDAL', grade, material, measure: calc.measure,
+      description: description.trim() || undefined,
       id1: id, od1: od, ht, pcs,
       weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight,
       // Only attach test-calibration values when the user actually filled them.
@@ -924,6 +938,18 @@ export const ToroidalForm = ({
         </Field>
       </div>
 
+      {/* Optional free-text description for this line item. */}
+      <div className="mt-2">
+        <Field label="Description (optional)">
+          <input
+            className={inputCls}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="e.g. customer remark, special instruction…"
+          />
+        </Field>
+      </div>
+
       {/* Computed values — geometry + flux-test results.
           Heading order matches the production sheet: Flux ( T ) → ATe/cm → V (Volts) → Ie max (mA). */}
       <div className="mt-3 rounded-md border border-amber-100 bg-white/60 px-3 py-2">
@@ -973,6 +999,7 @@ export const RectangularForm = ({
 }) => {
   const [grade, setGrade] = useState('');
   const [material, setMaterial] = useState('');
+  const [description, setDescription] = useState('');
   const [id1, setId1] = useState(0);
   const [id2, setId2] = useState(0);
   const [od1, setOd1] = useState(0);
@@ -1025,7 +1052,7 @@ export const RectangularForm = ({
     : 0;
 
   const reset = () => {
-    setGrade(''); setMaterial('');
+    setGrade(''); setMaterial(''); setDescription('');
     setId1(0); setId2(0); setOd1(0); setOd2(0); setHt(0); setPcs(0);
     setTurns(0); setFlux(0);
     setRateValue(0);
@@ -1042,6 +1069,7 @@ export const RectangularForm = ({
     }
     onAdd({
       coreType: 'RECTANGULAR', grade, material, measure: calc.measure,
+      description: description.trim() || undefined,
       id1, id2, od1, od2, ht, builtup: calc.builtup, pcs,
       weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight,
       coreAc: calc.coreAc, coreMl: calc.coreMl, d13: calc.d13,
@@ -1108,6 +1136,18 @@ export const RectangularForm = ({
               : 'Select flux…'
             }
             disabled={!grade || !gradeHasFluxData}
+          />
+        </Field>
+      </div>
+
+      {/* Optional free-text description for this line item. */}
+      <div className="mt-2">
+        <Field label="Description (optional)">
+          <input
+            className={inputCls}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="e.g. customer remark, special instruction…"
           />
         </Field>
       </div>

@@ -172,6 +172,7 @@ CREATE TABLE `PoOrderItem` (
     `grade` VARCHAR(80) NOT NULL,
     `material` VARCHAR(120) NOT NULL,
     `measure` VARCHAR(160) NOT NULL,
+    `description` TEXT NULL,
     `id1` DOUBLE NOT NULL,
     `id2` DOUBLE NULL,
     `od1` DOUBLE NOT NULL,
