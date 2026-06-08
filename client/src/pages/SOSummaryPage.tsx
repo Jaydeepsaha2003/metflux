@@ -28,7 +28,6 @@ type SummaryItem = {
   grade: string;
   material: string;
   measure: string;
-  description: string | null;
   pcsOrdered: number;
   pcsProduced: number;
   pcsDispatched: number;
@@ -189,7 +188,6 @@ export const SOSummaryPage = () => {
         'Grade':         it.grade,
         'Material':      it.material,
         'Measure':       it.measure,
-        'Description':   it.description ?? '',
         'Ordered':       it.pcsOrdered,
         'Produced':      it.pcsProduced,
         'Dispatched':    it.pcsDispatched,
@@ -351,12 +349,7 @@ export const SOSummaryPage = () => {
                             </td>
                             <td className="px-3 py-2 text-slate-500 text-xs">{it.grade}</td>
                             <td className="px-3 py-2 text-slate-500 text-xs">{it.material}</td>
-                            <td className="px-3 py-2 font-mono text-xs text-slate-700">
-                              {it.measure}
-                              {it.description && (
-                                <div className="mt-0.5 font-sans italic text-[10px] text-slate-400 whitespace-normal">{it.description}</div>
-                              )}
-                            </td>
+                            <td className="px-3 py-2 font-mono text-xs text-slate-700">{it.measure}</td>
                             <td className="px-3 py-2 text-right tabular-nums text-slate-700">{it.pcsOrdered}</td>
                             <td className="px-3 py-2 text-right tabular-nums text-slate-500">{it.pcsProduced}</td>
                             <td className="px-3 py-2 text-right tabular-nums text-slate-500">{it.pcsDispatched}</td>
@@ -497,9 +490,6 @@ export const SOSummaryPage = () => {
                                   <span className="text-xs text-slate-500">{it.material}</span>
                                 </div>
                                 <div className="mt-0.5 font-mono text-xs text-slate-700 truncate">{it.measure}</div>
-                                {it.description && (
-                                  <div className="mt-0.5 text-[11px] italic text-slate-500 break-words">{it.description}</div>
-                                )}
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
                                 <button onClick={() => toggleItemTest(it.id)} className={cn(

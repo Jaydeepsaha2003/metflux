@@ -26,7 +26,6 @@ type Item = {
   grade: string;
   material: string;
   measure: string;
-  description: string | null;
   id1: number; id2: number | null;
   od1: number; od2: number | null;
   ht: number;
@@ -355,7 +354,6 @@ const ToroidalEditor = ({
 }: { item: Item; grades: GradeRow[]; fluxGrades: FluxGroup[]; onSaved: () => void }) => {
   const [grade, setGrade] = useState(item.grade);
   const [material, setMaterial] = useState(item.material);
-  const [description, setDescription] = useState(item.description ?? '');
   const [id1, setId1] = useState(item.id1);
   const [od1, setOd1] = useState(item.od1);
   const [ht, setHt]   = useState(item.ht);
@@ -398,7 +396,6 @@ const ToroidalEditor = ({
           coreType: 'TOROIDAL',
           grade, material,
           measure: calc.measure,
-          description: description.trim() || null,
           id1, od1, ht, pcs,
           weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight,
           rateBasis: rateValue > 0 ? rateBasis : null,
@@ -469,15 +466,6 @@ const ToroidalEditor = ({
         <NumField label={rateBasis === 'PER_KG' ? 'Rate (₹/kg)' : 'Rate (₹/pcs)'} value={rateValue} onChange={setRateValue} />
       </div>
 
-      <Field label="Description (optional)">
-        <input
-          className="input"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="e.g. customer remark, special instruction…"
-        />
-      </Field>
-
       <ComputedRow stats={[
         ['Wt/pc',    calc.weightPerPc.toFixed(3)],
         ['Total Wt', calc.totalWeight.toFixed(3)],
@@ -505,7 +493,6 @@ const RectangularEditor = ({
 }: { item: Item; grades: GradeRow[]; fluxGrades: FluxGroup[]; onSaved: () => void }) => {
   const [grade, setGrade] = useState(item.grade);
   const [material, setMaterial] = useState(item.material);
-  const [description, setDescription] = useState(item.description ?? '');
   const [id1, setId1] = useState(item.id1);
   const [id2, setId2] = useState(item.id2 ?? 0);
   const [od1, setOd1] = useState(item.od1);
@@ -548,7 +535,6 @@ const RectangularEditor = ({
           coreType: 'RECTANGULAR',
           grade, material,
           measure: calc.measure,
-          description: description.trim() || null,
           id1, id2, od1, od2, ht,
           builtup: calc.builtup,
           weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight,
@@ -622,15 +608,6 @@ const RectangularEditor = ({
         </Field>
         <NumField label={rateBasis === 'PER_KG' ? 'Rate (₹/kg)' : 'Rate (₹/pcs)'} value={rateValue} onChange={setRateValue} />
       </div>
-
-      <Field label="Description (optional)">
-        <input
-          className="input"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="e.g. customer remark, special instruction…"
-        />
-      </Field>
 
       <ComputedRow stats={[
         ['Built-up', calc.builtup.toFixed(3)],
