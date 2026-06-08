@@ -462,9 +462,9 @@ export const SupplierPOPrintPage = () => {
           </div>
 
           {/* Editable Terms & Conditions */}
-          <div className="px-5 py-3 text-[12px] border-b border-slate-300">
-            <div className="text-[11px] font-bold uppercase tracking-wide text-slate-700 mb-2">Terms &amp; Conditions :-</div>
-            <div className="grid grid-cols-[110px_1fr] gap-y-1 gap-x-3 mb-3">
+          <div className="px-5 py-2 text-[12px] border-b border-slate-300">
+            <div className="text-[11px] font-bold uppercase tracking-wide text-slate-700 mb-1.5">Terms &amp; Conditions :-</div>
+            <div className="grid grid-cols-[110px_1fr] gap-y-0.5 gap-x-3 mb-2">
               <span className="text-slate-600">Packing :</span>
               <input className="border-b border-dashed border-slate-300 bg-transparent outline-none focus:border-brand-500 px-1" value={tcPacking}   onChange={(e) => setTcPacking(e.target.value)} />
               <span className="text-slate-600">Freight :</span>
@@ -478,23 +478,23 @@ export const SupplierPOPrintPage = () => {
               <span className="text-slate-600">Transport :</span>
               <input className="border-b border-dashed border-slate-300 bg-transparent outline-none focus:border-brand-500 px-1" value={tcTransport} onChange={(e) => setTcTransport(e.target.value)} />
             </div>
-            <div className="text-slate-600 mb-1.5">General terms &amp; condition :</div>
+            <div className="text-slate-600 mb-1">General terms &amp; condition :</div>
             <textarea
-              className="w-full text-[12px] leading-relaxed border border-slate-200 rounded-md p-2 outline-none focus:border-brand-500 min-h-[140px]"
+              className="w-full text-[11px] leading-snug border border-slate-200 rounded-md p-1.5 outline-none focus:border-brand-500 min-h-[96px]"
               value={tcGeneral}
               onChange={(e) => setTcGeneral(e.target.value)}
             />
           </div>
 
-          {/* Signature footer */}
-          <div className="grid grid-cols-2 text-[12px]">
-            <div className="border-r border-slate-300 px-5 py-4 space-y-1.5">
+          {/* Signature footer — no-break keeps GSTIN + signatures on the same page */}
+          <div className="grid grid-cols-2 text-[12px] no-break">
+            <div className="border-r border-slate-300 px-5 py-2 space-y-1">
               <div className="flex"><span className="w-16 text-slate-500 font-semibold">GSTIN :</span><span className="font-mono">{company?.gstNumber ?? '—'}</span></div>
               <div className="flex"><span className="w-16 text-slate-500 font-semibold">PAN No.:</span><span className="font-mono">{company?.gstNumber ? company.gstNumber.slice(2, 12) : '—'}</span></div>
             </div>
-            <div className="px-5 py-4">
+            <div className="px-5 py-2">
               <div className="font-semibold uppercase text-[11px] tracking-wide">For, {company?.name ?? 'Company Name'}</div>
-              <div className="grid grid-cols-2 gap-2 mt-12 text-center text-[11px] text-slate-600">
+              <div className="grid grid-cols-2 gap-2 mt-8 text-center text-[11px] text-slate-600">
                 <div className="border-t border-slate-400 pt-1">Prepared By</div>
                 <div className="border-t border-slate-400 pt-1">Authorised By</div>
               </div>
