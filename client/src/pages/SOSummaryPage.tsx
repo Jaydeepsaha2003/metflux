@@ -330,18 +330,7 @@ export const SOSummaryPage = () => {
                           {group.totalPending}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="inline-flex items-center gap-1">
-                          <Link
-                            to={`/po/new/${group.poOrderId}`}
-                            className="btn-ghost text-brand-700 hover:bg-brand-50 text-xs"
-                            title="Edit whole PO (add/remove items)"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                            <span className="hidden lg:inline">Edit PO</span>
-                          </Link>
-                        </div>
-                      </td>
+                      <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()} />
                     </tr>
 
                     {/* Expanded item rows */}
@@ -481,16 +470,10 @@ export const SOSummaryPage = () => {
                 </button>
                 {isPoOpen && (
                   <div className="border-t border-slate-200">
-                    <div className="flex items-center justify-between px-3 py-2 bg-slate-50">
+                    <div className="flex items-center px-3 py-2 bg-slate-50">
                       <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
                         {group.items.length} item{group.items.length !== 1 ? 's' : ''}
                       </span>
-                      <Link
-                        to={`/po/new/${group.poOrderId}`}
-                        className="btn-ghost text-xs text-brand-700 hover:bg-brand-50"
-                      >
-                        <Pencil className="h-3.5 w-3.5" /> Edit PO
-                      </Link>
                     </div>
                     {group.items.map((it) => {
                       const isTestOpen = expandedItems.has(it.id);

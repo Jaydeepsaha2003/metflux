@@ -3,9 +3,9 @@
 // with live calculations + accumulated items list. Submit creates one PoOrder
 // with many PoOrderItems in a single API call.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Save, Loader2, Calendar, Hash, User2, Package } from 'lucide-react';
+import { Plus, Trash2, Save, Loader2, Calendar, Hash, User2, Package, Pencil } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc } from '@/lib/calc';
@@ -514,21 +514,32 @@ export const POOrderNewPage = () => {
                   </div>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={() => removeItem(idx)}
-                disabled={it._locked}
-                title={it._locked ? 'Cannot remove — production already recorded' : 'Remove item'}
-                className={cn(
-                  'flex-shrink-0 rounded-md p-1.5 transition',
-                  it._locked
-                    ? 'text-slate-300 cursor-not-allowed'
-                    : 'text-slate-400 hover:bg-red-50 hover:text-red-600'
+              <div className="flex-shrink-0 flex items-center gap-0.5">
+                {isEdit && it._dbId && !it._locked && (
+                  <Link
+                    to={`/po/manage/${it._dbId}`}
+                    className="rounded-md p-1.5 text-brand-600 hover:bg-brand-50 transition"
+                    title="Edit item dimensions"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Link>
                 )}
-                aria-label="Remove item"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+                <button
+                  type="button"
+                  onClick={() => removeItem(idx)}
+                  disabled={it._locked}
+                  title={it._locked ? 'Cannot remove — production already recorded' : 'Remove item'}
+                  className={cn(
+                    'rounded-md p-1.5 transition',
+                    it._locked
+                      ? 'text-slate-300 cursor-not-allowed'
+                      : 'text-slate-400 hover:bg-red-50 hover:text-red-600'
+                  )}
+                  aria-label="Remove item"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -581,21 +592,32 @@ export const POOrderNewPage = () => {
                     {it.totalAmount ? `₹${it.totalAmount.toFixed(2)}` : '—'}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() => removeItem(idx)}
-                      disabled={it._locked}
-                      title={it._locked ? 'Cannot remove — production already recorded' : 'Remove item'}
-                      className={cn(
-                        'rounded-md p-1.5 transition',
-                        it._locked
-                          ? 'text-slate-300 cursor-not-allowed'
-                          : 'text-slate-400 hover:bg-red-50 hover:text-red-600'
+                    <div className="inline-flex items-center gap-0.5">
+                      {isEdit && it._dbId && !it._locked && (
+                        <Link
+                          to={`/po/manage/${it._dbId}`}
+                          className="rounded-md p-1.5 text-brand-600 hover:bg-brand-50 transition"
+                          title="Edit item dimensions"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Link>
                       )}
-                      aria-label="Remove item"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => removeItem(idx)}
+                        disabled={it._locked}
+                        title={it._locked ? 'Cannot remove — production already recorded' : 'Remove item'}
+                        className={cn(
+                          'rounded-md p-1.5 transition',
+                          it._locked
+                            ? 'text-slate-300 cursor-not-allowed'
+                            : 'text-slate-400 hover:bg-red-50 hover:text-red-600'
+                        )}
+                        aria-label="Remove item"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

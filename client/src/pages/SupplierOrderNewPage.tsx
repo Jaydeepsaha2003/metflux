@@ -34,6 +34,8 @@ const fiscalYear = (date: Date = new Date()) => {
   return `${String(startYear).padStart(2, '0')}-${String((startYear + 1) % 100).padStart(2, '0')}`;
 };
 
+const DRAFT_KEY = 'supplier_po_draft_new';
+
 const inputCls =
   'h-9 w-full rounded-md border border-slate-300 bg-white px-2.5 text-sm text-slate-900 ' +
   'placeholder:text-slate-400 outline-none transition ' +
@@ -50,6 +52,11 @@ export const SupplierOrderNewPage = () => {
   const expectedDate = useMemo(() => addDays(orderDate, expectedDays), [orderDate, expectedDays]);
 
   const [items, setItems] = useState<Item[]>([]);
+
+  const [draftAvailable, setDraftAvailable] = useState(false);
+  const [draftData, setDraftData] = useState<null | {
+    poNumber: string; supplierId: string; orderDate: string; expectedDays: number; items: Item[];
+  }>(null);
 
   const { data: suppliersResp } = useQuery({
     queryKey: ['suppliers', 'all'],
@@ -74,12 +81,50 @@ export const SupplierOrderNewPage = () => {
     setPoNumber(`${prefix}${String(used + 1).padStart(3, '0')}`);
   }, [company, existingPos, poNumber]);
 
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.poNumber || parsed?.supplierId || (parsed?.items?.length ?? 0) > 0) {
+          setDraftData(parsed);
+          setDraftAvailable(true);
+        }
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!poNumber && !supplierId && items.length === 0) return;
+    const id = setTimeout(() => {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ poNumber, supplierId, orderDate, expectedDays, items }));
+    }, 1500);
+    return () => clearTimeout(id);
+  }, [poNumber, supplierId, orderDate, expectedDays, items]);
+
+  const restoreDraft = () => {
+    if (!draftData) return;
+    setPoNumber(draftData.poNumber ?? '');
+    setSupplierId(draftData.supplierId ?? '');
+    setOrderDate(draftData.orderDate ?? todayISO());
+    setExpectedDays(draftData.expectedDays ?? 0);
+    setItems(draftData.items ?? []);
+    setDraftAvailable(false);
+  };
+
+  const discardDraft = () => {
+    localStorage.removeItem(DRAFT_KEY);
+    setDraftAvailable(false);
+  };
+
   const supplier = (suppliersResp?.items ?? []).find((s) => s.id === supplierId);
 
   const [error, setError] = useState<{ message: string; details?: string[] } | null>(null);
   const submit = useMutation({
     mutationFn: (body: unknown) => api('/supplier-orders', { method: 'POST', json: body }),
     onSuccess: () => {
+      localStorage.removeItem(DRAFT_KEY);
       queryClient.invalidateQueries({ queryKey: ['supplier-orders'] });
       navigate('/supplier-po/manage');
     },
@@ -124,6 +169,23 @@ export const SupplierOrderNewPage = () => {
 
   return (
     <div className="space-y-4 max-w-7xl pb-4">
+      {draftAvailable && draftData && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+          <div className="text-sm text-amber-800">
+            <span className="font-semibold">Unsaved draft found</span>
+            {draftData.poNumber && <span className="ml-2 font-mono text-amber-700">{draftData.poNumber}</span>}
+            {(draftData.items?.length ?? 0) > 0 && (
+              <span className="ml-2 text-xs text-amber-600">({draftData.items.length} item{draftData.items.length !== 1 ? 's' : ''})</span>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={discardDraft} className="btn-ghost text-sm text-amber-700 hover:bg-amber-100">Discard</button>
+            <button onClick={restoreDraft} className="btn-primary text-sm bg-amber-600 hover:bg-amber-700 text-white border-amber-600">
+              Restore draft
+            </button>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
           <Truck className="h-5 w-5 text-brand-600" /> New Supplier PO

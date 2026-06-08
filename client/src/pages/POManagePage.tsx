@@ -2,11 +2,12 @@
 // Search, filter by status, edit one item, cancel the unprocessed remainder.
 // Cancel logic on the backend: if no production/dispatch yet → full cancel;
 // if partial → reduces ordered pcs to whatever's already been built.
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Search, Pencil, Ban, FileText, CheckCircle2, XCircle, RotateCcw, Trash2,
+  ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
@@ -36,6 +37,38 @@ type Item = {
 
 type ListResp = { items: Item[]; total: number; page: number; pageSize: number };
 
+type PoGroup = {
+  poOrderId: string;
+  poNumber: string;
+  customerName: string;
+  orderDate: string;
+  items: Item[];
+  totalPcs: number;
+  totalWeight: number;
+};
+
+const groupByPo = (items: Item[]): PoGroup[] => {
+  const map = new Map<string, PoGroup>();
+  for (const it of items) {
+    if (!map.has(it.poOrderId)) {
+      map.set(it.poOrderId, {
+        poOrderId: it.poOrderId,
+        poNumber: it.poNumber,
+        customerName: it.customerName,
+        orderDate: it.orderDate,
+        items: [],
+        totalPcs: 0,
+        totalWeight: 0,
+      });
+    }
+    const g = map.get(it.poOrderId)!;
+    g.items.push(it);
+    g.totalPcs += it.pcs;
+    g.totalWeight += it.totalWeight;
+  }
+  return [...map.values()];
+};
+
 const formatDate = (iso: string) => {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
@@ -61,6 +94,15 @@ export const POManagePage = () => {
     queryFn: () =>
       api<ListResp>(`/po-orders/items?search=${encodeURIComponent(search)}&status=${status}&page=${page}&pageSize=${PAGE_SIZE}`),
   });
+
+  const groups = useMemo(() => groupByPo(data?.items ?? []), [data]);
+  const [expandedPos, setExpandedPos] = useState<Set<string>>(new Set());
+  const togglePoExpand = (poOrderId: string) =>
+    setExpandedPos((prev) => {
+      const next = new Set(prev);
+      if (next.has(poOrderId)) next.delete(poOrderId); else next.add(poOrderId);
+      return next;
+    });
 
   const cancel = useMutation({
     mutationFn: (id: string) => api(`/po-orders/items/${id}/cancel`, { method: 'POST' }),
@@ -173,82 +215,125 @@ export const POManagePage = () => {
                 </tr>
               </thead>
               <tbody>
-                {data.items.map((it) => (
-                  <tr key={it.id} className="border-t border-slate-100 hover:bg-slate-50/60">
-                    <td className="px-3 py-2.5 font-medium text-slate-800 whitespace-nowrap">{it.poNumber}</td>
-                    <td className="px-3 py-2.5 text-slate-900 font-medium whitespace-nowrap">{it.customerName}</td>
-                    <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{formatDate(it.orderDate)}</td>
-                    <td className="px-3 py-2.5 whitespace-nowrap">
-                      <span className={cn(
-                        'rounded-full px-2 py-0.5 text-xs font-medium',
-                        it.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
-                      )}>
-                        {it.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 text-slate-700 font-medium whitespace-nowrap">{it.grade}</td>
-                    <td className="px-3 py-2.5 text-slate-700 whitespace-nowrap">{it.material}</td>
-                    <td className="px-3 py-2.5 font-mono text-slate-700 whitespace-nowrap">{it.measure}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap">{it.pcs}</td>
-                    <td className="px-3 py-2.5 text-right font-mono tabular-nums whitespace-nowrap">{it.weightPerPc.toFixed(3)}</td>
-                    <td className="px-3 py-2.5 text-right font-mono font-semibold tabular-nums whitespace-nowrap">{it.totalWeight.toFixed(3)}</td>
-                    <td className="px-3 py-2.5 text-center whitespace-nowrap">
-                      {it.status === 'ACTIVE'
-                        ? <CheckCircle2 className="h-5 w-5 text-green-600 inline" aria-label="Active" />
-                        : <XCircle className="h-5 w-5 text-slate-400 inline" aria-label="Cancelled" />}
-                    </td>
-                    <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                      <div className="inline-flex items-center gap-1">
-                        {it.status === 'ACTIVE' && (
-                          <>
-                            <Link
-                              to={`/po/manage/${it.id}`}
-                              className={cn(
-                                'btn-ghost',
-                                (it.pcsProduced ?? 0) > 0
-                                  ? 'text-slate-300 hover:bg-slate-50'
-                                  : 'text-brand-700 hover:bg-brand-50'
+                {groups.map((group) => {
+                  const isOpen = expandedPos.has(group.poOrderId);
+                  return (
+                    <Fragment key={group.poOrderId}>
+                      <tr
+                        className={cn(
+                          'border-t border-slate-200 cursor-pointer select-none',
+                          isOpen ? 'bg-brand-50/40' : 'bg-slate-50/60 hover:bg-slate-50'
+                        )}
+                        onClick={() => togglePoExpand(group.poOrderId)}
+                      >
+                        <td className="px-3 py-2.5 font-semibold text-slate-900 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1.5">
+                            {isOpen
+                              ? <ChevronDown className="h-3.5 w-3.5 text-brand-600 shrink-0" />
+                              : <ChevronRight className="h-3.5 w-3.5 text-slate-400 shrink-0" />}
+                            {group.poNumber}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 text-slate-900 font-medium whitespace-nowrap">{group.customerName}</td>
+                        <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{formatDate(group.orderDate)}</td>
+                        <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{group.items.length} item{group.items.length !== 1 ? 's' : ''}</td>
+                        <td className="px-3 py-2.5 whitespace-nowrap" />
+                        <td className="px-3 py-2.5 whitespace-nowrap" />
+                        <td className="px-3 py-2.5 whitespace-nowrap" />
+                        <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap font-semibold">{group.totalPcs}</td>
+                        <td className="px-3 py-2.5 whitespace-nowrap" />
+                        <td className="px-3 py-2.5 text-right font-mono font-semibold tabular-nums whitespace-nowrap">{group.totalWeight.toFixed(3)}</td>
+                        <td className="px-3 py-2.5 whitespace-nowrap" />
+                        <td className="px-3 py-2.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <Link
+                            to={`/po/new/${group.poOrderId}`}
+                            className="btn-ghost text-brand-700 hover:bg-brand-50 text-xs"
+                            title="Edit whole PO (add / remove / modify items)"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                            <span className="hidden lg:inline ml-1">Edit PO</span>
+                          </Link>
+                        </td>
+                      </tr>
+                      {isOpen && group.items.map((it) => (
+                        <tr key={it.id} className="border-t border-slate-100 hover:bg-slate-50/60">
+                          <td className="pl-8 pr-3 py-2.5 text-xs text-slate-400 whitespace-nowrap">{it.poNumber}</td>
+                          <td className="px-3 py-2.5 text-slate-900 font-medium whitespace-nowrap">{it.customerName}</td>
+                          <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{formatDate(it.orderDate)}</td>
+                          <td className="px-3 py-2.5 whitespace-nowrap">
+                            <span className={cn(
+                              'rounded-full px-2 py-0.5 text-xs font-medium',
+                              it.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
+                            )}>
+                              {it.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5 text-slate-700 font-medium whitespace-nowrap">{it.grade}</td>
+                          <td className="px-3 py-2.5 text-slate-700 whitespace-nowrap">{it.material}</td>
+                          <td className="px-3 py-2.5 font-mono text-slate-700 whitespace-nowrap">{it.measure}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap">{it.pcs}</td>
+                          <td className="px-3 py-2.5 text-right font-mono tabular-nums whitespace-nowrap">{it.weightPerPc.toFixed(3)}</td>
+                          <td className="px-3 py-2.5 text-right font-mono font-semibold tabular-nums whitespace-nowrap">{it.totalWeight.toFixed(3)}</td>
+                          <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                            {it.status === 'ACTIVE'
+                              ? <CheckCircle2 className="h-5 w-5 text-green-600 inline" aria-label="Active" />
+                              : <XCircle className="h-5 w-5 text-slate-400 inline" aria-label="Cancelled" />}
+                          </td>
+                          <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                            <div className="inline-flex items-center gap-1">
+                              {it.status === 'ACTIVE' && (
+                                <>
+                                  <Link
+                                    to={`/po/manage/${it.id}`}
+                                    className={cn(
+                                      'btn-ghost',
+                                      (it.pcsProduced ?? 0) > 0
+                                        ? 'text-slate-300 hover:bg-slate-50'
+                                        : 'text-brand-700 hover:bg-brand-50'
+                                    )}
+                                    title={(it.pcsProduced ?? 0) > 0
+                                      ? `Locked — ${it.pcsProduced} pcs produced. Use Cancel to shrink remaining qty.`
+                                      : 'Edit'}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Link>
+                                  <button
+                                    onClick={() => setCancelTarget(it)}
+                                    className="btn-ghost text-amber-600 hover:bg-amber-50"
+                                    title="Cancel item"
+                                    disabled={cancel.isPending}
+                                  >
+                                    <Ban className="h-4 w-4" />
+                                  </button>
+                                </>
                               )}
-                              title={(it.pcsProduced ?? 0) > 0
-                                ? `Locked — ${it.pcsProduced} pcs produced. Use Cancel to shrink remaining qty.`
-                                : 'Edit'}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Link>
-                            <button
-                              onClick={() => setCancelTarget(it)}
-                              className="btn-ghost text-amber-600 hover:bg-amber-50"
-                              title="Cancel item"
-                              disabled={cancel.isPending}
-                            >
-                              <Ban className="h-4 w-4" />
-                            </button>
-                          </>
-                        )}
-                        {it.status === 'CANCELLED' && (
-                          <button
-                            onClick={() => setRestoreTarget(it)}
-                            className="btn-ghost text-emerald-700 hover:bg-emerald-50"
-                            title="Restore cancelled item"
-                            disabled={restoreItem.isPending}
-                          >
-                            <RotateCcw className="h-4 w-4" />
-                          </button>
-                        )}
-                        {(it.pcsProduced ?? 0) === 0 && (it.pcsDispatched ?? 0) === 0 && (
-                          <button
-                            onClick={() => setDeleteTarget(it)}
-                            className="btn-ghost text-red-600 hover:bg-red-50"
-                            title="Delete permanently"
-                            disabled={deleteItem.isPending}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                              {it.status === 'CANCELLED' && (
+                                <button
+                                  onClick={() => setRestoreTarget(it)}
+                                  className="btn-ghost text-emerald-700 hover:bg-emerald-50"
+                                  title="Restore cancelled item"
+                                  disabled={restoreItem.isPending}
+                                >
+                                  <RotateCcw className="h-4 w-4" />
+                                </button>
+                              )}
+                              {(it.pcsProduced ?? 0) === 0 && (it.pcsDispatched ?? 0) === 0 && (
+                                <button
+                                  onClick={() => setDeleteTarget(it)}
+                                  className="btn-ghost text-red-600 hover:bg-red-50"
+                                  title="Delete permanently"
+                                  disabled={deleteItem.isPending}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -261,80 +346,119 @@ export const POManagePage = () => {
       {/* Mobile cards — < md */}
       {!isLoading && data && data.items.length > 0 && (
         <div className="space-y-3 md:hidden">
-          {data.items.map((it) => (
-            <div key={it.id} className="card overflow-hidden">
-              <div className="px-3 py-3 space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-slate-800">{it.poNumber}</span>
-                      <span className={cn(
-                        'rounded-full px-1.5 py-0.5 text-[10px] font-medium',
-                        it.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
-                      )}>
-                        {it.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
-                      </span>
-                      <span className="text-xs text-slate-700 font-medium">{it.grade}</span>
+          {groups.map((group) => {
+            const isOpen = expandedPos.has(group.poOrderId);
+            return (
+              <div key={group.poOrderId} className="card overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => togglePoExpand(group.poOrderId)}
+                  className="w-full px-3 py-3 text-left"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-slate-800">{group.poNumber}</span>
+                        <span className="text-xs font-medium text-slate-900 truncate">{group.customerName}</span>
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-slate-500">
+                        {formatDate(group.orderDate)} · {group.items.length} item{group.items.length !== 1 ? 's' : ''}
+                      </div>
                     </div>
-                    <div className="mt-0.5 text-sm font-medium text-slate-900 truncate">{it.customerName}</div>
-                    <div className="mt-0.5 text-[11px] text-slate-500">
-                      {formatDate(it.orderDate)} · {it.material}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-mono tabular-nums font-semibold text-slate-700">{group.totalWeight.toFixed(3)} kg</span>
+                      {isOpen
+                        ? <ChevronDown className="h-4 w-4 text-brand-600" />
+                        : <ChevronRight className="h-4 w-4 text-slate-400" />}
                     </div>
-                    <div className="mt-0.5 font-mono text-xs text-slate-600 truncate">{it.measure}</div>
                   </div>
-                  <div className="shrink-0">
-                    {it.status === 'ACTIVE'
-                      ? <CheckCircle2 className="h-5 w-5 text-green-600" aria-label="Active" />
-                      : <XCircle className="h-5 w-5 text-slate-400" aria-label="Cancelled" />}
-                  </div>
-                </div>
+                </button>
 
-                <div className="grid grid-cols-3 gap-2">
-                  <Stat label="Pcs"      value={String(it.pcs)} />
-                  <Stat label="Wt / pc"  value={it.weightPerPc.toFixed(3)} />
-                  <Stat label="Total Wt" value={it.totalWeight.toFixed(3)} accent />
-                </div>
-
-                {it.status === 'ACTIVE' && (
-                  <div className="flex justify-end gap-2 border-t border-slate-100 pt-2">
-                    <Link
-                      to={`/po/manage/${it.id}`}
-                      className="btn-ghost border border-slate-300 text-sm flex-1 justify-center"
-                    >
-                      <Pencil className="h-4 w-4" /> Edit
-                    </Link>
-                    <button
-                      onClick={() => setCancelTarget(it)}
-                      className="btn-ghost border border-amber-200 text-amber-700 text-sm flex-1 justify-center hover:bg-amber-50"
-                      disabled={cancel.isPending}
-                    >
-                      <Ban className="h-4 w-4" /> Cancel
-                    </button>
-                  </div>
-                )}
-                {it.status === 'CANCELLED' && (
-                  <div className="flex justify-end gap-2 border-t border-slate-100 pt-2">
-                    <button
-                      onClick={() => setRestoreTarget(it)}
-                      className="btn-ghost border border-emerald-200 text-emerald-700 text-sm flex-1 justify-center hover:bg-emerald-50"
-                      disabled={restoreItem.isPending}
-                    >
-                      <RotateCcw className="h-4 w-4" /> Restore
-                    </button>
-                    {(it.pcsProduced ?? 0) === 0 && (it.pcsDispatched ?? 0) === 0 && (
-                      <button
-                        onClick={() => setDeleteTarget(it)}
-                        className="btn-ghost border border-red-200 text-red-600 text-sm flex-1 justify-center hover:bg-red-50"
-                        disabled={deleteItem.isPending}
+                {isOpen && (
+                  <div className="border-t border-slate-200">
+                    <div className="flex items-center justify-between px-3 py-2 bg-slate-50">
+                      <span className="text-xs text-slate-500 font-medium">{group.totalPcs} pcs · {group.totalWeight.toFixed(3)} kg</span>
+                      <Link
+                        to={`/po/new/${group.poOrderId}`}
+                        className="btn-ghost text-xs text-brand-700 hover:bg-brand-50"
+                        title="Edit whole PO"
                       >
-                        <Trash2 className="h-4 w-4" /> Delete
-                      </button>
-                    )}
+                        <Pencil className="h-3.5 w-3.5" /> Edit PO
+                      </Link>
+                    </div>
+                    {group.items.map((it) => (
+                      <div key={it.id} className="border-t border-slate-100">
+                        <div className="px-3 py-3 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={cn(
+                                  'rounded-full px-1.5 py-0.5 text-[10px] font-medium',
+                                  it.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
+                                )}>
+                                  {it.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
+                                </span>
+                                <span className="text-xs text-slate-700 font-medium">{it.grade}</span>
+                              </div>
+                              <div className="mt-0.5 font-mono text-xs text-slate-600 truncate">{it.measure}</div>
+                              <div className="mt-0.5 text-[11px] text-slate-500">{it.material}</div>
+                            </div>
+                            <div className="shrink-0">
+                              {it.status === 'ACTIVE'
+                                ? <CheckCircle2 className="h-5 w-5 text-green-600" aria-label="Active" />
+                                : <XCircle className="h-5 w-5 text-slate-400" aria-label="Cancelled" />}
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            <Stat label="Pcs"      value={String(it.pcs)} />
+                            <Stat label="Wt / pc"  value={it.weightPerPc.toFixed(3)} />
+                            <Stat label="Total Wt" value={it.totalWeight.toFixed(3)} accent />
+                          </div>
+                          {it.status === 'ACTIVE' && (
+                            <div className="flex justify-end gap-2 border-t border-slate-100 pt-2">
+                              <Link
+                                to={`/po/manage/${it.id}`}
+                                className="btn-ghost border border-slate-300 text-sm flex-1 justify-center"
+                              >
+                                <Pencil className="h-4 w-4" /> Edit
+                              </Link>
+                              <button
+                                onClick={() => setCancelTarget(it)}
+                                className="btn-ghost border border-amber-200 text-amber-700 text-sm flex-1 justify-center hover:bg-amber-50"
+                                disabled={cancel.isPending}
+                              >
+                                <Ban className="h-4 w-4" /> Cancel
+                              </button>
+                            </div>
+                          )}
+                          {it.status === 'CANCELLED' && (
+                            <div className="flex justify-end gap-2 border-t border-slate-100 pt-2">
+                              <button
+                                onClick={() => setRestoreTarget(it)}
+                                className="btn-ghost border border-emerald-200 text-emerald-700 text-sm flex-1 justify-center hover:bg-emerald-50"
+                                disabled={restoreItem.isPending}
+                              >
+                                <RotateCcw className="h-4 w-4" /> Restore
+                              </button>
+                              {(it.pcsProduced ?? 0) === 0 && (it.pcsDispatched ?? 0) === 0 && (
+                                <button
+                                  onClick={() => setDeleteTarget(it)}
+                                  className="btn-ghost border border-red-200 text-red-600 text-sm flex-1 justify-center hover:bg-red-50"
+                                  disabled={deleteItem.isPending}
+                                >
+                                  <Trash2 className="h-4 w-4" /> Delete
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
-            </div>
-          ))}
+            );
+          })}
           {data && (
             <div className="card overflow-hidden">
               <Pagination page={page} pageSize={PAGE_SIZE} total={data.total} onPageChange={setPage} />
