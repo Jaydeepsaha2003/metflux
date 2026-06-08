@@ -45,6 +45,35 @@ const prefixFromName = (name) => {
   return (letters + 'XXX').slice(0, 3);
 };
 
+/** URL-safe slug from a customer name. "M/S LAN Engineering & Tech." → "m-s-lan-engineering-tech". */
+const slugifyName = (name) => {
+  const s = String(name ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 50);
+  return s || 'customer';
+};
+
+/** A globally-unique shareToken from the name slug. shareToken is the public
+    portal lookup key, so it must be unique across ALL customers. On a clash we
+    append -2, -3, … */
+const uniqueShareToken = async (name, excludeId = null) => {
+  const base = slugifyName(name);
+  let candidate = base;
+  let n = 1;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const clash = await qOne(
+      `SELECT \`id\` FROM \`Customer\` WHERE \`shareToken\` = ?${excludeId ? ' AND `id` <> ?' : ''}`,
+      excludeId ? [candidate, excludeId] : [candidate]
+    );
+    if (!clash) return candidate;
+    n += 1;
+    candidate = `${base}-${n}`;
+  }
+};
+
 /** Next free "XYZ-NNN" code for the given prefix in this company. */
 const nextCustomerCode = async (companyId, prefix) => {
   const rows = await q(
@@ -115,14 +144,15 @@ router.post('/', requireRole('STAFF'), asyncHandler(async (req, res) => {
     if (dup) throw new AppError('Customer code already in use', 409, 'CODE_DUPLICATE');
   }
 
-  // Generate the ID upfront so shareToken can equal it — the portal URL
-  // is /<customerId> and never changes for the lifetime of the customer.
+  // The public portal URL uses a readable slug of the customer name
+  // (e.g. /portal/aarti-steels) rather than the raw UUID. Kept globally unique.
   const customerId = uuidv4();
+  const shareToken = await uniqueShareToken(data.name);
   const created = await insert('Customer', {
     id: customerId,
     ...data,
     customerCode,
-    shareToken: customerId,
+    shareToken,
     companyId: req.tenant.companyId,
     createdById: req.auth.userId,
   });
@@ -146,6 +176,12 @@ router.patch('/:id', requireRole('STAFF'), asyncHandler(async (req, res) => {
       if (dup) throw new AppError('Customer code already in use', 409, 'CODE_DUPLICATE');
     }
     data.customerCode = cleaned;
+  }
+
+  // Keep the portal slug in sync when the name changes (regenerate, unique).
+  // Old UUID-based links still resolve — the portal looks up by token OR id.
+  if (data.name && data.name !== existing.name) {
+    data.shareToken = await uniqueShareToken(data.name, id);
   }
 
   res.json(await update('Customer', id, data));

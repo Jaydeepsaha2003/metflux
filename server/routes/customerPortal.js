@@ -54,8 +54,8 @@ const findCustomerByToken = async (token) => {
             co.\`whatsappNumber\`  AS co_whatsapp
        FROM \`Customer\` c
        INNER JOIN \`Company\` co ON co.\`id\` = c.\`companyId\`
-      WHERE c.\`shareToken\` = ? AND co.\`isActive\` = 1`,
-    [token]
+      WHERE (c.\`shareToken\` = ? OR c.\`id\` = ?) AND co.\`isActive\` = 1`,
+    [token, token]
   );
   if (!row) throw new AppError('Portal not found', 404, 'NOT_FOUND');
   return row;
