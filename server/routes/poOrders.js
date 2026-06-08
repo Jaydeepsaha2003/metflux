@@ -263,7 +263,9 @@ const itemRowSql = `
 router.get('/items', requirePermission('view_po'), asyncHandler(async (req, res) => {
   const { page, pageSize, search, status, poOrderId } = z.object({
     page: z.coerce.number().int().min(1).default(1),
-    pageSize: z.coerce.number().int().min(1).max(200).default(50),
+    // Cap is generous so "load every line of one PO" (edit mode) works in one
+    // call — a single PO never has hundreds of lines, but 1000 is a safe ceiling.
+    pageSize: z.coerce.number().int().min(1).max(1000).default(50),
     search: z.string().trim().max(120).optional(),
     status: z.enum(['ACTIVE', 'CANCELLED', 'ALL']).default('ACTIVE'),
     poOrderId: z.string().trim().optional(),

@@ -429,6 +429,15 @@ export const POManagePage = () => {
                               >
                                 <Ban className="h-4 w-4" /> Cancel
                               </button>
+                              {(it.pcsProduced ?? 0) === 0 && (it.pcsDispatched ?? 0) === 0 && (
+                                <button
+                                  onClick={() => setDeleteTarget(it)}
+                                  className="btn-ghost border border-red-200 text-red-600 text-sm flex-1 justify-center hover:bg-red-50"
+                                  disabled={deleteItem.isPending}
+                                >
+                                  <Trash2 className="h-4 w-4" /> Delete
+                                </button>
+                              )}
                             </div>
                           )}
                           {it.status === 'CANCELLED' && (

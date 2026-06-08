@@ -158,7 +158,7 @@ export const ProductionNewPage = () => {
   };
 
   return (
-    <div className="space-y-4 max-w-[1400px]">
+    <div className="space-y-4">
       <div className="flex items-center gap-3">
         <Link to="/production" className="btn-ghost text-slate-600">
           <ArrowLeft className="h-4 w-4" /> Back

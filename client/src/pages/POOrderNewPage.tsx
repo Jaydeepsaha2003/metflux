@@ -166,12 +166,12 @@ export const POOrderNewPage = () => {
     ratePerKg: number | null; ratePerPc: number | null; totalAmount: number | null;
     pcsProduced: number; pcsDispatched: number;
   };
-  const { data: existingPo } = useQuery({
+  const { data: existingPo, error: existingPoErr } = useQuery({
     queryKey: ['po-orders', 'header', poId],
     queryFn: () => api<ExistingPo>(`/po-orders/${poId}`),
     enabled: isEdit,
   });
-  const { data: existingItemsResp } = useQuery({
+  const { data: existingItemsResp, error: existingItemsErr } = useQuery({
     queryKey: ['po-orders', 'items-for-edit', poId],
     queryFn: () => api<{ items: ExistingItem[] }>(`/po-orders/items?poOrderId=${poId}&pageSize=500&status=ACTIVE`),
     enabled: isEdit,
@@ -308,14 +308,29 @@ export const POOrderNewPage = () => {
     }
   };
 
-  /* Show spinner while fetching existing PO data in edit mode. */
-  if (isEdit && !editLoaded && (!existingPo || !existingItemsResp)) {
-    return (
-      <div className="card p-10 text-center">
-        <Loader2 className="h-5 w-5 animate-spin mx-auto text-slate-400" />
-        <div className="mt-2 text-sm text-slate-500">Loading sales order…</div>
-      </div>
-    );
+  /* Edit mode: while the existing PO is still loading, show a spinner — but if
+     either fetch errored, surface it instead of spinning forever. */
+  if (isEdit && !editLoaded) {
+    const loadErr = existingPoErr || existingItemsErr;
+    if (loadErr) {
+      const msg = loadErr instanceof ApiError ? loadErr.message : 'Could not load this sales order.';
+      return (
+        <div className="card p-8 text-center space-y-3">
+          <div className="text-sm font-medium text-red-700">{msg}</div>
+          <button onClick={() => navigate('/po/manage')} className="btn-ghost mx-auto">
+            Back to SO Modify
+          </button>
+        </div>
+      );
+    }
+    if (!existingPo || !existingItemsResp) {
+      return (
+        <div className="card p-10 text-center">
+          <Loader2 className="h-5 w-5 animate-spin mx-auto text-slate-400" />
+          <div className="mt-2 text-sm text-slate-500">Loading sales order…</div>
+        </div>
+      );
+    }
   }
 
   const totalWeight = items.reduce((s, x) => s + x.totalWeight, 0);
