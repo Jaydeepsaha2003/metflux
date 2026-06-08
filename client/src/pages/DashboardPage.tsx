@@ -1,10 +1,10 @@
 // Dashboard — KPIs + employee performance table.
 // Mobile-first: KPI cards stack 2-up on phones, tables become cards.
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Factory, Truck, Package, RotateCcw, FileText, Users2, Trophy, Loader2,
-  CalendarRange, RotateCw, User, TrendingUp, AlertTriangle,
+  CalendarRange, RotateCw, User, TrendingUp,
 } from 'lucide-react';
 import { useAuthStore, activeMembership, useHideCustomerNames } from '@/store/auth';
 import { api } from '@/lib/api';
@@ -207,7 +207,6 @@ export const DashboardPage = () => {
             <Loader2 className="h-5 w-5 animate-spin" /> Loading…
           </div>
         ) : !stats ? null : (
-          <div className="space-y-2.5">
           <div className="grid grid-cols-2 gap-2.5 sm:gap-3 md:grid-cols-3 lg:grid-cols-5">
             <KpiCard
               icon={FileText} accent="brand"
@@ -250,16 +249,6 @@ export const DashboardPage = () => {
               statusTone={stats.openReturns ? 'warn' : 'ok'}
               info="Total open return requests — across all time, not filtered by date."
             />
-          </div>
-          {stats.overdueItems > 0 && (
-            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
-              <span>
-                <span className="font-semibold">{stats.overdueItems} item{stats.overdueItems !== 1 ? 's' : ''}</span>
-                {' '}past their delivery date with production still pending.
-              </span>
-            </div>
-          )}
           </div>
         )}
       </section>
@@ -541,12 +530,28 @@ const STATUS_TONES = {
   warn: 'bg-rose-50 text-rose-700 ring-rose-100',
 };
 
-/* ── InfoTip — hoverable (i) button with tooltip ── */
+/* ── InfoTip — hoverable (i) button with a viewport-safe tooltip ──
+   The tooltip uses fixed positioning + measurement so it never gets clipped
+   by a card's edge and never runs off the right side of the screen (the
+   right-most KPI card would otherwise overflow the viewport). */
 const InfoTip = ({ text }: { text: string }) => {
   const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; arrow: number } | null>(null);
+
+  useEffect(() => {
+    if (!open || !btnRef.current) { setPos(null); return; }
+    const W = 240, M = 8;   // tooltip width (w-60) + viewport margin
+    const r = btnRef.current.getBoundingClientRect();
+    const center = r.left + r.width / 2;
+    const left = Math.max(M, Math.min(center - W / 2, window.innerWidth - M - W));
+    setPos({ top: r.bottom + 8, left, arrow: center - left });
+  }, [open]);
+
   return (
-    <div className="relative inline-flex shrink-0" style={{ lineHeight: 0 }}>
+    <div className="inline-flex shrink-0" style={{ lineHeight: 0 }}>
       <button
+        ref={btnRef}
         type="button"
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}
@@ -555,10 +560,16 @@ const InfoTip = ({ text }: { text: string }) => {
       >
         i
       </button>
-      {open && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-60 rounded-lg bg-slate-800 text-white text-[11px] px-3 py-2 shadow-xl leading-snug pointer-events-none">
+      {open && pos && (
+        <div
+          className="fixed z-50 w-60 rounded-lg bg-slate-800 text-white text-[11px] px-3 py-2 shadow-xl leading-snug pointer-events-none"
+          style={{ top: pos.top, left: pos.left }}
+        >
           {text}
-          <div className="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-slate-800" />
+          <div
+            className="absolute bottom-full border-[5px] border-transparent border-b-slate-800"
+            style={{ left: pos.arrow - 5 }}
+          />
         </div>
       )}
     </div>
@@ -581,8 +592,8 @@ const KpiCard = ({
   /** Toroidal / Rectangular pcs breakdown shown as small tags. */
   split?: { toroidal: number; rectangular: number };
 }) => (
-  <div className="card relative flex flex-col overflow-hidden p-3 pt-3.5">
-    <span className={cn('absolute inset-x-0 top-0 h-1', TOP_BARS[accent])} />
+  <div className="card relative flex flex-col p-3 pt-3.5">
+    <span className={cn('absolute inset-x-0 top-0 h-1 rounded-t-xl', TOP_BARS[accent])} />
     <div className="flex items-center gap-2">
       <div className={cn('grid h-7 w-7 place-items-center rounded-md ring-1 shrink-0', ACCENTS[accent])}>
         <Icon className="h-3.5 w-3.5" />
@@ -634,9 +645,25 @@ const KpiCard = ({
 /* ── MonthlyChart — pure SVG bar + line chart ── */
 const MonthlyChart = ({ data }: { data: MonthlyPoint[] }) => {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [vw, setVw] = useState(900);
+
+  // Measure the container so the SVG fills its full width at 1 unit = 1px
+  // (no letterboxing) and grows with the screen instead of staying small.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (w) setVw(Math.max(320, Math.round(w)));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   if (!data.length) return null;
 
-  const VW = 600, VH = 210;
+  const VW = vw, VH = 260;
   const PL = 52, PR = 62, PT = 18, PB = 38;
   const IW = VW - PL - PR;
   const IH = VH - PT - PB;
@@ -684,7 +711,8 @@ const MonthlyChart = ({ data }: { data: MonthlyPoint[] }) => {
     : 0;
 
   return (
-    <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full select-none" style={{ height: VH }}>
+    <div ref={wrapRef} className="w-full">
+    <svg viewBox={`0 0 ${VW} ${VH}`} width="100%" height={VH} className="select-none block">
       <defs>
         <linearGradient id="amtGrad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#10b981" stopOpacity="0.18" />
@@ -737,13 +765,16 @@ const MonthlyChart = ({ data }: { data: MonthlyPoint[] }) => {
         />
       ))}
 
-      {/* X labels */}
-      {data.map((d, i) => (
-        <text key={i} x={xc(i).toFixed(1)} y={VH - 8}
-          textAnchor="middle" fontSize="10" fill="#94a3b8">
-          {monthShort(d.month)}
-        </text>
-      ))}
+      {/* X labels — drop every other one when slots get too narrow (mobile). */}
+      {data.map((d, i) => {
+        if (slotW < 30 && i % 2 !== 0) return null;
+        return (
+          <text key={i} x={xc(i).toFixed(1)} y={VH - 8}
+            textAnchor="middle" fontSize="10" fill="#94a3b8">
+            {monthShort(d.month)}
+          </text>
+        );
+      })}
 
       {/* Left Y (pcs) */}
       {[0, ...ticks].map((f, j) => (
@@ -778,5 +809,6 @@ const MonthlyChart = ({ data }: { data: MonthlyPoint[] }) => {
         </g>
       )}
     </svg>
+    </div>
   );
 };
