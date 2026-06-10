@@ -94,7 +94,21 @@ router.post('/', requirePermission('add_po'), asyncHandler(async (req, res) => {
     'SELECT `id` FROM `PoOrder` WHERE `companyId` = ? AND `poNumber` = ?',
     [req.tenant.companyId, data.poNumber]
   );
-  if (dup) throw new AppError('PO number already exists in this company', 409, 'PO_DUPLICATE');
+  if (dup) {
+    // A header with this SO# already exists. If it still has line items it's a
+    // genuine duplicate. If it has none, it's an orphan left behind when every
+    // line was deleted one-by-one (older builds kept the empty header, which
+    // then occupied the (companyId, poNumber) unique slot). Drop the orphan so
+    // the number can be reused instead of falsely reporting "already exists".
+    const cnt = await qOne(
+      'SELECT COUNT(*) AS n FROM `PoOrderItem` WHERE `poOrderId` = ?',
+      [dup.id]
+    );
+    if (Number(cnt?.n ?? 0) > 0) {
+      throw new AppError('PO number already exists in this company', 409, 'PO_DUPLICATE');
+    }
+    await del('PoOrder', dup.id);
+  }
 
   const result = await txn(async (tx) => {
     const po = await tx.insert('PoOrder', {
@@ -144,7 +158,9 @@ router.post('/', requirePermission('add_po'), asyncHandler(async (req, res) => {
 router.get('/', requirePermission('view_po'), asyncHandler(async (req, res) => {
   const { page, pageSize, search } = z.object({
     page: z.coerce.number().int().min(1).default(1),
-    pageSize: z.coerce.number().int().min(1).max(100).default(20),
+    // Up to 500 so callers that load every SO for a dropdown (e.g. the Return
+    // form's SO-number selector) work in one request. Browsing uses pageSize=20.
+    pageSize: z.coerce.number().int().min(1).max(500).default(20),
     search: z.string().trim().max(120).optional(),
   }).parse(req.query);
   const skip = (page - 1) * pageSize;
@@ -413,7 +429,9 @@ router.post('/items/:id/cancel', requirePermission('add_po'), asyncHandler(async
 router.get('/summary', requirePermission('po_summary'), asyncHandler(async (req, res) => {
   const { page, pageSize, search, status } = z.object({
     page: z.coerce.number().int().min(1).default(1),
-    pageSize: z.coerce.number().int().min(1).max(200).default(50),
+    // Cap is generous so the "Excel" button (which pulls every filtered row in
+    // one request) works without paging. Normal browsing uses pageSize=20.
+    pageSize: z.coerce.number().int().min(1).max(10000).default(50),
     search: z.string().trim().max(120).optional(),
     status: z.enum(['ACTIVE', 'CANCELLED', 'ALL']).default('ACTIVE'),
   }).parse(req.query);
@@ -635,7 +653,20 @@ router.delete('/items/:id', requirePermission('add_po'), asyncHandler(async (req
     );
   }
 
-  await q('DELETE FROM `PoOrderItem` WHERE `id` = ?', [row.id]);
+  await txn(async (tx) => {
+    await tx.q('DELETE FROM `PoOrderItem` WHERE `id` = ?', [row.id]);
+    // If that was the last line on the SO, remove the now-empty SO header too,
+    // so its SO# is free to be reused. Otherwise a deleted-then-recreated SO#
+    // collides with the orphaned header (which still holds the unique
+    // (companyId, poNumber) slot) and the create wrongly reports "already exists".
+    const left = await tx.qOne(
+      'SELECT COUNT(*) AS n FROM `PoOrderItem` WHERE `poOrderId` = ?',
+      [row.poOrderId]
+    );
+    if (Number(left?.n ?? 0) === 0) {
+      await tx.q('DELETE FROM `PoOrder` WHERE `id` = ?', [row.poOrderId]);
+    }
+  });
   res.status(204).end();
 }));
 

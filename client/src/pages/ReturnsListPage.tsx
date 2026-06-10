@@ -62,7 +62,7 @@ const PAGE_SIZE = 20;
 export const ReturnsListPage = () => {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm, alert, confirmDialog } = useConfirm();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<'ALL' | ReturnStatus>('ALL');
   const [page, setPage] = useState(1);
@@ -103,6 +103,8 @@ export const ReturnsListPage = () => {
         'Logged On':      fmt(r.createdAt),
       }));
       downloadXlsx(`returns-${status === 'ALL' ? 'all' : status.toLowerCase()}-${todayStamp()}`, 'Returns', rows);
+    } catch (e) {
+      alert({ title: 'Export failed', message: e instanceof Error ? e.message : 'Please try again.', tone: 'danger' });
     } finally {
       setExporting(false);
     }

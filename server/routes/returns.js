@@ -100,7 +100,9 @@ const flattenReturn = (r, itemRows = []) => ({
 router.get('/', requireAnyPermission('manage_returns', 'dispatch'), asyncHandler(async (req, res) => {
   const { page, pageSize, search, status } = z.object({
     page:     z.coerce.number().int().min(1).default(1),
-    pageSize: z.coerce.number().int().min(1).max(200).default(50),
+    // Generous cap so the "Excel" button (pulls every filtered row at once)
+    // works without paging. Normal browsing uses pageSize=20.
+    pageSize: z.coerce.number().int().min(1).max(10000).default(50),
     search:   z.string().trim().max(120).optional(),
     status:   z.enum(['PENDING','RECEIVED','IN_REWORK','REDISPATCHED','CLOSED','CANCELLED','ALL']).default('ALL'),
   }).parse(req.query);

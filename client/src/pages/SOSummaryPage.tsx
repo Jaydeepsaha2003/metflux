@@ -203,6 +203,8 @@ export const SOSummaryPage = () => {
         'Status':        it.status,
       }));
       downloadXlsx(`so-summary-${status.toLowerCase()}-${todayStamp()}`, 'SO Summary', rows);
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : 'Export failed. Please try again.');
     } finally {
       setExporting(false);
     }

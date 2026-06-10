@@ -24,6 +24,7 @@ type PendingItem = {
   turns: number | null;
   testVoltage: number | null;
   testCurrent: number | null;
+  weightPerPc: number;
   orderedPcs: number;
   producedPcs: number;
   remainingPcs: number;
@@ -38,6 +39,7 @@ type WaItemDetail = {
   grade: string | null;
   material: string | null;
   measure: string | null;
+  weightPerPc: number | null;
   flux: number | null;
   turns: number | null;
   testVoltage: number | null;
@@ -71,6 +73,7 @@ type RowState = {
   iemax: string;
   pcs: string;        // editable
   maxPcs: number;     // remaining cap
+  weightPerPc: number; // kg per piece — WT column = pcs × weightPerPc
   labourId: string;   // editable
 };
 
@@ -186,6 +189,7 @@ export const WorkAllotmentBuildPage = () => {
         iemax:         numStr(it.testCurrent, 2),
         pcs:           String(it.pcs),
         maxPcs:        it.pcs, // already locked-in; can't grow past saved value
+        weightPerPc:   it.weightPerPc ?? 0,
         labourId:      it.labourId ?? '',
       })));
     } else {
@@ -205,6 +209,7 @@ export const WorkAllotmentBuildPage = () => {
         iemax:         numStr(p.testCurrent, 2),
         pcs:           String(p.remainingPcs),
         maxPcs:        p.remainingPcs,
+        weightPerPc:   p.weightPerPc ?? 0,
         labourId:      '',
       })));
     }
@@ -214,6 +219,12 @@ export const WorkAllotmentBuildPage = () => {
     setRows((prev) => prev.map((r) => (r.poOrderItemId === id ? { ...r, [field]: val } : r)));
 
   const totalPcs = rows.reduce((s, r) => s + (parseInt(r.pcs) || 0), 0);
+
+  // WT (KG.) per line = allotted pcs × weight per piece. Recomputed live as pcs
+  // is edited. 3-decimal precision mirrors weights shown elsewhere in the app.
+  const fmtWt = (n: number) => (Number.isFinite(n) ? n : 0).toFixed(3);
+  const rowWt = (r: RowState) => (parseInt(r.pcs) || 0) * (r.weightPerPc || 0);
+  const totalWt = rows.reduce((s, r) => s + rowWt(r), 0);
 
   /* Validation — shown inline before save */
   const validationError = (() => {
@@ -455,6 +466,7 @@ export const WorkAllotmentBuildPage = () => {
                   <th className="px-3 py-2 text-right">Voltage</th>
                   <th className="px-3 py-2 text-right">Iemax</th>
                   <th className="px-3 py-2 text-right">Pcs <span className="text-[10px] text-slate-400 font-normal">(max)</span></th>
+                  <th className="px-3 py-2 text-right">WT (KG.)</th>
                   <th className="px-3 py-2 text-left">Worker</th>
                 </tr>
               </thead>
@@ -479,6 +491,7 @@ export const WorkAllotmentBuildPage = () => {
                         <span className="text-[10px] text-slate-400">/{r.maxPcs}</span>
                       </div>
                     </td>
+                    <td className="px-3 py-2 text-right tabular-nums font-mono text-xs text-slate-700">{fmtWt(rowWt(r))}</td>
                     <td className="px-3 py-2">
                       <select
                         className="input w-44"
@@ -540,6 +553,9 @@ export const WorkAllotmentBuildPage = () => {
                       value={r.pcs}
                       onChange={(e) => updateRow(r.poOrderItemId, 'pcs', e.target.value)}
                     />
+                    <span className="mt-1 block text-right text-[10px] text-slate-400 tabular-nums">
+                      WT ≈ {fmtWt(rowWt(r))} kg
+                    </span>
                   </label>
                   <label className="block">
                     <span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">
@@ -611,21 +627,22 @@ export const WorkAllotmentBuildPage = () => {
             <InfoRow label="Total Pcs" value={String(totalPcs)} border="" />
           </div>
 
-          {/* Items table — column order: SR | Cust Code | SO Date | Measure | Grade | Material | Pcs | Flux | Turns | Voltage | Iemax | Worker */}
+          {/* Items table — column order: SR | Cust Code | SO Date | Measure | Grade | Material | Pcs | WT (KG.) | Flux | Turns | Voltage | Iemax | Worker */}
           <table className="w-full text-sm border-collapse table-fixed">
             <colgroup>
               <col style={{ width: '3%'  }} />  {/* SR */}
-              <col style={{ width: '10%' }} />  {/* CUST CODE */}
+              <col style={{ width: '9%'  }} />  {/* CUST CODE */}
               <col style={{ width: '8%'  }} />  {/* SO DATE */}
-              <col style={{ width: '15%' }} />  {/* MEASURE */}
+              <col style={{ width: '12%' }} />  {/* MEASURE */}
               <col style={{ width: '8%'  }} />  {/* GRADE */}
-              <col style={{ width: '9%'  }} />  {/* MATERIAL */}
-              <col style={{ width: '5%'  }} />  {/* PCS  ← moved here */}
+              <col style={{ width: '8%'  }} />  {/* MATERIAL */}
+              <col style={{ width: '5%'  }} />  {/* PCS */}
+              <col style={{ width: '7%'  }} />  {/* WT (KG.) */}
               <col style={{ width: '5%'  }} />  {/* FLUX */}
               <col style={{ width: '5%'  }} />  {/* TURNS */}
               <col style={{ width: '7%'  }} />  {/* VOLTAGE */}
               <col style={{ width: '7%'  }} />  {/* IEMAX */}
-              <col style={{ width: '18%' }} />  {/* WORKER */}
+              <col style={{ width: '16%' }} />  {/* WORKER */}
             </colgroup>
             <thead>
               <tr className="bg-slate-100 border-b-2 border-slate-400 text-center font-bold uppercase tracking-wide text-[10px]">
@@ -636,6 +653,7 @@ export const WorkAllotmentBuildPage = () => {
                 <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Grade</th>
                 <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Material</th>
                 <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Pcs</th>
+                <th className="px-1 py-1.5 border-r border-slate-300 align-middle">WT (KG.)</th>
                 <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Flux</th>
                 <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Turns</th>
                 <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Voltage</th>
@@ -655,6 +673,7 @@ export const WorkAllotmentBuildPage = () => {
                   <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.grade} /></td>
                   <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.material} /></td>
                   <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.pcs} bold /></td>
+                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={fmtWt(rowWt(r))} /></td>
                   <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.flux} /></td>
                   <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.turns} /></td>
                   <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.voltage} /></td>
@@ -669,6 +688,9 @@ export const WorkAllotmentBuildPage = () => {
                 </td>
                 <td className="px-1 border-r border-slate-400 text-center text-xs font-black text-slate-800 align-middle">
                   {totalPcs}
+                </td>
+                <td className="px-1 border-r border-slate-400 text-center text-xs font-black text-slate-800 align-middle tabular-nums">
+                  {fmtWt(totalWt)}
                 </td>
                 <td colSpan={4} className="border-r border-slate-400 align-middle" />
                 <td className="align-middle" />

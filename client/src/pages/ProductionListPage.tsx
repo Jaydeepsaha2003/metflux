@@ -43,7 +43,7 @@ export const ProductionListPage = () => {
   const [page, setPage] = useState(1);
   useEffect(() => { setPage(1); }, [search]);
   const queryClient = useQueryClient();
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm, alert, confirmDialog } = useConfirm();
   const hideNames = useHideCustomerNames();
 
   const { data, isLoading } = useQuery({
@@ -81,6 +81,8 @@ export const ProductionListPage = () => {
         'Amount (₹)':  p.amount,
       }));
       downloadXlsx(`production-${todayStamp()}`, 'Production', rows);
+    } catch (e) {
+      alert({ title: 'Export failed', message: e instanceof Error ? e.message : 'Please try again.', tone: 'danger' });
     } finally {
       setExporting(false);
     }
