@@ -1,12 +1,13 @@
 // Packing list — covers one or more dispatch records.
 // Outer groups: TOROIDAL then RECTANGULAR. Inner groups: by GRADE with subtotals.
 // WO No is auto-generated (not user-editable). Every table cell is editable before downloading.
-import { useRef, useState, useEffect, Fragment } from 'react';
+import { useRef, useState, useEffect, useMemo, Fragment } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueries } from '@tanstack/react-query';
-import { ArrowLeft, Download, Package, Loader2, MessageCircle, ClipboardCheck } from 'lucide-react';
+import { ArrowLeft, Download, Package, Loader2, MessageCircle, ClipboardCheck, Check, RotateCcw } from 'lucide-react';
 import { api } from '@/lib/api';
 import { shareViaWhatsApp, type ShareTarget } from '@/lib/share';
+import { readDraft, useFormDraft, fmtDraftTime } from '@/hooks/useFormDraft';
 import html2pdf from 'html2pdf.js';
 
 /* ── Types ────────────────────────────────────────────────────── */
@@ -86,6 +87,21 @@ const Display = ({
   </div>
 );
 
+/* ── Draft autosave ───────────────────────────────────────────── */
+const PL_DRAFT_KEY = 'packing-list-build';
+type PlDraft = {
+  dispatchIds: string[];
+  invoiceNo: string;
+  invoiceDate: string;
+  testedBy: string;
+  approvedBy: string;
+  rows: { dispatchId: string; remarks: string }[];
+};
+/** Order-insensitive id-set equality — a saved draft only restores onto the
+ *  exact same set of dispatches it was captured from. */
+const sameIds = (a: string[], b: string[]) =>
+  a.length === b.length && [...a].sort().join(',') === [...b].sort().join(',');
+
 /* ── Main page ────────────────────────────────────────────────── */
 export const PackingListPage = () => {
   const location = useLocation();
@@ -93,8 +109,17 @@ export const PackingListPage = () => {
   const state = (location.state ?? {}) as { dispatchIds?: string[]; plId?: string };
   const { dispatchIds: stateIds, plId } = state;
 
+  // Draft recovery: a refresh or accidental navigation wipes router state, so a
+  // saved draft's dispatchIds drive the page when there's no router state to use.
+  // Read once on mount.
+  const draft = useMemo(() => (plId ? null : readDraft<PlDraft>(PL_DRAFT_KEY)), [plId]);
+  const effectiveIds = (stateIds && stateIds.length) ? stateIds : (draft?.data.dispatchIds ?? []);
+  const [draftRestoredAt, setDraftRestoredAt] = useState<number | null>(null);
+  const initRef = useRef(false); // build the editable rows exactly once
+
   useEffect(() => {
-    if (!stateIds?.length && !plId) navigate('/packing', { replace: true });
+    if (!effectiveIds.length && !plId) navigate('/packing', { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* Queries */
@@ -104,7 +129,7 @@ export const PackingListPage = () => {
     enabled: !!plId,
   });
   const dispatchQueries = useQueries({
-    queries: (stateIds ?? []).map((id) => ({
+    queries: effectiveIds.map((id) => ({
       queryKey: ['dispatch-item', id],
       queryFn: () => api<DispatchDetail>(`/dispatch/${id}`),
       enabled: !plId,
@@ -158,8 +183,9 @@ export const PackingListPage = () => {
   /* Editable table rows — initialized from dispatches */
   const [rows, setRows] = useState<RowState[]>([]);
   useEffect(() => {
+    if (initRef.current) return; // initialize the editable rows exactly once
     if (!dispatches.length) return;
-    setRows(dispatches.map((d) => {
+    let built: RowState[] = dispatches.map((d) => {
       // Packing list weight column points to the weighbridge reading when present,
       // else falls back to the calculated total. UI label stays "Total Weight".
       const displayWeight = d.actualWeight ?? d.totalWeight;
@@ -174,7 +200,20 @@ export const PackingListPage = () => {
         weight: displayWeight != null ? displayWeight.toFixed(3) : '',
         remarks: '',
       };
-    }));
+    });
+    // Overlay a saved draft, but only onto the exact same dispatch set it came
+    // from — restores invoice details, tested/approved-by, and per-row remarks.
+    if (draft && sameIds(draft.data.dispatchIds, effectiveIds)) {
+      const edits = new Map(draft.data.rows.map((r) => [r.dispatchId, r.remarks]));
+      built = built.map((r) => (edits.has(r.dispatchId) ? { ...r, remarks: edits.get(r.dispatchId) ?? '' } : r));
+      setInvoiceNo(draft.data.invoiceNo);
+      setInvoiceDate(draft.data.invoiceDate);
+      setTestedBy(draft.data.testedBy);
+      setApprovedBy(draft.data.approvedBy);
+      setDraftRestoredAt(draft.savedAt);
+    }
+    setRows(built);
+    initRef.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatches.map((d) => d.id).join(',')]);
 
@@ -200,6 +239,16 @@ export const PackingListPage = () => {
   const grandTotalPcs = rows.reduce((s, r) => s + (parseInt(r.qty) || 0), 0);
   const grandTotalWeight = rows.reduce((s, r) => s + (parseFloat(r.weight) || 0), 0);
 
+  // Auto-save an in-progress draft (build mode only) so a refresh or accidental
+  // navigation never loses the invoice details, tested/approved-by, or remarks.
+  const draftData: PlDraft = {
+    dispatchIds: effectiveIds,
+    invoiceNo, invoiceDate, testedBy, approvedBy,
+    rows: rows.map((r) => ({ dispatchId: r.dispatchId, remarks: r.remarks })),
+  };
+  const { savedAt: draftSavedAt, clear: clearDraft } =
+    useFormDraft<PlDraft>(plId ? null : PL_DRAFT_KEY, draftData, !plId && rows.length > 0);
+
   /* Formatted address */
   const addressLine = company?.address?.replace(/\n+/g, ', ').trim() ?? '';
 
@@ -208,7 +257,7 @@ export const PackingListPage = () => {
   const [generating, setGenerating] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const persistPackingList = async () => {
+  const persistPackingList = async (): Promise<boolean> => {
     try {
       const payload = {
         plNumber: woNo || 'DRAFT',
@@ -222,10 +271,12 @@ export const PackingListPage = () => {
       if (plId) {
         await api(`/packing-lists/${plId}`, { method: 'PUT', body: JSON.stringify(payload) });
       } else {
-        await api('/packing-lists', { method: 'POST', body: JSON.stringify({ dispatchIds: stateIds, ...payload }) });
+        await api('/packing-lists', { method: 'POST', body: JSON.stringify({ dispatchIds: effectiveIds, ...payload }) });
       }
+      return true;
     } catch (e: unknown) {
       setSaveError(e instanceof Error ? e.message : 'Save failed');
+      return false;
     }
   };
 
@@ -289,18 +340,19 @@ export const PackingListPage = () => {
   const handleDownload = async () => {
     setGenerating(true);
     setSaveError(null);
-    await persistPackingList();
+    const saved = await persistPackingList();
     const job = buildPdfJob();
     if (!job) { setGenerating(false); return; }
     await new Promise((r) => requestAnimationFrame(r));
     try { await job.worker.save(); }
     finally { job.teardown(); setGenerating(false); }
+    if (saved) clearDraft(); // work is now persisted server-side — drop the local draft
   };
 
   const handleWhatsappShare = async () => {
     setGenerating(true);
     setSaveError(null);
-    await persistPackingList();
+    const saved = await persistPackingList();
     const job = buildPdfJob();
     if (!job) { setGenerating(false); return; }
     await new Promise((r) => requestAnimationFrame(r));
@@ -326,6 +378,7 @@ export const PackingListPage = () => {
       job.teardown();
       setGenerating(false);
     }
+    if (saved) clearDraft(); // persisted server-side — drop the local draft
   };
 
   if (isLoading) return <div className="card p-10 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-slate-400" /></div>;
@@ -354,6 +407,11 @@ export const PackingListPage = () => {
               </span>
             )}
           </h1>
+          {!plId && draftSavedAt && (
+            <span className="ml-auto hidden sm:inline-flex items-center gap-1 text-[11px] text-slate-400 shrink-0" title="Your work is auto-saved on this device until you download">
+              <Check className="h-3 w-3" /> Draft saved
+            </span>
+          )}
         </div>
 
         {/* Row 2 — inputs (2 cols mobile, 4 cols tablet+) */}
@@ -376,6 +434,17 @@ export const PackingListPage = () => {
           </label>
         </div>
 
+        {draftRestoredAt && (
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+            <span className="flex items-center gap-1.5">
+              <RotateCcw className="h-3.5 w-3.5 shrink-0" />
+              Recovered your unsaved draft from {fmtDraftTime(draftRestoredAt)}.
+            </span>
+            <button type="button" onClick={() => setDraftRestoredAt(null)} className="font-medium text-sky-700 hover:underline shrink-0">
+              Dismiss
+            </button>
+          </div>
+        )}
         {saveError && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
             Could not save: {saveError} — PDF will still download.

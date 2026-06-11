@@ -2,12 +2,13 @@
 // "view mode" (state.waId). Each row carries an editable pcs and a labour
 // dropdown. On save we POST to /work-allotments and download a PDF using the
 // same html2pdf approach as PackingListPage.
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Download, ClipboardList, Loader2, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Download, ClipboardList, Loader2, MessageCircle, Check, RotateCcw } from 'lucide-react';
 import { api } from '@/lib/api';
 import { shareViaWhatsApp, type ShareTarget } from '@/lib/share';
+import { readDraft, useFormDraft, fmtDraftTime } from '@/hooks/useFormDraft';
 import html2pdf from 'html2pdf.js';
 
 /* ── Types ────────────────────────────────────────────────────── */
@@ -103,6 +104,21 @@ const Display = ({
   </div>
 );
 
+/* ── Draft autosave ───────────────────────────────────────────── */
+const WA_DRAFT_KEY = 'work-allotment-build';
+type WaDraft = {
+  poItemIds: string[];
+  waNumber: string;
+  remarks: string;
+  issuedBy: string;
+  receivedBy: string;
+  rows: { poOrderItemId: string; pcs: string; labourId: string }[];
+};
+/** Order-insensitive id-set equality — a saved draft only restores onto the
+ *  exact same selection of items it was captured from. */
+const sameIds = (a: string[], b: string[]) =>
+  a.length === b.length && [...a].sort().join(',') === [...b].sort().join(',');
+
 /* ── Main page ────────────────────────────────────────────────── */
 export const WorkAllotmentBuildPage = () => {
   const location = useLocation();
@@ -110,8 +126,17 @@ export const WorkAllotmentBuildPage = () => {
   const state = (location.state ?? {}) as { poItemIds?: string[]; waId?: string };
   const { poItemIds: stateIds, waId } = state;
 
+  // Draft recovery: a refresh or accidental navigation wipes router state, so a
+  // saved draft's poItemIds drive the page when there's no router state to use.
+  // Read once on mount.
+  const draft = useMemo(() => (waId ? null : readDraft<WaDraft>(WA_DRAFT_KEY)), [waId]);
+  const effectiveIds = (stateIds && stateIds.length) ? stateIds : (draft?.data.poItemIds ?? []);
+  const [draftRestoredAt, setDraftRestoredAt] = useState<number | null>(null);
+  const initRef = useRef(false); // build the editable rows exactly once
+
   useEffect(() => {
-    if (!stateIds?.length && !waId) navigate('/work-allotment', { replace: true });
+    if (!effectiveIds.length && !waId) navigate('/work-allotment', { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* Queries */
@@ -175,6 +200,7 @@ export const WorkAllotmentBuildPage = () => {
   const [rows, setRows] = useState<RowState[]>([]);
 
   useEffect(() => {
+    if (initRef.current) return; // initialize the editable rows exactly once
     if (waId) {
       // View mode — populate from existing WA items.
       if (!existingWa) return;
@@ -194,11 +220,12 @@ export const WorkAllotmentBuildPage = () => {
         weightPerPc:   it.weightPerPc ?? 0,
         labourId:      it.labourId ?? '',
       })));
+      initRef.current = true;
     } else {
       // Build mode — pull the selected ids out of the cached pending list.
-      if (!pendingList || !stateIds) return;
-      const wanted = pendingList.items.filter((p) => stateIds.includes(p.id));
-      setRows(wanted.map((p) => ({
+      if (!pendingList || !effectiveIds.length) return;
+      const wanted = pendingList.items.filter((p) => effectiveIds.includes(p.id));
+      let built: RowState[] = wanted.map((p) => ({
         poOrderItemId: p.id,
         customerCode:  p.customerCode,
         orderDate:     p.orderDate,
@@ -213,9 +240,26 @@ export const WorkAllotmentBuildPage = () => {
         maxPcs:        p.remainingPcs,
         weightPerPc:   p.weightPerPc ?? 0,
         labourId:      '',
-      })));
+      }));
+      // Overlay a saved draft, but only onto the exact same selection it came
+      // from — restores the typed pcs / workers / number / signatures.
+      if (draft && sameIds(draft.data.poItemIds, effectiveIds)) {
+        const edits = new Map(draft.data.rows.map((r) => [r.poOrderItemId, r]));
+        built = built.map((r) => {
+          const e = edits.get(r.poOrderItemId);
+          return e ? { ...r, pcs: e.pcs, labourId: e.labourId } : r;
+        });
+        setWaNumber(draft.data.waNumber);
+        setRemarks(draft.data.remarks);
+        setIssuedBy(draft.data.issuedBy);
+        setReceivedBy(draft.data.receivedBy);
+        setDraftRestoredAt(draft.savedAt);
+      }
+      setRows(built);
+      initRef.current = true;
     }
-  }, [waId, existingWa, pendingList, (stateIds ?? []).join(',')]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waId, existingWa, pendingList, effectiveIds.join(',')]);
 
   const updateRow = (id: string, field: keyof RowState, val: string) =>
     setRows((prev) => prev.map((r) => (r.poOrderItemId === id ? { ...r, [field]: val } : r)));
@@ -227,6 +271,16 @@ export const WorkAllotmentBuildPage = () => {
   const fmtWt = (n: number) => (Number.isFinite(n) ? n : 0).toFixed(3);
   const rowWt = (r: RowState) => (parseInt(r.pcs) || 0) * (r.weightPerPc || 0);
   const totalWt = rows.reduce((s, r) => s + rowWt(r), 0);
+
+  // Auto-save an in-progress draft (build mode only) so a refresh or accidental
+  // navigation never loses the typed pcs / workers / number / signatures.
+  const draftData: WaDraft = {
+    poItemIds: effectiveIds,
+    waNumber, remarks, issuedBy, receivedBy,
+    rows: rows.map((r) => ({ poOrderItemId: r.poOrderItemId, pcs: r.pcs, labourId: r.labourId })),
+  };
+  const { savedAt: draftSavedAt, clear: clearDraft } =
+    useFormDraft<WaDraft>(waId ? null : WA_DRAFT_KEY, draftData, !waId && rows.length > 0);
 
   /* Validation — shown inline before save */
   const validationError = (() => {
@@ -250,8 +304,8 @@ export const WorkAllotmentBuildPage = () => {
   const [generating, setGenerating] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const persistWorkAllotment = async () => {
-    if (waId) return;
+  const persistWorkAllotment = async (): Promise<boolean> => {
+    if (waId) return true;
     try {
       await api('/work-allotments', {
         method: 'POST',
@@ -266,8 +320,10 @@ export const WorkAllotmentBuildPage = () => {
           })),
         }),
       });
+      return true;
     } catch (e: unknown) {
       setSaveError(e instanceof Error ? e.message : 'Save failed');
+      return false;
     }
   };
 
@@ -347,19 +403,20 @@ export const WorkAllotmentBuildPage = () => {
     if (validationError) { setSaveError(validationError); return; }
     setGenerating(true);
     setSaveError(null);
-    await persistWorkAllotment();
+    const saved = await persistWorkAllotment();
     const job = buildPdfJob();
     if (!job) { setGenerating(false); return; }
     await new Promise((r) => requestAnimationFrame(r));
     try { await job.worker.save(); }
     finally { job.teardown(); setGenerating(false); }
+    if (saved) clearDraft(); // work is now persisted server-side — drop the local draft
   };
 
   const handleWhatsappShare = async () => {
     if (validationError) { setSaveError(validationError); return; }
     setGenerating(true);
     setSaveError(null);
-    await persistWorkAllotment();
+    const saved = await persistWorkAllotment();
     const job = buildPdfJob();
     if (!job) { setGenerating(false); return; }
     await new Promise((r) => requestAnimationFrame(r));
@@ -388,6 +445,7 @@ export const WorkAllotmentBuildPage = () => {
       job.teardown();
       setGenerating(false);
     }
+    if (saved) clearDraft(); // persisted server-side — drop the local draft
   };
 
   if (isLoading) return <div className="card p-10 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-slate-400" /></div>;
@@ -415,6 +473,11 @@ export const WorkAllotmentBuildPage = () => {
               </span>
             )}
           </h1>
+          {!waId && draftSavedAt && (
+            <span className="ml-auto hidden sm:inline-flex items-center gap-1 text-[11px] text-slate-400 shrink-0" title="Your work is auto-saved on this device until you download">
+              <Check className="h-3 w-3" /> Draft saved
+            </span>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -440,6 +503,17 @@ export const WorkAllotmentBuildPage = () => {
           </label>
         </div>
 
+        {draftRestoredAt && (
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+            <span className="flex items-center gap-1.5">
+              <RotateCcw className="h-3.5 w-3.5 shrink-0" />
+              Recovered your unsaved draft from {fmtDraftTime(draftRestoredAt)}.
+            </span>
+            <button type="button" onClick={() => setDraftRestoredAt(null)} className="font-medium text-sky-700 hover:underline shrink-0">
+              Dismiss
+            </button>
+          </div>
+        )}
         {(saveError || validationError) && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
             {saveError ?? validationError}
