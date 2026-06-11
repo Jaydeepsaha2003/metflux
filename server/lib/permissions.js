@@ -32,6 +32,8 @@ export const PERMISSION_KEYS = Object.freeze([
   'dispatch',
   // Returns
   'manage_returns',
+  // Sales invoices, debtor aging & payments
+  'manage_invoices',
   // User administration (gates the User-management page)
   'manage_users',
 ]);
@@ -52,6 +54,7 @@ export const PERMISSION_LABELS = Object.freeze({
   add_material:     'Manage Materials',
   dispatch:         'Dispatch & Packing List',
   manage_returns:   'Manage Returns',
+  manage_invoices:  'Sales Invoices & Payments',
   manage_users:     'Manage Users',
 });
 

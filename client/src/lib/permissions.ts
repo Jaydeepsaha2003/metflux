@@ -9,6 +9,7 @@ export const PERMISSION_KEYS = [
   'add_customer', 'add_supplier', 'add_staff', 'add_material',
   'dispatch',
   'manage_returns',
+  'manage_invoices',
   'manage_users',
 ] as const;
 
@@ -29,6 +30,7 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   add_material:     'Manage Materials',
   dispatch:         'Dispatch & Packing List',
   manage_returns:   'Manage Returns',
+  manage_invoices:  'Sales Invoices & Payments',
   manage_users:     'Manage Users',
 };
 
@@ -40,6 +42,7 @@ export const PERMISSION_GROUPS: { label: string; keys: PermissionKey[] }[] = [
   { label: 'Production',      keys: ['rec_production', 'modify_prod_qty'] },
   { label: 'Dispatch',        keys: ['dispatch'] },
   { label: 'Returns',         keys: ['manage_returns'] },
+  { label: 'Sales Invoices',  keys: ['manage_invoices'] },
   { label: 'Master Data',     keys: ['add_customer', 'add_supplier', 'add_staff', 'add_material'] },
   { label: 'Administration',  keys: ['manage_users'] },
 ];

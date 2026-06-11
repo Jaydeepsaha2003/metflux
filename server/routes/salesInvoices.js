@@ -1,0 +1,317 @@
+// Sales Invoices — imported from an accounting export (Tally "List of Sales
+// Vouchers"). Each invoice's due date = invoiceDate + the customer's credit
+// terms (Customer.dueDays). Re-uploading the same file is idempotent (unique
+// invoiceNumber per company). Powers the Debtor Aging + reminder views.
+import { Router } from 'express';
+import { z } from 'zod';
+import { q, qOne, insert, update, txn } from '../lib/db.js';
+import { AppError, asyncHandler } from '../lib/errors.js';
+import { requireAuth, requirePermission } from '../lib/auth.js';
+import { resolveTenant } from '../lib/tenant.js';
+import { round2, parseAmount, parseDMY, normName, addDays } from '../lib/invoicing.js';
+
+const router = Router();
+router.use(requireAuth, resolveTenant);
+
+/* ---------- shared shape for the client ---------- */
+const flatten = (inv) => {
+  const amount = Number(inv.amount) || 0;
+  const paid = Number(inv.paidAmount) || 0;
+  const balance = round2(amount - paid);
+  let daysOverdue = null;
+  if (inv.dueDate && balance > 0.01) {
+    daysOverdue = Math.floor((Date.now() - new Date(inv.dueDate).getTime()) / 86400000);
+  }
+  return {
+    id: inv.id,
+    invoiceNumber: inv.invoiceNumber,
+    invoiceDate: inv.invoiceDate,
+    customerId: inv.customerId,
+    customerName: inv.customerName,
+    customerCode: inv.customerCode ?? null,
+    customerPhone: inv.customerPhone ?? null,
+    itemDetails: inv.itemDetails,
+    amount, paidAmount: paid, balance,
+    dueDate: inv.dueDate,
+    status: inv.status,
+    daysOverdue,
+    needsAttention: !inv.customerId || !inv.dueDate,
+  };
+};
+
+/* ---------- POST /import — parse the vouchers sheet (sent as a raw matrix) ---------- */
+const importSchema = z.object({ rows: z.array(z.array(z.any())).max(20000) });
+
+router.post('/import', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+  const { rows } = importSchema.parse(req.body);
+  const matrix = rows.map((r) => (Array.isArray(r) ? r.map((c) => String(c ?? '').trim()) : []));
+
+  // Locate the header row (banner rows precede it in a Tally export).
+  let headerIdx = matrix.findIndex((r) => {
+    const j = r.join(' ').toLowerCase();
+    return /vch|bill|voucher|invoice/.test(j) && /particular|party|customer|date/.test(j);
+  });
+  if (headerIdx < 0) headerIdx = matrix.findIndex((r) => r.some((c) => /^date$/i.test(c)));
+  if (headerIdx < 0) {
+    throw new AppError('Could not find the column header row (expected Date, Vch/Bill No, Particulars, Amount).', 400, 'NO_HEADER');
+  }
+  const header = matrix[headerIdx].map((c) => c.toLowerCase());
+  const findCol = (...keys) => {
+    for (const k of keys) { const i = header.findIndex((h) => h.includes(k)); if (i >= 0) return i; }
+    return -1;
+  };
+  const cDate = findCol('date');
+  const cVch  = findCol('vch', 'bill', 'voucher', 'invoice');
+  const cPart = findCol('particular', 'party', 'customer', 'account');
+  const cItem = findCol('item', 'description', 'detail');
+  const cAmt  = findCol('amount', 'value', 'total');
+  if (cVch < 0 || cAmt < 0) {
+    throw new AppError('The sheet needs a Vch/Bill No column and an Amount column.', 400, 'BAD_HEADER');
+  }
+
+  // Group line items into invoices. A row with a Vch No starts a new invoice;
+  // blank-Vch rows that still carry an item are continuation lines we sum in.
+  const invoices = [];
+  let cur = null;
+  for (let i = headerIdx + 1; i < matrix.length; i++) {
+    const r = matrix[i];
+    const vch  = (r[cVch] ?? '').trim();
+    const date = cDate >= 0 ? (r[cDate] ?? '').trim() : '';
+    const part = cPart >= 0 ? (r[cPart] ?? '').trim() : '';
+    const item = cItem >= 0 ? (r[cItem] ?? '').trim() : '';
+    const amt  = parseAmount(r[cAmt]);
+    if (/grand\s*total/i.test(part) || /grand\s*total/i.test(item) || /^total\b/i.test(part)) continue;
+    if (vch) {
+      cur = { invoiceNumber: vch, dateStr: date, customerName: part, items: item ? [item] : [], amount: amt };
+      invoices.push(cur);
+    } else if (cur && item) {
+      cur.amount = round2(cur.amount + amt);
+      cur.items.push(item);
+    }
+  }
+
+  // Build lookups: customer-by-name + existing invoice numbers (dedupe).
+  const customers = await q('SELECT `id`, `name`, `dueDays` FROM `Customer` WHERE `companyId` = ?', [req.tenant.companyId]);
+  const byName = new Map();
+  for (const c of customers) { const k = normName(c.name); if (k && !byName.has(k)) byName.set(k, c); }
+  const existingRows = await q('SELECT `invoiceNumber` FROM `SalesInvoice` WHERE `companyId` = ?', [req.tenant.companyId]);
+  const existing = new Set(existingRows.map((r) => r.invoiceNumber));
+
+  let imported = 0, skippedDuplicates = 0, unmatchedCustomers = 0, missingDueDays = 0;
+  const errors = [];
+  const seen = new Set();
+
+  for (const inv of invoices) {
+    try {
+      if (!inv.invoiceNumber) continue;
+      if (existing.has(inv.invoiceNumber) || seen.has(inv.invoiceNumber)) { skippedDuplicates++; continue; }
+      seen.add(inv.invoiceNumber);
+
+      const date = parseDMY(inv.dateStr);
+      if (!date) { errors.push({ invoiceNumber: inv.invoiceNumber, message: `Unreadable date "${inv.dateStr || '(blank)'}"` }); continue; }
+
+      const match = byName.get(normName(inv.customerName));
+      let dueDate = null;
+      if (!match) unmatchedCustomers++;
+      else if (match.dueDays == null) missingDueDays++;
+      else dueDate = addDays(date, Number(match.dueDays));
+
+      await insert('SalesInvoice', {
+        companyId: req.tenant.companyId,
+        invoiceNumber: inv.invoiceNumber.slice(0, 80),
+        invoiceDate: date,
+        customerId: match?.id ?? null,
+        customerName: (inv.customerName || match?.name || '—').slice(0, 200),
+        itemDetails: inv.items.join(' | ').slice(0, 400) || null,
+        amount: round2(inv.amount),
+        dueDate,
+        paidAmount: 0,
+        status: 'UNPAID',
+        createdById: req.auth.userId,
+      });
+      imported++;
+    } catch (e) {
+      errors.push({ invoiceNumber: inv.invoiceNumber, message: e?.message ?? 'Insert failed' });
+    }
+  }
+
+  res.json({
+    imported, skippedDuplicates, unmatchedCustomers, missingDueDays,
+    totalInvoicesInFile: invoices.length,
+    errors: errors.slice(0, 100),
+  });
+}));
+
+/* ---------- GET /summary — dashboard cards ---------- */
+router.get('/summary', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+  const row = await qOne(
+    `SELECT
+       COUNT(*) AS total,
+       COALESCE(SUM(\`amount\` - \`paidAmount\`), 0) AS outstanding,
+       COALESCE(SUM(CASE WHEN \`status\` <> 'PAID' AND \`dueDate\` IS NOT NULL AND \`dueDate\` < NOW()
+                         THEN \`amount\` - \`paidAmount\` ELSE 0 END), 0) AS overdue,
+       SUM(CASE WHEN \`status\` <> 'PAID' THEN 1 ELSE 0 END) AS openCount,
+       SUM(CASE WHEN \`customerId\` IS NULL OR \`dueDate\` IS NULL THEN 1 ELSE 0 END) AS attention
+     FROM \`SalesInvoice\` WHERE \`companyId\` = ?`,
+    [req.tenant.companyId]
+  );
+  res.json({
+    totalInvoices: Number(row?.total ?? 0),
+    outstanding: round2(Number(row?.outstanding ?? 0)),
+    overdue: round2(Number(row?.overdue ?? 0)),
+    openCount: Number(row?.openCount ?? 0),
+    attention: Number(row?.attention ?? 0),
+  });
+}));
+
+/* ---------- GET /aging — per-customer aging buckets (powers reminders) ---------- */
+router.get('/aging', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+  const rows = await q(
+    `SELECT si.*, c.\`name\` AS cName, c.\`phone\` AS cPhone, c.\`customerCode\` AS cCode
+       FROM \`SalesInvoice\` si
+       LEFT JOIN \`Customer\` c ON c.\`id\` = si.\`customerId\`
+      WHERE si.\`companyId\` = ? AND si.\`status\` <> 'PAID'`,
+    [req.tenant.companyId]
+  );
+  const now = new Date();
+  const todayMid = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const groups = new Map();
+
+  for (const inv of rows) {
+    const balance = round2(Number(inv.amount) - Number(inv.paidAmount));
+    if (balance <= 0.01) continue;
+    const key = inv.customerId ?? `__x__:${inv.customerName}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        customerId: inv.customerId ?? null,
+        customerName: inv.cName ?? inv.customerName,
+        customerCode: inv.cCode ?? null,
+        phone: inv.cPhone ?? null,
+        notDue: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90: 0, noTerms: 0, total: 0,
+        maxDaysOverdue: 0, invoices: [],
+      });
+    }
+    const g = groups.get(key);
+    let days = null;
+    if (!inv.dueDate) {
+      g.noTerms = round2(g.noTerms + balance);
+    } else {
+      const due = new Date(inv.dueDate);
+      const dueMid = Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate());
+      days = Math.floor((todayMid - dueMid) / 86400000);
+      if (days <= 0) g.notDue = round2(g.notDue + balance);
+      else if (days <= 30) g.d1_30 = round2(g.d1_30 + balance);
+      else if (days <= 60) g.d31_60 = round2(g.d31_60 + balance);
+      else if (days <= 90) g.d61_90 = round2(g.d61_90 + balance);
+      else g.d90 = round2(g.d90 + balance);
+      if (days > g.maxDaysOverdue) g.maxDaysOverdue = days;
+    }
+    g.total = round2(g.total + balance);
+    g.invoices.push({ id: inv.id, invoiceNumber: inv.invoiceNumber, invoiceDate: inv.invoiceDate, dueDate: inv.dueDate, balance, daysOverdue: days });
+  }
+
+  const customers = [...groups.values()].sort((a, b) => b.total - a.total);
+  for (const g of customers) {
+    g.invoices.sort((a, b) => new Date(a.dueDate || a.invoiceDate) - new Date(b.dueDate || b.invoiceDate));
+  }
+  const totals = customers.reduce((t, g) => ({
+    notDue: round2(t.notDue + g.notDue), d1_30: round2(t.d1_30 + g.d1_30),
+    d31_60: round2(t.d31_60 + g.d31_60), d61_90: round2(t.d61_90 + g.d61_90),
+    d90: round2(t.d90 + g.d90), noTerms: round2(t.noTerms + g.noTerms), total: round2(t.total + g.total),
+  }), { notDue: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90: 0, noTerms: 0, total: 0 });
+
+  res.json({ customers, totals });
+}));
+
+/* ---------- GET / — paginated list ---------- */
+router.get('/', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+  const { page, pageSize, search, status, filter } = z.object({
+    page: z.coerce.number().int().min(1).default(1),
+    pageSize: z.coerce.number().int().min(1).max(10000).default(50),
+    search: z.string().trim().max(120).optional(),
+    status: z.enum(['UNPAID', 'PARTIAL', 'PAID', 'OVERDUE', 'ALL']).default('ALL'),
+    filter: z.enum(['ALL', 'ATTENTION']).default('ALL'),
+  }).parse(req.query);
+  const skip = (page - 1) * pageSize;
+
+  let where = 'si.`companyId` = ?';
+  const params = [req.tenant.companyId];
+  if (status === 'OVERDUE') where += " AND si.`status` <> 'PAID' AND si.`dueDate` IS NOT NULL AND si.`dueDate` < NOW()";
+  else if (status !== 'ALL') { where += ' AND si.`status` = ?'; params.push(status); }
+  if (filter === 'ATTENTION') where += ' AND (si.`customerId` IS NULL OR si.`dueDate` IS NULL)';
+  if (search) { const like = `%${search}%`; where += ' AND (si.`invoiceNumber` LIKE ? OR si.`customerName` LIKE ?)'; params.push(like, like); }
+
+  const base = `FROM \`SalesInvoice\` si LEFT JOIN \`Customer\` c ON c.\`id\` = si.\`customerId\` WHERE ${where}`;
+  const [rows, totalRow, agg] = await Promise.all([
+    q(`SELECT si.*, c.\`customerCode\` AS customerCode, c.\`phone\` AS customerPhone ${base}
+        ORDER BY si.\`invoiceDate\` DESC, si.\`createdAt\` DESC LIMIT ? OFFSET ?`, [...params, pageSize, skip]),
+    qOne(`SELECT COUNT(*) AS n ${base}`, params),
+    qOne(`SELECT COALESCE(SUM(si.\`amount\`),0) AS amt, COALESCE(SUM(si.\`paidAmount\`),0) AS paid ${base}`, params),
+  ]);
+
+  res.json({
+    items: rows.map(flatten),
+    total: Number(totalRow?.n ?? 0), page, pageSize,
+    totals: {
+      amount: round2(Number(agg?.amt ?? 0)),
+      paid: round2(Number(agg?.paid ?? 0)),
+      balance: round2(Number(agg?.amt ?? 0) - Number(agg?.paid ?? 0)),
+    },
+  });
+}));
+
+/* ---------- PATCH /:id — fix a flagged invoice (assign customer / set due date) ---------- */
+router.patch('/:id', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+  const data = z.object({
+    customerId: z.string().min(1).optional().nullable(),
+    dueDate: z.coerce.date().optional().nullable(),
+    notes: z.string().max(400).optional().nullable(),
+  }).parse(req.body);
+
+  const inv = await qOne('SELECT * FROM `SalesInvoice` WHERE `id` = ? AND `companyId` = ?', [req.params.id, req.tenant.companyId]);
+  if (!inv) throw new AppError('Invoice not found', 404, 'NOT_FOUND');
+
+  const patch = {};
+  if (data.customerId !== undefined) {
+    if (data.customerId) {
+      const c = await qOne('SELECT `id`, `name`, `dueDays` FROM `Customer` WHERE `id` = ? AND `companyId` = ?', [data.customerId, req.tenant.companyId]);
+      if (!c) throw new AppError('Customer not found', 400, 'BAD_CUSTOMER');
+      patch.customerId = c.id;
+      patch.customerName = c.name;
+      // Auto-fill due date from the newly-linked customer's terms if not set.
+      if (data.dueDate === undefined && !inv.dueDate && c.dueDays != null) {
+        patch.dueDate = addDays(new Date(inv.invoiceDate), Number(c.dueDays));
+      }
+    } else {
+      patch.customerId = null;
+    }
+  }
+  if (data.dueDate !== undefined) patch.dueDate = data.dueDate;
+  if (data.notes !== undefined) patch.notes = data.notes ?? null;
+
+  await update('SalesInvoice', inv.id, patch);
+  const fresh = await qOne(
+    `SELECT si.*, c.\`customerCode\` AS customerCode, c.\`phone\` AS customerPhone
+       FROM \`SalesInvoice\` si LEFT JOIN \`Customer\` c ON c.\`id\` = si.\`customerId\` WHERE si.\`id\` = ?`,
+    [inv.id]
+  );
+  res.json(flatten(fresh));
+}));
+
+/* ---------- DELETE /:id — remove an invoice, reversing any payment allocations ---------- */
+router.delete('/:id', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+  const inv = await qOne('SELECT `id` FROM `SalesInvoice` WHERE `id` = ? AND `companyId` = ?', [req.params.id, req.tenant.companyId]);
+  if (!inv) throw new AppError('Invoice not found', 404, 'NOT_FOUND');
+  await txn(async (tx) => {
+    const allocs = await tx.q('SELECT * FROM `PaymentAllocation` WHERE `salesInvoiceId` = ?', [inv.id]);
+    for (const a of allocs) {
+      const pay = await tx.qOne('SELECT * FROM `Payment` WHERE `id` = ?', [a.paymentId]);
+      if (pay) await tx.update('Payment', pay.id, { allocatedAmount: Math.max(0, round2(Number(pay.allocatedAmount) - Number(a.amount))) });
+    }
+    await tx.q('DELETE FROM `PaymentAllocation` WHERE `salesInvoiceId` = ?', [inv.id]);
+    await tx.q('DELETE FROM `SalesInvoice` WHERE `id` = ?', [inv.id]);
+  });
+  res.status(204).end();
+}));
+
+export default router;

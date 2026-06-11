@@ -4,6 +4,7 @@ import {
   LayoutDashboard, Users, LogOut, ChevronDown, FileText, Settings as SettingsIcon,
   Plus, ListChecks, BarChart3, Layers, Building2, Factory, Inbox, ClipboardList,
   PanelLeftClose, Users2, Truck, PackageCheck, ShoppingCart, Activity, RotateCcw, Menu, X, ShieldAlert,
+  Receipt, Clock, Wallet,
 } from 'lucide-react';
 import { useAuthStore, can, activeMembership } from '@/store/auth';
 import type { PermissionKey } from '@/lib/permissions';
@@ -53,6 +54,14 @@ const NAV: NavItem[] = [
     ],
   },
   { kind: 'leaf', to: '/returns', label: 'Return', icon: RotateCcw, perm: 'manage_returns' },
+  {
+    kind: 'group', key: 'sales-invoices', label: 'Sales Invoices', icon: Receipt,
+    children: [
+      { kind: 'leaf', to: '/sales-invoices',          label: 'Invoices',         icon: FileText, end: true, perm: 'manage_invoices' },
+      { kind: 'leaf', to: '/sales-invoices/aging',    label: 'Debtor Aging',     icon: Clock,    perm: 'manage_invoices' },
+      { kind: 'leaf', to: '/sales-invoices/payments', label: 'Receive Payments', icon: Wallet,   perm: 'manage_invoices' },
+    ],
+  },
   {
     kind: 'group', key: 'supplier-po', label: 'Supplier Order', icon: ShoppingCart,
     children: [

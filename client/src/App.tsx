@@ -36,6 +36,9 @@ import { WorkAllotmentBuildPage } from '@/pages/WorkAllotmentBuildPage';
 import { ReturnsListPage } from '@/pages/ReturnsListPage';
 import { ReturnFormPage } from '@/pages/ReturnFormPage';
 import { TestingReportPage } from '@/pages/TestingReportPage';
+import { SalesInvoicesPage } from '@/pages/SalesInvoicesPage';
+import { DebtorAgingPage } from '@/pages/DebtorAgingPage';
+import { ReceivePaymentsPage } from '@/pages/ReceivePaymentsPage';
 import { DataCleanupPage } from '@/pages/DataCleanupPage';
 import { CustomerPortalPage } from '@/pages/CustomerPortalPage';
 import { AppLayout } from '@/components/AppLayout';
@@ -85,6 +88,11 @@ export const App = () => (
       <Route path="/returns"     element={<ReturnsListPage />} />
       <Route path="/returns/new" element={<ReturnFormPage />} />
       <Route path="/returns/:id" element={<ReturnFormPage />} />
+
+      {/* Sales Invoices */}
+      <Route path="/sales-invoices"          element={<SalesInvoicesPage />} />
+      <Route path="/sales-invoices/aging"    element={<DebtorAgingPage />} />
+      <Route path="/sales-invoices/payments" element={<ReceivePaymentsPage />} />
 
       {/* Supplier Order group */}
       <Route path="/supplier-po/new"          element={<SupplierOrderNewPage />} />
