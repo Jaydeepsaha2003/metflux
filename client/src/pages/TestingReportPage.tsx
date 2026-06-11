@@ -31,18 +31,21 @@ type DispatchDetail = {
 
 /* ── Sample-pcs calculation ───────────────────────────────────────
    Rules (always round to nearest integer):
+     pcs ≤ 50    → 100% (sample every piece)
      pcs > 1000  → 5%
      pcs ≥ 100   → 10%
-     pcs < 100   → 25%  */
+     51–99       → 25%  */
 const calcSamplePcs = (pcs: number): number => {
+  if (pcs <= 50)  return pcs;             // ≤50 → 100% sampling
   if (pcs > 1000) return Math.round(pcs * 0.05);
-  if (pcs >= 100)  return Math.round(pcs * 0.10);
-  return Math.round(pcs * 0.25);
+  if (pcs >= 100) return Math.round(pcs * 0.10);
+  return Math.round(pcs * 0.25);          // 51–99 → 25%
 };
 
 const samplingRate = (pcs: number): string => {
+  if (pcs <= 50)  return '100%';
   if (pcs > 1000) return '5%';
-  if (pcs >= 100)  return '10%';
+  if (pcs >= 100) return '10%';
   return '25%';
 };
 
@@ -431,119 +434,81 @@ export const TestingReportPage = () => {
                   />
                 </div>
 
-                {/* Summary strip — No. of Pcs + Sample Pcs, above the table header */}
-                {(() => {
-                  const totalPcs    = g.rows.reduce((s, r) => s + r.pcs, 0);
-                  const totalSample = g.rows.reduce((s, r) => s + calcSamplePcs(r.pcs), 0);
-                  const rateLabel   = g.rows.length === 1 ? samplingRate(g.rows[0].pcs) : '—';
-                  return (
-                    <div className="flex items-center gap-6 px-5 py-2 bg-slate-700 text-white border-b border-slate-600 text-[11px] font-medium">
-                      <span>No. of Pcs:&nbsp;<strong className="text-sm font-black">{totalPcs}</strong></span>
-                      <span className="text-slate-400">·</span>
-                      <span>Sample Pcs:&nbsp;<strong className="text-sm font-black">{totalSample}</strong></span>
-                      <span className="text-slate-400">·</span>
-                      <span>Sampling Rate:&nbsp;<strong className="text-sm font-black">{rateLabel}</strong></span>
-                    </div>
-                  );
-                })()}
-
-                {/* Sample-piece tables — split into page-sized chunks so every
-                    PDF page gets a fresh column header. First dispatch on page 1
-                    has company-header overhead → 18 rows. Every other chunk is
-                    forced to a new page and fits 28 rows comfortably. */}
-                {g.rows.map((d, dispatchIdx) => {
-                  const mAVals  = sampleRowsByDispatch[d.id] ?? [];
-                  const FIRST   = dispatchIdx === 0 ? 15 : 28;
-                  const REST    = 28;
-
-                  // Build chunks: first chunk may be smaller than REST.
-                  const chunks: Array<(number | null)[]> = [];
-                  if (mAVals.length > 0) {
-                    chunks.push(mAVals.slice(0, FIRST));
-                    for (let pos = FIRST; pos < mAVals.length; pos += REST) {
-                      chunks.push(mAVals.slice(pos, pos + REST));
-                    }
-                  } else {
-                    chunks.push([]);
+                {/* Per-item sample sheets. The constant fields (measure, grade,
+                    turns, applied voltage) sit in a header band BEFORE the pcs
+                    counts; the readings go in a 4-up grid (SN | Actual IeMax × 4
+                    = 8 columns) so a page holds ~4× the samples it used to. */}
+                {g.rows.map((d) => {
+                  const samples = sampleRowsByDispatch[d.id] ?? [];
+                  const PER_ROW = 4; // 4 (SN, IeMax) pairs across = 8 columns
+                  const gridRows: (number | null)[][] = [];
+                  for (let i = 0; i < samples.length; i += PER_ROW) {
+                    gridRows.push(samples.slice(i, i + PER_ROW));
                   }
-
-                  const tableHead = (
-                    <thead>
-                      <tr className="bg-slate-100 border-b-2 border-slate-400 text-center font-bold uppercase tracking-wide text-[10px]">
-                        <th className="px-1 py-1.5 border-r border-slate-300 align-middle">SN</th>
-                        <th className="px-1 py-1.5 border-r border-slate-300 text-left align-middle">Measure</th>
-                        <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Grade</th>
-                        <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Turns</th>
-                        <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Applied Voltage (V)</th>
-                        <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Pcs</th>
-                        <th className="px-1 py-1.5 align-middle">Actual LeMax (mA)</th>
-                      </tr>
-                    </thead>
-                  );
-
                   return (
-                    <Fragment key={d.id}>
-                      {chunks.map((chunk, ci) => {
-                        // Offset = total rows in all earlier chunks of this item.
-                        const snOffset = chunks.slice(0, ci).reduce((s, c) => s + c.length, 0);
-                        const forceBreak = dispatchIdx > 0 || ci > 0;
-                        return (
-                          <div
-                            key={`${d.id}-c${ci}`}
-                            style={forceBreak ? { pageBreakBefore: 'always' } : undefined}
-                          >
-                            {/* Spec reference — shown on every page so each page is self-contained */}
-                            {d.testCurrent != null && (
-                              <div className="flex flex-wrap items-center gap-x-5 gap-y-0.5 px-5 py-1.5 bg-slate-50 border-b border-slate-300 text-[10px] text-slate-700">
-                                <span>
-                                  <span className="font-semibold uppercase tracking-wide">Max Allowed Current (mA):</span>{' '}
-                                  <strong className="text-slate-900 tabular-nums">{d.testCurrent.toFixed(1)} mA</strong>
-                                </span>
-                              </div>
-                            )}
-                            <table className="w-full text-sm border-collapse table-fixed">
-                              <colgroup>
-                                <col style={{ width: '36px' }} />
-                                <col />
-                                <col style={{ width: '11%' }} />
-                                <col style={{ width: '8%' }} />
-                                <col style={{ width: '13%' }} />
-                                <col style={{ width: '7%' }} />
-                                <col style={{ width: '18%' }} />
-                              </colgroup>
-                              {tableHead}
-                              <tbody>
-                                {chunk.map((mA, i) => (
-                                  <tr key={i} className="h-8 border-b border-slate-100">
+                    <div key={d.id} className="border-b border-slate-300">
+                      {/* Item header — measure / grade / turns / voltage first,
+                          then the pcs counts + spec current. */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 border-b border-slate-300 bg-slate-50">
+                        <HdrCell label="Measure"             value={d.measure || '—'} />
+                        <HdrCell label="Grade"               value={d.grade || '—'} />
+                        <HdrCell label="No. of Turns"        value={d.turns != null ? String(d.turns) : '—'} />
+                        <HdrCell label="Applied Voltage (V)" value={d.testVoltage != null ? d.testVoltage.toFixed(3) : '—'} />
+                        <HdrCell label="No. of Pcs"          value={String(d.pcs)} strong />
+                        <HdrCell label="Sample Pcs"          value={String(samples.length)} strong />
+                        <HdrCell label="Sampling Rate"       value={samplingRate(d.pcs)} strong />
+                        <HdrCell label="Max Allowed Current" value={d.testCurrent != null ? `${d.testCurrent.toFixed(1)} mA` : '—'} strong />
+                      </div>
+                      {/* Sample readings — SN | Actual IeMax (mA), four pairs wide */}
+                      <table className="w-full text-sm border-collapse table-fixed">
+                        <colgroup>
+                          {Array.from({ length: PER_ROW }).map((_, i) => (
+                            <Fragment key={i}>
+                              <col style={{ width: '7%' }} />
+                              <col style={{ width: '18%' }} />
+                            </Fragment>
+                          ))}
+                        </colgroup>
+                        <thead>
+                          <tr className="bg-slate-100 border-b-2 border-slate-400 text-center font-bold uppercase tracking-wide text-[9px]">
+                            {Array.from({ length: PER_ROW }).map((_, i) => (
+                              <Fragment key={i}>
+                                <th className="px-1 py-1.5 border-r border-slate-300 align-middle">SN</th>
+                                <th className={`px-1 py-1.5 align-middle ${i < PER_ROW - 1 ? 'border-r-2 border-slate-400' : ''}`}>Actual IeMax (mA)</th>
+                              </Fragment>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {gridRows.length === 0 && (
+                            <tr className="h-8 border-b border-slate-100">
+                              <td colSpan={PER_ROW * 2} className="text-center text-[11px] italic text-slate-400 align-middle">
+                                No sample data
+                              </td>
+                            </tr>
+                          )}
+                          {gridRows.map((row, ri) => (
+                            <tr key={ri} className="h-7 border-b border-slate-100">
+                              {Array.from({ length: PER_ROW }).map((_, ci) => {
+                                const present = ci < row.length;
+                                const sn = ri * PER_ROW + ci + 1;
+                                const val = row[ci];
+                                return (
+                                  <Fragment key={ci}>
                                     <td className="px-1 border-r border-slate-200 text-center text-[11px] font-medium text-slate-500 align-middle">
-                                      {snOffset + i + 1}
+                                      {present ? sn : ''}
                                     </td>
-                                    <td className="px-1 border-r border-slate-200 text-left text-[11px] align-middle truncate">
-                                      {d.measure}
+                                    <td className={`px-1 text-center text-[11px] tabular-nums align-middle ${ci < PER_ROW - 1 ? 'border-r-2 border-slate-300' : ''}`}>
+                                      {present ? (val != null ? val.toFixed(2) : '—') : ''}
                                     </td>
-                                    <td className="px-1 border-r border-slate-200 text-center text-[11px] align-middle">
-                                      {d.grade}
-                                    </td>
-                                    <td className="px-1 border-r border-slate-200 text-center text-[11px] tabular-nums align-middle">
-                                      {d.turns != null ? d.turns : '—'}
-                                    </td>
-                                    <td className="px-1 border-r border-slate-200 text-center text-[11px] tabular-nums align-middle">
-                                      {d.testVoltage != null ? d.testVoltage.toFixed(3) : '—'}
-                                    </td>
-                                    <td className="px-1 border-r border-slate-200 text-center text-[11px] font-semibold tabular-nums align-middle">
-                                      1
-                                    </td>
-                                    <td className="px-1 text-center text-[11px] tabular-nums align-middle">
-                                      {mA != null ? mA.toFixed(2) : '—'}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        );
-                      })}
-                    </Fragment>
+                                  </Fragment>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   );
                 })}
 
@@ -580,6 +545,14 @@ export const TestingReportPage = () => {
     </div>
   );
 };
+
+/* Compact labelled cell for the per-item header band (measure/grade/etc.). */
+const HdrCell = ({ label, value, strong }: { label: string; value: string; strong?: boolean }) => (
+  <div className="flex flex-col border-r border-b border-slate-200 px-2 py-1">
+    <span className="text-[8px] font-semibold uppercase tracking-wide text-slate-500 leading-tight">{label}</span>
+    <span className={`truncate text-[11px] leading-tight ${strong ? 'font-bold text-slate-900' : 'font-medium text-slate-800'}`}>{value}</span>
+  </div>
+);
 
 const InfoRow = ({ label, value, border }: { label: string; value: string; border: string }) => (
   <div className={`flex ${border} border-slate-300`}>

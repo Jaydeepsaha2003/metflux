@@ -139,9 +139,9 @@ export const PackingListPage = () => {
     queryKey: ['company-me'],
     queryFn: () => api<CompanyDetail>('/companies/me'),
   });
-  const { data: allPls } = useQuery({
-    queryKey: ['packing-lists-all'],
-    queryFn: () => api<{ items: Array<{ plNumber: string }> }>('/packing-lists'),
+  const { data: nextWo } = useQuery({
+    queryKey: ['packing-list-next-number'],
+    queryFn: () => api<{ plNumber: string }>('/packing-lists/next-number'),
     enabled: !plId,
   });
 
@@ -163,12 +163,13 @@ export const PackingListPage = () => {
   /* Auto-generate WO NO. Format: <3-letter company prefix>WO-<3-digit serial>
      e.g. METWO-001, TORWO-007. The series advances per company across all
      packing lists already saved on the server. */
+  // WO No. is assigned by the server — sequential per company, gap-free, never
+  // duplicated, and never user-editable. We just preview the next number; the
+  // real value is confirmed (and re-read into the doc) on save.
   useEffect(() => {
-    if (plId || !company || woNo) return;
-    const woPrefix = `${company.name.slice(0, 3).toUpperCase()}WO`;
-    const existing = allPls?.items.filter((p) => p.plNumber.startsWith(woPrefix + '-')).length ?? 0;
-    setWoNo(`${woPrefix}-${String(existing + 1).padStart(3, '0')}`);
-  }, [company, allPls, plId]);
+    if (plId || woNo || !nextWo) return;
+    setWoNo(nextWo.plNumber);
+  }, [nextWo, plId, woNo]);
 
   /* Pre-fill from existing PL */
   useEffect(() => {
@@ -257,10 +258,11 @@ export const PackingListPage = () => {
   const [generating, setGenerating] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const persistPackingList = async (): Promise<boolean> => {
+  // Returns the server-assigned WO No. so the downloaded PDF matches the saved
+  // record. plNumber is NOT sent — the server owns it (assign on create, keep on update).
+  const persistPackingList = async (): Promise<{ ok: boolean; plNumber?: string }> => {
     try {
       const payload = {
-        plNumber: woNo || 'DRAFT',
         plDate: woDate || today,
         invoiceNo: invoiceNo || null,
         invoiceDate: invoiceDate || null,
@@ -270,19 +272,24 @@ export const PackingListPage = () => {
       };
       if (plId) {
         await api(`/packing-lists/${plId}`, { method: 'PUT', body: JSON.stringify(payload) });
-      } else {
-        await api('/packing-lists', { method: 'POST', body: JSON.stringify({ dispatchIds: effectiveIds, ...payload }) });
+        return { ok: true, plNumber: woNo };
       }
-      return true;
+      const created = await api<{ plNumber: string }>('/packing-lists', {
+        method: 'POST',
+        body: JSON.stringify({ dispatchIds: effectiveIds, ...payload }),
+      });
+      return { ok: true, plNumber: created.plNumber };
     } catch (e: unknown) {
       setSaveError(e instanceof Error ? e.message : 'Save failed');
-      return false;
+      return { ok: false };
     }
   };
 
   // Build the print-ready clone (swap inputs → spans, mount offscreen) and
   // return an html2pdf worker plus a teardown. Shared by download + share.
-  const buildPdfJob = () => {
+  // woForName overrides the filename's WO No. (the live `woNo` state may not have
+  // re-rendered yet right after a server assignment).
+  const buildPdfJob = (woForName?: string) => {
     const el = printRef.current;
     if (!el || !dispatches.length) return null;
 
@@ -317,7 +324,7 @@ export const PackingListPage = () => {
     offscreen.appendChild(clone);
     document.body.appendChild(offscreen);
 
-    const filename = `Packing-List-${woNo || 'PL'}.pdf`;
+    const filename = `Packing-List-${woForName || woNo || 'PL'}.pdf`;
     const worker = html2pdf().set({
       margin: 8,
       filename,
@@ -341,26 +348,33 @@ export const PackingListPage = () => {
     setGenerating(true);
     setSaveError(null);
     const saved = await persistPackingList();
-    const job = buildPdfJob();
+    const finalWo = saved.plNumber ?? woNo;
+    if (saved.plNumber && saved.plNumber !== woNo) setWoNo(saved.plNumber);
+    // let the server-assigned WO No. paint into the doc before we snapshot it
+    await new Promise((r) => requestAnimationFrame(r));
+    const job = buildPdfJob(finalWo);
     if (!job) { setGenerating(false); return; }
     await new Promise((r) => requestAnimationFrame(r));
     try { await job.worker.save(); }
     finally { job.teardown(); setGenerating(false); }
-    if (saved) clearDraft(); // work is now persisted server-side — drop the local draft
+    if (saved.ok) clearDraft(); // work is now persisted server-side — drop the local draft
   };
 
   const handleWhatsappShare = async () => {
     setGenerating(true);
     setSaveError(null);
     const saved = await persistPackingList();
-    const job = buildPdfJob();
+    const finalWo = saved.plNumber ?? woNo;
+    if (saved.plNumber && saved.plNumber !== woNo) setWoNo(saved.plNumber);
+    await new Promise((r) => requestAnimationFrame(r));
+    const job = buildPdfJob(finalWo);
     if (!job) { setGenerating(false); return; }
     await new Promise((r) => requestAnimationFrame(r));
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const blob = (await (job.worker as any).output('blob')) as Blob;
       const message = [
-        `*Packing List ${woNo || 'DRAFT'}*`,
+        `*Packing List ${finalWo || 'DRAFT'}*`,
         company?.name ? `From: ${company.name}` : null,
         customerLabel ? `Customer: ${customerLabel}` : null,
         invoiceNo ? `Invoice: ${invoiceNo}` : null,
@@ -378,7 +392,7 @@ export const PackingListPage = () => {
       job.teardown();
       setGenerating(false);
     }
-    if (saved) clearDraft(); // persisted server-side — drop the local draft
+    if (saved.ok) clearDraft(); // persisted server-side — drop the local draft
   };
 
   if (isLoading) return <div className="card p-10 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-slate-400" /></div>;

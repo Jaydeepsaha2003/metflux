@@ -30,6 +30,9 @@ const customerInputBase = z.object({
   gstNumber: z.string().trim().max(40).optional().nullable(),
   gstRate: z.coerce.number().min(0).max(100).optional(),
   state: z.string().trim().max(80).optional().nullable(),
+  // Credit terms — payment due `dueDays` days after the invoice date. NULL =
+  // not set (Sales Invoices flags those). Coerced from the form's string input.
+  dueDays: z.coerce.number().int().min(0).max(3650).optional().nullable(),
   notes: z.string().trim().max(2000).optional().nullable(),
 });
 

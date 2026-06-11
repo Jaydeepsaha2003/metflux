@@ -15,13 +15,14 @@ type Customer = {
   gstNumber: string | null;
   gstRate: number;
   state: string | null;
+  dueDays: number | null;
   notes: string | null;
 };
 
-type Form = Omit<Customer, 'id' | 'gstRate'> & { gstRate: string };
+type Form = Omit<Customer, 'id' | 'gstRate' | 'dueDays'> & { gstRate: string; dueDays: string };
 
 const empty: Form = {
-  customerCode: '', name: '', email: '', phone: '', address: '', gstNumber: '', gstRate: '0', state: '', notes: '',
+  customerCode: '', name: '', email: '', phone: '', address: '', gstNumber: '', gstRate: '0', state: '', dueDays: '', notes: '',
 };
 
 /** Suggested code from a customer name: first 3 alpha chars (uppercase). */
@@ -56,12 +57,14 @@ export const CustomerFormPage = () => {
       gstNumber: existing.gstNumber ?? '',
       gstRate: String(existing.gstRate ?? 0),
       state: existing.state ?? '',
+      dueDays: existing.dueDays != null ? String(existing.dueDays) : '',
       notes: existing.notes ?? '',
     });
   }, [existing]);
 
   // customerCode is owned by the server — never sent from this form.
-  type Payload = Omit<Form, 'customerCode'>;
+  // dueDays goes out as a number (or null when blank, so it isn't coerced to 0).
+  type Payload = Omit<Form, 'customerCode' | 'dueDays'> & { dueDays: number | null };
 
   const create = useMutation({
     mutationFn: (body: Payload) => api<Customer>('/customers', { method: 'POST', json: body }),
@@ -97,7 +100,8 @@ export const CustomerFormPage = () => {
     // Strip it from the payload so the server keeps existing (PATCH) or
     // auto-generates a fresh one (POST).
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { customerCode: _omit, ...payload } = form;
+    const { customerCode: _omit, dueDays, ...rest } = form;
+    const payload: Payload = { ...rest, dueDays: dueDays.trim() === '' ? null : Number(dueDays) };
     if (isEdit) update.mutate(payload);
     else create.mutate(payload);
   };
@@ -168,6 +172,18 @@ export const CustomerFormPage = () => {
               onChange={(e) => set('gstRate', e.target.value)}
               placeholder="e.g. 18"
             />
+          </Field>
+          <Field label="Credit Terms (Due Days)">
+            <input
+              className="input"
+              type="number" min={0} max={3650} step="1" inputMode="numeric"
+              value={form.dueDays}
+              onChange={(e) => set('dueDays', e.target.value)}
+              placeholder="e.g. 30"
+            />
+            <span className="mt-1 block text-[10px] text-slate-400">
+              Days allowed for payment after the invoice date. Sales Invoices uses this to set due dates; leave blank if not agreed.
+            </span>
           </Field>
           <Field label="Address" full>
             <textarea

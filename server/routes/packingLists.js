@@ -12,7 +12,7 @@ router.use(requireAuth, resolveTenant);
 
 const createSchema = z.object({
   dispatchIds: z.array(z.string().min(1)).min(1),
-  plNumber:    z.string().trim().min(1).max(80),
+  plNumber:    z.string().trim().max(80).optional().nullable(), // ignored — WO No. is server-assigned & immutable
   plDate:      z.coerce.date(),
   invoiceNo:   z.string().trim().max(80).optional().nullable(),
   invoiceDate: z.coerce.date().optional().nullable(),
@@ -22,7 +22,7 @@ const createSchema = z.object({
 });
 
 const updateSchema = z.object({
-  plNumber:    z.string().trim().min(1).max(80),
+  plNumber:    z.string().trim().max(80).optional().nullable(), // ignored — WO No. is server-assigned & immutable
   plDate:      z.coerce.date(),
   invoiceNo:   z.string().trim().max(80).optional().nullable(),
   invoiceDate: z.coerce.date().optional().nullable(),
@@ -30,6 +30,28 @@ const updateSchema = z.object({
   approvedBy:  z.string().trim().max(120).optional().nullable(),
   remarks:     z.string().trim().max(200).optional().nullable(),
 });
+
+/** WO-number prefix from the company name — e.g. "TOROFLUX" → "TORWO". */
+const woPrefix = (name) => `${String(name ?? '').slice(0, 3).toUpperCase()}WO`;
+
+/** Next sequential WO No. for a company, e.g. "TORWO-007". `db` is either the
+ *  module helpers ({ q, qOne }) or a txn handle — both expose q/qOne. Computing
+ *  this inside the insert txn keeps the series gap-free; a unique index on
+ *  (companyId, plNumber) is the final guard against a concurrent collision. */
+const nextPlNumber = async (companyId, db) => {
+  const company = await db.qOne('SELECT `name` FROM `Company` WHERE `id` = ?', [companyId]);
+  const prefix = woPrefix(company?.name ?? '');
+  const rows = await db.q(
+    'SELECT `plNumber` FROM `PackingList` WHERE `companyId` = ? AND `plNumber` LIKE ?',
+    [companyId, `${prefix}-%`]
+  );
+  let max = 0;
+  for (const r of rows) {
+    const m = /-(\d+)$/.exec(r.plNumber ?? '');
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  return `${prefix}-${String(max + 1).padStart(3, '0')}`;
+};
 
 const flattenDispatch = (d) => ({
   id:            d.id,
@@ -164,6 +186,13 @@ router.get('/pending', requirePermission('dispatch'), asyncHandler(async (req, r
   res.json({ items });
 }));
 
+/* GET /packing-lists/next-number — the WO No. the next saved PL will receive.
+   Registered before /:plId so "next-number" isn't captured as an id. */
+router.get('/next-number', requirePermission('dispatch'), asyncHandler(async (req, res) => {
+  const plNumber = await nextPlNumber(req.tenant.companyId, { q, qOne });
+  res.json({ plNumber });
+}));
+
 /* GET /packing-lists */
 router.get('/', requirePermission('dispatch'), asyncHandler(async (req, res) => {
   const { search } = z.object({ search: z.string().trim().max(120).optional() }).parse(req.query);
@@ -231,8 +260,12 @@ router.post('/', requirePermission('dispatch'), asyncHandler(async (req, res) =>
   }
 
   const plId = await txn(async (tx) => {
+    // WO No. is assigned by the server, sequentially per company, so it can
+    // never duplicate (a unique index backs this up). The client no longer
+    // sends it; any value it does send is ignored.
+    const plNumber = await nextPlNumber(req.tenant.companyId, tx);
     const pl = await tx.insert('PackingList', {
-      plNumber:    data.plNumber,
+      plNumber,
       plDate:      data.plDate,
       invoiceNo:   data.invoiceNo ?? null,
       invoiceDate: data.invoiceDate ?? null,
@@ -262,8 +295,8 @@ router.put('/:plId', requirePermission('dispatch'), asyncHandler(async (req, res
   );
   if (!pl) throw new AppError('Packing list not found', 404, 'NOT_FOUND');
 
+  // WO No. is immutable once assigned — intentionally not updated here.
   await update('PackingList', pl.id, {
-    plNumber:    data.plNumber,
     plDate:      data.plDate,
     invoiceNo:   data.invoiceNo   ?? null,
     invoiceDate: data.invoiceDate ?? null,

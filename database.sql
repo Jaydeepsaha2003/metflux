@@ -100,6 +100,7 @@ CREATE TABLE `Customer` (
     `gstNumber` VARCHAR(40) NULL,
     `gstRate` DOUBLE NOT NULL DEFAULT 0,
     `state` VARCHAR(80) NULL,
+    `dueDays` INTEGER NULL,
     `notes` TEXT NULL,
     `shareToken` VARCHAR(64) NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -260,6 +261,7 @@ CREATE TABLE `PackingList` (
     `updatedAt` DATETIME(3) NOT NULL,
 
     INDEX `PackingList_companyId_plDate_idx`(`companyId`, `plDate`),
+    UNIQUE INDEX `PackingList_companyId_plNumber_key`(`companyId`, `plNumber`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
