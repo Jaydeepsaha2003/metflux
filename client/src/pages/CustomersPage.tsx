@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Search, MessageCircle, Plus, Pencil, Building2, Link2, Check } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Pagination } from '@/components/Pagination';
+import { BulkExcel, type BulkExcelConfig } from '@/components/BulkExcel';
 import { useHideCustomerNames } from '@/store/auth';
 
 type Customer = {
@@ -28,6 +29,7 @@ export const CustomersPage = () => {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const qc = useQueryClient();
 
   const copyPortalLink = async (c: Customer) => {
     if (!c.shareToken) return;
@@ -54,13 +56,51 @@ export const CustomersPage = () => {
     window.open(res.url, '_blank', 'noopener,noreferrer');
   };
 
+  const bulkConfig: BulkExcelConfig = {
+    entityLabel: 'Customers',
+    filenameBase: 'customers',
+    sheetName: 'Customers',
+    template: [
+      { header: 'Name', example: 'Aarti Steels' },
+      { header: 'Customer Code', example: '(blank = auto)' },
+      { header: 'Phone', example: '+91 98765 43210' },
+      { header: 'Email', example: 'accounts@aarti.com' },
+      { header: 'State', example: 'Maharashtra' },
+      { header: 'GSTIN', example: '27AAAAA0000A1Z5' },
+      { header: 'GST Rate', example: '18' },
+      { header: 'Credit Terms (Days)', example: '30' },
+      { header: 'Address', example: 'Plot 12, MIDC' },
+      { header: 'Notes', example: '' },
+    ],
+    fetchExportRows: async () => {
+      const all = await api<{ items: Array<Record<string, unknown>> }>('/customers?pageSize=500');
+      return all.items.map((c) => ({
+        'Customer Code': (c.customerCode as string) ?? '',
+        'Name': (c.name as string) ?? '',
+        'Phone': (c.phone as string) ?? '',
+        'Email': (c.email as string) ?? '',
+        'State': (c.state as string) ?? '',
+        'GSTIN': (c.gstNumber as string) ?? '',
+        'GST Rate': (c.gstRate as number) ?? 0,
+        'Credit Terms (Days)': (c.dueDays as number | null) ?? '',
+        'Address': (c.address as string) ?? '',
+        'Notes': (c.notes as string) ?? '',
+      }));
+    },
+    importPath: '/customers/import',
+    onImported: () => qc.invalidateQueries({ queryKey: ['customers'] }),
+  };
+
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Customers</h1>
-        <Link to="/customers/new" className="btn-primary">
-          <Plus className="h-4 w-4" /> Add Customer
-        </Link>
+        <div className="flex items-center gap-2">
+          <BulkExcel config={bulkConfig} />
+          <Link to="/customers/new" className="btn-primary">
+            <Plus className="h-4 w-4" /> Add Customer
+          </Link>
+        </div>
       </div>
 
       <div className="card overflow-hidden">

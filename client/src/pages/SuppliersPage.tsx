@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Search, Plus, Pencil, Truck } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Pagination } from '@/components/Pagination';
+import { BulkExcel, type BulkExcelConfig } from '@/components/BulkExcel';
 
 type Supplier = {
   id: string;
@@ -24,11 +25,43 @@ const PAGE_SIZE = 20;
 export const SuppliersPage = () => {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const qc = useQueryClient();
   useEffect(() => { setPage(1); }, [search]);
   const { data, isLoading } = useQuery({
     queryKey: ['suppliers', search, page],
     queryFn: () => api<ListResp>(`/suppliers?search=${encodeURIComponent(search)}&page=${page}&pageSize=${PAGE_SIZE}`),
   });
+
+  const bulkConfig: BulkExcelConfig = {
+    entityLabel: 'Suppliers',
+    filenameBase: 'suppliers',
+    sheetName: 'Suppliers',
+    template: [
+      { header: 'Name', example: 'Steel Strip Co.' },
+      { header: 'Phone', example: '+91 90000 00000' },
+      { header: 'Email', example: 'sales@steelstrip.com' },
+      { header: 'State', example: 'Gujarat' },
+      { header: 'GSTIN', example: '24AAAAA0000A1Z5' },
+      { header: 'GST Rate', example: '18' },
+      { header: 'Address', example: 'GIDC, Vapi' },
+      { header: 'Notes', example: '' },
+    ],
+    fetchExportRows: async () => {
+      const all = await api<{ items: Array<Record<string, unknown>> }>('/suppliers?pageSize=500');
+      return all.items.map((s) => ({
+        'Name': (s.name as string) ?? '',
+        'Phone': (s.phone as string) ?? '',
+        'Email': (s.email as string) ?? '',
+        'State': (s.state as string) ?? '',
+        'GSTIN': (s.gstNumber as string) ?? '',
+        'GST Rate': (s.gstRate as number) ?? 0,
+        'Address': (s.address as string) ?? '',
+        'Notes': (s.notes as string) ?? '',
+      }));
+    },
+    importPath: '/suppliers/import',
+    onImported: () => qc.invalidateQueries({ queryKey: ['suppliers'] }),
+  };
 
   return (
     <div className="space-y-5">
@@ -36,9 +69,12 @@ export const SuppliersPage = () => {
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <Truck className="h-5 w-5 text-brand-600" /> Suppliers
         </h1>
-        <Link to="/settings/suppliers/new" className="btn-primary w-full sm:w-auto">
-          <Plus className="h-4 w-4" /> Add Supplier
-        </Link>
+        <div className="flex items-center gap-2">
+          <BulkExcel config={bulkConfig} />
+          <Link to="/settings/suppliers/new" className="btn-primary">
+            <Plus className="h-4 w-4" /> Add Supplier
+          </Link>
+        </div>
       </div>
 
       <div className="card overflow-hidden">

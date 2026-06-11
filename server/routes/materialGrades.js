@@ -5,6 +5,7 @@ import { q, qOne, insert, update, del } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
+import { importBody, cellPick, rowIsBlank, errMessage } from '../lib/importHelpers.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -63,6 +64,40 @@ router.patch('/:id', requirePermission('add_material'), asyncHandler(async (req,
   if (!row) throw new AppError('Not found', 404, 'NOT_FOUND');
   const updated = await update('MaterialGrade', row.id, data);
   res.json(updated);
+}));
+
+/* ---------- POST /api/material-grades/import — bulk add grade/material combos ---------- */
+router.post('/import', requirePermission('add_material'), asyncHandler(async (req, res) => {
+  const { rows } = importBody.parse(req.body);
+  let created = 0, updated = 0, skipped = 0;
+  const errors = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowNo = i + 2;
+    if (rowIsBlank(row)) { skipped++; continue; }
+
+    const gradeRaw = cellPick(row, 'Grade');
+    const materialRaw = cellPick(row, 'Material');
+    if (!gradeRaw || !materialRaw) {
+      errors.push({ row: rowNo, name: gradeRaw || materialRaw, message: 'Both Grade and Material are required' });
+      continue;
+    }
+    try {
+      const { grade, material } = upsertSchema.parse({ grade: gradeRaw, material: materialRaw });
+      const existing = await qOne(
+        'SELECT `id` FROM `MaterialGrade` WHERE `companyId` = ? AND `grade` = ? AND `material` = ?',
+        [req.tenant.companyId, grade, material]
+      );
+      if (existing) { skipped += 1; continue; } // identical combo already present
+      await insert('MaterialGrade', { grade, material, companyId: req.tenant.companyId });
+      created += 1;
+    } catch (e) {
+      errors.push({ row: rowNo, name: `${gradeRaw} / ${materialRaw}`, message: errMessage(e) });
+    }
+  }
+
+  res.json({ created, updated, skipped, errors });
 }));
 
 /* ---------- DELETE /api/material-grades/:id ---------- */

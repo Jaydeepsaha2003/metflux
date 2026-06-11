@@ -3,10 +3,11 @@
 // Tenant scoping is done through that join table, NOT Supplier.companyId.
 import { Router } from 'express';
 import { z } from 'zod';
-import { q, qOne, txn } from '../lib/db.js';
+import { q, qOne, txn, update } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
+import { importBody, cellPick, numOpt, rowIsBlank, errMessage } from '../lib/importHelpers.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -162,6 +163,67 @@ router.patch('/:id', requirePermission('add_supplier'), asyncHandler(async (req,
   });
 
   res.json(await withCompanies(supplier));
+}));
+
+/* POST /import — bulk create/update suppliers from an Excel upload. Matches an
+   existing supplier (in this company) by name; new ones are created and joined
+   to the active company. Only provided columns are written. */
+router.post('/import', requirePermission('add_supplier'), asyncHandler(async (req, res) => {
+  const { rows } = importBody.parse(req.body);
+  let created = 0, updated = 0, skipped = 0;
+  const errors = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowNo = i + 2;
+    if (rowIsBlank(row)) { skipped++; continue; }
+
+    const name = cellPick(row, 'Name', 'Supplier Name');
+    if (!name) { errors.push({ row: rowNo, message: 'Missing Name' }); continue; }
+
+    const raw = {
+      name,
+      phone:     cellPick(row, 'Phone', 'Mobile', 'Contact'),
+      email:     cellPick(row, 'Email', 'E-mail'),
+      state:     cellPick(row, 'State'),
+      gstNumber: cellPick(row, 'GSTIN', 'GST Number', 'GST No', 'GST'),
+      gstRate:   numOpt(cellPick(row, 'GST Rate', 'GST Rate (%)', 'GST %')),
+      address:   cellPick(row, 'Address'),
+      notes:     cellPick(row, 'Notes', 'Remarks'),
+    };
+    const fields = Object.fromEntries(Object.entries(raw).filter(([, v]) => v !== undefined));
+
+    try {
+      const data = supplierFieldsBase.partial().parse(fields);
+      if (data.email === '') data.email = null;
+
+      const existing = await qOne(
+        `SELECT s.* FROM \`Supplier\` s
+           INNER JOIN \`SupplierMembership\` sm ON sm.\`supplierId\` = s.\`id\`
+          WHERE sm.\`companyId\` = ? AND LOWER(s.\`name\`) = LOWER(?) LIMIT 1`,
+        [req.tenant.companyId, name]
+      );
+
+      if (existing) {
+        if (Object.keys(data).length) await update('Supplier', existing.id, data);
+        updated += 1;
+      } else {
+        await txn(async (tx) => {
+          const s = await tx.insert('Supplier', {
+            ...data,
+            companyId: req.tenant.companyId,
+            createdById: req.auth.userId,
+          });
+          await tx.insert('SupplierMembership', { supplierId: s.id, companyId: req.tenant.companyId });
+        });
+        created += 1;
+      }
+    } catch (e) {
+      errors.push({ row: rowNo, name, message: errMessage(e) });
+    }
+  }
+
+  res.json({ created, updated, skipped, errors });
 }));
 
 /* DELETE /:id — removes the supplier and all its memberships */

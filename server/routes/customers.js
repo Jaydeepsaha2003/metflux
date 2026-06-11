@@ -5,6 +5,7 @@ import { q, qOne, insert, update, del } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requireRole } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
+import { importBody, cellPick, numOpt, rowIsBlank, errMessage } from '../lib/importHelpers.js';
 import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
@@ -188,6 +189,84 @@ router.patch('/:id', requireRole('STAFF'), asyncHandler(async (req, res) => {
   }
 
   res.json(await update('Customer', id, data));
+}));
+
+// POST /api/customers/import — bulk create/update from an Excel upload.
+// Matches an existing customer by Customer Code (if given) else by name. Only
+// columns present (non-blank) in a row are written, so a sparse sheet won't
+// wipe existing fields. Per-row errors are collected; the rest still import.
+router.post('/import', requireRole('STAFF'), asyncHandler(async (req, res) => {
+  const { rows } = importBody.parse(req.body);
+  let created = 0, updated = 0, skipped = 0;
+  const errors = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowNo = i + 2; // sheet row (header is row 1)
+    if (rowIsBlank(row)) { skipped++; continue; }
+
+    const name = cellPick(row, 'Name', 'Customer Name', 'Particulars');
+    if (!name) { errors.push({ row: rowNo, message: 'Missing Name' }); continue; }
+
+    // Build a patch of only the columns the sheet actually provides.
+    const raw = {
+      name,
+      phone:     cellPick(row, 'Phone', 'Mobile', 'Contact'),
+      email:     cellPick(row, 'Email', 'E-mail'),
+      state:     cellPick(row, 'State'),
+      gstNumber: cellPick(row, 'GSTIN', 'GST Number', 'GST No', 'GST'),
+      gstRate:   numOpt(cellPick(row, 'GST Rate', 'GST Rate (%)', 'GST %')),
+      dueDays:   numOpt(cellPick(row, 'Credit Terms (Days)', 'Credit Terms', 'Due Days', 'Credit Days')),
+      address:   cellPick(row, 'Address'),
+      notes:     cellPick(row, 'Notes', 'Remarks'),
+    };
+    const code = cellPick(row, 'Customer Code', 'Code');
+    const fields = Object.fromEntries(Object.entries(raw).filter(([, v]) => v !== undefined));
+    if (fields.dueDays !== undefined) fields.dueDays = Math.max(0, Math.round(fields.dueDays));
+
+    try {
+      const data = customerInputBase.partial().parse(fields);
+      if (data.email === '') data.email = null;
+
+      let existing = null;
+      if (code) {
+        existing = await qOne(
+          'SELECT * FROM `Customer` WHERE `companyId` = ? AND `customerCode` = ?',
+          [req.tenant.companyId, cleanCode(code)]
+        );
+      }
+      if (!existing) {
+        existing = await qOne(
+          'SELECT * FROM `Customer` WHERE `companyId` = ? AND LOWER(`name`) = LOWER(?)',
+          [req.tenant.companyId, name]
+        );
+      }
+
+      if (existing) {
+        const patch = { ...data };
+        if (name !== existing.name) patch.shareToken = await uniqueShareToken(name, existing.id);
+        await update('Customer', existing.id, patch);
+        updated += 1;
+      } else {
+        const customerCode = code
+          ? cleanCode(code)
+          : await nextCustomerCode(req.tenant.companyId, prefixFromName(name));
+        await insert('Customer', {
+          id: uuidv4(),
+          ...data,
+          customerCode,
+          shareToken: await uniqueShareToken(name),
+          companyId: req.tenant.companyId,
+          createdById: req.auth.userId,
+        });
+        created += 1;
+      }
+    } catch (e) {
+      errors.push({ row: rowNo, name, message: errMessage(e) });
+    }
+  }
+
+  res.json({ created, updated, skipped, errors });
 }));
 
 // DELETE /api/customers/:id — managers and up

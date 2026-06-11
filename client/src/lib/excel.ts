@@ -19,3 +19,31 @@ export const todayStamp = () => {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
+
+/** Read the first sheet of an uploaded .xlsx/.csv into row objects keyed by the
+ *  header row. Every value comes back as a trimmed string. Use for clean header
+ *  tables (the bulk import templates). */
+export const readXlsx = async (file: File): Promise<Record<string, string>[]> => {
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array' });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  if (!ws) return [];
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '', raw: false });
+  return rows.map((r) => {
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(r)) out[String(k).trim()] = String(v ?? '').trim();
+    return out;
+  });
+};
+
+/** Read the first sheet as a raw matrix (array of rows of cell strings). Use
+ *  when the file has banner rows before the real header (e.g. Tally exports)
+ *  and the server needs to locate the header itself. */
+export const readXlsxMatrix = async (file: File): Promise<string[][]> => {
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array' });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  if (!ws) return [];
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '', raw: false, blankrows: false });
+  return rows.map((r) => (Array.isArray(r) ? r.map((c) => String(c ?? '').trim()) : []));
+};

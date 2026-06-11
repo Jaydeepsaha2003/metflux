@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, Users2, Search } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useConfirm } from '@/hooks/useConfirm';
+import { BulkExcel, type BulkExcelConfig } from '@/components/BulkExcel';
 
 type LabourCompany = { id: string; name: string };
 type Labour = {
@@ -29,15 +30,37 @@ export const LaboursPage = () => {
   });
   const { confirm, confirmDialog } = useConfirm();
 
+  const bulkConfig: BulkExcelConfig = {
+    entityLabel: 'Workers',
+    filenameBase: 'workers',
+    sheetName: 'Workers',
+    template: [
+      { header: 'Name', example: 'Ramesh Kumar' },
+      { header: 'Phone', example: '+91 98765 43210' },
+    ],
+    fetchExportRows: async () => {
+      const all = await api<{ labours: Array<Record<string, unknown>> }>('/labours');
+      return all.labours.map((l) => ({
+        'Name': (l.name as string) ?? '',
+        'Phone': (l.phone as string) ?? '',
+      }));
+    },
+    importPath: '/labours/import',
+    onImported: () => queryClient.invalidateQueries({ queryKey: ['labours'] }),
+  };
+
   return (
     <div className="space-y-4 max-w-4xl">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <Users2 className="h-5 w-5 text-brand-600" /> Workers
         </h1>
-        <Link to="/settings/labours/new" className="btn-primary">
-          <Plus className="h-4 w-4" /> Add Worker
-        </Link>
+        <div className="flex items-center gap-2">
+          <BulkExcel config={bulkConfig} />
+          <Link to="/settings/labours/new" className="btn-primary">
+            <Plus className="h-4 w-4" /> Add Worker
+          </Link>
+        </div>
       </div>
 
       <div className="card overflow-hidden">

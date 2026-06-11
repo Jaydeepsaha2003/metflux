@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, Save, X, Layers, Loader2 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { useConfirm } from '@/hooks/useConfirm';
+import { BulkExcel, type BulkExcelConfig } from '@/components/BulkExcel';
 
 type Row = { id: string; grade: string; material: string; createdAt: string };
 
@@ -40,11 +41,30 @@ export const MaterialsPage = () => {
     onSuccess: invalidate,
   });
 
+  const bulkConfig: BulkExcelConfig = {
+    entityLabel: 'Grades & Materials',
+    filenameBase: 'materials',
+    sheetName: 'Materials',
+    template: [
+      { header: 'Grade', example: 'M4' },
+      { header: 'Material', example: '0.23 DABBA' },
+    ],
+    fetchExportRows: async () => {
+      const all = await api<{ items: Row[] }>('/material-grades/_flat');
+      return all.items.map((r) => ({ 'Grade': r.grade, 'Material': r.material }));
+    },
+    importPath: '/material-grades/import',
+    onImported: invalidate,
+  };
+
   return (
     <div className="space-y-5 max-w-5xl">
-      <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-        <Layers className="h-5 w-5 text-brand-600" /> Grades & Materials
-      </h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+          <Layers className="h-5 w-5 text-brand-600" /> Grades & Materials
+        </h1>
+        <BulkExcel config={bulkConfig} />
+      </div>
 
       <AddRow onSubmit={(g, m) => addM.mutateAsync({ grade: g, material: m })} busy={addM.isPending} />
 

@@ -7,6 +7,7 @@ import { q, qOne, insert, update, del, txn } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission, requireAnyPermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
+import { importBody, cellPick, rowIsBlank, errMessage } from '../lib/importHelpers.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -127,6 +128,55 @@ router.patch('/:id', requirePermission('add_staff'), asyncHandler(async (req, re
     return tx.qOne('SELECT * FROM `Labour` WHERE `id` = ?', [req.params.id]);
   });
   res.json(await withCompanies(labour));
+}));
+
+/* ---------- POST /import — bulk create workers from Excel ---------- */
+router.post('/import', requirePermission('add_staff'), asyncHandler(async (req, res) => {
+  const { rows } = importBody.parse(req.body);
+  const nameSchema = z.string().trim().min(1).max(120);
+  const phoneSchema = z.string().trim().max(40);
+  let created = 0, updated = 0, skipped = 0;
+  const errors = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowNo = i + 2;
+    if (rowIsBlank(row)) { skipped++; continue; }
+
+    const rawName = cellPick(row, 'Name', 'Worker', 'Worker Name', 'Labour', 'Labour Name');
+    if (!rawName) { errors.push({ row: rowNo, message: 'Missing Name' }); continue; }
+    const rawPhone = cellPick(row, 'Phone', 'Mobile', 'Contact');
+
+    try {
+      const name = nameSchema.parse(rawName);
+      const phone = rawPhone !== undefined ? phoneSchema.parse(rawPhone) : undefined;
+
+      const existing = await qOne(
+        `SELECT l.* FROM \`Labour\` l
+           INNER JOIN \`LabourMembership\` lm ON lm.\`labourId\` = l.\`id\`
+          WHERE lm.\`companyId\` = ? AND LOWER(l.\`name\`) = LOWER(?) LIMIT 1`,
+        [req.tenant.companyId, name]
+      );
+
+      if (existing) {
+        const patch = {};
+        if (name !== existing.name) patch.name = name;
+        if (phone !== undefined) patch.phone = phone;
+        if (Object.keys(patch).length) await update('Labour', existing.id, patch);
+        updated += 1;
+      } else {
+        await txn(async (tx) => {
+          const l = await tx.insert('Labour', { name, phone: phone ?? null });
+          await tx.insert('LabourMembership', { labourId: l.id, companyId: req.tenant.companyId });
+        });
+        created += 1;
+      }
+    } catch (e) {
+      errors.push({ row: rowNo, name: rawName, message: errMessage(e) });
+    }
+  }
+
+  res.json({ created, updated, skipped, errors });
 }));
 
 /* ---------- DELETE /:id ---------- */
