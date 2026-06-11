@@ -152,6 +152,8 @@ export const WorkAllotmentBuildPage = () => {
   const [waNumber, setWaNumber] = useState('');
   const [waDate] = useState(today);
   const [remarks, setRemarks] = useState('');
+  const [issuedBy, setIssuedBy] = useState('');
+  const [receivedBy, setReceivedBy] = useState('');
 
   /* Auto-generate WA No. — same pattern as Packing List WO No.
      Format: <3-letter company prefix>WA-<3-digit serial> */
@@ -428,6 +430,14 @@ export const WorkAllotmentBuildPage = () => {
             <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Remarks</span>
             <input className="input" value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="optional" disabled={!!waId} />
           </label>
+          <label className="block">
+            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Issued By</span>
+            <input className="input" value={issuedBy} onChange={(e) => setIssuedBy(e.target.value)} placeholder="name (optional)" />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Received By</span>
+            <input className="input" value={receivedBy} onChange={(e) => setReceivedBy(e.target.value)} placeholder="name (optional)" />
+          </label>
         </div>
 
         {(saveError || validationError) && (
@@ -702,13 +712,13 @@ export const WorkAllotmentBuildPage = () => {
           <div className="grid grid-cols-2 border-t-2 border-slate-400 mt-2">
             <div className="border-r border-slate-300 px-6 py-5">
               <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-5">Issued By</div>
-              <div className="border-b border-slate-400 mb-1 min-h-[24px] text-sm font-medium" />
+              <div className="border-b border-slate-400 mb-1 min-h-[24px] text-sm font-medium flex items-end justify-center pb-0.5">{issuedBy}</div>
               <div className="text-[10px] text-slate-500">Name &amp; Signature</div>
               <div className="mt-2 text-[10px] text-slate-500">Date: {waDate ? fmtDate(waDate) : '___________'}</div>
             </div>
             <div className="px-6 py-5">
               <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-5">Received By</div>
-              <div className="border-b border-slate-400 mb-1 min-h-[24px] text-sm font-medium" />
+              <div className="border-b border-slate-400 mb-1 min-h-[24px] text-sm font-medium flex items-end justify-center pb-0.5">{receivedBy}</div>
               <div className="text-[10px] text-slate-500">Worker Signature</div>
               <div className="mt-2 text-[10px] text-slate-500">Date: ___________</div>
             </div>

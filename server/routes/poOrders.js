@@ -64,6 +64,28 @@ const createSchema = z.object({
   items: z.array(itemSchema).min(1, 'Add at least one item before submitting'),
 });
 
+// Throws PO_DUPLICATE if `poNumber` is genuinely taken in this company. If the
+// only thing holding the number is an *empty* SO header — an orphan left behind
+// when every line of a since-removed SO was deleted one-by-one, which still
+// occupies the (companyId, poNumber) unique slot — that orphan is dropped so the
+// number can be reused. Shared by create (new SO) and the PATCH header rename so
+// both behave identically. `excludeId` skips the SO currently being renamed.
+const ensurePoNumberFree = async (companyId, poNumber, excludeId = null) => {
+  const dup = await qOne(
+    `SELECT \`id\` FROM \`PoOrder\` WHERE \`companyId\` = ? AND \`poNumber\` = ?${excludeId ? ' AND `id` <> ?' : ''}`,
+    excludeId ? [companyId, poNumber, excludeId] : [companyId, poNumber]
+  );
+  if (!dup) return;
+  const cnt = await qOne(
+    'SELECT COUNT(*) AS n FROM `PoOrderItem` WHERE `poOrderId` = ?',
+    [dup.id]
+  );
+  if (Number(cnt?.n ?? 0) > 0) {
+    throw new AppError('SO# already exists in this company', 409, 'PO_DUPLICATE');
+  }
+  await del('PoOrder', dup.id);
+};
+
 // Loads items for a list of poOrderIds keyed by poOrderId.
 const loadItemsForPos = async (poOrderIds) => {
   if (poOrderIds.length === 0) return new Map();
@@ -90,25 +112,7 @@ router.post('/', requirePermission('add_po'), asyncHandler(async (req, res) => {
   );
   if (!customer) throw new AppError('Customer not found', 400, 'BAD_CUSTOMER');
 
-  const dup = await qOne(
-    'SELECT `id` FROM `PoOrder` WHERE `companyId` = ? AND `poNumber` = ?',
-    [req.tenant.companyId, data.poNumber]
-  );
-  if (dup) {
-    // A header with this SO# already exists. If it still has line items it's a
-    // genuine duplicate. If it has none, it's an orphan left behind when every
-    // line was deleted one-by-one (older builds kept the empty header, which
-    // then occupied the (companyId, poNumber) unique slot). Drop the orphan so
-    // the number can be reused instead of falsely reporting "already exists".
-    const cnt = await qOne(
-      'SELECT COUNT(*) AS n FROM `PoOrderItem` WHERE `poOrderId` = ?',
-      [dup.id]
-    );
-    if (Number(cnt?.n ?? 0) > 0) {
-      throw new AppError('PO number already exists in this company', 409, 'PO_DUPLICATE');
-    }
-    await del('PoOrder', dup.id);
-  }
+  await ensurePoNumberFree(req.tenant.companyId, data.poNumber);
 
   const result = await txn(async (tx) => {
     const po = await tx.insert('PoOrder', {
@@ -577,13 +581,11 @@ router.patch('/:id', requirePermission('add_po'), asyncHandler(async (req, res) 
     if (!c) throw new AppError('Customer not found', 400, 'BAD_CUSTOMER');
   }
 
-  // If SO# is being changed, enforce per-company uniqueness.
+  // If SO# is being changed, enforce per-company uniqueness — tolerating an
+  // orphaned empty header left from deleting every line of a since-removed SO
+  // (mirrors create()), so a number freed up by deletion can be reused on rename.
   if (data.poNumber && data.poNumber !== po.poNumber) {
-    const dup = await qOne(
-      'SELECT `id` FROM `PoOrder` WHERE `companyId` = ? AND `poNumber` = ? AND `id` <> ?',
-      [req.tenant.companyId, data.poNumber, po.id]
-    );
-    if (dup) throw new AppError('SO# already exists in this company', 409, 'PO_DUPLICATE');
+    await ensurePoNumberFree(req.tenant.companyId, data.poNumber, po.id);
   }
 
   const patch = {};
