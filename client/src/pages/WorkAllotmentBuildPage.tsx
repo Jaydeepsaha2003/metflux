@@ -387,12 +387,12 @@ export const WorkAllotmentBuildPage = () => {
         windowWidth: A4_USABLE_PX,
       },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-      // Allow page breaks naturally — was 'avoid-all', which refused to split
-      // the items table at all and pushed it entirely onto page 2, leaving
-      // page 1 with the header + a huge blank. `avoid: 'tr'` keeps individual
-      // rows intact (no row sliced in half), while still letting the table
-      // flow across pages.
-      pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', 'thead', '.no-break'] },
+      // The items table is paginated manually (fixed rows per page + an explicit
+      // page break between chunks) and the totals/signature block is atomic, so
+      // html2pdf never has to slice a row across a page boundary. The old
+      // `avoid: 'tr'` left a duplicated ghost of the straddling row. 'css'
+      // honours our page-break-before / page-break-inside styles.
+      pagebreak: { mode: ['css', 'legacy'] },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).from(clone);
 
@@ -453,6 +453,72 @@ export const WorkAllotmentBuildPage = () => {
     <div className="card p-10 text-center text-slate-400">
       No items to allot. <Link to="/work-allotment" className="text-brand-700 hover:underline">Go back</Link>
     </div>
+  );
+
+  /* Paginate the printable doc manually: a fixed number of rows per page + an
+     explicit page break between chunks means html2pdf never slices a row across
+     a boundary (which had duplicated the straddling row). Page 1 is shorter as
+     it also carries the company header + info band. Sizes are conservative so a
+     chunk always fits one landscape A4 page. */
+  const PAGE_ROWS_FIRST = 12;
+  const PAGE_ROWS_REST = 16;
+  const rowPages: { items: RowState[]; start: number }[] = [{ items: rows.slice(0, PAGE_ROWS_FIRST), start: 0 }];
+  for (let i = PAGE_ROWS_FIRST; i < rows.length; i += PAGE_ROWS_REST) {
+    rowPages.push({ items: rows.slice(i, i + PAGE_ROWS_REST), start: i });
+  }
+
+  const docColgroup = (
+    <colgroup>
+      <col style={{ width: '3%'  }} />
+      <col style={{ width: '9%'  }} />
+      <col style={{ width: '8%'  }} />
+      <col style={{ width: '12%' }} />
+      <col style={{ width: '8%'  }} />
+      <col style={{ width: '8%'  }} />
+      <col style={{ width: '5%'  }} />
+      <col style={{ width: '7%'  }} />
+      <col style={{ width: '5%'  }} />
+      <col style={{ width: '5%'  }} />
+      <col style={{ width: '7%'  }} />
+      <col style={{ width: '7%'  }} />
+      <col style={{ width: '16%' }} />
+    </colgroup>
+  );
+  const docThead = (
+    <thead>
+      <tr className="bg-slate-100 border-b-2 border-slate-400 text-center font-bold uppercase tracking-wide text-[10px]">
+        <th className="px-1 py-1.5 border-r border-slate-300 align-middle">SR</th>
+        <th className="px-1 py-1.5 border-r border-slate-300 align-middle text-left">Cust Code</th>
+        <th className="px-1 py-1.5 border-r border-slate-300 align-middle">SO Date</th>
+        <th className="px-1 py-1.5 border-r border-slate-300 align-middle text-left">Measure</th>
+        <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Grade</th>
+        <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Material</th>
+        <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Pcs</th>
+        <th className="px-1 py-1.5 border-r border-slate-300 align-middle">WT (KG.)</th>
+        <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Flux</th>
+        <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Turns</th>
+        <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Voltage</th>
+        <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Iemax</th>
+        <th className="px-1 py-1.5 align-middle text-left">Worker</th>
+      </tr>
+    </thead>
+  );
+  const renderRow = (r: RowState, idx: number) => (
+    <tr key={r.poOrderItemId} className="h-9 border-b border-slate-200">
+      <td className="px-1 border-r border-slate-200 text-center font-medium text-slate-500 text-[12px] align-middle">{idx + 1}</td>
+      <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.customerCode} align="left" /></td>
+      <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={fmtDate(r.orderDate)} /></td>
+      <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.measure} align="left" /></td>
+      <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.grade} /></td>
+      <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.material} /></td>
+      <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.pcs} bold /></td>
+      <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={fmtWt(rowWt(r))} /></td>
+      <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.flux} /></td>
+      <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.turns} /></td>
+      <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.voltage} /></td>
+      <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.iemax} /></td>
+      <td className="px-0.5 align-middle"><Display value={labourName(r.labourId)} align="left" /></td>
+    </tr>
   );
 
   return (
@@ -711,79 +777,39 @@ export const WorkAllotmentBuildPage = () => {
             <InfoRow label="Total Pcs" value={String(totalPcs)} border="" />
           </div>
 
-          {/* Items table — column order: SR | Cust Code | SO Date | Measure | Grade | Material | Pcs | WT (KG.) | Flux | Turns | Voltage | Iemax | Worker */}
-          <table className="w-full text-sm border-collapse table-fixed">
-            <colgroup>
-              <col style={{ width: '3%'  }} />  {/* SR */}
-              <col style={{ width: '9%'  }} />  {/* CUST CODE */}
-              <col style={{ width: '8%'  }} />  {/* SO DATE */}
-              <col style={{ width: '12%' }} />  {/* MEASURE */}
-              <col style={{ width: '8%'  }} />  {/* GRADE */}
-              <col style={{ width: '8%'  }} />  {/* MATERIAL */}
-              <col style={{ width: '5%'  }} />  {/* PCS */}
-              <col style={{ width: '7%'  }} />  {/* WT (KG.) */}
-              <col style={{ width: '5%'  }} />  {/* FLUX */}
-              <col style={{ width: '5%'  }} />  {/* TURNS */}
-              <col style={{ width: '7%'  }} />  {/* VOLTAGE */}
-              <col style={{ width: '7%'  }} />  {/* IEMAX */}
-              <col style={{ width: '16%' }} />  {/* WORKER */}
-            </colgroup>
-            <thead>
-              <tr className="bg-slate-100 border-b-2 border-slate-400 text-center font-bold uppercase tracking-wide text-[10px]">
-                <th className="px-1 py-1.5 border-r border-slate-300 align-middle">SR</th>
-                <th className="px-1 py-1.5 border-r border-slate-300 align-middle text-left">Cust Code</th>
-                <th className="px-1 py-1.5 border-r border-slate-300 align-middle">SO Date</th>
-                <th className="px-1 py-1.5 border-r border-slate-300 align-middle text-left">Measure</th>
-                <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Grade</th>
-                <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Material</th>
-                <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Pcs</th>
-                <th className="px-1 py-1.5 border-r border-slate-300 align-middle">WT (KG.)</th>
-                <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Flux</th>
-                <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Turns</th>
-                <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Voltage</th>
-                <th className="px-1 py-1.5 border-r border-slate-300 align-middle">Iemax</th>
-                <th className="px-1 py-1.5 align-middle text-left">Worker</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, idx) => (
-                <tr key={r.poOrderItemId} className="h-9 border-b border-slate-200">
-                  <td className="px-1 border-r border-slate-200 text-center font-medium text-slate-500 text-[12px] align-middle">
-                    {idx + 1}
-                  </td>
-                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.customerCode} align="left" /></td>
-                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={fmtDate(r.orderDate)} /></td>
-                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.measure} align="left" /></td>
-                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.grade} /></td>
-                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.material} /></td>
-                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.pcs} bold /></td>
-                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={fmtWt(rowWt(r))} /></td>
-                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.flux} /></td>
-                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.turns} /></td>
-                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.voltage} /></td>
-                  <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.iemax} /></td>
-                  <td className="px-0.5 align-middle"><Display value={labourName(r.labourId)} align="left" /></td>
-                </tr>
-              ))}
-              {/* Total row */}
-              <tr className="h-8 border-t-2 border-slate-500 bg-slate-200">
-                <td colSpan={6} className="px-2 border-r border-slate-400 text-right text-[10px] font-black uppercase tracking-widest text-slate-600 align-middle">
-                  Grand Total
-                </td>
-                <td className="px-1 border-r border-slate-400 text-center text-xs font-black text-slate-800 align-middle">
-                  {totalPcs}
-                </td>
-                <td className="px-1 border-r border-slate-400 text-center text-xs font-black text-slate-800 align-middle tabular-nums">
-                  {fmtWt(totalWt)}
-                </td>
-                <td colSpan={4} className="border-r border-slate-400 align-middle" />
-                <td className="align-middle" />
-              </tr>
-            </tbody>
-          </table>
+          {/* Items table(s) — paginated into page-sized chunks (header repeated)
+              so html2pdf never slices a row across a page break. Column order:
+              SR | Cust Code | SO Date | Measure | Grade | Material | Pcs |
+              WT (KG.) | Flux | Turns | Voltage | Iemax | Worker */}
+          {rowPages.map((pg, pi) => (
+            <table key={pi} style={pi > 0 ? { pageBreakBefore: 'always' } : undefined}
+              className="w-full text-sm border-collapse table-fixed">
+              {docColgroup}
+              {docThead}
+              <tbody>
+                {pg.items.map((r, j) => renderRow(r, pg.start + j))}
+                {pi === rowPages.length - 1 && (
+                  <tr className="h-8 border-t-2 border-slate-500 bg-slate-200">
+                    <td colSpan={6} className="px-2 border-r border-slate-400 text-right text-[10px] font-black uppercase tracking-widest text-slate-600 align-middle">
+                      Grand Total
+                    </td>
+                    <td className="px-1 border-r border-slate-400 text-center text-xs font-black text-slate-800 align-middle">
+                      {totalPcs}
+                    </td>
+                    <td className="px-1 border-r border-slate-400 text-center text-xs font-black text-slate-800 align-middle tabular-nums">
+                      {fmtWt(totalWt)}
+                    </td>
+                    <td colSpan={4} className="border-r border-slate-400 align-middle" />
+                    <td className="align-middle" />
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          ))}
 
-          {/* Signature footer */}
-          <div className="grid grid-cols-2 border-t-2 border-slate-400 mt-2">
+          {/* Signature footer — kept atomic (page-break-inside: avoid) so it moves
+              whole to a fresh page rather than being sliced. */}
+          <div className="grid grid-cols-2 border-t-2 border-slate-400 mt-2" style={{ pageBreakInside: 'avoid' }}>
             <div className="border-r border-slate-300 px-6 py-5">
               <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-5">Issued By</div>
               <div className="border-b border-slate-400 mb-1 min-h-[24px] text-sm font-medium flex items-end justify-center pb-0.5">{issuedBy}</div>
