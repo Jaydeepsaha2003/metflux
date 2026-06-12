@@ -373,64 +373,91 @@ export const WorkAllotmentBuildPage = () => {
     offscreen.appendChild(clone);
     document.body.appendChild(offscreen);
 
-    // ── Measured pagination ──────────────────────────────────────────────
-    // Split the single items table into one table per page, breaking only
-    // between whole rows. Boundaries come from *measured* row heights, so a
-    // wrapped (taller) cell can never make a row straddle — and get sliced or
-    // ghosted across — a page edge (the bug fixed row-counts caused). Each page
-    // repeats the column header, and a page break is forced before every table
-    // after the first — table-level breaks are reliably honoured by html2pdf.
+    // ── Page-by-page rendering ───────────────────────────────────────────
+    // Split the document into separate page-sized DIVs (measured row heights,
+    // header repeated, signature kept whole) and render EACH page as its own
+    // canvas onto its own PDF page. The previous approach rendered one tall
+    // canvas that html2pdf sliced at computed offsets — rounding drift
+    // accumulated page after page, so by page ~5 headers overlapped rows.
+    // With one canvas per page there is nothing to slice, so nothing can
+    // drift, overlap or ghost — on page 2 or page 50.
     const MARGIN_MM = 8;
-    const pxPerMm = A4_USABLE_PX / (297 - 2 * MARGIN_MM);  // clone width ↔ usable mm
-    // Usable landscape height × 0.88 safety: html2canvas renders wrapped cells a
-    // touch taller than getBoundingClientRect reports, so a too-tight budget let
-    // ~2 rows spill past the page edge. 0.88 was tuned end-to-end (headless
-    // Chrome → real html2pdf) until no page bled across a break.
-    const pageH = (210 - 2 * MARGIN_MM) * pxPerMm * 0.88;
-    const table = clone.querySelector('table');
-    const thead = table?.querySelector('thead') ?? null;
-    const colgroup = table?.querySelector('colgroup') ?? null;
-    const tbody = table?.querySelector('tbody') ?? null;
-    if (table && tbody) {
-      const theadH = thead ? thead.getBoundingClientRect().height : 0;
-      const rowEls = Array.from(tbody.children) as HTMLElement[];
-      let pageTop = clone.getBoundingClientRect().top;
-      let firstPage = true;
+    const pxPerMm = A4_USABLE_PX / (297 - 2 * MARGIN_MM);   // clone px ↔ usable mm
+    // Usable landscape page height in clone px, packed to 93% — headroom for
+    // html2canvas laying content out a few px taller than we measure here.
+    const PAGE_H = (210 - 2 * MARGIN_MM) * pxPerMm * 0.93;
+
+    const srcTable = clone.querySelector('table');
+    const thead = srcTable?.querySelector('thead') ?? null;
+    const colgroup = srcTable?.querySelector('colgroup') ?? null;
+    const tbody = srcTable?.querySelector('tbody') ?? null;
+    const signature = clone.querySelector<HTMLElement>('.wa-signature');
+
+    let pages: HTMLElement[] = [clone];
+    if (srcTable && tbody) {
+      const theadH = thead?.getBoundingClientRect().height ?? 0;
+      const sigH = signature?.getBoundingClientRect().height ?? 0;
+      // Everything above the table (company header + info band) → page 1 only.
+      const preTable: HTMLElement[] = [];
+      for (const child of Array.from(clone.children) as HTMLElement[]) {
+        if (child === srcTable) break;
+        preTable.push(child);
+      }
+      const preH = preTable.reduce((s, n) => s + n.getBoundingClientRect().height, 0);
+
+      // Pack whole rows into pages using their real rendered heights.
       const groups: HTMLElement[][] = [];
       let current: HTMLElement[] = [];
-      for (const tr of rowEls) {
-        const rect = tr.getBoundingClientRect();
-        const budget = pageH - (firstPage ? 0 : theadH); // pages 2+ repeat the header
-        if (current.length && rect.bottom - pageTop > budget) {
+      let used = preH + theadH;
+      for (const tr of Array.from(tbody.children) as HTMLElement[]) {
+        const h = tr.getBoundingClientRect().height;
+        if (current.length && used + h > PAGE_H) {
           groups.push(current);
           current = [];
-          pageTop = rect.top;
-          firstPage = false;
+          used = theadH; // pages 2+ start with just the repeated column header
         }
         current.push(tr);
+        used += h;
       }
       if (current.length) groups.push(current);
+      const sigOnLastPage = used + sigH <= PAGE_H;
 
-      if (groups.length > 1) {
-        const parent = table.parentNode as HTMLElement;
-        groups.forEach((group, gi) => {
-          const t = document.createElement('table');
-          t.className = table.className;
-          t.style.pageBreakInside = 'avoid';          // keep this page's header glued to its rows
-          if (gi > 0) t.style.pageBreakBefore = 'always';
-          if (colgroup) t.appendChild(colgroup.cloneNode(true));
-          if (thead) t.appendChild(thead.cloneNode(true));
-          const tb = document.createElement('tbody');
-          group.forEach((tr) => tb.appendChild(tr)); // moves the row out of the original tbody
-          t.appendChild(tb);
-          parent.insertBefore(t, table);
-        });
-        parent.removeChild(table);
+      const mkPage = () => {
+        const p = document.createElement('div');
+        p.className = clone.className;
+        p.style.width = `${A4_USABLE_PX}px`;
+        p.style.minWidth = '0';
+        p.style.overflow = 'visible';
+        p.style.borderRadius = '0';
+        p.style.boxShadow = 'none';
+        p.style.background = '#ffffff';
+        return p;
+      };
+
+      pages = groups.map((group, gi) => {
+        const page = mkPage();
+        if (gi === 0) preTable.forEach((n) => page.appendChild(n)); // moves nodes
+        const t = document.createElement('table');
+        t.className = srcTable.className;
+        if (colgroup) t.appendChild(colgroup.cloneNode(true));
+        if (thead) t.appendChild(thead.cloneNode(true));
+        const tb = document.createElement('tbody');
+        group.forEach((tr) => tb.appendChild(tr)); // moves rows out of the clone
+        t.appendChild(tb);
+        page.appendChild(t);
+        return page;
+      });
+      if (signature) {
+        const host = sigOnLastPage ? pages[pages.length - 1] : mkPage();
+        host.appendChild(signature);
+        if (!sigOnLastPage) pages.push(host);
       }
+      pages.forEach((p) => offscreen.appendChild(p));
+      offscreen.removeChild(clone); // the gutted clone is no longer needed
     }
 
     const filename = `Work-Allotment-${waNumber || 'WA'}.pdf`;
-    const worker = html2pdf().set({
+    const OPTS = {
       margin: 8,
       filename,
       image: { type: 'jpeg', quality: 0.98 },
@@ -443,12 +470,22 @@ export const WorkAllotmentBuildPage = () => {
         windowWidth: A4_USABLE_PX,
       },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-      // 'css' honours the per-row `page-break-before` we inject above (from
-      // measured heights) plus `page-break-inside: avoid` on the signature, so
-      // html2pdf never slices a row across a page boundary — no more ghost rows.
-      pagebreak: { mode: ['css', 'legacy'] },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any).from(clone);
+    };
+    // Render page 1, then for each further page element: add a blank PDF page
+    // and render that element onto it. The explicit .toContainer().toCanvas()
+    // .toPdf() re-runs the pipeline per element — the prerequisite system
+    // would otherwise just reuse the previous canvas.
+    // The worker-chain API (toPdf/get/toContainer/toCanvas) isn't in the
+    // package's type stubs — go through `any` for the whole chain.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let worker: any = (html2pdf() as any).set(OPTS).from(pages[0]).toPdf();
+    for (const pageEl of pages.slice(1)) {
+      worker = worker
+        .get('pdf')
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .then((pdf: any) => { pdf.addPage(); })
+        .from(pageEl).toContainer().toCanvas().toPdf();
+    }
 
     return { worker, filename, teardown: () => document.body.removeChild(offscreen) };
   };
