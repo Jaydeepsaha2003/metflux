@@ -416,6 +416,7 @@ export const WorkAllotmentBuildPage = () => {
         groups.forEach((group, gi) => {
           const t = document.createElement('table');
           t.className = table.className;
+          t.style.pageBreakInside = 'avoid';          // keep this page's header glued to its rows
           if (gi > 0) t.style.pageBreakBefore = 'always';
           if (colgroup) t.appendChild(colgroup.cloneNode(true));
           if (thead) t.appendChild(thead.cloneNode(true));
