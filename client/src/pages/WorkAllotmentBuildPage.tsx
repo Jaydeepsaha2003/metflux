@@ -373,6 +373,61 @@ export const WorkAllotmentBuildPage = () => {
     offscreen.appendChild(clone);
     document.body.appendChild(offscreen);
 
+    // ── Measured pagination ──────────────────────────────────────────────
+    // Split the single items table into one table per page, breaking only
+    // between whole rows. Boundaries come from *measured* row heights, so a
+    // wrapped (taller) cell can never make a row straddle — and get sliced or
+    // ghosted across — a page edge (the bug fixed row-counts caused). Each page
+    // repeats the column header, and a page break is forced before every table
+    // after the first — table-level breaks are reliably honoured by html2pdf.
+    const MARGIN_MM = 8;
+    const pxPerMm = A4_USABLE_PX / (297 - 2 * MARGIN_MM);  // clone width ↔ usable mm
+    // Usable landscape height × 0.88 safety: html2canvas renders wrapped cells a
+    // touch taller than getBoundingClientRect reports, so a too-tight budget let
+    // ~2 rows spill past the page edge. 0.88 was tuned end-to-end (headless
+    // Chrome → real html2pdf) until no page bled across a break.
+    const pageH = (210 - 2 * MARGIN_MM) * pxPerMm * 0.88;
+    const table = clone.querySelector('table');
+    const thead = table?.querySelector('thead') ?? null;
+    const colgroup = table?.querySelector('colgroup') ?? null;
+    const tbody = table?.querySelector('tbody') ?? null;
+    if (table && tbody) {
+      const theadH = thead ? thead.getBoundingClientRect().height : 0;
+      const rowEls = Array.from(tbody.children) as HTMLElement[];
+      let pageTop = clone.getBoundingClientRect().top;
+      let firstPage = true;
+      const groups: HTMLElement[][] = [];
+      let current: HTMLElement[] = [];
+      for (const tr of rowEls) {
+        const rect = tr.getBoundingClientRect();
+        const budget = pageH - (firstPage ? 0 : theadH); // pages 2+ repeat the header
+        if (current.length && rect.bottom - pageTop > budget) {
+          groups.push(current);
+          current = [];
+          pageTop = rect.top;
+          firstPage = false;
+        }
+        current.push(tr);
+      }
+      if (current.length) groups.push(current);
+
+      if (groups.length > 1) {
+        const parent = table.parentNode as HTMLElement;
+        groups.forEach((group, gi) => {
+          const t = document.createElement('table');
+          t.className = table.className;
+          if (gi > 0) t.style.pageBreakBefore = 'always';
+          if (colgroup) t.appendChild(colgroup.cloneNode(true));
+          if (thead) t.appendChild(thead.cloneNode(true));
+          const tb = document.createElement('tbody');
+          group.forEach((tr) => tb.appendChild(tr)); // moves the row out of the original tbody
+          t.appendChild(tb);
+          parent.insertBefore(t, table);
+        });
+        parent.removeChild(table);
+      }
+    }
+
     const filename = `Work-Allotment-${waNumber || 'WA'}.pdf`;
     const worker = html2pdf().set({
       margin: 8,
@@ -387,11 +442,9 @@ export const WorkAllotmentBuildPage = () => {
         windowWidth: A4_USABLE_PX,
       },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-      // The items table is paginated manually (fixed rows per page + an explicit
-      // page break between chunks) and the totals/signature block is atomic, so
-      // html2pdf never has to slice a row across a page boundary. The old
-      // `avoid: 'tr'` left a duplicated ghost of the straddling row. 'css'
-      // honours our page-break-before / page-break-inside styles.
+      // 'css' honours the per-row `page-break-before` we inject above (from
+      // measured heights) plus `page-break-inside: avoid` on the signature, so
+      // html2pdf never slices a row across a page boundary — no more ghost rows.
       pagebreak: { mode: ['css', 'legacy'] },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).from(clone);
@@ -455,18 +508,10 @@ export const WorkAllotmentBuildPage = () => {
     </div>
   );
 
-  /* Paginate the printable doc manually: a fixed number of rows per page + an
-     explicit page break between chunks means html2pdf never slices a row across
-     a boundary (which had duplicated the straddling row). Page 1 is shorter as
-     it also carries the company header + info band. Sizes are conservative so a
-     chunk always fits one landscape A4 page. */
-  const PAGE_ROWS_FIRST = 12;
-  const PAGE_ROWS_REST = 16;
-  const rowPages: { items: RowState[]; start: number }[] = [{ items: rows.slice(0, PAGE_ROWS_FIRST), start: 0 }];
-  for (let i = PAGE_ROWS_FIRST; i < rows.length; i += PAGE_ROWS_REST) {
-    rowPages.push({ items: rows.slice(i, i + PAGE_ROWS_REST), start: i });
-  }
-
+  /* Reusable colgroup / header / row renderer for the printable items table.
+     The doc renders as one table; pagination is decided in buildPdfJob by
+     measuring real row heights, so a wrapped (taller) cell can never make a
+     row straddle — and get sliced/ghosted across — a page boundary. */
   const docColgroup = (
     <colgroup>
       <col style={{ width: '3%'  }} />
@@ -777,39 +822,33 @@ export const WorkAllotmentBuildPage = () => {
             <InfoRow label="Total Pcs" value={String(totalPcs)} border="" />
           </div>
 
-          {/* Items table(s) — paginated into page-sized chunks (header repeated)
-              so html2pdf never slices a row across a page break. Column order:
-              SR | Cust Code | SO Date | Measure | Grade | Material | Pcs |
-              WT (KG.) | Flux | Turns | Voltage | Iemax | Worker */}
-          {rowPages.map((pg, pi) => (
-            <table key={pi} style={pi > 0 ? { pageBreakBefore: 'always' } : undefined}
-              className="w-full text-sm border-collapse table-fixed">
-              {docColgroup}
-              {docThead}
-              <tbody>
-                {pg.items.map((r, j) => renderRow(r, pg.start + j))}
-                {pi === rowPages.length - 1 && (
-                  <tr className="h-8 border-t-2 border-slate-500 bg-slate-200">
-                    <td colSpan={6} className="px-2 border-r border-slate-400 text-right text-[10px] font-black uppercase tracking-widest text-slate-600 align-middle">
-                      Grand Total
-                    </td>
-                    <td className="px-1 border-r border-slate-400 text-center text-xs font-black text-slate-800 align-middle">
-                      {totalPcs}
-                    </td>
-                    <td className="px-1 border-r border-slate-400 text-center text-xs font-black text-slate-800 align-middle tabular-nums">
-                      {fmtWt(totalWt)}
-                    </td>
-                    <td colSpan={4} className="border-r border-slate-400 align-middle" />
-                    <td className="align-middle" />
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          ))}
+          {/* Items table — column order: SR | Cust Code | SO Date | Measure |
+              Grade | Material | Pcs | WT (KG.) | Flux | Turns | Voltage | Iemax |
+              Worker. Page breaks are inserted per-row in buildPdfJob. */}
+          <table className="w-full text-sm border-collapse table-fixed">
+            {docColgroup}
+            {docThead}
+            <tbody>
+              {rows.map((r, idx) => renderRow(r, idx))}
+              <tr className="h-8 border-t-2 border-slate-500 bg-slate-200">
+                <td colSpan={6} className="px-2 border-r border-slate-400 text-right text-[10px] font-black uppercase tracking-widest text-slate-600 align-middle">
+                  Grand Total
+                </td>
+                <td className="px-1 border-r border-slate-400 text-center text-xs font-black text-slate-800 align-middle">
+                  {totalPcs}
+                </td>
+                <td className="px-1 border-r border-slate-400 text-center text-xs font-black text-slate-800 align-middle tabular-nums">
+                  {fmtWt(totalWt)}
+                </td>
+                <td colSpan={4} className="border-r border-slate-400 align-middle" />
+                <td className="align-middle" />
+              </tr>
+            </tbody>
+          </table>
 
           {/* Signature footer — kept atomic (page-break-inside: avoid) so it moves
               whole to a fresh page rather than being sliced. */}
-          <div className="grid grid-cols-2 border-t-2 border-slate-400 mt-2" style={{ pageBreakInside: 'avoid' }}>
+          <div className="wa-signature grid grid-cols-2 border-t-2 border-slate-400 mt-2" style={{ pageBreakInside: 'avoid' }}>
             <div className="border-r border-slate-300 px-6 py-5">
               <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-5">Issued By</div>
               <div className="border-b border-slate-400 mb-1 min-h-[24px] text-sm font-medium flex items-end justify-center pb-0.5">{issuedBy}</div>
