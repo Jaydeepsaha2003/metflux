@@ -262,34 +262,36 @@ export const DashboardPage = () => {
           </h2>
           <div className="card divide-y divide-slate-100">
             {stats.topCustomers.map((c, i) => (
-              <div key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+              <div key={c.id} className="flex items-center gap-3 px-3 py-2.5">
                 <div className={cn(
                   'grid h-6 w-6 place-items-center rounded-full text-[11px] font-bold shrink-0',
                   i === 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
                 )}>
                   {i + 1}
                 </div>
-                <div className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900">
-                  {hideNames
-                    ? <span className="font-mono text-brand-700">{c.customerCode ?? '—'}</span>
-                    : c.name}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium text-slate-900">
+                    {hideNames
+                      ? <span className="font-mono text-brand-700">{c.customerCode ?? '—'}</span>
+                      : c.name}
+                  </div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] tabular-nums text-slate-500">
+                    <span>{c.pcs.toLocaleString('en-IN')} pcs · {c.kg.toFixed(1)} kg</span>
+                    {c.toroidalPcs > 0 && (
+                      <span className="rounded bg-emerald-50 px-1.5 py-0.5 font-semibold text-emerald-700 ring-1 ring-emerald-100">
+                        Toro {c.toroidalPcs.toLocaleString('en-IN')}
+                      </span>
+                    )}
+                    {c.rectangularPcs > 0 && (
+                      <span className="rounded bg-blue-50 px-1.5 py-0.5 font-semibold text-blue-700 ring-1 ring-blue-100">
+                        Rect {c.rectangularPcs.toLocaleString('en-IN')}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="text-xs tabular-nums text-slate-600">
-                  {c.pcs.toLocaleString('en-IN')} pcs · {c.kg.toFixed(1)} kg
+                <div className="shrink-0 text-right text-sm font-semibold tabular-nums text-slate-800">
+                  {fmtCompactMoney(c.amount)}
                 </div>
-                <div className="flex items-center gap-1">
-                  {c.toroidalPcs > 0 && (
-                    <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-emerald-700 ring-1 ring-emerald-100">
-                      Toro {c.toroidalPcs.toLocaleString('en-IN')}
-                    </span>
-                  )}
-                  {c.rectangularPcs > 0 && (
-                    <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-blue-700 ring-1 ring-blue-100">
-                      Rect {c.rectangularPcs.toLocaleString('en-IN')}
-                    </span>
-                  )}
-                </div>
-                <div className="text-xs font-semibold tabular-nums text-slate-800">{fmtCompactMoney(c.amount)}</div>
               </div>
             ))}
           </div>
@@ -663,8 +665,11 @@ const MonthlyChart = ({ data }: { data: MonthlyPoint[] }) => {
 
   if (!data.length) return null;
 
-  const VW = vw, VH = 260;
-  const PL = 52, PR = 62, PT = 18, PB = 38;
+  // On narrow (phone) widths, shrink the axis gutters + height so the plotting
+  // area isn't swallowed by fixed padding (was ~36% of a 320px-wide chart).
+  const narrow = vw < 480;
+  const VW = vw, VH = narrow ? 210 : 260;
+  const PL = narrow ? 34 : 52, PR = narrow ? 42 : 62, PT = 16, PB = narrow ? 30 : 38;
   const IW = VW - PL - PR;
   const IH = VH - PT - PB;
 
