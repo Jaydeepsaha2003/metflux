@@ -52,7 +52,6 @@ export const CustomersPage = () => {
     const alreadySet = c.portalPasswordSet === true || c.portalPasswordSet === 1;
     if (!alreadySet && c.portalInitialPassword) {
       lines.push(`Password: ${c.portalInitialPassword}`);
-      lines.push("You'll be asked to set your own password the first time you log in.");
     } else {
       lines.push('Please log in with the password you set earlier.');
     }
