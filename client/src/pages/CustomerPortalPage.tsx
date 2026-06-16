@@ -192,10 +192,9 @@ type DataViewProps = {
   token: string;
   sessionToken: string;
   onAuthError: () => void;
-  onMustChange: () => void;
 };
 
-const PortalDataView = ({ token, sessionToken, onAuthError, onMustChange }: DataViewProps) => {
+const PortalDataView = ({ token, sessionToken, onAuthError }: DataViewProps) => {
   const [search, setSearch]           = useState('');
   const [debounced, setDebounced]     = useState('');
   const [showAll, setShowAll]         = useState(false);
@@ -212,11 +211,8 @@ const PortalDataView = ({ token, sessionToken, onAuthError, onMustChange }: Data
       const res = await fetch(url, { headers: { Authorization: `Bearer ${sessionToken}` } });
       if (!res.ok) {
         const b = await res.json().catch(() => ({}));
-        const code = b?.error?.code;
         // Session expired / invalid → bounce back to the login screen.
         if (res.status === 401) { onAuthError(); throw new Error('Session expired'); }
-        // Still on the shared initial password → force the change screen.
-        if (res.status === 403 && code === 'PORTAL_MUST_CHANGE') { onMustChange(); throw new Error('Password change required'); }
         throw new Error(b?.error?.message || `${res.status}`);
       }
       return res.json();
@@ -531,7 +527,7 @@ const PasswordField = ({ value, onChange, placeholder, autoFocus }: {
 
 /* ── Login screen ───────────────────────────────────────────── */
 const LoginScreen = ({ token, onLoggedIn }: {
-  token: string; onLoggedIn: (sessionToken: string, mustChange: boolean) => void;
+  token: string; onLoggedIn: (sessionToken: string) => void;
 }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -560,7 +556,7 @@ const LoginScreen = ({ token, onLoggedIn }: {
       });
       const b = await res.json().catch(() => ({}));
       if (!res.ok) { setError(b?.error?.message || 'Sign in failed'); return; }
-      onLoggedIn(b.token, !!b.mustChangePassword);
+      onLoggedIn(b.token);
     } catch {
       setError('Network error — please try again.');
     } finally {
@@ -596,83 +592,13 @@ const LoginScreen = ({ token, onLoggedIn }: {
   );
 };
 
-/* ── Forced password change ─────────────────────────────────── */
-const ChangePasswordScreen = ({ token, sessionToken, onChanged, onAuthError }: {
-  token: string; sessionToken: string;
-  onChanged: (sessionToken: string) => void; onAuthError: () => void;
-}) => {
-  const [pw, setPw] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const info = useQuery<PortalInfo>({
-    queryKey: ['portal-info', token],
-    queryFn: async () => {
-      const res = await fetch(`/api/portal/${token}/info`);
-      if (!res.ok) throw new Error('not found');
-      return res.json();
-    },
-    retry: false,
-    staleTime: 5 * 60_000,
-  });
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    if (pw.length < 6) { setError('Password must be at least 6 characters'); return; }
-    if (pw !== confirm) { setError('Passwords do not match'); return; }
-    setBusy(true);
-    try {
-      const res = await fetch(`/api/portal/${token}/change-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionToken}` },
-        body: JSON.stringify({ newPassword: pw }),
-      });
-      const b = await res.json().catch(() => ({}));
-      if (res.status === 401) { onAuthError(); return; }
-      if (!res.ok) { setError(b?.error?.message || 'Could not update password'); return; }
-      onChanged(b.token);
-    } catch {
-      setError('Network error — please try again.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <AuthShell company={info.data?.company}>
-      <h1 className="text-lg font-bold text-slate-900">Set your password</h1>
-      <p className="text-[13px] text-slate-500 mt-1 mb-5">
-        For your security, please choose your own password before continuing.
-      </p>
-      <form onSubmit={submit} className="space-y-3">
-        <PasswordField value={pw} onChange={setPw} placeholder="New password" autoFocus />
-        <PasswordField value={confirm} onChange={setConfirm} placeholder="Confirm new password" />
-        {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">{error}</div>
-        )}
-        <button
-          type="submit"
-          disabled={busy || !pw || !confirm}
-          className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold py-2.5 transition-colors"
-        >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-          Save & continue
-        </button>
-      </form>
-    </AuthShell>
-  );
-};
-
-/* ── Page wrapper — routes between login, password change, data ── */
+/* ── Page wrapper — routes between login and the orders view ──── */
 export const CustomerPortalPage = () => {
   const { token } = useParams<{ token: string }>();
   const storageKey = token ? `mf_portal_${token}` : '';
   const [sessionToken, setSessionToken] = useState<string | null>(
     () => (token ? localStorage.getItem(`mf_portal_${token}`) : null)
   );
-  const [needsChange, setNeedsChange] = useState(false);
 
   const persist = useCallback((tok: string) => {
     if (storageKey) localStorage.setItem(storageKey, tok);
@@ -682,35 +608,18 @@ export const CustomerPortalPage = () => {
   const clear = useCallback(() => {
     if (storageKey) localStorage.removeItem(storageKey);
     setSessionToken(null);
-    setNeedsChange(false);
   }, [storageKey]);
 
   if (!token) return <PortalError />;
 
   if (!sessionToken) {
-    return (
-      <LoginScreen
-        token={token}
-        onLoggedIn={(tok, mustChange) => { persist(tok); setNeedsChange(mustChange); }}
-      />
-    );
-  }
-  if (needsChange) {
-    return (
-      <ChangePasswordScreen
-        token={token}
-        sessionToken={sessionToken}
-        onChanged={(tok) => { persist(tok); setNeedsChange(false); }}
-        onAuthError={clear}
-      />
-    );
+    return <LoginScreen token={token} onLoggedIn={persist} />;
   }
   return (
     <PortalDataView
       token={token}
       sessionToken={sessionToken}
       onAuthError={clear}
-      onMustChange={() => setNeedsChange(true)}
     />
   );
 };

@@ -4,11 +4,9 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import XLSX from 'xlsx';
-import { q, qOne, update } from '../lib/db.js';
+import { q, qOne } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
-import {
-  hashPassword, verifyPassword, signPortalToken, verifyPortalToken,
-} from '../lib/auth.js';
+import { verifyPassword, signPortalToken, verifyPortalToken } from '../lib/auth.js';
 import { authLimiter } from '../lib/rateLimit.js';
 
 const router = Router();
@@ -118,43 +116,14 @@ router.post('/:token/login', authLimiter, asyncHandler(async (req, res) => {
   const sessionToken = signPortalToken({ customerId: customer.id, shareToken: req.params.token });
   res.json({
     token: sessionToken,
-    // Force a password change while they're still on the shared initial one.
-    mustChangePassword: !customer.portalPasswordSet,
     company: brandingOf(customer),
     customerName: customer.name,
   });
 }));
 
-/* ── POST /api/portal/:token/change-password — set a personal password ── */
-router.post('/:token/change-password', requirePortalAuth, asyncHandler(async (req, res) => {
-  const { newPassword } = z
-    .object({ newPassword: z.string().min(6, 'Password must be at least 6 characters').max(64) })
-    .parse(req.body);
-  const customer = req.portalCustomer;
-
-  // Don't let them "change" it back to the very password we just handed out.
-  if (customer.portalInitialPassword && newPassword === customer.portalInitialPassword) {
-    throw new AppError('Please choose a password different from the one you were given.', 400, 'PORTAL_SAME_PASSWORD');
-  }
-
-  await update('Customer', customer.id, {
-    portalPasswordHash: await hashPassword(newPassword),
-    portalPasswordSet: 1,
-    portalInitialPassword: null,
-  });
-
-  // Re-issue so the client keeps a valid session after the change.
-  const sessionToken = signPortalToken({ customerId: customer.id, shareToken: req.params.token });
-  res.json({ token: sessionToken, mustChangePassword: false });
-}));
-
 /* ── GET /api/portal/:token ──────────────────────────────────── */
 router.get('/:token', requirePortalAuth, asyncHandler(async (req, res) => {
   const customer = req.portalCustomer;
-  // Hard gate: no order data until the shared initial password is replaced.
-  if (!customer.portalPasswordSet) {
-    throw new AppError('Set your password to continue', 403, 'PORTAL_MUST_CHANGE');
-  }
 
   const { search } = z.object({ search: z.string().trim().max(120).optional() })
     .parse(req.query);
@@ -257,9 +226,6 @@ router.get('/:token', requirePortalAuth, asyncHandler(async (req, res) => {
 /* ── GET /api/portal/:token/testing-excel/:poOrderId ─────────── */
 router.get('/:token/testing-excel/:poOrderId', requirePortalAuth, asyncHandler(async (req, res) => {
   const customer = req.portalCustomer;
-  if (!customer.portalPasswordSet) {
-    throw new AppError('Set your password to continue', 403, 'PORTAL_MUST_CHANGE');
-  }
 
   const po = await qOne(
     'SELECT * FROM `PoOrder` WHERE `id` = ? AND `customerId` = ?',
