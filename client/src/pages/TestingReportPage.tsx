@@ -546,11 +546,13 @@ export const TestingReportPage = () => {
   );
 };
 
-/* Compact labelled cell for the per-item header band (measure/grade/etc.). */
+/* Compact labelled cell for the per-item header band (measure/grade/etc.).
+   Values WRAP (no truncate) so long measures like "180 x 110 x 200 x …" and
+   "2173.9 mA" show in full — both on screen and in the exported PDF. */
 const HdrCell = ({ label, value, strong }: { label: string; value: string; strong?: boolean }) => (
-  <div className="flex flex-col border-r border-b border-slate-200 px-2 py-1">
+  <div className="flex min-w-0 flex-col border-r border-b border-slate-200 px-2 py-1.5">
     <span className="text-[8px] font-semibold uppercase tracking-wide text-slate-500 leading-tight">{label}</span>
-    <span className={`truncate text-[11px] leading-tight ${strong ? 'font-bold text-slate-900' : 'font-medium text-slate-800'}`}>{value}</span>
+    <span className={`mt-0.5 break-words text-[11px] leading-snug ${strong ? 'font-bold text-slate-900' : 'font-medium text-slate-800'}`}>{value}</span>
   </div>
 );
 
