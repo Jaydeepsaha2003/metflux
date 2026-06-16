@@ -49,7 +49,12 @@ export const SalesInvoicesPage = () => {
   const [status, setStatus] = useState<StatusFilter>('ALL');
   const [attention, setAttention] = useState(false);
   const [page, setPage] = useState(1);
-  useEffect(() => { setPage(1); }, [search, status, attention]);
+  // Bulk-selection state. `selected` holds explicitly-ticked ids (persists across
+  // pages); `allMatching` means "every invoice matching the current filter".
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [allMatching, setAllMatching] = useState(false);
+  // Changing the filter invalidates any selection — start fresh.
+  useEffect(() => { setPage(1); setSelected(new Set()); setAllMatching(false); }, [search, status, attention]);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -97,7 +102,46 @@ export const SalesInvoicesPage = () => {
     onSuccess: refresh,
   });
 
+  const clearSelection = () => { setSelected(new Set()); setAllMatching(false); };
+
+  const bulkDel = useMutation({
+    mutationFn: (payload: { ids?: string[]; all?: boolean; status?: StatusFilter; search?: string; filter?: 'ALL' | 'ATTENTION' }) =>
+      api<{ deleted: number }>('/sales-invoices/bulk-delete', { method: 'POST', json: payload }),
+    onSuccess: () => { clearSelection(); refresh(); },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Bulk delete failed'),
+  });
+
   const totals = data?.totals;
+  const items = data?.items ?? [];
+  const pageIds = items.map((i) => i.id);
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  const selectionCount = allMatching ? (data?.total ?? 0) : selected.size;
+
+  const toggleOne = (id: string) => {
+    setAllMatching(false);
+    setSelected((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  };
+  const toggleAllOnPage = () => {
+    setAllMatching(false);
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (pageIds.every((id) => n.has(id))) pageIds.forEach((id) => n.delete(id));
+      else pageIds.forEach((id) => n.add(id));
+      return n;
+    });
+  };
+
+  const doBulkDelete = async () => {
+    if (!selectionCount) return;
+    const ok = await confirm({
+      title: 'Delete invoices?',
+      message: <>Delete <strong>{selectionCount}</strong> invoice{selectionCount === 1 ? '' : 's'}? Any payments applied to them will be unallocated. This cannot be undone.</>,
+      tone: 'danger', confirmLabel: `Delete ${selectionCount}`,
+    });
+    if (!ok) return;
+    if (allMatching) bulkDel.mutate({ all: true, status, search: search || undefined, filter: attention ? 'ATTENTION' : 'ALL' });
+    else bulkDel.mutate({ ids: [...selected] });
+  };
 
   return (
     <div className="space-y-5">
@@ -145,6 +189,29 @@ export const SalesInvoicesPage = () => {
         </button>
       </div>
 
+      {/* Bulk-selection toolbar */}
+      {(selected.size > 0 || allMatching) && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-sm">
+          <span className="font-medium text-brand-800">
+            {selectionCount} selected
+          </span>
+          {allMatching ? (
+            <span className="text-xs text-brand-700">All matching invoices across every page.</span>
+          ) : allPageSelected && (data?.total ?? 0) > items.length ? (
+            <button onClick={() => setAllMatching(true)} className="text-xs font-medium text-brand-700 underline hover:text-brand-900">
+              Select all {data?.total} matching
+            </button>
+          ) : null}
+          <div className="ml-auto flex items-center gap-2">
+            <button onClick={clearSelection} className="btn-ghost text-slate-600">Clear</button>
+            <button onClick={doBulkDelete} disabled={bulkDel.isPending} className="btn-danger">
+              {bulkDel.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Delete {selectionCount}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div className="card overflow-hidden">
         {isLoading ? (
@@ -158,6 +225,16 @@ export const SalesInvoicesPage = () => {
             <table className="w-full text-sm whitespace-nowrap">
               <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>
+                  <th className="px-3 py-2.5 w-8">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 cursor-pointer rounded border-slate-300 accent-brand-600"
+                      checked={allMatching || allPageSelected}
+                      ref={(el) => { if (el) el.indeterminate = !allMatching && !allPageSelected && pageIds.some((id) => selected.has(id)); }}
+                      onChange={toggleAllOnPage}
+                      title="Select all on this page"
+                    />
+                  </th>
                   <th className="px-3 py-2.5">Invoice #</th>
                   <th className="px-3 py-2.5">Date</th>
                   <th className="px-3 py-2.5">Customer</th>
@@ -171,8 +248,18 @@ export const SalesInvoicesPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {data.items.map((inv) => (
-                  <tr key={inv.id} className={cn('border-t border-slate-100 hover:bg-slate-50/60', inv.needsAttention && 'bg-red-50/40')}>
+                {data.items.map((inv) => {
+                  const checked = allMatching || selected.has(inv.id);
+                  return (
+                  <tr key={inv.id} className={cn('border-t border-slate-100 hover:bg-slate-50/60', checked && 'bg-brand-50/40', !checked && inv.needsAttention && 'bg-red-50/40')}>
+                    <td className="px-3 py-2.5">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 cursor-pointer rounded border-slate-300 accent-brand-600"
+                        checked={checked}
+                        onChange={() => toggleOne(inv.id)}
+                      />
+                    </td>
                     <td className="px-3 py-2.5 font-medium text-slate-900">{inv.invoiceNumber}</td>
                     <td className="px-3 py-2.5 text-slate-600">{fmtDate(inv.invoiceDate)}</td>
                     <td className="px-3 py-2.5">
@@ -230,12 +317,13 @@ export const SalesInvoicesPage = () => {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
               {totals && (
                 <tfoot>
                   <tr className="border-t-2 border-slate-300 bg-slate-50 font-semibold">
-                    <td className="px-3 py-2.5 text-slate-600" colSpan={5}>Page total ({data.total} invoices)</td>
+                    <td className="px-3 py-2.5 text-slate-600" colSpan={6}>Page total ({data.total} invoices)</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{inr(totals.amount)}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{inr(totals.balance)}</td>
                     <td colSpan={3} />

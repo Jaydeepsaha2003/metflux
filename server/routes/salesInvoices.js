@@ -344,6 +344,69 @@ router.patch('/:id', requirePermission('manage_invoices'), asyncHandler(async (r
   res.json(flatten(fresh));
 }));
 
+/* ---------- POST /bulk-delete — delete many invoices at once ----------
+   Body is either { ids: [...] } (explicit selection) or { all: true } plus the
+   current list filters (delete every matching invoice across all pages). Each
+   invoice's payment allocations are reversed, exactly like single delete. */
+router.post('/bulk-delete', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+  const body = z.object({
+    ids: z.array(z.string().min(1)).max(50000).optional(),
+    all: z.boolean().optional(),
+    status: z.enum(['UNPAID', 'PARTIAL', 'PAID', 'OVERDUE', 'ALL']).default('ALL'),
+    search: z.string().trim().max(120).optional(),
+    filter: z.enum(['ALL', 'ATTENTION']).default('ALL'),
+  }).parse(req.body);
+
+  // Resolve the target invoice ids, always re-scoped to the active company.
+  let ids = [];
+  if (body.all) {
+    let where = 'si.`companyId` = ?';
+    const params = [req.tenant.companyId];
+    if (body.status === 'OVERDUE') where += " AND si.`status` <> 'PAID' AND si.`dueDate` IS NOT NULL AND si.`dueDate` < NOW()";
+    else if (body.status !== 'ALL') { where += ' AND si.`status` = ?'; params.push(body.status); }
+    if (body.filter === 'ATTENTION') where += ' AND (si.`customerId` IS NULL OR si.`dueDate` IS NULL)';
+    if (body.search) { const like = `%${body.search}%`; where += ' AND (si.`invoiceNumber` LIKE ? OR si.`customerName` LIKE ?)'; params.push(like, like); }
+    const rows = await q(`SELECT si.\`id\` FROM \`SalesInvoice\` si WHERE ${where}`, params);
+    ids = rows.map((r) => r.id);
+  } else if (body.ids?.length) {
+    const ph = body.ids.map(() => '?').join(',');
+    const rows = await q(
+      `SELECT \`id\` FROM \`SalesInvoice\` WHERE \`companyId\` = ? AND \`id\` IN (${ph})`,
+      [req.tenant.companyId, ...body.ids]
+    );
+    ids = rows.map((r) => r.id);
+  } else {
+    throw new AppError('Select at least one invoice to delete.', 400, 'NOTHING_SELECTED');
+  }
+
+  if (!ids.length) return res.json({ deleted: 0 });
+
+  // Delete in batches so the IN(...) lists and the txn stay a sane size.
+  const CHUNK = 500;
+  await txn(async (tx) => {
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const batch = ids.slice(i, i + CHUNK);
+      const ph = batch.map(() => '?').join(',');
+      // Reverse each affected payment's allocated total in one grouped pass.
+      const allocs = await tx.q(
+        `SELECT \`paymentId\`, COALESCE(SUM(\`amount\`), 0) AS amt
+           FROM \`PaymentAllocation\` WHERE \`salesInvoiceId\` IN (${ph}) GROUP BY \`paymentId\``,
+        batch
+      );
+      for (const a of allocs) {
+        await tx.q(
+          'UPDATE `Payment` SET `allocatedAmount` = GREATEST(0, ROUND(`allocatedAmount` - ?, 2)) WHERE `id` = ?',
+          [Number(a.amt) || 0, a.paymentId]
+        );
+      }
+      await tx.q(`DELETE FROM \`PaymentAllocation\` WHERE \`salesInvoiceId\` IN (${ph})`, batch);
+      await tx.q(`DELETE FROM \`SalesInvoice\` WHERE \`companyId\` = ? AND \`id\` IN (${ph})`, [req.tenant.companyId, ...batch]);
+    }
+  });
+
+  res.json({ deleted: ids.length });
+}));
+
 /* ---------- DELETE /:id — remove an invoice, reversing any payment allocations ---------- */
 router.delete('/:id', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
   const inv = await qOne('SELECT `id` FROM `SalesInvoice` WHERE `id` = ? AND `companyId` = ?', [req.params.id, req.tenant.companyId]);
