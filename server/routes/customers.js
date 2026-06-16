@@ -284,7 +284,21 @@ router.patch('/:id', requireRole('STAFF'), asyncHandler(async (req, res) => {
   // Backfill a short code for legacy rows that predate portal auth.
   if (!existing.portalShortCode) data.portalShortCode = await uniqueShortCode(id);
 
-  res.json(publicCustomer(await update('Customer', id, data)));
+  const updated = await update('Customer', id, data);
+
+  // Credit terms drive invoice due dates. When the terms are first set or
+  // changed, (re)link them to this customer's invoices so aging & reminders
+  // work immediately — no re-import needed. dueDate = invoiceDate + dueDays.
+  if (data.dueDays != null && data.dueDays !== existing.dueDays) {
+    try {
+      await q(
+        'UPDATE `SalesInvoice` SET `dueDate` = DATE_ADD(`invoiceDate`, INTERVAL ? DAY) WHERE `companyId` = ? AND `customerId` = ?',
+        [data.dueDays, req.tenant.companyId, id]
+      );
+    } catch { /* SalesInvoice table absent on minimal installs — ignore */ }
+  }
+
+  res.json(publicCustomer(updated));
 }));
 
 // POST /api/customers/import — bulk create/update from an Excel upload.
