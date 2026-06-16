@@ -1,13 +1,15 @@
-// Public customer portal — no login required.
-// Light theme, latest PO featured by default, card grid for all orders.
-import { useState, useEffect, useMemo } from 'react';
+// Password-protected customer portal.
+// Customers sign in with the password their supplier shared, are forced to set
+// their own on first login, then see their orders. Light theme, latest PO
+// featured by default, card grid for all orders.
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Search, Package, Factory, Truck, CheckCircle2, Clock,
   Download, AlertCircle, Loader2, ChevronDown, ChevronRight,
   FileSpreadsheet, MapPin, Phone, Mail, Building2,
-  LayoutGrid, ArrowRight, ShieldCheck,
+  LayoutGrid, ArrowRight, ShieldCheck, Lock, KeyRound, Eye, EyeOff,
 } from 'lucide-react';
 
 /* ── Types ──────────────────────────────────────────────────── */
@@ -50,7 +52,7 @@ const pct = (part: number, total: number) =>
 const fmt = (n: number) => n.toLocaleString('en-IN');
 
 /* ── Order card ─────────────────────────────────────────────── */
-const OrderCard = ({ order, token, featured }: { order: Order; token: string; featured?: boolean }) => {
+const OrderCard = ({ order, token, dlToken, featured }: { order: Order; token: string; dlToken: string; featured?: boolean }) => {
   const [expanded, setExpanded] = useState(featured ?? false);
   const meta = STATUS[order.status] ?? STATUS.PENDING;
   const prdPct = pct(order.totalProduced,   order.totalOrdered);
@@ -83,7 +85,7 @@ const OrderCard = ({ order, token, featured }: { order: Order; token: string; fe
           </div>
 
           {order.hasDispatch && (
-            <a href={`/api/portal/${token}/testing-excel/${order.id}`} download
+            <a href={`/api/portal/${token}/testing-excel/${order.id}?t=${encodeURIComponent(dlToken)}`} download
               className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-[11px] font-semibold px-3 py-1.5 transition-colors shadow-sm">
               <FileSpreadsheet className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Test Report</span>
@@ -185,9 +187,15 @@ const StatChip = ({ icon: Icon, label, value, color }: {
   </div>
 );
 
-/* ── Main page ──────────────────────────────────────────────── */
-export const CustomerPortalPage = () => {
-  const { token } = useParams<{ token: string }>();
+/* ── Orders view (authenticated) ────────────────────────────── */
+type DataViewProps = {
+  token: string;
+  sessionToken: string;
+  onAuthError: () => void;
+  onMustChange: () => void;
+};
+
+const PortalDataView = ({ token, sessionToken, onAuthError, onMustChange }: DataViewProps) => {
   const [search, setSearch]           = useState('');
   const [debounced, setDebounced]     = useState('');
   const [showAll, setShowAll]         = useState(false);
@@ -198,14 +206,22 @@ export const CustomerPortalPage = () => {
   }, [search]);
 
   const { data, isLoading, isError } = useQuery<PortalData>({
-    queryKey: ['portal', token, debounced],
+    queryKey: ['portal', token, debounced, sessionToken],
     queryFn: async () => {
       const url = `/api/portal/${token}${debounced ? `?search=${encodeURIComponent(debounced)}` : ''}`;
-      const res = await fetch(url);
-      if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.error || `${res.status}`); }
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${sessionToken}` } });
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}));
+        const code = b?.error?.code;
+        // Session expired / invalid → bounce back to the login screen.
+        if (res.status === 401) { onAuthError(); throw new Error('Session expired'); }
+        // Still on the shared initial password → force the change screen.
+        if (res.status === 403 && code === 'PORTAL_MUST_CHANGE') { onMustChange(); throw new Error('Password change required'); }
+        throw new Error(b?.error?.message || `${res.status}`);
+      }
       return res.json();
     },
-    enabled: !!token,
+    enabled: !!token && !!sessionToken,
     retry: false,
     staleTime: 60_000,
   });
@@ -370,7 +386,7 @@ export const CustomerPortalPage = () => {
             )}
             <div className="grid gap-4 sm:grid-cols-2">
               {orders.map((order) => (
-                <OrderCard key={order.id} order={order} token={token!} />
+                <OrderCard key={order.id} order={order} token={token} dlToken={sessionToken} />
               ))}
             </div>
           </div>
@@ -390,7 +406,7 @@ export const CustomerPortalPage = () => {
                     </button>
                   )}
                 </div>
-                <OrderCard order={latestOrder} token={token!} featured />
+                <OrderCard order={latestOrder} token={token} dlToken={sessionToken} featured />
               </>
             )}
 
@@ -441,5 +457,260 @@ export const CustomerPortalPage = () => {
         </div>
       </main>
     </div>
+  );
+};
+
+/* ── Shared auth-screen scaffolding ─────────────────────────── */
+type PortalInfo = {
+  company: { name: string; logoUrl: string | null };
+  customerName: string;
+  needsPassword: boolean;
+};
+
+const PortalError = () => (
+  <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+    <div className="max-w-sm w-full text-center space-y-4">
+      <div className="h-16 w-16 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center mx-auto">
+        <AlertCircle className="h-8 w-8 text-red-400" />
+      </div>
+      <h1 className="text-xl font-bold text-slate-900">Portal not found</h1>
+      <p className="text-sm text-slate-500">This link may be invalid. Please contact the company for a new link.</p>
+    </div>
+  </div>
+);
+
+const AuthShell = ({ company, children }: { company?: { name: string; logoUrl: string | null }; children: React.ReactNode }) => (
+  <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+    <div className="w-full max-w-sm">
+      <div className="flex flex-col items-center text-center mb-6">
+        {company?.logoUrl
+          ? <img src={company.logoUrl} alt={company.name} className="h-12 w-12 object-contain rounded-xl mb-3" />
+          : <div className="h-12 w-12 rounded-xl bg-emerald-600 flex items-center justify-center text-white mb-3">
+              <Building2 className="h-6 w-6" />
+            </div>}
+        {company?.name && <div className="font-bold text-slate-900">{company.name}</div>}
+        <div className="text-[11px] font-semibold uppercase tracking-widest text-emerald-600 mt-1">Customer Portal</div>
+      </div>
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="h-1.5 bg-gradient-to-r from-emerald-500 to-teal-400" />
+        <div className="p-5 sm:p-6">{children}</div>
+      </div>
+      <div className="text-center text-[11px] text-slate-300 pt-4">Powered by Metflux</div>
+    </div>
+  </div>
+);
+
+/* Password input with a show/hide toggle. */
+const PasswordField = ({ value, onChange, placeholder, autoFocus }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; autoFocus?: boolean;
+}) => {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+      <input
+        type={show ? 'text' : 'password'}
+        className="w-full bg-white rounded-xl border border-slate-200 pl-10 pr-10 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        autoFocus={autoFocus}
+      />
+      <button
+        type="button"
+        onClick={() => setShow((s) => !s)}
+        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600"
+        tabIndex={-1}
+        aria-label={show ? 'Hide password' : 'Show password'}
+      >
+        {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      </button>
+    </div>
+  );
+};
+
+/* ── Login screen ───────────────────────────────────────────── */
+const LoginScreen = ({ token, onLoggedIn }: {
+  token: string; onLoggedIn: (sessionToken: string, mustChange: boolean) => void;
+}) => {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const info = useQuery<PortalInfo>({
+    queryKey: ['portal-info', token],
+    queryFn: async () => {
+      const res = await fetch(`/api/portal/${token}/info`);
+      if (!res.ok) throw new Error('not found');
+      return res.json();
+    },
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/portal/${token}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      const b = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(b?.error?.message || 'Sign in failed'); return; }
+      onLoggedIn(b.token, !!b.mustChangePassword);
+    } catch {
+      setError('Network error — please try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (info.isError) return <PortalError />;
+
+  return (
+    <AuthShell company={info.data?.company}>
+      <h1 className="text-lg font-bold text-slate-900">
+        {info.data ? `Welcome${info.data.customerName ? `, ${info.data.customerName}` : ''}` : 'Sign in'}
+      </h1>
+      <p className="text-[13px] text-slate-500 mt-1 mb-5">
+        Enter the password your supplier shared with you to track your orders.
+      </p>
+      <form onSubmit={submit} className="space-y-3">
+        <PasswordField value={password} onChange={setPassword} placeholder="Password" autoFocus />
+        {error && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">{error}</div>
+        )}
+        <button
+          type="submit"
+          disabled={busy || !password}
+          className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold py-2.5 transition-colors"
+        >
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+          Sign in
+        </button>
+      </form>
+    </AuthShell>
+  );
+};
+
+/* ── Forced password change ─────────────────────────────────── */
+const ChangePasswordScreen = ({ token, sessionToken, onChanged, onAuthError }: {
+  token: string; sessionToken: string;
+  onChanged: (sessionToken: string) => void; onAuthError: () => void;
+}) => {
+  const [pw, setPw] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const info = useQuery<PortalInfo>({
+    queryKey: ['portal-info', token],
+    queryFn: async () => {
+      const res = await fetch(`/api/portal/${token}/info`);
+      if (!res.ok) throw new Error('not found');
+      return res.json();
+    },
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (pw.length < 6) { setError('Password must be at least 6 characters'); return; }
+    if (pw !== confirm) { setError('Passwords do not match'); return; }
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/portal/${token}/change-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionToken}` },
+        body: JSON.stringify({ newPassword: pw }),
+      });
+      const b = await res.json().catch(() => ({}));
+      if (res.status === 401) { onAuthError(); return; }
+      if (!res.ok) { setError(b?.error?.message || 'Could not update password'); return; }
+      onChanged(b.token);
+    } catch {
+      setError('Network error — please try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <AuthShell company={info.data?.company}>
+      <h1 className="text-lg font-bold text-slate-900">Set your password</h1>
+      <p className="text-[13px] text-slate-500 mt-1 mb-5">
+        For your security, please choose your own password before continuing.
+      </p>
+      <form onSubmit={submit} className="space-y-3">
+        <PasswordField value={pw} onChange={setPw} placeholder="New password" autoFocus />
+        <PasswordField value={confirm} onChange={setConfirm} placeholder="Confirm new password" />
+        {error && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">{error}</div>
+        )}
+        <button
+          type="submit"
+          disabled={busy || !pw || !confirm}
+          className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold py-2.5 transition-colors"
+        >
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+          Save & continue
+        </button>
+      </form>
+    </AuthShell>
+  );
+};
+
+/* ── Page wrapper — routes between login, password change, data ── */
+export const CustomerPortalPage = () => {
+  const { token } = useParams<{ token: string }>();
+  const storageKey = token ? `mf_portal_${token}` : '';
+  const [sessionToken, setSessionToken] = useState<string | null>(
+    () => (token ? localStorage.getItem(`mf_portal_${token}`) : null)
+  );
+  const [needsChange, setNeedsChange] = useState(false);
+
+  const persist = useCallback((tok: string) => {
+    if (storageKey) localStorage.setItem(storageKey, tok);
+    setSessionToken(tok);
+  }, [storageKey]);
+
+  const clear = useCallback(() => {
+    if (storageKey) localStorage.removeItem(storageKey);
+    setSessionToken(null);
+    setNeedsChange(false);
+  }, [storageKey]);
+
+  if (!token) return <PortalError />;
+
+  if (!sessionToken) {
+    return (
+      <LoginScreen
+        token={token}
+        onLoggedIn={(tok, mustChange) => { persist(tok); setNeedsChange(mustChange); }}
+      />
+    );
+  }
+  if (needsChange) {
+    return (
+      <ChangePasswordScreen
+        token={token}
+        sessionToken={sessionToken}
+        onChanged={(tok) => { persist(tok); setNeedsChange(false); }}
+        onAuthError={clear}
+      />
+    );
+  }
+  return (
+    <PortalDataView
+      token={token}
+      sessionToken={sessionToken}
+      onAuthError={clear}
+      onMustChange={() => setNeedsChange(true)}
+    />
   );
 };

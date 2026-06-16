@@ -18,6 +18,7 @@ type Invoice = {
   id: string; invoiceNumber: string; invoiceDate: string;
   customerId: string | null; customerName: string; customerCode: string | null; customerPhone: string | null;
   itemDetails: string | null; amount: number; paidAmount: number; balance: number;
+  taxType: string | null; taxableAmount: number; igst: number; cgst: number; sgst: number; gst: number;
   dueDate: string | null; status: 'UNPAID' | 'PARTIAL' | 'PAID'; daysOverdue: number | null; needsAttention: boolean;
 };
 type ListResp = { items: Invoice[]; total: number; page: number; pageSize: number; totals: { amount: number; paid: number; balance: number } };
@@ -108,7 +109,7 @@ export const SalesInvoicesPage = () => {
         </h1>
         <button onClick={() => fileRef.current?.click()} disabled={uploading} className="btn-primary">
           {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-          Upload Vouchers (Excel)
+          Upload Sales Register (Excel)
         </button>
       </div>
 
@@ -160,7 +161,9 @@ export const SalesInvoicesPage = () => {
                   <th className="px-3 py-2.5">Invoice #</th>
                   <th className="px-3 py-2.5">Date</th>
                   <th className="px-3 py-2.5">Customer</th>
-                  <th className="px-3 py-2.5 text-right">Amount</th>
+                  <th className="px-3 py-2.5 text-right">Taxable</th>
+                  <th className="px-3 py-2.5 text-right">GST</th>
+                  <th className="px-3 py-2.5 text-right">Amount (incl. GST)</th>
                   <th className="px-3 py-2.5 text-right">Balance</th>
                   <th className="px-3 py-2.5">Due</th>
                   <th className="px-3 py-2.5 text-center">Status</th>
@@ -180,6 +183,13 @@ export const SalesInvoicesPage = () => {
                           <AlertTriangle className="h-3.5 w-3.5" /> {hideNames ? '••••' : inv.customerName}
                         </span>
                       )}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-slate-500">{inv.taxableAmount ? inr(inv.taxableAmount) : '—'}</td>
+                    <td
+                      className="px-3 py-2.5 text-right tabular-nums text-slate-500"
+                      title={inv.gst ? `IGST ${inr(inv.igst)} · CGST ${inr(inv.cgst)} · SGST ${inr(inv.sgst)}${inv.taxType ? `\n${inv.taxType}` : ''}` : undefined}
+                    >
+                      {inv.gst ? inr(inv.gst) : '—'}
                     </td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{inr(inv.amount)}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums font-medium">{inr(inv.balance)}</td>
@@ -225,7 +235,7 @@ export const SalesInvoicesPage = () => {
               {totals && (
                 <tfoot>
                   <tr className="border-t-2 border-slate-300 bg-slate-50 font-semibold">
-                    <td className="px-3 py-2.5 text-slate-600" colSpan={3}>Page total ({data.total} invoices)</td>
+                    <td className="px-3 py-2.5 text-slate-600" colSpan={5}>Page total ({data.total} invoices)</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{inr(totals.amount)}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{inr(totals.balance)}</td>
                     <td colSpan={3} />

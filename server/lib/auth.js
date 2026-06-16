@@ -34,6 +34,25 @@ export const signRefreshToken = ({ userId, jti }) =>
 export const verifyAccessToken = (token) => jwt.verify(token, env.JWT_ACCESS_SECRET);
 export const verifyRefreshToken = (token) => jwt.verify(token, env.JWT_REFRESH_SECRET);
 
+/* ----- customer portal session tokens -----
+   The public customer portal is its own little auth world: a customer signs in
+   with a password and gets a short-lived token scoped to their customer row.
+   We reuse JWT_ACCESS_SECRET but stamp `typ: 'portal'` so a portal token can
+   never be mistaken for a staff access token (verifyPortalToken rejects any
+   token missing that marker). `tok` carries the shareToken the link used. */
+export const signPortalToken = ({ customerId, shareToken }) =>
+  jwt.sign(
+    { sub: customerId, tok: shareToken ?? null, typ: 'portal' },
+    env.JWT_ACCESS_SECRET,
+    { expiresIn: '12h' }
+  );
+
+export const verifyPortalToken = (token) => {
+  const payload = jwt.verify(token, env.JWT_ACCESS_SECRET);
+  if (payload.typ !== 'portal') throw new Error('Not a portal token');
+  return payload;
+};
+
 /* ----- middleware ----- */
 
 // Attaches `req.auth = { userId, companyId, role, permissions, isPlatformAdmin }`
@@ -44,6 +63,9 @@ export const requireAuth = (req, _res, next) => {
   if (!token) throw new AppError('Missing access token', 401, 'UNAUTHENTICATED');
   try {
     const payload = verifyAccessToken(token);
+    // Customer-portal tokens are signed with the same secret but carry
+    // `typ: 'portal'` — they must never be accepted as a staff access token.
+    if (payload.typ === 'portal') throw new AppError('Invalid token', 401, 'UNAUTHENTICATED');
     req.auth = {
       userId: payload.sub,
       companyId: payload.cid ?? null,

@@ -22,6 +22,9 @@ const flatten = (inv) => {
   if (inv.dueDate && balance > 0.01) {
     daysOverdue = Math.floor((Date.now() - new Date(inv.dueDate).getTime()) / 86400000);
   }
+  const igst = Number(inv.igst) || 0;
+  const cgst = Number(inv.cgst) || 0;
+  const sgst = Number(inv.sgst) || 0;
   return {
     id: inv.id,
     invoiceNumber: inv.invoiceNumber,
@@ -32,6 +35,11 @@ const flatten = (inv) => {
     customerPhone: inv.customerPhone ?? null,
     itemDetails: inv.itemDetails,
     amount, paidAmount: paid, balance,
+    // GST kept separately; `amount` already includes it (= invoice due).
+    taxType: inv.taxType ?? null,
+    taxableAmount: Number(inv.taxableAmount) || 0,
+    igst, cgst, sgst,
+    gst: round2(igst + cgst + sgst),
     dueDate: inv.dueDate,
     status: inv.status,
     daysOverdue,
@@ -68,6 +76,27 @@ router.post('/import', requirePermission('manage_invoices'), asyncHandler(async 
   if (cVch < 0 || cAmt < 0) {
     throw new AppError('The sheet needs a Vch/Bill No column and an Amount column.', 400, 'BAD_HEADER');
   }
+  // Optional Sales-Register columns: tax type + the GST breakdown. Absent in
+  // the plainer voucher export (then these stay -1 and we just store zeros).
+  const cType    = findCol('type');
+  const cSale    = findCol('sale');
+  const cTaxable = findCol('taxable');
+  const cIgst    = findCol('igst');
+  const cCgst    = findCol('cgst');
+  const cSgst    = findCol('sgst');
+  const cOther   = findCol('other');
+  const cell = (r, i) => (i >= 0 ? (r[i] ?? '').trim() : '');
+
+  // A trailing totals row carries no Vch No and instead has "Total" in the
+  // Type/Account column, or a "Total Tax Amount" banner. Always ignored.
+  const isTotalsRow = (r, vch) => {
+    if (vch) return false;
+    const joined = r.join(' ').toLowerCase();
+    return /grand\s*total/.test(joined)
+      || /total\s*tax\s*amount/.test(joined)
+      || /^total$/i.test(cell(r, cType))
+      || /^total\b/i.test(cell(r, cPart));
+  };
 
   // Group line items into invoices. A row with a Vch No starts a new invoice;
   // blank-Vch rows that still carry an item are continuation lines we sum in.
@@ -80,9 +109,19 @@ router.post('/import', requirePermission('manage_invoices'), asyncHandler(async 
     const part = cPart >= 0 ? (r[cPart] ?? '').trim() : '';
     const item = cItem >= 0 ? (r[cItem] ?? '').trim() : '';
     const amt  = parseAmount(r[cAmt]);
-    if (/grand\s*total/i.test(part) || /grand\s*total/i.test(item) || /^total\b/i.test(part)) continue;
+    if (isTotalsRow(r, vch)) { cur = null; continue; }
     if (vch) {
-      cur = { invoiceNumber: vch, dateStr: date, customerName: part, items: item ? [item] : [], amount: amt };
+      cur = {
+        invoiceNumber: vch, dateStr: date, customerName: part,
+        items: item ? [item] : [], amount: amt,
+        taxType:       cell(r, cType) || null,
+        saleAmount:    parseAmount(r[cSale]),
+        taxableAmount: parseAmount(r[cTaxable]),
+        igst:          parseAmount(r[cIgst]),
+        cgst:          parseAmount(r[cCgst]),
+        sgst:          parseAmount(r[cSgst]),
+        otherAmount:   parseAmount(r[cOther]),
+      };
       invoices.push(cur);
     } else if (cur && item) {
       cur.amount = round2(cur.amount + amt);
@@ -124,6 +163,13 @@ router.post('/import', requirePermission('manage_invoices'), asyncHandler(async 
         customerName: (inv.customerName || match?.name || '—').slice(0, 200),
         itemDetails: inv.items.join(' | ').slice(0, 400) || null,
         amount: round2(inv.amount),
+        taxType: inv.taxType ? String(inv.taxType).slice(0, 40) : null,
+        saleAmount: round2(inv.saleAmount || 0),
+        taxableAmount: round2(inv.taxableAmount || 0),
+        igst: round2(inv.igst || 0),
+        cgst: round2(inv.cgst || 0),
+        sgst: round2(inv.sgst || 0),
+        otherAmount: round2(inv.otherAmount || 0),
         dueDate,
         paidAmount: 0,
         status: 'UNPAID',

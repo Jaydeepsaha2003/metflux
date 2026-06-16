@@ -19,6 +19,9 @@ type Customer = {
   gstNumber: string | null;
   gstRate: number;
   shareToken: string | null;
+  portalShortCode: string | null;
+  portalInitialPassword: string | null;
+  portalPasswordSet: number | boolean;
   createdAt: string;
 };
 
@@ -32,13 +35,37 @@ export const CustomersPage = () => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const qc = useQueryClient();
 
+  // Build the ready-to-send message a customer receives: greeting, the short
+  // portal link, and — while they're still on the auto-generated password —
+  // the password itself plus a note that they'll set their own on first login.
+  const buildPortalMessage = (c: Customer) => {
+    const shortUrl = c.portalShortCode
+      ? `${window.location.origin}/p/${c.portalShortCode}`
+      : `${window.location.origin}/s/admin/portal/${c.shareToken}`;
+    const lines = [
+      `Hi ${c.name},`,
+      '',
+      'You can track your orders on our Customer Portal here:',
+      shortUrl,
+      '',
+    ];
+    const alreadySet = c.portalPasswordSet === true || c.portalPasswordSet === 1;
+    if (!alreadySet && c.portalInitialPassword) {
+      lines.push(`Password: ${c.portalInitialPassword}`);
+      lines.push("You'll be asked to set your own password the first time you log in.");
+    } else {
+      lines.push('Please log in with the password you set earlier.');
+    }
+    return lines.join('\n');
+  };
+
   const copyPortalLink = async (c: Customer) => {
-    if (!c.shareToken) return;
-    const url = `${window.location.origin}/s/admin/portal/${c.shareToken}`;
+    if (!c.shareToken && !c.portalShortCode) return;
+    const message = buildPortalMessage(c);
     let ok = false;
     try {
       if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(url);
+        await navigator.clipboard.writeText(message);
         ok = true;
       }
     } catch { /* fall through to the legacy copy path */ }
@@ -47,7 +74,7 @@ export const CustomersPage = () => {
       // is unavailable or blocked — a hidden textarea + execCommand still works.
       try {
         const ta = document.createElement('textarea');
-        ta.value = url;
+        ta.value = message;
         ta.style.position = 'fixed';
         ta.style.opacity = '0';
         document.body.appendChild(ta);
@@ -61,8 +88,8 @@ export const CustomersPage = () => {
       setCopiedId(c.id);
       setTimeout(() => setCopiedId(null), 2000);
     } else {
-      // Last resort: surface the link so it can be copied by hand.
-      window.prompt('Copy this customer portal link:', url);
+      // Last resort: surface the message so it can be copied by hand.
+      window.prompt('Copy this customer portal message:', message);
     }
   };
   const hideNames = useHideCustomerNames();
@@ -76,9 +103,13 @@ export const CustomersPage = () => {
 
   const shareWhatsapp = async (c: Customer) => {
     if (!c.phone) return;
+    // Send the same portal message (link + password) we'd put on the clipboard.
+    const message = (c.shareToken || c.portalShortCode)
+      ? buildPortalMessage(c)
+      : `Hi ${c.name}, this is from Metflux.`;
     const res = await api<{ url: string }>('/whatsapp/share-url', {
       method: 'POST',
-      json: { phone: c.phone, message: `Hi ${c.name}, this is from Metflux.` },
+      json: { phone: c.phone, message },
     });
     window.open(res.url, '_blank', 'noopener,noreferrer');
   };
@@ -192,11 +223,11 @@ export const CustomersPage = () => {
                               <MessageCircle className="h-4 w-4" />
                             </button>
                           )}
-                          {c.shareToken && (
+                          {(c.shareToken || c.portalShortCode) && (
                             <button
                               onClick={() => copyPortalLink(c)}
                               className={cn('btn-ghost transition-colors', copiedId === c.id ? 'text-emerald-600 hover:bg-emerald-50' : 'text-slate-500 hover:bg-slate-100')}
-                              title={copiedId === c.id ? 'Link copied!' : 'Copy customer portal link'}
+                              title={copiedId === c.id ? 'Message copied!' : 'Copy portal link + password'}
                             >
                               {copiedId === c.id ? <Check className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
                             </button>
@@ -237,9 +268,9 @@ export const CustomersPage = () => {
                     {c.email && <Detail label="Email" value={c.email} full />}
                   </dl>
 
-                  {(c.shareToken || c.phone) && (
+                  {(c.shareToken || c.portalShortCode || c.phone) && (
                     <div className="mt-3 flex flex-wrap gap-2">
-                      {c.shareToken && (
+                      {(c.shareToken || c.portalShortCode) && (
                         <button
                           onClick={() => copyPortalLink(c)}
                           className={cn(
@@ -248,7 +279,7 @@ export const CustomersPage = () => {
                           )}
                         >
                           {copiedId === c.id ? <Check className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
-                          {copiedId === c.id ? 'Link copied' : 'Copy portal link'}
+                          {copiedId === c.id ? 'Copied' : 'Copy portal message'}
                         </button>
                       )}
                       {c.phone && (

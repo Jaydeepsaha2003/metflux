@@ -103,6 +103,16 @@ CREATE TABLE `Customer` (
     `dueDays` INTEGER NULL,
     `notes` TEXT NULL,
     `shareToken` VARCHAR(64) NULL,
+    -- Customer portal login. portalPasswordHash is the bcrypt of the current
+    -- password; portalPasswordSet flips to 1 once the customer picks their own
+    -- (until then the initial password must be changed on first login).
+    -- portalInitialPassword keeps the plaintext temp password so an admin can
+    -- re-share it — cleared the moment the customer sets their own.
+    -- portalShortCode powers the /p/<code> shareable short link.
+    `portalPasswordHash` VARCHAR(191) NULL,
+    `portalPasswordSet` TINYINT(1) NOT NULL DEFAULT 0,
+    `portalInitialPassword` VARCHAR(64) NULL,
+    `portalShortCode` VARCHAR(16) NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
     `companyId` VARCHAR(191) NOT NULL,
@@ -111,6 +121,7 @@ CREATE TABLE `Customer` (
     INDEX `Customer_companyId_createdAt_idx`(`companyId`, `createdAt`),
     INDEX `Customer_companyId_name_idx`(`companyId`, `name`),
     UNIQUE INDEX `Customer_companyId_customerCode_key`(`companyId`, `customerCode`),
+    UNIQUE INDEX `Customer_portalShortCode_key`(`portalShortCode`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -496,7 +507,16 @@ CREATE TABLE `SalesInvoice` (
     `customerId` VARCHAR(191) NULL,
     `customerName` VARCHAR(200) NOT NULL,
     `itemDetails` VARCHAR(400) NULL,
+    -- `amount` is the invoice due INCLUDING GST (the Sales Register "Total
+    -- Amount"). The tax breakdown below is kept separately for reference.
     `amount` DOUBLE NOT NULL DEFAULT 0,
+    `taxType` VARCHAR(40) NULL,
+    `saleAmount` DOUBLE NOT NULL DEFAULT 0,
+    `taxableAmount` DOUBLE NOT NULL DEFAULT 0,
+    `igst` DOUBLE NOT NULL DEFAULT 0,
+    `cgst` DOUBLE NOT NULL DEFAULT 0,
+    `sgst` DOUBLE NOT NULL DEFAULT 0,
+    `otherAmount` DOUBLE NOT NULL DEFAULT 0,
     `dueDate` DATETIME(3) NULL,
     `paidAmount` DOUBLE NOT NULL DEFAULT 0,
     `status` ENUM('UNPAID', 'PARTIAL', 'PAID') NOT NULL DEFAULT 'UNPAID',

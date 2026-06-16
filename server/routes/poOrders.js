@@ -478,6 +478,8 @@ router.get('/summary', requirePermission('po_summary'), asyncHandler(async (req,
     measure:       it.measure,
     pcsOrdered:    it.pcs,
     pcsProduced:   Number(it.pcsProduced ?? 0),
+    // Excess produced beyond what was ordered (per item; never negative).
+    pcsOverproduced: Math.max(Number(it.pcsProduced ?? 0) - it.pcs, 0),
     pcsDispatched: Number(it.pcsDispatched ?? 0),
     pcsPending:    Math.max(it.pcs - Number(it.pcsProduced ?? 0), 0),
     weightPerPc:   it.weightPerPc,
@@ -504,7 +506,10 @@ router.get('/summary', requirePermission('po_summary'), asyncHandler(async (req,
        ), 0) AS totalProduced,
        COALESCE(SUM(
          (SELECT COALESCE(SUM(dd.\`pcs\`),0) FROM \`Dispatch\` dd WHERE dd.\`poOrderItemId\` = it.\`id\`)
-       ), 0) AS totalDispatched
+       ), 0) AS totalDispatched,
+       COALESCE(SUM(GREATEST(
+         (SELECT COALESCE(SUM(pp.\`pcs\`),0) FROM \`Production\` pp WHERE pp.\`poOrderItemId\` = it.\`id\`) - it.\`pcs\`, 0
+       )), 0) AS totalOverproduced
      FROM \`PoOrderItem\` it
        INNER JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
        INNER JOIN \`Customer\` c ON c.\`id\` = po.\`customerId\`
@@ -512,10 +517,11 @@ router.get('/summary', requirePermission('po_summary'), asyncHandler(async (req,
     params
   );
   const aggregates = {
-    pcsOrdered:    Number(aggRow?.totalOrdered    ?? 0),
-    pcsProduced:   Number(aggRow?.totalProduced   ?? 0),
-    pcsDispatched: Number(aggRow?.totalDispatched ?? 0),
-    pcsPending:    Math.max(Number(aggRow?.totalOrdered ?? 0) - Number(aggRow?.totalProduced ?? 0), 0),
+    pcsOrdered:      Number(aggRow?.totalOrdered      ?? 0),
+    pcsProduced:     Number(aggRow?.totalProduced     ?? 0),
+    pcsOverproduced: Number(aggRow?.totalOverproduced ?? 0),
+    pcsDispatched:   Number(aggRow?.totalDispatched   ?? 0),
+    pcsPending:      Math.max(Number(aggRow?.totalOrdered ?? 0) - Number(aggRow?.totalProduced ?? 0), 0),
   };
 
   res.json({ items: enriched, total: Number(totalRow?.n ?? 0), page, pageSize, aggregates });

@@ -13,6 +13,7 @@ import { pool } from './lib/db.js';
 import { errorHandler, notFoundHandler } from './lib/errors.js';
 import { hostRouter } from './lib/hostRouter.js';
 import { apiRouter } from './routes/index.js';
+import shortLinkRouter from './routes/shortlink.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.resolve(__dirname, 'public');
@@ -44,6 +45,9 @@ app.use('/uploads', express.static(path.join(PUBLIC_DIR, 'uploads'), {
 
 // JSON API
 app.use('/api', apiRouter);
+
+// Public customer-portal short links: /p/<code> → portal SPA.
+app.use('/p', shortLinkRouter);
 
 // Admin SPA at /s/admin, portfolio at /.
 app.use(hostRouter({

@@ -30,6 +30,7 @@ type SummaryItem = {
   measure: string;
   pcsOrdered: number;
   pcsProduced: number;
+  pcsOverproduced: number;
   pcsDispatched: number;
   pcsPending: number;
   weightPerPc: number;
@@ -45,6 +46,7 @@ type SummaryItem = {
 type Aggregates = {
   pcsOrdered: number;
   pcsProduced: number;
+  pcsOverproduced: number;
   pcsDispatched: number;
   pcsPending: number;
 };
@@ -75,6 +77,7 @@ type PoGroup = {
   items: SummaryItem[];
   totalOrdered: number;
   totalProduced: number;
+  totalOverproduced: number;
   totalDispatched: number;
   totalPending: number;
 };
@@ -90,15 +93,16 @@ const groupByPo = (items: SummaryItem[]): PoGroup[] => {
         customerName: it.customerName,
         customerCode: it.customerCode,
         items: [],
-        totalOrdered: 0, totalProduced: 0, totalDispatched: 0, totalPending: 0,
+        totalOrdered: 0, totalProduced: 0, totalOverproduced: 0, totalDispatched: 0, totalPending: 0,
       });
     }
     const g = map.get(it.poOrderId)!;
     g.items.push(it);
-    g.totalOrdered    += it.pcsOrdered;
-    g.totalProduced   += it.pcsProduced;
-    g.totalDispatched += it.pcsDispatched;
-    g.totalPending    += it.pcsPending;
+    g.totalOrdered      += it.pcsOrdered;
+    g.totalProduced     += it.pcsProduced;
+    g.totalOverproduced += it.pcsOverproduced;
+    g.totalDispatched   += it.pcsDispatched;
+    g.totalPending      += it.pcsPending;
   }
   return [...map.values()];
 };
@@ -190,6 +194,7 @@ export const SOSummaryPage = () => {
         'Measure':       it.measure,
         'Ordered':       it.pcsOrdered,
         'Produced':      it.pcsProduced,
+        'Overproduced':  it.pcsOverproduced,
         'Dispatched':    it.pcsDispatched,
         'Pending':       it.pcsPending,
         'Wt / pc':       it.weightPerPc,
@@ -260,6 +265,8 @@ export const SOSummaryPage = () => {
             <span className="text-slate-300">·</span>
             <Tally label="Produced"   value={aggregates.pcsProduced}   />
             <span className="text-slate-300">·</span>
+            <Tally label="Overproduced" value={aggregates.pcsOverproduced} over />
+            <span className="text-slate-300">·</span>
             <Tally label="Dispatched" value={aggregates.pcsDispatched} />
             <span className="text-slate-300">·</span>
             <Tally label="Pending"    value={aggregates.pcsPending} accent />
@@ -291,6 +298,7 @@ export const SOSummaryPage = () => {
                 <th className="px-3 py-2 font-medium min-w-[160px]">Customer</th>
                 <th className="px-3 py-2 font-medium text-right w-20">Ordered</th>
                 <th className="px-3 py-2 font-medium text-right w-20">Produced</th>
+                <th className="px-3 py-2 font-medium text-right w-24">Overproduced</th>
                 <th className="px-3 py-2 font-medium text-right w-24">Dispatched</th>
                 <th className="px-3 py-2 font-medium text-right w-20">Pending</th>
                 <th className="px-3 py-2 font-medium text-right w-32">Actions</th>
@@ -323,6 +331,11 @@ export const SOSummaryPage = () => {
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums font-medium">{group.totalOrdered}</td>
                       <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">{group.totalProduced}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">
+                        {group.totalOverproduced > 0
+                          ? <span className="inline-block min-w-[2.5rem] rounded-md bg-orange-50 px-2 py-0.5 font-semibold text-orange-700">{group.totalOverproduced}</span>
+                          : <span className="text-slate-300">0</span>}
+                      </td>
                       <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">{group.totalDispatched}</td>
                       <td className="px-3 py-2.5 text-right tabular-nums">
                         <span className={cn(
@@ -354,6 +367,11 @@ export const SOSummaryPage = () => {
                             <td className="px-3 py-2 font-mono text-xs text-slate-700">{it.measure}</td>
                             <td className="px-3 py-2 text-right tabular-nums text-slate-700">{it.pcsOrdered}</td>
                             <td className="px-3 py-2 text-right tabular-nums text-slate-500">{it.pcsProduced}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">
+                              {it.pcsOverproduced > 0
+                                ? <span className="inline-block min-w-[2.5rem] rounded px-1.5 py-0.5 text-xs font-medium bg-orange-50 text-orange-700">{it.pcsOverproduced}</span>
+                                : <span className="text-slate-300">0</span>}
+                            </td>
                             <td className="px-3 py-2 text-right tabular-nums text-slate-500">{it.pcsDispatched}</td>
                             <td className="px-3 py-2 text-right tabular-nums">
                               <span className={cn(
@@ -409,7 +427,7 @@ export const SOSummaryPage = () => {
                           </tr>
                           {isTestOpen && (
                             <tr className="bg-gradient-to-br from-brand-50/40 via-white to-amber-50/40">
-                              <td colSpan={9} className="px-4 py-4 pl-10">
+                              <td colSpan={10} className="px-4 py-4 pl-10">
                                 <TestPanel item={it} />
                               </td>
                             </tr>
@@ -463,9 +481,10 @@ export const SOSummaryPage = () => {
                         : <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />}
                     </div>
                   </div>
-                  <div className="mt-2 grid grid-cols-4 gap-1.5 text-center">
+                  <div className="mt-2 grid grid-cols-5 gap-1.5 text-center">
                     <Pill label="Ord"  value={group.totalOrdered} />
                     <Pill label="Prod" value={group.totalProduced} muted />
+                    <Pill label="Over" value={group.totalOverproduced} accent={group.totalOverproduced > 0 ? 'over' : undefined} muted />
                     <Pill label="Disp" value={group.totalDispatched} muted />
                     <Pill label="Pend" value={group.totalPending} accent={group.totalPending > 0 ? 'warning' : 'ok'} />
                   </div>
@@ -517,9 +536,10 @@ export const SOSummaryPage = () => {
                                 )}
                               </div>
                             </div>
-                            <div className="grid grid-cols-4 gap-1.5 text-center">
+                            <div className="grid grid-cols-5 gap-1.5 text-center">
                               <Pill label="Ord"  value={it.pcsOrdered} />
                               <Pill label="Prod" value={it.pcsProduced} muted />
+                              <Pill label="Over" value={it.pcsOverproduced} accent={it.pcsOverproduced > 0 ? 'over' : undefined} muted />
                               <Pill label="Disp" value={it.pcsDispatched} muted />
                               <Pill label="Pend" value={it.pcsPending} accent={it.pcsPending > 0 ? 'warning' : 'ok'} />
                             </div>
@@ -664,21 +684,24 @@ const FluxField = ({ label, value, highlight }: { label: string; value: string; 
   </div>
 );
 
-const Tally = ({ label, value, accent }: { label: string; value: number; accent?: boolean }) => (
+const Tally = ({ label, value, accent, over }: { label: string; value: number; accent?: boolean; over?: boolean }) => (
   <span className="inline-flex items-baseline gap-1">
     <span className="text-[10px] uppercase">{label}</span>
-    <span className={cn('font-semibold tabular-nums text-sm', accent ? 'text-amber-700' : 'text-slate-900')}>{value}</span>
+    <span className={cn(
+      'font-semibold tabular-nums text-sm',
+      over ? (value > 0 ? 'text-orange-600' : 'text-slate-400') : accent ? 'text-amber-700' : 'text-slate-900'
+    )}>{value}</span>
   </span>
 );
 
 const Pill = ({ label, value, muted, accent }: {
-  label: string; value: number; muted?: boolean; accent?: 'ok' | 'warning';
+  label: string; value: number; muted?: boolean; accent?: 'ok' | 'warning' | 'over';
 }) => (
   <div className={cn(
     'rounded-md px-2 py-1',
-    accent === 'warning' ? 'bg-yellow-50' : accent === 'ok' ? 'bg-green-50' : 'bg-slate-50'
+    accent === 'warning' ? 'bg-yellow-50' : accent === 'ok' ? 'bg-green-50' : accent === 'over' ? 'bg-orange-50' : 'bg-slate-50'
   )}>
-    <div className={cn('text-[10px] font-medium', accent === 'warning' ? 'text-yellow-700' : accent === 'ok' ? 'text-green-700' : 'text-slate-500')}>{label}</div>
-    <div className={cn('tabular-nums text-sm font-semibold', accent === 'warning' ? 'text-yellow-800' : accent === 'ok' ? 'text-green-800' : muted ? 'text-slate-600' : 'text-slate-900')}>{value}</div>
+    <div className={cn('text-[10px] font-medium', accent === 'warning' ? 'text-yellow-700' : accent === 'ok' ? 'text-green-700' : accent === 'over' ? 'text-orange-700' : 'text-slate-500')}>{label}</div>
+    <div className={cn('tabular-nums text-sm font-semibold', accent === 'warning' ? 'text-yellow-800' : accent === 'ok' ? 'text-green-800' : accent === 'over' ? 'text-orange-800' : muted ? 'text-slate-600' : 'text-slate-900')}>{value}</div>
   </div>
 );

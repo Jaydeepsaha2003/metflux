@@ -20,7 +20,9 @@
     "migrate:customer-due-days": "node scripts/migrate-customer-due-days.js",
     "migrate:packing-list-wo": "node scripts/migrate-packing-list-wo.js",
     "migrate:sales-invoices": "node scripts/migrate-sales-invoices.js",
-    "migrate": "npm run migrate:supplier-membership && npm run migrate:customer-code && npm run migrate:hide-customer-names && npm run migrate:logo-column && npm run migrate:share-token && npm run migrate:supplier-item-notes && npm run migrate:customer-portal-slug && npm run migrate:customer-due-days && npm run migrate:packing-list-wo && npm run migrate:sales-invoices"
+    "migrate:sales-invoice-gst": "node scripts/migrate-sales-invoice-gst.js",
+    "migrate:customer-portal-auth": "node scripts/migrate-customer-portal-auth.js",
+    "migrate": "npm run migrate:supplier-membership && npm run migrate:customer-code && npm run migrate:hide-customer-names && npm run migrate:logo-column && npm run migrate:share-token && npm run migrate:supplier-item-notes && npm run migrate:customer-portal-slug && npm run migrate:customer-due-days && npm run migrate:packing-list-wo && npm run migrate:sales-invoices && npm run migrate:sales-invoice-gst && npm run migrate:customer-portal-auth"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

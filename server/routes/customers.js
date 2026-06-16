@@ -3,9 +3,10 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { q, qOne, insert, update, del } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
-import { requireAuth, requireRole } from '../lib/auth.js';
+import { requireAuth, requireRole, hashPassword } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 import { importBody, cellPick, numOpt, rowIsBlank, errMessage } from '../lib/importHelpers.js';
+import { derivePortalPassword, uniqueShortCode } from '../lib/portal.js';
 import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
@@ -102,6 +103,63 @@ const findOwned = async (req, id) => {
   return item;
 };
 
+// portalPasswordHash is an internal secret — never ship it to the client. The
+// short code, plaintext initial password and "set" flag are fine for the admin
+// UI (it needs them to build the shareable message).
+const publicCustomer = (row) => {
+  if (!row) return row;
+  // eslint-disable-next-line no-unused-vars
+  const { portalPasswordHash, ...rest } = row;
+  return rest;
+};
+
+// Rejects a customer that would duplicate an existing one in this company by
+// name (case-insensitive) or GST number. `excludeId` skips the row being edited.
+const assertNoDuplicate = async (req, { name, gstNumber }, excludeId = null) => {
+  const companyId = req.tenant.companyId;
+  if (name) {
+    const clash = await qOne(
+      `SELECT \`name\` FROM \`Customer\`
+        WHERE \`companyId\` = ? AND LOWER(\`name\`) = LOWER(?)${excludeId ? ' AND `id` <> ?' : ''}
+        LIMIT 1`,
+      excludeId ? [companyId, name, excludeId] : [companyId, name]
+    );
+    if (clash) {
+      throw new AppError(
+        `A customer named "${clash.name}" already exists.`,
+        409, 'NAME_DUPLICATE'
+      );
+    }
+  }
+  const gst = typeof gstNumber === 'string' ? gstNumber.trim() : gstNumber;
+  if (gst) {
+    const clash = await qOne(
+      `SELECT \`name\`, \`gstNumber\` FROM \`Customer\`
+        WHERE \`companyId\` = ? AND UPPER(\`gstNumber\`) = UPPER(?)${excludeId ? ' AND `id` <> ?' : ''}
+        LIMIT 1`,
+      excludeId ? [companyId, gst, excludeId] : [companyId, gst]
+    );
+    if (clash) {
+      throw new AppError(
+        `GST number ${clash.gstNumber} is already registered to "${clash.name}".`,
+        409, 'GST_DUPLICATE'
+      );
+    }
+  }
+};
+
+// The portal credentials bundle for a brand-new customer: a derived initial
+// password (stored hashed + plaintext for re-share) and a unique short code.
+const provisionPortalCredentials = async (data) => {
+  const initial = derivePortalPassword(data);
+  return {
+    portalPasswordHash: await hashPassword(initial),
+    portalInitialPassword: initial,
+    portalPasswordSet: 0,
+    portalShortCode: await uniqueShortCode(),
+  };
+};
+
 // GET /api/customers
 router.get('/', asyncHandler(async (req, res) => {
   const { page, pageSize, search } = paginationQuery.parse(req.query);
@@ -123,18 +181,21 @@ router.get('/', asyncHandler(async (req, res) => {
     qOne(`SELECT COUNT(*) AS n FROM \`Customer\` WHERE ${where}`, params),
   ]);
 
-  res.json({ items, total: Number(totalRow?.n ?? 0), page, pageSize });
+  res.json({ items: items.map(publicCustomer), total: Number(totalRow?.n ?? 0), page, pageSize });
 }));
 
 // GET /api/customers/:id
 router.get('/:id', asyncHandler(async (req, res) => {
   const { id } = idParam.parse(req.params);
-  res.json(await findOwned(req, id));
+  res.json(publicCustomer(await findOwned(req, id)));
 }));
 
 // POST /api/customers
 router.post('/', requireRole('STAFF'), asyncHandler(async (req, res) => {
   const data = customerInput.parse(req.body);
+
+  // No two customers in a company may share a name or GST number.
+  await assertNoDuplicate(req, data);
 
   // Resolve the customer code: prefer client-supplied; auto-generate otherwise.
   let customerCode = cleanCode(data.customerCode);
@@ -152,15 +213,17 @@ router.post('/', requireRole('STAFF'), asyncHandler(async (req, res) => {
   // (e.g. /portal/aarti-steels) rather than the raw UUID. Kept globally unique.
   const customerId = uuidv4();
   const shareToken = await uniqueShareToken(data.name);
+  const portal = await provisionPortalCredentials(data);
   const created = await insert('Customer', {
     id: customerId,
     ...data,
     customerCode,
     shareToken,
+    ...portal,
     companyId: req.tenant.companyId,
     createdById: req.auth.userId,
   });
-  res.status(201).json(created);
+  res.status(201).json(publicCustomer(created));
 }));
 
 // PATCH /api/customers/:id
@@ -168,6 +231,19 @@ router.patch('/:id', requireRole('STAFF'), asyncHandler(async (req, res) => {
   const { id } = idParam.parse(req.params);
   const data = customerInputPartial.parse(req.body);
   const existing = await findOwned(req, id);
+
+  // Block a rename / GST change that would collide with another customer.
+  await assertNoDuplicate(
+    req,
+    {
+      name: data.name && data.name !== existing.name ? data.name : null,
+      gstNumber:
+        data.gstNumber !== undefined && data.gstNumber !== existing.gstNumber
+          ? data.gstNumber
+          : null,
+    },
+    id
+  );
 
   if (data.customerCode !== undefined) {
     const cleaned = cleanCode(data.customerCode);
@@ -188,7 +264,27 @@ router.patch('/:id', requireRole('STAFF'), asyncHandler(async (req, res) => {
     data.shareToken = await uniqueShareToken(data.name, id);
   }
 
-  res.json(await update('Customer', id, data));
+  // While the customer is still on the auto-generated initial password (they
+  // haven't picked their own yet), keep it in step with the details it's
+  // derived from — so the shareable message always shows a password that works.
+  if (!existing.portalPasswordSet) {
+    const nameChanged = data.name && data.name !== existing.name;
+    const gstChanged = data.gstNumber !== undefined && data.gstNumber !== existing.gstNumber;
+    if (nameChanged || gstChanged) {
+      const initial = derivePortalPassword({
+        name: data.name ?? existing.name,
+        gstNumber: data.gstNumber !== undefined ? data.gstNumber : existing.gstNumber,
+        phone: data.phone !== undefined ? data.phone : existing.phone,
+      });
+      data.portalPasswordHash = await hashPassword(initial);
+      data.portalInitialPassword = initial;
+    }
+  }
+
+  // Backfill a short code for legacy rows that predate portal auth.
+  if (!existing.portalShortCode) data.portalShortCode = await uniqueShortCode(id);
+
+  res.json(publicCustomer(await update('Customer', id, data)));
 }));
 
 // POST /api/customers/import — bulk create/update from an Excel upload.
@@ -251,11 +347,13 @@ router.post('/import', requireRole('STAFF'), asyncHandler(async (req, res) => {
         const customerCode = code
           ? cleanCode(code)
           : await nextCustomerCode(req.tenant.companyId, prefixFromName(name));
+        const portal = await provisionPortalCredentials(data);
         await insert('Customer', {
           id: uuidv4(),
           ...data,
           customerCode,
           shareToken: await uniqueShareToken(name),
+          ...portal,
           companyId: req.tenant.companyId,
           createdById: req.auth.userId,
         });
