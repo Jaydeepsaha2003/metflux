@@ -76,3 +76,40 @@ export const allocatePaymentFifo = async (db, { companyId, customerId, paymentId
   }
   return allocated;
 };
+
+/**
+ * Apply a payment to specific invoices the user picked ("bill to bill").
+ * `allocations` is [{ salesInvoiceId, amount }]. Each requested amount is
+ * clamped to that invoice's balance and to the payment's remaining funds;
+ * invoices not belonging to the customer (or already paid) are skipped.
+ * Anything left over stays as unallocated credit (advance). Returns the total
+ * actually applied.
+ */
+export const allocatePaymentManual = async (db, { companyId, customerId, paymentId, amount, allocations }) => {
+  if (!Array.isArray(allocations) || !allocations.length) return 0;
+  let remaining = round2(amount);
+  let allocated = 0;
+  for (const a of allocations) {
+    if (remaining <= 0.01) break;
+    const inv = await db.qOne(
+      'SELECT * FROM `SalesInvoice` WHERE `id` = ? AND `companyId` = ? AND `customerId` = ?',
+      [a.salesInvoiceId, companyId, customerId]
+    );
+    if (!inv) continue;
+    const balance = round2(Number(inv.amount) - Number(inv.paidAmount));
+    if (balance <= 0.01) continue;
+    const applied = round2(Math.min(remaining, balance, round2(Number(a.amount) || 0)));
+    if (applied <= 0.01) continue;
+    await db.insert('PaymentAllocation', {
+      companyId, paymentId, salesInvoiceId: inv.id, amount: applied,
+    });
+    const newPaid = round2(Number(inv.paidAmount) + applied);
+    await db.update('SalesInvoice', inv.id, {
+      paidAmount: newPaid,
+      status: invoiceStatus(inv.amount, newPaid),
+    });
+    remaining = round2(remaining - applied);
+    allocated = round2(allocated + applied);
+  }
+  return allocated;
+};

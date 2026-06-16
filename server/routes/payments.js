@@ -8,7 +8,7 @@ import { q, qOne, txn } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
-import { round2, invoiceStatus, parseDMY, normName, allocatePaymentFifo } from '../lib/invoicing.js';
+import { round2, invoiceStatus, parseDMY, normName, allocatePaymentFifo, allocatePaymentManual } from '../lib/invoicing.js';
 import { cellPick, numOpt, rowIsBlank, errMessage } from '../lib/importHelpers.js';
 
 const router = Router();
@@ -21,10 +21,19 @@ const createSchema = z.object({
   method:      z.string().trim().max(40).optional().nullable(),
   reference:   z.string().trim().max(120).optional().nullable(),
   notes:       z.string().trim().max(400).optional().nullable(),
+  // How to apply the payment:
+  //   AUTO         — FIFO across open invoices, oldest due first (default)
+  //   BILL_TO_BILL — only the invoices the user picked, in `allocations`
+  //   ADVANCE      — apply nothing; keep the whole amount as credit
+  mode:        z.enum(['AUTO', 'BILL_TO_BILL', 'ADVANCE']).default('AUTO'),
+  allocations: z.array(z.object({
+    salesInvoiceId: z.string().min(1),
+    amount:         z.coerce.number().positive(),
+  })).max(500).optional(),
 });
 
-// Insert a Payment and FIFO-allocate it. `tx` is a txn handle.
-const recordPayment = async (tx, { companyId, userId, customer, amount, paymentDate, method, reference, notes }) => {
+// Insert a Payment and allocate it per `mode`. `tx` is a txn handle.
+const recordPayment = async (tx, { companyId, userId, customer, amount, paymentDate, method, reference, notes, mode = 'AUTO', allocations }) => {
   const pay = await tx.insert('Payment', {
     companyId,
     customerId:   customer.id,
@@ -37,7 +46,16 @@ const recordPayment = async (tx, { companyId, userId, customer, amount, paymentD
     notes:     notes ?? null,
     createdById: userId,
   });
-  const allocated = await allocatePaymentFifo(tx, { companyId, customerId: customer.id, paymentId: pay.id, amount });
+
+  let allocated = 0;
+  if (mode === 'ADVANCE') {
+    allocated = 0; // pure advance / credit — applied to nothing
+  } else if (mode === 'BILL_TO_BILL') {
+    allocated = await allocatePaymentManual(tx, { companyId, customerId: customer.id, paymentId: pay.id, amount, allocations });
+  } else {
+    allocated = await allocatePaymentFifo(tx, { companyId, customerId: customer.id, paymentId: pay.id, amount });
+  }
+
   if (allocated > 0) await tx.update('Payment', pay.id, { allocatedAmount: allocated });
   return { paymentId: pay.id, allocated: round2(allocated), unallocated: round2(amount - allocated) };
 };

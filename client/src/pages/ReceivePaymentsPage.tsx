@@ -21,8 +21,10 @@ type Payment = {
   allocations: Allocation[];
 };
 type ImportResult = { recorded: number; skipped: number; allocated: number; errors: { row: number; name?: string; message: string }[] };
+type PayMode = 'AUTO' | 'BILL_TO_BILL' | 'ADVANCE';
 
 const inr = (n: number) => '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const round2 = (n: number) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const fmtDate = (iso: string | null) => {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -40,6 +42,10 @@ export const ReceivePaymentsPage = () => {
   const [reference, setReference] = useState('');
   const [formMsg, setFormMsg] = useState<string | null>(null);
   const [formErr, setFormErr] = useState<string | null>(null);
+  // Allocation mode + the per-invoice amounts picked in Bill-to-Bill mode
+  // (invoiceId -> amount string; a key's presence means it's selected).
+  const [mode, setMode] = useState<PayMode>('AUTO');
+  const [allocs, setAllocs] = useState<Record<string, string>>({});
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
@@ -71,14 +77,29 @@ export const ReceivePaymentsPage = () => {
     qc.invalidateQueries({ queryKey: ['debtor-aging'] });
   };
 
+  // Bill-to-Bill helpers: the amount equals the sum of the picked invoices.
+  const billTotal = round2(Object.values(allocs).reduce((s, v) => s + (Number(v) || 0), 0));
+  const toggleAlloc = (inv: OpenInvoice) =>
+    setAllocs((prev) => {
+      const next = { ...prev };
+      if (inv.id in next) delete next[inv.id];
+      else next[inv.id] = String(inv.balance);
+      return next;
+    });
+  const setAllocAmount = (id: string, v: string) =>
+    setAllocs((prev) => ({ ...prev, [id]: v }));
+
   const record = useMutation({
-    mutationFn: () => api<{ allocated: number; unallocated: number }>('/payments', {
-      method: 'POST',
-      json: { customerId, amount: Number(amount), paymentDate, reference: reference || null },
-    }),
+    mutationFn: (payload: Record<string, unknown>) =>
+      api<{ allocated: number; unallocated: number }>('/payments', { method: 'POST', json: payload }),
     onSuccess: (r) => {
-      setFormMsg(`Recorded. Applied ${inr(r.allocated)} to open invoices (FIFO)${r.unallocated > 0 ? `; ${inr(r.unallocated)} left as unapplied credit` : ''}.`);
-      setAmount(''); setReference('');
+      if (mode === 'ADVANCE') {
+        setFormMsg(`Recorded ${inr(r.allocated + r.unallocated)} as advance credit (not applied to any invoice).`);
+      } else {
+        const where = mode === 'BILL_TO_BILL' ? 'to the selected invoices' : 'to open invoices (FIFO)';
+        setFormMsg(`Recorded. Applied ${inr(r.allocated)} ${where}${r.unallocated > 0 ? `; ${inr(r.unallocated)} left as credit` : ''}.`);
+      }
+      setAmount(''); setReference(''); setAllocs({});
       refresh();
     },
     onError: (e) => setFormErr(e instanceof ApiError ? e.message : 'Could not record payment'),
@@ -88,8 +109,19 @@ export const ReceivePaymentsPage = () => {
     e.preventDefault();
     setFormErr(null); setFormMsg(null);
     if (!customerId) { setFormErr('Pick a customer.'); return; }
+
+    if (mode === 'BILL_TO_BILL') {
+      const allocations = Object.entries(allocs)
+        .map(([salesInvoiceId, amt]) => ({ salesInvoiceId, amount: Number(amt) }))
+        .filter((a) => a.amount > 0);
+      if (!allocations.length) { setFormErr('Select at least one invoice and enter an amount.'); return; }
+      record.mutate({ customerId, amount: billTotal, paymentDate, reference: reference || null, mode, allocations });
+      return;
+    }
+
+    // AUTO + ADVANCE both take a single amount.
     if (!(Number(amount) > 0)) { setFormErr('Enter an amount greater than 0.'); return; }
-    record.mutate();
+    record.mutate({ customerId, amount: Number(amount), paymentDate, reference: reference || null, mode });
   };
 
   const downloadTemplate = () => {
@@ -145,14 +177,43 @@ export const ReceivePaymentsPage = () => {
         {/* Record a payment */}
         <form onSubmit={submit} className="card p-5 space-y-4">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Record a payment</h2>
+
+          {/* Allocation mode */}
+          <div>
+            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">How to apply</span>
+            <div className="grid grid-cols-3 gap-1 rounded-lg border border-slate-200 p-1">
+              {([
+                ['AUTO', 'Automatic', 'FIFO'],
+                ['BILL_TO_BILL', 'Bill to Bill', 'Pick invoices'],
+                ['ADVANCE', 'Advance', 'No invoices'],
+              ] as const).map(([m, label, sub]) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => { setMode(m); setFormMsg(null); setFormErr(null); }}
+                  className={`rounded-md px-2 py-1.5 text-center transition ${mode === m ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
+                >
+                  <span className="block text-[12px] font-semibold leading-tight">{label}</span>
+                  <span className={`block text-[9px] uppercase tracking-wide ${mode === m ? 'text-brand-100' : 'text-slate-400'}`}>{sub}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <label className="block">
             <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Customer</span>
-            <SearchableSelect value={customerId} onChange={(v) => { setCustomerId(v); setFormMsg(null); }} options={options} placeholder="Select customer…" />
+            <SearchableSelect value={customerId} onChange={(v) => { setCustomerId(v); setFormMsg(null); setAllocs({}); }} options={options} placeholder="Select customer…" />
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Amount (₹)</span>
-              <input className="input text-right tabular-nums" type="number" min="0" step="0.01" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+              {mode === 'BILL_TO_BILL' ? (
+                <div className="input flex items-center justify-end tabular-nums bg-slate-50 text-slate-700 font-semibold" title="Sum of the invoices you select on the right">
+                  {inr(billTotal)}
+                </div>
+              ) : (
+                <input className="input text-right tabular-nums" type="number" min="0" step="0.01" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+              )}
             </label>
             <label className="block">
               <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Date</span>
@@ -164,25 +225,36 @@ export const ReceivePaymentsPage = () => {
             <input className="input" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="NEFT / cheque no." />
           </label>
 
+          {mode === 'BILL_TO_BILL' && (
+            <p className="text-[11px] text-slate-400">Tick the invoices on the right and set how much to apply to each. The amount is their total.</p>
+          )}
+          {mode === 'ADVANCE' && (
+            <p className="text-[11px] text-amber-600">Recorded as advance credit — not applied to any invoice. It stays on the customer's account to settle later.</p>
+          )}
+
           {formErr && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{formErr}</div>}
           {formMsg && <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{formMsg}</div>}
 
           <button type="submit" disabled={record.isPending} className="btn-primary w-full">
-            {record.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />} Receive payment (FIFO)
+            {record.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
+            {mode === 'AUTO' ? ' Receive payment (FIFO)' : mode === 'BILL_TO_BILL' ? ' Receive & apply to selected' : ' Receive as advance'}
           </button>
         </form>
 
-        {/* Open invoices preview for the selected customer */}
+        {/* Open invoices — preview (AUTO) or pick list (BILL_TO_BILL) */}
         <div className="card p-5">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-            {customerId ? 'Open invoices (oldest first)' : 'Open invoices'}
+            {mode === 'BILL_TO_BILL' ? 'Select invoices to pay' : 'Open invoices (oldest first)'}
           </h2>
           {!customerId ? (
-            <p className="mt-6 text-center text-sm text-slate-400">Select a customer to see what the payment will be applied to.</p>
+            <p className="mt-6 text-center text-sm text-slate-400">Select a customer to see their open invoices.</p>
           ) : !outstanding ? (
             <div className="py-8 text-center text-slate-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
           ) : !outstanding.open.length ? (
-            <p className="mt-6 text-center text-sm text-emerald-600">No open invoices — fully paid up. 🎉</p>
+            <div className="mt-6 text-center text-sm">
+              <p className="text-emerald-600">No open invoices — fully paid up. 🎉</p>
+              {mode !== 'ADVANCE' && <p className="mt-2 text-[11px] text-slate-400">Switch to <strong>Advance</strong> to record this as credit.</p>}
+            </div>
           ) : (
             <>
               <div className="mt-2 mb-2 flex items-center justify-between text-sm">
@@ -192,20 +264,55 @@ export const ReceivePaymentsPage = () => {
               <div className="max-h-64 overflow-y-auto rounded-lg border border-slate-200">
                 <table className="w-full text-xs">
                   <thead className="bg-slate-50 text-left text-slate-500 sticky top-0">
-                    <tr><th className="px-2 py-1.5">Invoice #</th><th className="px-2 py-1.5">Due</th><th className="px-2 py-1.5 text-right">Balance</th></tr>
+                    <tr>
+                      {mode === 'BILL_TO_BILL' && <th className="px-2 py-1.5 w-6"></th>}
+                      <th className="px-2 py-1.5">Invoice #</th>
+                      <th className="px-2 py-1.5">Due</th>
+                      <th className="px-2 py-1.5 text-right">Balance</th>
+                      {mode === 'BILL_TO_BILL' && <th className="px-2 py-1.5 text-right w-24">Pay</th>}
+                    </tr>
                   </thead>
                   <tbody>
-                    {outstanding.open.map((i) => (
-                      <tr key={i.id} className="border-t border-slate-100">
-                        <td className="px-2 py-1.5 font-medium">{i.invoiceNumber}</td>
-                        <td className="px-2 py-1.5 text-slate-500">{fmtDate(i.dueDate)}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums">{inr(i.balance)}</td>
-                      </tr>
-                    ))}
+                    {outstanding.open.map((i) => {
+                      const checked = i.id in allocs;
+                      return (
+                        <tr key={i.id} className={`border-t border-slate-100 ${checked ? 'bg-brand-50/50' : ''}`}>
+                          {mode === 'BILL_TO_BILL' && (
+                            <td className="px-2 py-1.5">
+                              <input type="checkbox" className="h-3.5 w-3.5 cursor-pointer accent-brand-600" checked={checked} onChange={() => toggleAlloc(i)} />
+                            </td>
+                          )}
+                          <td className="px-2 py-1.5 font-medium">{i.invoiceNumber}</td>
+                          <td className="px-2 py-1.5 text-slate-500">{fmtDate(i.dueDate)}</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums">{inr(i.balance)}</td>
+                          {mode === 'BILL_TO_BILL' && (
+                            <td className="px-2 py-1.5 text-right">
+                              <input
+                                type="number" min="0" max={i.balance} step="0.01" inputMode="decimal"
+                                disabled={!checked}
+                                value={checked ? allocs[i.id] : ''}
+                                onChange={(e) => setAllocAmount(i.id, e.target.value)}
+                                className="w-20 rounded border border-slate-200 px-1.5 py-0.5 text-right text-xs tabular-nums disabled:bg-slate-50 disabled:text-slate-300"
+                                placeholder="0"
+                              />
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
-              <p className="mt-2 text-[11px] text-slate-400">Payment is applied top-down (oldest due first) until it runs out.</p>
+              {mode === 'BILL_TO_BILL' ? (
+                <div className="mt-2 flex items-center justify-between text-[12px]">
+                  <span className="text-slate-500">Selected total</span>
+                  <span className="font-bold tabular-nums text-brand-700">{inr(billTotal)}</span>
+                </div>
+              ) : mode === 'ADVANCE' ? (
+                <p className="mt-2 text-[11px] text-amber-600">Advance mode ignores these — the amount is kept as credit.</p>
+              ) : (
+                <p className="mt-2 text-[11px] text-slate-400">Payment is applied top-down (oldest due first) until it runs out.</p>
+              )}
             </>
           )}
         </div>
