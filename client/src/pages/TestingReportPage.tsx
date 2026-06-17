@@ -253,9 +253,6 @@ export const TestingReportPage = () => {
       node.style.pageBreakInside = 'avoid';
       node.style.breakInside = 'avoid';
     });
-    // Each item is forced onto its own page in the PDF, so the on-screen gutter
-    // strips between items are pointless there — drop them from the clone.
-    clone.querySelectorAll('.gutter-strip').forEach((n) => n.remove());
 
     clone.style.width = `${A4_USABLE_PX}px`;
     clone.style.minWidth = '0';
@@ -461,8 +458,8 @@ export const TestingReportPage = () => {
                     gridRows.push(samples.slice(i, i + PER_ROW));
                   }
                   return (
-                    <div key={d.id} className={`border-b border-slate-300 break-inside-avoid pdf-keep ${idx > 0 ? 'tr-page-break' : ''}`}>
-                      {/* On-screen gutter strip; in the PDF each item gets its own page instead. */}
+                    <div key={d.id} className="border-b border-slate-300 break-inside-avoid pdf-keep">
+                      {/* Gutter strip separating this item from the previous one (kept in the PDF too). */}
                       {idx > 0 && (
                         <div className="gutter-strip h-3 border-b border-slate-300 bg-slate-100" />
                       )}

@@ -46,7 +46,7 @@ const monthLabel = (m: string) => {
   return mo === 1 ? `${lbl} '${String(y).slice(2)}` : lbl;
 };
 
-type Preset = 'MONTH' | 'FY' | 'YEAR';
+type Preset = 'MONTH' | 'FY' | 'YEAR' | 'CUSTOM';
 const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const isoOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const rangeFor = (p: Preset) => {
@@ -62,7 +62,12 @@ const rangeFor = (p: Preset) => {
 /* ── Page ───────────────────────────────────────────────────── */
 export const BusinessAnalysisPage = () => {
   const [preset, setPreset] = useState<Preset>('YEAR');
-  const range = useMemo(() => rangeFor(preset), [preset]);
+  const [customFrom, setCustomFrom] = useState<string>(() => rangeFor('YEAR').from);
+  const [customTo, setCustomTo] = useState<string>(() => todayISO());
+  const range = useMemo(
+    () => (preset === 'CUSTOM' ? { from: customFrom, to: customTo } : rangeFor(preset)),
+    [preset, customFrom, customTo]
+  );
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['business-analysis', range.from, range.to],
@@ -76,13 +81,22 @@ export const BusinessAnalysisPage = () => {
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <BarChart3 className="h-5 w-5 text-brand-600" /> Business Analysis
         </h1>
-        <div className="flex items-center gap-1 rounded-lg border border-slate-200 p-1 text-xs">
-          {([['MONTH', 'This Month'], ['FY', 'This FY'], ['YEAR', 'Last 12 Months']] as const).map(([p, label]) => (
-            <button key={p} onClick={() => setPreset(p)}
-              className={cn('rounded-md px-3 py-1.5 font-medium transition', preset === p ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100')}>
-              {label}
-            </button>
-          ))}
+        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-1 rounded-lg border border-slate-200 p-1 text-xs">
+            {([['MONTH', 'This Month'], ['FY', 'This FY'], ['YEAR', 'Last 12 Months'], ['CUSTOM', 'Custom']] as const).map(([p, label]) => (
+              <button key={p} onClick={() => setPreset(p)}
+                className={cn('rounded-md px-3 py-1.5 font-medium transition', preset === p ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100')}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {preset === 'CUSTOM' && (
+            <div className="flex items-center gap-1.5 text-xs">
+              <input type="date" value={customFrom} max={customTo} onChange={(e) => setCustomFrom(e.target.value)} className="input py-1.5 text-xs" />
+              <span className="text-slate-400">→</span>
+              <input type="date" value={customTo} min={customFrom} max={todayISO()} onChange={(e) => setCustomTo(e.target.value)} className="input py-1.5 text-xs" />
+            </div>
+          )}
         </div>
       </div>
 
@@ -134,20 +148,20 @@ const AnalysisBody = ({ data }: { data: Analysis }) => {
       {/* ── Top customers + State ── */}
       <div className="grid gap-5 lg:grid-cols-2">
         <div className="card p-5">
-          <SectionTitle icon={Users} title="Top customers" subtitle="By invoiced value (range)" />
-          <div className="mt-3 overflow-x-auto">
+          <SectionTitle icon={Users} title="Customers" subtitle={`${data.topCustomers.length} billed in range · by invoiced value`} />
+          <div className="mt-3 max-h-96 overflow-auto rounded-lg border border-slate-100">
             <table className="w-full text-sm">
-              <thead className="text-left text-[11px] uppercase tracking-wide text-slate-400">
-                <tr><th className="py-1.5">Customer</th><th className="py-1.5 text-right">Invoiced</th><th className="py-1.5 text-right">Outstanding</th><th className="py-1.5 w-24">Share</th></tr>
+              <thead className="sticky top-0 z-10 bg-white text-left text-[11px] uppercase tracking-wide text-slate-400 shadow-[0_1px_0_0_#e2e8f0]">
+                <tr><th className="px-2 py-2">Customer</th><th className="px-2 py-2 text-right">Invoiced</th><th className="px-2 py-2 text-right">Outstanding</th><th className="px-2 py-2 w-24">Share</th></tr>
               </thead>
               <tbody>
                 {data.topCustomers.length === 0 && <tr><td colSpan={4} className="py-6 text-center text-slate-400">No invoices in range.</td></tr>}
                 {data.topCustomers.map((c) => (
-                  <tr key={c.id || c.name} className="border-t border-slate-100">
-                    <td className="py-2 pr-2 font-medium text-slate-800 truncate max-w-[160px]">{c.name}{c.code && <span className="ml-1 font-mono text-[10px] text-slate-400">{c.code}</span>}</td>
-                    <td className="py-2 text-right tabular-nums">{cr(c.invoiced)}</td>
-                    <td className={cn('py-2 text-right tabular-nums', c.outstanding > 0 ? 'text-amber-700' : 'text-slate-400')}>{cr(c.outstanding)}</td>
-                    <td className="py-2"><ShareBar pct={c.share} /></td>
+                  <tr key={c.id || c.name} className="border-t border-slate-100 hover:bg-slate-50/60">
+                    <td className="px-2 py-2 font-medium text-slate-800 truncate max-w-[160px]">{c.name}{c.code && <span className="ml-1 font-mono text-[10px] text-slate-400">{c.code}</span>}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{cr(c.invoiced)}</td>
+                    <td className={cn('px-2 py-2 text-right tabular-nums', c.outstanding > 0 ? 'text-amber-700' : 'text-slate-400')}>{cr(c.outstanding)}</td>
+                    <td className="px-2 py-2"><ShareBar pct={c.share} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -236,7 +250,7 @@ const SectionTitle = ({ icon: Icon, title, subtitle }: { icon: typeof Wallet; ti
 );
 
 const ShareBar = ({ pct }: { pct: number }) => (
-  <div className="flex items-center gap-1.5">
+  <div className="flex items-center gap-1.5" title={`${pct}% of invoiced (range)`}>
     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
       <div className="h-full rounded-full bg-brand-500" style={{ width: `${Math.min(pct, 100)}%` }} />
     </div>
@@ -250,7 +264,7 @@ const BarList = ({ items }: { items: { label: string; value: number; share: numb
     <div className="mt-3 space-y-2.5">
       {items.length === 0 && <p className="text-sm text-slate-400">No data in range.</p>}
       {items.map((i) => (
-        <div key={i.label}>
+        <div key={i.label} title={`${i.label}: ${inr(i.value)} (${i.share}%)`}>
           <div className="flex items-center justify-between text-xs">
             <span className="truncate font-medium text-slate-700">{i.label}</span>
             <span className="ml-2 shrink-0 tabular-nums text-slate-500">{cr(i.value)} · {i.share}%</span>
@@ -318,7 +332,7 @@ const Funnel = ({ f }: { f: Analysis['fulfillment'] }) => {
   return (
     <div className="mt-4 space-y-3">
       {rows.map((r) => (
-        <div key={r.label}>
+        <div key={r.label} title={`${r.label}: ${nf(r.value)} pcs (${r.pct}%)`}>
           <div className="flex items-center justify-between text-xs">
             <span className="font-medium text-slate-600">{r.label}</span>
             <span className="tabular-nums text-slate-500">{nf(r.value)} pcs · {r.pct}%</span>
@@ -351,13 +365,19 @@ const TrendChart = ({ trend }: { trend: Analysis['trend'] }) => {
         {[0.25, 0.5, 0.75, 1].map((g) => (
           <line key={g} x1={padL} x2={W - padR} y1={padT + innerH - g * innerH} y2={padT + innerH - g * innerH} stroke="#f1f5f9" strokeWidth={1} />
         ))}
-        {/* invoiced bars */}
+        {/* invoiced bars (hover shows the figures) */}
         {trend.map((t, i) => (
-          <rect key={i} x={cx(i) - barW / 2} y={y(t.invoiced)} width={barW} height={Math.max(0, padT + innerH - y(t.invoiced))} rx={2} fill="#6366f1" opacity={0.85} />
+          <rect key={i} x={cx(i) - barW / 2} y={y(t.invoiced)} width={barW} height={Math.max(0, padT + innerH - y(t.invoiced))} rx={2} fill="#6366f1" opacity={0.85}>
+            <title>{`${monthLabel(t.month)} — Invoiced ${inr(t.invoiced)} · Received ${inr(t.received)}`}</title>
+          </rect>
         ))}
         {/* received line + dots */}
         <polyline points={linePts} fill="none" stroke="#059669" strokeWidth={2} />
-        {trend.map((t, i) => <circle key={i} cx={cx(i)} cy={y(t.received)} r={2.5} fill="#059669" />)}
+        {trend.map((t, i) => (
+          <circle key={i} cx={cx(i)} cy={y(t.received)} r={2.5} fill="#059669">
+            <title>{`${monthLabel(t.month)} — Received ${inr(t.received)}`}</title>
+          </circle>
+        ))}
         {/* month labels */}
         {trend.map((t, i) => (
           <text key={i} x={cx(i)} y={H - 8} textAnchor="middle" fontSize={9} fill="#94a3b8">{monthLabel(t.month)}</text>
@@ -394,10 +414,14 @@ const CoreDonut = ({ toroidal, rectangular }: { toroidal: number; rectangular: n
   return (
     <div className="mt-3 flex items-center gap-5">
       <svg viewBox="0 0 140 140" className="h-32 w-32 shrink-0">
-        <circle cx={70} cy={70} r={r} fill="none" stroke="#e2e8f0" strokeWidth={18} />
+        <circle cx={70} cy={70} r={r} fill="none" stroke="#e2e8f0" strokeWidth={18}>
+          <title>{`Rectangular: ${nf(rectangular)} pcs`}</title>
+        </circle>
         {total > 0 && (
           <circle cx={70} cy={70} r={r} fill="none" stroke="#d97706" strokeWidth={18}
-            strokeDasharray={`${c * toroPct} ${c}`} transform="rotate(-90 70 70)" strokeLinecap="butt" />
+            strokeDasharray={`${c * toroPct} ${c}`} transform="rotate(-90 70 70)" strokeLinecap="butt">
+            <title>{`Toroidal: ${nf(toroidal)} pcs (${Math.round(toroPct * 100)}%)`}</title>
+          </circle>
         )}
         <text x={70} y={66} textAnchor="middle" fontSize={13} fontWeight="700" fill="#0f172a">{nf(total)}</text>
         <text x={70} y={82} textAnchor="middle" fontSize={9} fill="#94a3b8">pcs</text>

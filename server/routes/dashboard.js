@@ -393,7 +393,7 @@ router.get('/analysis', requirePermission('manage_invoices'), asyncHandler(async
           FROM \`SalesInvoice\` si LEFT JOIN \`Customer\` c ON c.\`id\` = si.\`customerId\`
           WHERE si.\`companyId\` = ? AND si.\`invoiceDate\` >= ? AND si.\`invoiceDate\` <= ?
           GROUP BY si.\`customerId\`, c.\`name\`, c.\`customerCode\`
-          ORDER BY invoiced DESC LIMIT 8`, [companyId, rangeStart, rangeEnd]),
+          ORDER BY invoiced DESC LIMIT 1000`, [companyId, rangeStart, rangeEnd]),
     q(`SELECT COALESCE(NULLIF(TRIM(c.\`state\`),''),'—') state, COALESCE(SUM(si.\`amount\`),0) amt, COUNT(*) cnt
           FROM \`SalesInvoice\` si LEFT JOIN \`Customer\` c ON c.\`id\` = si.\`customerId\`
           WHERE si.\`companyId\` = ? AND si.\`invoiceDate\` >= ? AND si.\`invoiceDate\` <= ?
