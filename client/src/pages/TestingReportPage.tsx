@@ -242,6 +242,14 @@ export const TestingReportPage = () => {
       ci.replaceWith(span);
     });
 
+    // html2pdf reads the *legacy* `page-break-inside` (Tailwind's break-inside
+    // class isn't enough), so stamp it on every item block to stop a single
+    // item being split across two pages.
+    clone.querySelectorAll<HTMLElement>('.pdf-keep').forEach((node) => {
+      node.style.pageBreakInside = 'avoid';
+      node.style.breakInside = 'avoid';
+    });
+
     clone.style.width = `${A4_USABLE_PX}px`;
     clone.style.minWidth = '0';
     clone.style.overflow = 'visible';
@@ -555,9 +563,9 @@ export const TestingReportPage = () => {
    "2173.9 mA" show in full — both on screen and in the exported PDF. The extra
    vertical padding + relaxed line-height keep descenders clear of the border. */
 const HdrCell = ({ label, value, strong }: { label: string; value: string; strong?: boolean }) => (
-  <div className="flex min-w-0 flex-col items-center justify-center text-center border-r border-b border-slate-200 px-2 py-2 leading-normal">
-    <span className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">{label}</span>
-    <span className={`mt-1 break-words text-[11px] leading-normal ${strong ? 'font-bold text-slate-900' : 'font-medium text-slate-800'}`}>{value}</span>
+  <div className="min-w-0 border-r border-b border-slate-200 px-2 py-2 text-center leading-normal">
+    <div className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+    <div className={`mt-1 break-words text-[11px] leading-normal ${strong ? 'font-bold text-slate-900' : 'font-medium text-slate-800'}`}>{value}</div>
   </div>
 );
 
