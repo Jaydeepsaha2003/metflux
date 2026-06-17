@@ -161,7 +161,7 @@ export const DashboardPage = () => {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
@@ -207,7 +207,7 @@ export const DashboardPage = () => {
             <Loader2 className="h-5 w-5 animate-spin" /> Loading…
           </div>
         ) : !stats ? null : (
-          <div className="grid grid-cols-2 gap-2.5 sm:gap-3 md:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-5">
             <KpiCard
               icon={FileText} accent="brand"
               label="Sales orders"
@@ -256,13 +256,13 @@ export const DashboardPage = () => {
       {/* ── Top customers ── */}
       {stats && stats.topCustomers.length > 0 && (
         <section>
-          <h2 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <h2 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
             <span className="inline-block h-3.5 w-1 rounded-sm bg-amber-400" />
             Top customers
           </h2>
           <div className="card divide-y divide-slate-100">
             {stats.topCustomers.map((c, i) => (
-              <div key={c.id} className="flex items-center gap-3 px-3 py-2.5">
+              <div key={c.id} className="flex items-center gap-3 px-4 py-3">
                 <div className={cn(
                   'grid h-6 w-6 place-items-center rounded-full text-[11px] font-bold shrink-0',
                   i === 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
@@ -301,7 +301,7 @@ export const DashboardPage = () => {
       {/* ── Monthly chart ── */}
       {monthlyData && (
         <section>
-          <h2 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <h2 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
             <span className="inline-block h-3.5 w-1 rounded-sm bg-indigo-400" />
             <TrendingUp className="h-3.5 w-3.5 text-indigo-500" />
             Monthly orders — last 12 months
@@ -324,7 +324,7 @@ export const DashboardPage = () => {
 
       {/* ── Employee performance ── */}
       <section>
-        <div className="mb-2 flex items-center justify-between gap-3">
+        <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500 flex items-center gap-2">
             <span className="inline-block h-3.5 w-1 rounded-sm bg-indigo-400" />
             <Users2 className="h-3.5 w-3.5 text-indigo-500" /> Employee performance
@@ -457,7 +457,7 @@ const DateRangeFilter = ({
   onApplyPreset: (p: typeof PRESETS[number]) => void;
   onReset: () => void;
 }) => (
-  <div className="card flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
+  <div className="card flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5">
     <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
       <CalendarRange className="h-3.5 w-3.5" /> Range
     </div>
@@ -594,18 +594,18 @@ const KpiCard = ({
   /** Toroidal / Rectangular pcs breakdown shown as small tags. */
   split?: { toroidal: number; rectangular: number };
 }) => (
-  <div className="card relative flex flex-col p-3 pt-3.5">
+  <div className="card relative flex flex-col p-4 pt-[18px]">
     <span className={cn('absolute inset-x-0 top-0 h-1 rounded-t-xl', TOP_BARS[accent])} />
     <div className="flex items-center gap-2">
-      <div className={cn('grid h-7 w-7 place-items-center rounded-md ring-1 shrink-0', ACCENTS[accent])}>
-        <Icon className="h-3.5 w-3.5" />
+      <div className={cn('grid h-8 w-8 place-items-center rounded-lg ring-1 shrink-0', ACCENTS[accent])}>
+        <Icon className="h-4 w-4" />
       </div>
       <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 truncate flex-1 min-w-0">
         {label}
       </div>
       {info && <InfoTip text={info} />}
     </div>
-    <div className="mt-1.5 text-lg font-bold tracking-tight text-slate-900 tabular-nums leading-tight">
+    <div className="mt-2.5 text-xl font-bold tracking-tight text-slate-900 tabular-nums leading-tight">
       {primary}
     </div>
     {split && (split.toroidal > 0 || split.rectangular > 0) && (
@@ -622,7 +622,7 @@ const KpiCard = ({
         )}
       </div>
     )}
-    <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+    <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
       {amount && (
         <span className={cn(
           'inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1',
