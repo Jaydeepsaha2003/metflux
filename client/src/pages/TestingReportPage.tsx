@@ -438,7 +438,7 @@ export const TestingReportPage = () => {
                     turns, applied voltage) sit in a header band BEFORE the pcs
                     counts; the readings go in a 4-up grid (SN | Actual IeMax × 4
                     = 8 columns) so a page holds ~4× the samples it used to. */}
-                {g.rows.map((d) => {
+                {g.rows.map((d, idx) => {
                   const samples = sampleRowsByDispatch[d.id] ?? [];
                   const PER_ROW = 4; // 4 (SN, IeMax) pairs across = 8 columns
                   const gridRows: (number | null)[][] = [];
@@ -447,6 +447,10 @@ export const TestingReportPage = () => {
                   }
                   return (
                     <div key={d.id} className="border-b border-slate-300">
+                      {/* Gutter strip separating this item from the previous one. */}
+                      {idx > 0 && (
+                        <div className="h-3 border-b border-slate-300 bg-slate-100 print:h-2" />
+                      )}
                       {/* Item header — measure / grade / turns / voltage first,
                           then the pcs counts + spec current. */}
                       <div className="grid grid-cols-2 sm:grid-cols-4 border-b border-slate-300 bg-slate-50">
