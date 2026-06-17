@@ -448,11 +448,17 @@ export const TestingReportPage = () => {
 
                 {/* Per-item sample sheets. The constant fields (measure, grade,
                     turns, applied voltage) sit in a header band BEFORE the pcs
-                    counts; the readings go in a 4-up grid (SN | Actual IeMax × 4
-                    = 8 columns) so a page holds ~4× the samples it used to. */}
+                    counts; the readings go in an up-to-4-wide grid (SN | Actual
+                    IeMax pairs). The column count ADAPTS to the sample count so a
+                    1-/2-/3-sample item fills the width with no empty columns. */}
                 {g.rows.map((d, idx) => {
                   const samples = sampleRowsByDispatch[d.id] ?? [];
-                  const PER_ROW = 4; // 4 (SN, IeMax) pairs across = 8 columns
+                  // 1 sample → 1 wide column; 4+ → the full 4-up grid.
+                  const PER_ROW = Math.min(4, Math.max(1, samples.length));
+                  // Spread the columns to fill 100% width whatever the count is.
+                  const pairW = 100 / PER_ROW;
+                  const snW = Math.min(8, pairW * 0.35);
+                  const valW = pairW - snW;
                   const gridRows: (number | null)[][] = [];
                   for (let i = 0; i < samples.length; i += PER_ROW) {
                     gridRows.push(samples.slice(i, i + PER_ROW));
@@ -480,8 +486,8 @@ export const TestingReportPage = () => {
                         <colgroup>
                           {Array.from({ length: PER_ROW }).map((_, i) => (
                             <Fragment key={i}>
-                              <col style={{ width: '7%' }} />
-                              <col style={{ width: '18%' }} />
+                              <col style={{ width: `${snW}%` }} />
+                              <col style={{ width: `${valW}%` }} />
                             </Fragment>
                           ))}
                         </colgroup>
