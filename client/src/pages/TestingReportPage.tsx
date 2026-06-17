@@ -270,7 +270,7 @@ export const TestingReportPage = () => {
         windowWidth: A4_USABLE_PX,
       },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak: { mode: ['css', 'legacy'], before: '.tr-page-break', avoid: ['tr'] },
+      pagebreak: { mode: ['css', 'legacy'], before: '.tr-page-break', avoid: ['tr', '.pdf-keep'] },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).from(clone);
 
@@ -446,7 +446,7 @@ export const TestingReportPage = () => {
                     gridRows.push(samples.slice(i, i + PER_ROW));
                   }
                   return (
-                    <div key={d.id} className="border-b border-slate-300">
+                    <div key={d.id} className="border-b border-slate-300 break-inside-avoid pdf-keep">
                       {/* Gutter strip separating this item from the previous one. */}
                       {idx > 0 && (
                         <div className="h-3 border-b border-slate-300 bg-slate-100 print:h-2" />
@@ -555,7 +555,7 @@ export const TestingReportPage = () => {
    "2173.9 mA" show in full — both on screen and in the exported PDF. The extra
    vertical padding + relaxed line-height keep descenders clear of the border. */
 const HdrCell = ({ label, value, strong }: { label: string; value: string; strong?: boolean }) => (
-  <div className="flex min-w-0 flex-col border-r border-b border-slate-200 px-2 py-2 leading-normal">
+  <div className="flex min-w-0 flex-col items-center justify-center text-center border-r border-b border-slate-200 px-2 py-2 leading-normal">
     <span className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">{label}</span>
     <span className={`mt-1 break-words text-[11px] leading-normal ${strong ? 'font-bold text-slate-900' : 'font-medium text-slate-800'}`}>{value}</span>
   </div>
