@@ -41,6 +41,7 @@ import { DebtorAgingPage } from '@/pages/DebtorAgingPage';
 import { ReceivePaymentsPage } from '@/pages/ReceivePaymentsPage';
 import { DataCleanupPage } from '@/pages/DataCleanupPage';
 import { CustomerPortalPage } from '@/pages/CustomerPortalPage';
+import { BusinessAnalysisPage } from '@/pages/BusinessAnalysisPage';
 import { AppLayout } from '@/components/AppLayout';
 import { RequireAuth } from '@/components/RequireAuth';
 
@@ -56,6 +57,7 @@ export const App = () => (
       }
     >
       <Route path="/" element={<DashboardPage />} />
+      <Route path="/analysis" element={<BusinessAnalysisPage />} />
 
       {/* PO Order group */}
       <Route path="/po/new"          element={<POOrderNewPage />} />

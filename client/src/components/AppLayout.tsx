@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, LogOut, ChevronDown, FileText, Settings as SettingsIcon,
   Plus, ListChecks, BarChart3, Layers, Building2, Factory, Inbox, ClipboardList,
   PanelLeftClose, Users2, Truck, PackageCheck, ShoppingCart, Activity, RotateCcw, Menu, X, ShieldAlert,
-  Receipt, Clock, Wallet,
+  Receipt, Clock, Wallet, TrendingUp,
 } from 'lucide-react';
 import { useAuthStore, can, activeMembership } from '@/store/auth';
 import type { PermissionKey } from '@/lib/permissions';
@@ -29,6 +29,7 @@ type NavItem = NavLeaf | NavGroup;
 
 const NAV: NavItem[] = [
   { kind: 'leaf', to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { kind: 'leaf', to: '/analysis', label: 'Analysis', icon: TrendingUp, perm: 'manage_invoices' },
   {
     kind: 'group', key: 'po', label: 'Sales Order', icon: FileText,
     children: [
