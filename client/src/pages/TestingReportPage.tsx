@@ -235,8 +235,12 @@ export const TestingReportPage = () => {
       const v = liveInputs[i]?.value ?? '';
       const span = document.createElement('span');
       span.className = ci.className;
-      span.style.display = 'block';
-      span.style.lineHeight = '36px';
+      // Mimic the input's vertical centering so editable header values line up
+      // with the plain cells beside them in the PDF (html2canvas renders them at
+      // different heights otherwise, making the header look misaligned).
+      span.style.display = 'flex';
+      span.style.alignItems = 'center';
+      span.style.minHeight = '34px';
       span.style.whiteSpace = 'pre';
       span.textContent = v.length ? v : ' ';
       ci.replaceWith(span);
@@ -249,6 +253,9 @@ export const TestingReportPage = () => {
       node.style.pageBreakInside = 'avoid';
       node.style.breakInside = 'avoid';
     });
+    // Each item is forced onto its own page in the PDF, so the on-screen gutter
+    // strips between items are pointless there — drop them from the clone.
+    clone.querySelectorAll('.gutter-strip').forEach((n) => n.remove());
 
     clone.style.width = `${A4_USABLE_PX}px`;
     clone.style.minWidth = '0';
@@ -454,10 +461,10 @@ export const TestingReportPage = () => {
                     gridRows.push(samples.slice(i, i + PER_ROW));
                   }
                   return (
-                    <div key={d.id} className="border-b border-slate-300 break-inside-avoid pdf-keep">
-                      {/* Gutter strip separating this item from the previous one. */}
+                    <div key={d.id} className={`border-b border-slate-300 break-inside-avoid pdf-keep ${idx > 0 ? 'tr-page-break' : ''}`}>
+                      {/* On-screen gutter strip; in the PDF each item gets its own page instead. */}
                       {idx > 0 && (
-                        <div className="h-3 border-b border-slate-300 bg-slate-100 print:h-2" />
+                        <div className="gutter-strip h-3 border-b border-slate-300 bg-slate-100" />
                       )}
                       {/* Item header — measure / grade / turns / voltage first,
                           then the pcs counts + spec current. */}
@@ -571,10 +578,10 @@ const HdrCell = ({ label, value, strong }: { label: string; value: string; stron
 
 const InfoRow = ({ label, value, border }: { label: string; value: string; border: string }) => (
   <div className={`flex ${border} border-slate-300`}>
-    <span className="w-28 shrink-0 bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 border-r border-slate-300">
+    <span className="flex w-28 shrink-0 items-center bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 border-r border-slate-300">
       {label}
     </span>
-    <span className="flex-1 px-3 py-1.5 text-sm font-medium">{value}</span>
+    <span className="flex flex-1 items-center px-3 py-1.5 text-sm font-medium">{value}</span>
   </div>
 );
 
@@ -588,14 +595,14 @@ const InfoEdit = ({
   border: string;
 }) => (
   <div className={`flex ${border} border-slate-300`}>
-    <span className="w-28 shrink-0 bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 border-r border-slate-300">
+    <span className="flex w-28 shrink-0 items-center bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 border-r border-slate-300">
       {label}
     </span>
     <input
       type={type}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="flex-1 min-w-0 bg-transparent px-3 py-1.5 text-sm font-medium outline-none focus:bg-amber-50/40"
+      className="flex-1 min-w-0 self-stretch bg-transparent px-3 py-1.5 text-sm font-medium outline-none focus:bg-amber-50/40"
     />
   </div>
 );
