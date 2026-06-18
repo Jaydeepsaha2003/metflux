@@ -42,6 +42,7 @@ import { ReceivePaymentsPage } from '@/pages/ReceivePaymentsPage';
 import { DataCleanupPage } from '@/pages/DataCleanupPage';
 import { CustomerPortalPage } from '@/pages/CustomerPortalPage';
 import { BusinessAnalysisPage } from '@/pages/BusinessAnalysisPage';
+import { TestingCalculatorPage } from '@/pages/TestingCalculatorPage';
 import { AppLayout } from '@/components/AppLayout';
 import { RequireAuth } from '@/components/RequireAuth';
 
@@ -76,6 +77,9 @@ export const App = () => (
       <Route path="/dispatch"        element={<DispatchListPage />} />
       <Route path="/dispatch/new"    element={<DispatchNewPage />} />
       <Route path="/dispatch/:id"    element={<DispatchEditPage />} />
+
+      {/* Testing calculator */}
+      <Route path="/testing"        element={<TestingCalculatorPage />} />
 
       {/* Packing */}
       <Route path="/packing"        element={<PackingPage />} />
