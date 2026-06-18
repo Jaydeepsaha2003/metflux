@@ -8,7 +8,7 @@ import { q, qOne, insert, update, txn } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
-import { round2, parseAmount, parseDMY, normName, addDays } from '../lib/invoicing.js';
+import { round2, parseAmount, normName, addDays, inferDateOrder, parseDateWith } from '../lib/invoicing.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -137,6 +137,11 @@ router.post('/import', requirePermission('manage_invoices'), asyncHandler(async 
   const existingRows = await q('SELECT `invoiceNumber` FROM `SalesInvoice` WHERE `companyId` = ?', [req.tenant.companyId]);
   const existing = new Set(existingRows.map((r) => r.invoiceNumber));
 
+  // Decide the date order once for the file — the register mixes month-first
+  // invoices (4/1/25 = 1 Apr) with day-first credit notes (13-06-2025 = 13 Jun);
+  // an unambiguous component (>12) still wins per row.
+  const dateOrder = inferDateOrder(invoices.map((inv) => inv.dateStr));
+
   let imported = 0, skippedDuplicates = 0, unmatchedCustomers = 0, missingDueDays = 0;
   const errors = [];
   const seen = new Set();
@@ -147,7 +152,7 @@ router.post('/import', requirePermission('manage_invoices'), asyncHandler(async 
       if (existing.has(inv.invoiceNumber) || seen.has(inv.invoiceNumber)) { skippedDuplicates++; continue; }
       seen.add(inv.invoiceNumber);
 
-      const date = parseDMY(inv.dateStr);
+      const date = parseDateWith(inv.dateStr, dateOrder);
       if (!date) { errors.push({ invoiceNumber: inv.invoiceNumber, message: `Unreadable date "${inv.dateStr || '(blank)'}"` }); continue; }
 
       const match = byName.get(normName(inv.customerName));
