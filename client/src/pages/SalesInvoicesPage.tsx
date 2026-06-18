@@ -19,6 +19,7 @@ type Invoice = {
   customerId: string | null; customerName: string; customerCode: string | null; customerPhone: string | null;
   itemDetails: string | null; amount: number; paidAmount: number; balance: number;
   taxType: string | null; taxableAmount: number; igst: number; cgst: number; sgst: number; gst: number;
+  docType: 'INVOICE' | 'CREDIT_NOTE';
   dueDate: string | null; status: 'UNPAID' | 'PARTIAL' | 'PAID'; daysOverdue: number | null; needsAttention: boolean;
 };
 type ListResp = { items: Invoice[]; total: number; page: number; pageSize: number; totals: { amount: number; paid: number; balance: number } };
@@ -149,7 +150,7 @@ export const SalesInvoicesPage = () => {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <Receipt className="h-5 w-5 text-brand-600" /> Sales Invoices
+          <Receipt className="h-5 w-5 text-brand-600" /> Sales Register
         </h1>
         <button onClick={() => fileRef.current?.click()} disabled={uploading} className="btn-primary">
           {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
@@ -260,7 +261,14 @@ export const SalesInvoicesPage = () => {
                         onChange={() => toggleOne(inv.id)}
                       />
                     </td>
-                    <td className="px-3 py-2.5 font-medium text-slate-900">{inv.invoiceNumber}</td>
+                    <td className="px-3 py-2.5 font-medium text-slate-900">
+                      <span className="inline-flex items-center gap-1.5">
+                        {inv.invoiceNumber}
+                        {inv.docType === 'CREDIT_NOTE' && (
+                          <span className="rounded-full bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 ring-1 ring-rose-200">Credit note</span>
+                        )}
+                      </span>
+                    </td>
                     <td className="px-3 py-2.5 text-slate-600">{fmtDate(inv.invoiceDate)}</td>
                     <td className="px-3 py-2.5">
                       {inv.customerId ? (

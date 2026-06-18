@@ -31,6 +31,48 @@ export const parseDMY = (s) => {
   return Number.isNaN(dt.getTime()) ? null : dt;
 };
 
+/** Inspect a set of date strings and decide whether they're day-first (D/M/Y,
+ *  common in Indian exports like "15-04-2025") or month-first (M/D/Y, Tally's
+ *  voucher export). Uses any unambiguous value (a component > 12) to decide;
+ *  when everything is ambiguous, '-' leans day-first and '/' month-first. */
+export const inferDateOrder = (strings) => {
+  let dayFirst = 0, monthFirst = 0, slash = 0, dash = 0;
+  for (const s of strings) {
+    const m = /^(\d{1,2})([/\-.])(\d{1,2})[/\-.](\d{2,4})$/.exec(String(s ?? '').trim());
+    if (!m) continue;
+    const a = +m[1], b = +m[3];
+    if (m[2] === '/') slash++; else dash++;
+    if (a > 12 && b <= 12) dayFirst++;
+    else if (b > 12 && a <= 12) monthFirst++;
+  }
+  if (dayFirst && !monthFirst) return 'DMY';
+  if (monthFirst && !dayFirst) return 'MDY';
+  if (dayFirst || monthFirst) return dayFirst >= monthFirst ? 'DMY' : 'MDY';
+  return dash > slash ? 'DMY' : 'MDY';
+};
+
+/** Parse a date with a known component order ('DMY' | 'MDY'). An unambiguous
+ *  component (>12) always wins; otherwise the given order decides. Also accepts
+ *  an Excel serial number. → UTC midnight Date, or null. */
+export const parseDateWith = (s, order = 'MDY') => {
+  const str = String(s ?? '').trim();
+  const m = /^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$/.exec(str);
+  if (!m) {
+    const n = Number(str);
+    if (Number.isInteger(n) && n > 20000 && n < 80000) return new Date(Date.UTC(1899, 11, 30) + n * 86400000);
+    return null;
+  }
+  let a = +m[1], b = +m[2], y = +m[3];
+  if (y < 100) y += 2000;
+  let d, mo;
+  if (a > 12 && b <= 12) { d = a; mo = b; }
+  else if (b > 12 && a <= 12) { mo = a; d = b; }
+  else if (order === 'DMY') { d = a; mo = b; } else { mo = a; d = b; }
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  const dt = new Date(Date.UTC(y, mo - 1, d, 0, 0, 0));
+  return Number.isNaN(dt.getTime()) ? null : dt;
+};
+
 /** Normalize a party name for matching: drop "M/S", punctuation, case, spacing. */
 export const normName = (s) =>
   String(s ?? '')

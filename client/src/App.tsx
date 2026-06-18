@@ -43,6 +43,7 @@ import { DataCleanupPage } from '@/pages/DataCleanupPage';
 import { CustomerPortalPage } from '@/pages/CustomerPortalPage';
 import { BusinessAnalysisPage } from '@/pages/BusinessAnalysisPage';
 import { TestingCalculatorPage } from '@/pages/TestingCalculatorPage';
+import { PurchasesPage } from '@/pages/PurchasesPage';
 import { AppLayout } from '@/components/AppLayout';
 import { RequireAuth } from '@/components/RequireAuth';
 
@@ -99,6 +100,7 @@ export const App = () => (
       <Route path="/sales-invoices"          element={<SalesInvoicesPage />} />
       <Route path="/sales-invoices/aging"    element={<DebtorAgingPage />} />
       <Route path="/sales-invoices/payments" element={<ReceivePaymentsPage />} />
+      <Route path="/accounts/purchases"      element={<PurchasesPage />} />
 
       {/* Supplier Order group */}
       <Route path="/supplier-po/new"          element={<SupplierOrderNewPage />} />

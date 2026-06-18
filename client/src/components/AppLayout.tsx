@@ -57,11 +57,12 @@ const NAV: NavItem[] = [
   },
   { kind: 'leaf', to: '/returns', label: 'Return', icon: RotateCcw, perm: 'manage_returns' },
   {
-    kind: 'group', key: 'sales-invoices', label: 'Sales Invoices', icon: Receipt,
+    kind: 'group', key: 'accounts', label: 'Accounts', icon: Receipt,
     children: [
-      { kind: 'leaf', to: '/sales-invoices',          label: 'Invoices',         icon: FileText, end: true, perm: 'manage_invoices' },
-      { kind: 'leaf', to: '/sales-invoices/aging',    label: 'Debtor Aging',     icon: Clock,    perm: 'manage_invoices' },
-      { kind: 'leaf', to: '/sales-invoices/payments', label: 'Receive Payments', icon: Wallet,   perm: 'manage_invoices' },
+      { kind: 'leaf', to: '/sales-invoices',          label: 'Sales Register',    icon: FileText,     end: true, perm: 'manage_invoices' },
+      { kind: 'leaf', to: '/accounts/purchases',      label: 'Purchase Register', icon: ShoppingCart, perm: 'manage_invoices' },
+      { kind: 'leaf', to: '/sales-invoices/aging',    label: 'Debtor Aging',      icon: Clock,        perm: 'manage_invoices' },
+      { kind: 'leaf', to: '/sales-invoices/payments', label: 'Receive Payments',  icon: Wallet,       perm: 'manage_invoices' },
     ],
   },
   {

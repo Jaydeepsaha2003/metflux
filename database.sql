@@ -520,6 +520,8 @@ CREATE TABLE `SalesInvoice` (
     `dueDate` DATETIME(3) NULL,
     `paidAmount` DOUBLE NOT NULL DEFAULT 0,
     `status` ENUM('UNPAID', 'PARTIAL', 'PAID') NOT NULL DEFAULT 'UNPAID',
+    -- A negative invoice is a credit note (reduces the receivable).
+    `docType` ENUM('INVOICE', 'CREDIT_NOTE') NOT NULL DEFAULT 'INVOICE',
     `notes` VARCHAR(400) NULL,
     `createdById` VARCHAR(191) NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -529,6 +531,35 @@ CREATE TABLE `SalesInvoice` (
     INDEX `SalesInvoice_companyId_status_idx`(`companyId`, `status`),
     INDEX `SalesInvoice_customerId_idx`(`customerId`),
     UNIQUE INDEX `SalesInvoice_companyId_invoiceNumber_key`(`companyId`, `invoiceNumber`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable — the purchase register (supplier bills + debit notes). `amount`
+-- is the payable incl. GST and net of TDS; `tds` is the register's "Other
+-- Amount". A negative row is a debit note.
+CREATE TABLE `PurchaseInvoice` (
+    `id` VARCHAR(191) NOT NULL,
+    `companyId` VARCHAR(191) NOT NULL,
+    `invoiceNumber` VARCHAR(80) NOT NULL,
+    `invoiceDate` DATETIME(3) NOT NULL,
+    `supplierName` VARCHAR(200) NOT NULL,
+    `gstin` VARCHAR(40) NULL,
+    `taxType` VARCHAR(40) NULL,
+    `amount` DOUBLE NOT NULL DEFAULT 0,
+    `purchaseAmount` DOUBLE NOT NULL DEFAULT 0,
+    `taxableAmount` DOUBLE NOT NULL DEFAULT 0,
+    `igst` DOUBLE NOT NULL DEFAULT 0,
+    `cgst` DOUBLE NOT NULL DEFAULT 0,
+    `sgst` DOUBLE NOT NULL DEFAULT 0,
+    `tds` DOUBLE NOT NULL DEFAULT 0,
+    `docType` ENUM('INVOICE', 'DEBIT_NOTE') NOT NULL DEFAULT 'INVOICE',
+    `notes` VARCHAR(400) NULL,
+    `createdById` VARCHAR(191) NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+
+    INDEX `PurchaseInvoice_companyId_invoiceDate_idx`(`companyId`, `invoiceDate`),
+    UNIQUE INDEX `PurchaseInvoice_companyId_invoiceNumber_key`(`companyId`, `invoiceNumber`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
