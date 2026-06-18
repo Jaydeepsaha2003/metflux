@@ -38,14 +38,15 @@ const PAGE_SIZE = 20;
 export const DispatchListPage = () => {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<'date' | 'customer'>('date');
   const [page, setPage] = useState(1);
-  useEffect(() => { setPage(1); }, [search]);
+  useEffect(() => { setPage(1); }, [search, sort]);
   const queryClient = useQueryClient();
   const hideNames = useHideCustomerNames();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['dispatch', search, page],
-    queryFn: () => api<ListResp>(`/dispatch?search=${encodeURIComponent(search)}&page=${page}&pageSize=${PAGE_SIZE}`),
+    queryKey: ['dispatch', search, page, sort],
+    queryFn: () => api<ListResp>(`/dispatch?search=${encodeURIComponent(search)}&page=${page}&pageSize=${PAGE_SIZE}&sort=${sort}`),
   });
 
   const remove = useMutation({
@@ -76,13 +77,32 @@ export const DispatchListPage = () => {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <div className="text-xs text-slate-500 ml-auto">
-            {data ? `${data.total} record${data.total === 1 ? '' : 's'}` : ''}
+          <div className="ml-auto flex items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs text-slate-500">
+              <span className="hidden sm:inline">Sort by</span>
+              <div className="flex rounded-lg border border-slate-200 p-0.5">
+                {(['date', 'customer'] as const).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setSort(s)}
+                    className={cn(
+                      'rounded-md px-2.5 py-1 text-xs font-medium transition',
+                      sort === s ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100',
+                    )}
+                  >
+                    {s === 'date' ? 'Date' : 'Customer'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="text-xs text-slate-500">
+              {data ? `${data.total} record${data.total === 1 ? '' : 's'}` : ''}
+            </div>
           </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm whitespace-nowrap">
             <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-3 py-2.5 font-medium">Date</th>
@@ -113,16 +133,18 @@ export const DispatchListPage = () => {
                   </td>
                 </tr>
               )}
-              {data?.items.map((d) => (
-                <tr key={d.id} className="border-t border-slate-100 hover:bg-slate-50/60">
+              {data?.items.map((d, idx, arr) => {
+                // When sorting by customer, draw a heavier divider where the
+                // customer changes so each customer's dispatches read as a group.
+                const newGroup = sort === 'customer' && idx > 0 && arr[idx - 1].customerName !== d.customerName;
+                return (
+                <tr key={d.id} className={cn('hover:bg-slate-50/60', newGroup ? 'border-t-2 border-slate-300' : 'border-t border-slate-100')}>
                   <td className="px-3 py-2 text-slate-600">{formatDate(d.dispatchDate)}</td>
                   <td className="px-3 py-2 font-mono text-xs">{d.poNumber}</td>
                   <td className="px-3 py-2">
                     <div className="font-mono text-xs font-semibold text-brand-700">{d.customerCode ?? '—'}</div>
                     {!hideNames && (
-                      <div className="text-[11px] text-slate-500 truncate max-w-[180px]" title={d.customerName}>
-                        {d.customerName}
-                      </div>
+                      <div className="text-[11px] text-slate-500">{d.customerName}</div>
                     )}
                   </td>
                   <td className="px-3 py-2">
@@ -169,7 +191,8 @@ export const DispatchListPage = () => {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

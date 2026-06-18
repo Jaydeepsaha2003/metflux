@@ -169,10 +169,14 @@ router.get('/ready', requirePermission('dispatch'), asyncHandler(async (req, res
 
 /* GET / — paginated list */
 router.get('/', requirePermission('dispatch'), asyncHandler(async (req, res) => {
-  const { page, pageSize, search } = z.object({
+  const { page, pageSize, search, sort } = z.object({
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(200).default(50),
     search: z.string().trim().max(120).optional(),
+    // 'date' (newest first) or 'customer' (groups a customer's dispatches
+    // together, newest first within each — so same-customer/same-day rows sit
+    // next to each other).
+    sort: z.enum(['date', 'customer']).default('date'),
   }).parse(req.query);
   const skip = (page - 1) * pageSize;
 
@@ -184,8 +188,12 @@ router.get('/', requirePermission('dispatch'), asyncHandler(async (req, res) => 
     params.push(like, like, like, like, like, like);
   }
 
+  const orderBy = sort === 'customer'
+    ? 'c.`name` ASC, d.`dispatchDate` DESC, d.`createdAt` DESC'
+    : 'd.`dispatchDate` DESC, c.`name` ASC, d.`createdAt` DESC';
+
   const [rows, totalRow] = await Promise.all([
-    q(`${DISPATCH_ROW_SQL} WHERE ${where} ORDER BY d.\`dispatchDate\` DESC LIMIT ? OFFSET ?`,
+    q(`${DISPATCH_ROW_SQL} WHERE ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
       [...params, pageSize, skip]),
     qOne(
       `SELECT COUNT(*) AS n FROM \`Dispatch\` d
