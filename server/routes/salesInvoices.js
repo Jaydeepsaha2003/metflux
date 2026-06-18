@@ -133,26 +133,45 @@ router.post('/import', requirePermission('manage_invoices'), asyncHandler(async 
   // Build lookups: customer-by-name + existing invoice numbers (dedupe).
   const customers = await q('SELECT `id`, `name`, `dueDays` FROM `Customer` WHERE `companyId` = ?', [req.tenant.companyId]);
   const byName = new Map();
-  for (const c of customers) { const k = normName(c.name); if (k && !byName.has(k)) byName.set(k, c); }
-  const existingRows = await q('SELECT `invoiceNumber` FROM `SalesInvoice` WHERE `companyId` = ?', [req.tenant.companyId]);
-  const existing = new Set(existingRows.map((r) => r.invoiceNumber));
+  const byId = new Map();
+  for (const c of customers) { byId.set(c.id, c); const k = normName(c.name); if (k && !byName.has(k)) byName.set(k, c); }
+  // Existing rows keyed by invoice number — we re-parse their date on re-import
+  // so a wrong date from an earlier import (month/day swap) gets corrected.
+  const existingRows = await q('SELECT `id`, `invoiceNumber`, `invoiceDate`, `customerId` FROM `SalesInvoice` WHERE `companyId` = ?', [req.tenant.companyId]);
+  const existingByNum = new Map(existingRows.map((r) => [r.invoiceNumber, r]));
 
   // Decide the date order once for the file — the register mixes month-first
   // invoices (4/1/25 = 1 Apr) with day-first credit notes (13-06-2025 = 13 Jun);
   // an unambiguous component (>12) still wins per row.
   const dateOrder = inferDateOrder(invoices.map((inv) => inv.dateStr));
 
-  let imported = 0, skippedDuplicates = 0, unmatchedCustomers = 0, missingDueDays = 0;
+  let imported = 0, skippedDuplicates = 0, datesFixed = 0, unmatchedCustomers = 0, missingDueDays = 0;
   const errors = [];
   const seen = new Set();
 
   for (const inv of invoices) {
     try {
-      if (!inv.invoiceNumber) continue;
-      if (existing.has(inv.invoiceNumber) || seen.has(inv.invoiceNumber)) { skippedDuplicates++; continue; }
+      if (!inv.invoiceNumber || seen.has(inv.invoiceNumber)) { continue; }
       seen.add(inv.invoiceNumber);
 
       const date = parseDateWith(inv.dateStr, dateOrder);
+
+      // Already imported → don't re-insert, but correct its date if it changed.
+      const prior = existingByNum.get(inv.invoiceNumber);
+      if (prior) {
+        if (date) {
+          const cur = prior.invoiceDate ? new Date(prior.invoiceDate) : null;
+          if (!cur || cur.getTime() !== date.getTime()) {
+            const patch = { invoiceDate: date };
+            const c = prior.customerId ? byId.get(prior.customerId) : null;
+            if (c?.dueDays != null) patch.dueDate = addDays(date, Number(c.dueDays));
+            await update('SalesInvoice', prior.id, patch);
+            datesFixed++;
+          } else { skippedDuplicates++; }
+        } else { skippedDuplicates++; }
+        continue;
+      }
+
       if (!date) { errors.push({ invoiceNumber: inv.invoiceNumber, message: `Unreadable date "${inv.dateStr || '(blank)'}"` }); continue; }
 
       const match = byName.get(normName(inv.customerName));
@@ -189,7 +208,7 @@ router.post('/import', requirePermission('manage_invoices'), asyncHandler(async 
   }
 
   res.json({
-    imported, skippedDuplicates, unmatchedCustomers, missingDueDays,
+    imported, skippedDuplicates, datesFixed, unmatchedCustomers, missingDueDays,
     totalInvoicesInFile: invoices.length,
     errors: errors.slice(0, 100),
   });
