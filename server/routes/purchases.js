@@ -8,7 +8,7 @@ import { q, qOne, insert } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
-import { round2, parseAmount, inferDateOrder, parseDateWith } from '../lib/invoicing.js';
+import { round2, parseAmount, inferDateOrder, parseDateWith, isCancelledName } from '../lib/invoicing.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -92,16 +92,26 @@ router.post('/import', requirePermission('manage_invoices'), asyncHandler(async 
   // Decide the date order once for the whole file (this register is day-first).
   const dateOrder = inferDateOrder(invoices.map((i) => i.dateStr));
 
-  const existingRows = await q('SELECT `invoiceNumber` FROM `PurchaseInvoice` WHERE `companyId` = ?', [req.tenant.companyId]);
-  const existing = new Set(existingRows.map((r) => r.invoiceNumber));
-  let imported = 0, skippedDuplicates = 0, debitNotes = 0;
+  const existingRows = await q('SELECT `id`, `invoiceNumber` FROM `PurchaseInvoice` WHERE `companyId` = ?', [req.tenant.companyId]);
+  const existingByNum = new Map(existingRows.map((r) => [r.invoiceNumber, r.id]));
+  let imported = 0, skippedDuplicates = 0, debitNotes = 0, cancelled = 0;
   const errors = [];
   const seen = new Set();
 
   for (const inv of invoices) {
     try {
-      if (existing.has(inv.invoiceNumber) || seen.has(inv.invoiceNumber)) { skippedDuplicates++; continue; }
+      if (seen.has(inv.invoiceNumber)) continue;
       seen.add(inv.invoiceNumber);
+
+      // Cancelled voucher → skip, and remove it if a prior import saved it.
+      if (isCancelledName(inv.supplierName)) {
+        const id = existingByNum.get(inv.invoiceNumber);
+        if (id) await q('DELETE FROM `PurchaseInvoice` WHERE `id` = ?', [id]);
+        cancelled++;
+        continue;
+      }
+
+      if (existingByNum.has(inv.invoiceNumber)) { skippedDuplicates++; continue; }
       const date = parseDateWith(inv.dateStr, dateOrder);
       if (!date) { errors.push({ invoiceNumber: inv.invoiceNumber, message: `Unreadable date "${inv.dateStr || '(blank)'}"` }); continue; }
       const docType = round2(inv.amount) < 0 ? 'DEBIT_NOTE' : 'INVOICE';
@@ -127,7 +137,7 @@ router.post('/import', requirePermission('manage_invoices'), asyncHandler(async 
     }
   }
 
-  res.json({ imported, skippedDuplicates, debitNotes, totalInFile: invoices.length, errors: errors.slice(0, 100) });
+  res.json({ imported, skippedDuplicates, debitNotes, cancelled, totalInFile: invoices.length, errors: errors.slice(0, 100) });
 }));
 
 /* ---------- GET /summary ---------- */

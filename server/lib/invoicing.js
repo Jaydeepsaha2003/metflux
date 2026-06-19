@@ -73,6 +73,11 @@ export const parseDateWith = (s, order = 'MDY') => {
   return Number.isNaN(dt.getTime()) ? null : dt;
 };
 
+/** True when the account/party name marks a cancelled voucher. The export
+ *  writes it spaced out like "(C A N C E L L E D) - PARTY", so we strip
+ *  non-letters before testing for cancelled / canceled. */
+export const isCancelledName = (s) => /cancell?ed/.test(String(s ?? '').replace(/[^a-z]/gi, '').toLowerCase());
+
 /** Normalize a party name for matching: drop "M/S", punctuation, case, spacing. */
 export const normName = (s) =>
   String(s ?? '')

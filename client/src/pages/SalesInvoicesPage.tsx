@@ -24,7 +24,7 @@ type Invoice = {
 };
 type ListResp = { items: Invoice[]; total: number; page: number; pageSize: number; totals: { amount: number; paid: number; balance: number } };
 type Summary = { totalInvoices: number; outstanding: number; overdue: number; openCount: number; attention: number };
-type ImportResult = { imported: number; skippedDuplicates: number; datesFixed: number; unmatchedCustomers: number; missingDueDays: number; totalInvoicesInFile: number; errors: { invoiceNumber: string; message: string }[] };
+type ImportResult = { imported: number; skippedDuplicates: number; datesFixed: number; cancelled: number; unmatchedCustomers: number; missingDueDays: number; totalInvoicesInFile: number; errors: { invoiceNumber: string; message: string }[] };
 
 const PAGE_SIZE = 25;
 type StatusFilter = 'ALL' | 'UNPAID' | 'PARTIAL' | 'PAID' | 'OVERDUE';
@@ -351,6 +351,7 @@ export const SalesInvoicesPage = () => {
           <div className="space-y-2 text-sm">
             <Row k="Invoices imported" v={importResult.imported} tone="ok" />
             <Row k="Dates corrected" v={importResult.datesFixed} tone={importResult.datesFixed ? 'ok' : 'muted'} />
+            <Row k="Cancelled (skipped)" v={importResult.cancelled} tone="muted" />
             <Row k="Skipped (already present)" v={importResult.skippedDuplicates} tone="muted" />
             <Row k="No matching customer" v={importResult.unmatchedCustomers} tone={importResult.unmatchedCustomers ? 'warning' : 'muted'} />
             <Row k="Customer has no credit terms" v={importResult.missingDueDays} tone={importResult.missingDueDays ? 'warning' : 'muted'} />

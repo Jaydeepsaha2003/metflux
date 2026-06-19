@@ -19,7 +19,7 @@ type Purchase = {
 };
 type ListResp = { items: Purchase[]; total: number; page: number; pageSize: number; totals: { amount: number; tds: number; gst: number } };
 type Summary = { total: number; totalAmount: number; gst: number; tds: number; debitNotes: number };
-type ImportResult = { imported: number; skippedDuplicates: number; debitNotes: number; totalInFile: number; errors: { invoiceNumber: string; message: string }[] };
+type ImportResult = { imported: number; skippedDuplicates: number; debitNotes: number; cancelled: number; totalInFile: number; errors: { invoiceNumber: string; message: string }[] };
 
 type DocFilter = 'ALL' | 'INVOICE' | 'DEBIT_NOTE';
 const PAGE_SIZE = 25;
@@ -233,6 +233,7 @@ export const PurchasesPage = () => {
           <div className="space-y-1.5 text-sm">
             <Row k="Entries imported" v={importResult.imported} tone="ok" />
             <Row k="Debit notes" v={importResult.debitNotes} tone={importResult.debitNotes ? 'warning' : 'muted'} />
+            <Row k="Cancelled (skipped)" v={importResult.cancelled} tone="muted" />
             <Row k="Skipped (already present)" v={importResult.skippedDuplicates} tone="muted" />
             {importResult.errors.length > 0 && (
               <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-amber-200 bg-amber-50 text-xs">

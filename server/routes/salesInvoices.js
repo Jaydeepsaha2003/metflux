@@ -8,7 +8,7 @@ import { q, qOne, insert, update, txn } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
-import { round2, parseAmount, normName, addDays, inferDateOrder, parseDateWith } from '../lib/invoicing.js';
+import { round2, parseAmount, normName, addDays, inferDateOrder, parseDateWith, isCancelledName } from '../lib/invoicing.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -145,7 +145,7 @@ router.post('/import', requirePermission('manage_invoices'), asyncHandler(async 
   // an unambiguous component (>12) still wins per row.
   const dateOrder = inferDateOrder(invoices.map((inv) => inv.dateStr));
 
-  let imported = 0, skippedDuplicates = 0, datesFixed = 0, unmatchedCustomers = 0, missingDueDays = 0;
+  let imported = 0, skippedDuplicates = 0, datesFixed = 0, cancelled = 0, unmatchedCustomers = 0, missingDueDays = 0;
   const errors = [];
   const seen = new Set();
 
@@ -153,6 +153,18 @@ router.post('/import', requirePermission('manage_invoices'), asyncHandler(async 
     try {
       if (!inv.invoiceNumber || seen.has(inv.invoiceNumber)) { continue; }
       seen.add(inv.invoiceNumber);
+
+      // Cancelled voucher → never an invoice. Skip it, and remove it if a prior
+      // import had saved it.
+      if (isCancelledName(inv.customerName)) {
+        const prior = existingByNum.get(inv.invoiceNumber);
+        if (prior) {
+          await q('DELETE FROM `PaymentAllocation` WHERE `salesInvoiceId` = ?', [prior.id]);
+          await q('DELETE FROM `SalesInvoice` WHERE `id` = ?', [prior.id]);
+        }
+        cancelled++;
+        continue;
+      }
 
       const date = parseDateWith(inv.dateStr, dateOrder);
 
@@ -208,7 +220,7 @@ router.post('/import', requirePermission('manage_invoices'), asyncHandler(async 
   }
 
   res.json({
-    imported, skippedDuplicates, datesFixed, unmatchedCustomers, missingDueDays,
+    imported, skippedDuplicates, datesFixed, cancelled, unmatchedCustomers, missingDueDays,
     totalInvoicesInFile: invoices.length,
     errors: errors.slice(0, 100),
   });
