@@ -298,6 +298,16 @@ router.patch('/:id', requireRole('STAFF'), asyncHandler(async (req, res) => {
     } catch { /* SalesInvoice table absent on minimal installs — ignore */ }
   }
 
+  // Keep the name shown on this customer's invoices in step with the rename.
+  if (data.name && data.name !== existing.name) {
+    try {
+      await q(
+        'UPDATE `SalesInvoice` SET `customerName` = ? WHERE `companyId` = ? AND `customerId` = ?',
+        [data.name, req.tenant.companyId, id]
+      );
+    } catch { /* ignore */ }
+  }
+
   res.json(publicCustomer(updated));
 }));
 

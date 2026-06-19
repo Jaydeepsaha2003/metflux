@@ -24,10 +24,11 @@ type Invoice = {
 };
 type ListResp = { items: Invoice[]; total: number; page: number; pageSize: number; totals: { amount: number; paid: number; balance: number } };
 type Summary = { totalInvoices: number; outstanding: number; overdue: number; openCount: number; attention: number };
-type ImportResult = { imported: number; skippedDuplicates: number; datesFixed: number; cancelled: number; unmatchedCustomers: number; missingDueDays: number; totalInvoicesInFile: number; errors: { invoiceNumber: string; message: string }[] };
+type ImportResult = { imported: number; skippedDuplicates: number; datesFixed: number; cancelled: number; customersCreated: number; unmatchedCustomers: number; missingDueDays: number; totalInvoicesInFile: number; errors: { invoiceNumber: string; message: string }[] };
 
 const PAGE_SIZE = 25;
 type StatusFilter = 'ALL' | 'UNPAID' | 'PARTIAL' | 'PAID' | 'OVERDUE';
+type DocFilter = 'ALL' | 'INVOICE' | 'CREDIT_NOTE';
 
 const inr = (n: number) => '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const fmtDate = (iso: string | null) => {
@@ -48,6 +49,7 @@ export const SalesInvoicesPage = () => {
   const { confirm, confirmDialog } = useConfirm();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<StatusFilter>('ALL');
+  const [docType, setDocType] = useState<DocFilter>('ALL');
   const [attention, setAttention] = useState(false);
   const [page, setPage] = useState(1);
   // Bulk-selection state. `selected` holds explicitly-ticked ids (persists across
@@ -55,7 +57,7 @@ export const SalesInvoicesPage = () => {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [allMatching, setAllMatching] = useState(false);
   // Changing the filter invalidates any selection — start fresh.
-  useEffect(() => { setPage(1); setSelected(new Set()); setAllMatching(false); }, [search, status, attention]);
+  useEffect(() => { setPage(1); setSelected(new Set()); setAllMatching(false); }, [search, status, attention, docType]);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -69,9 +71,9 @@ export const SalesInvoicesPage = () => {
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['sales-invoices', search, status, attention, page],
+    queryKey: ['sales-invoices', search, status, attention, docType, page],
     queryFn: () => api<ListResp>(
-      `/sales-invoices?status=${status}&filter=${attention ? 'ATTENTION' : 'ALL'}&page=${page}&pageSize=${PAGE_SIZE}${search ? `&search=${encodeURIComponent(search)}` : ''}`
+      `/sales-invoices?status=${status}&filter=${attention ? 'ATTENTION' : 'ALL'}&docType=${docType}&page=${page}&pageSize=${PAGE_SIZE}${search ? `&search=${encodeURIComponent(search)}` : ''}`
     ),
   });
 
@@ -106,7 +108,7 @@ export const SalesInvoicesPage = () => {
   const clearSelection = () => { setSelected(new Set()); setAllMatching(false); };
 
   const bulkDel = useMutation({
-    mutationFn: (payload: { ids?: string[]; all?: boolean; status?: StatusFilter; search?: string; filter?: 'ALL' | 'ATTENTION' }) =>
+    mutationFn: (payload: { ids?: string[]; all?: boolean; status?: StatusFilter; search?: string; filter?: 'ALL' | 'ATTENTION'; docType?: DocFilter }) =>
       api<{ deleted: number }>('/sales-invoices/bulk-delete', { method: 'POST', json: payload }),
     onSuccess: () => { clearSelection(); refresh(); },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Bulk delete failed'),
@@ -140,7 +142,7 @@ export const SalesInvoicesPage = () => {
       tone: 'danger', confirmLabel: `Delete ${selectionCount}`,
     });
     if (!ok) return;
-    if (allMatching) bulkDel.mutate({ all: true, status, search: search || undefined, filter: attention ? 'ATTENTION' : 'ALL' });
+    if (allMatching) bulkDel.mutate({ all: true, status, search: search || undefined, filter: attention ? 'ATTENTION' : 'ALL', docType });
     else bulkDel.mutate({ ids: [...selected] });
   };
 
@@ -188,6 +190,16 @@ export const SalesInvoicesPage = () => {
             attention ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-amber-700 border-amber-300 hover:bg-amber-50')}>
           <AlertTriangle className="h-3 w-3" /> Needs attention
         </button>
+        <span className="mx-1 hidden h-4 w-px bg-slate-200 sm:inline-block" />
+        {(['ALL', 'INVOICE', 'CREDIT_NOTE'] as const).map((d) => (
+          <button key={d} onClick={() => setDocType(d)}
+            className={cn('rounded-full px-3 py-1 text-xs font-medium border transition',
+              docType === d
+                ? (d === 'CREDIT_NOTE' ? 'bg-rose-600 text-white border-rose-600' : 'bg-brand-600 text-white border-brand-600')
+                : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50')}>
+            {d === 'ALL' ? 'All docs' : d === 'INVOICE' ? 'Invoices' : 'Credit notes'}
+          </button>
+        ))}
       </div>
 
       {/* Bulk-selection toolbar */}
@@ -353,11 +365,11 @@ export const SalesInvoicesPage = () => {
             <Row k="Dates corrected" v={importResult.datesFixed} tone={importResult.datesFixed ? 'ok' : 'muted'} />
             <Row k="Cancelled (skipped)" v={importResult.cancelled} tone="muted" />
             <Row k="Skipped (already present)" v={importResult.skippedDuplicates} tone="muted" />
-            <Row k="No matching customer" v={importResult.unmatchedCustomers} tone={importResult.unmatchedCustomers ? 'warning' : 'muted'} />
+            <Row k="New customers created" v={importResult.customersCreated} tone={importResult.customersCreated ? 'ok' : 'muted'} />
             <Row k="Customer has no credit terms" v={importResult.missingDueDays} tone={importResult.missingDueDays ? 'warning' : 'muted'} />
-            {(importResult.unmatchedCustomers > 0 || importResult.missingDueDays > 0) && (
+            {(importResult.customersCreated > 0 || importResult.missingDueDays > 0) && (
               <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                Flagged invoices show in red. Set the customer's <strong>Credit Terms (Days)</strong> on the Customers page, or fix each invoice here, to get due dates &amp; aging.
+                Missing customers were created automatically. Set their <strong>Credit Terms (Days)</strong> on the Customers page (it syncs due dates to their invoices instantly), or fix each invoice here.
               </p>
             )}
             {importResult.errors.length > 0 && (

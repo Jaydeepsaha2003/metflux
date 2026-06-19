@@ -9,6 +9,7 @@ import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 import { round2, parseAmount, normName, addDays, inferDateOrder, parseDateWith, isCancelledName } from '../lib/invoicing.js';
+import { createCustomerRecord } from '../lib/customers.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -86,6 +87,8 @@ router.post('/import', requirePermission('manage_invoices'), asyncHandler(async 
   const cCgst    = findCol('cgst');
   const cSgst    = findCol('sgst');
   const cOther   = findCol('other');
+  const cGstin   = findCol('gstin', 'tin');   // for auto-creating customers
+  const cMobile  = findCol('mobile');
   const cell = (r, i) => (i >= 0 ? (r[i] ?? '').trim() : '');
 
   // A trailing totals row carries no Vch No and instead has "Total" in the
@@ -122,6 +125,8 @@ router.post('/import', requirePermission('manage_invoices'), asyncHandler(async 
         cgst:          parseAmount(r[cCgst]),
         sgst:          parseAmount(r[cSgst]),
         otherAmount:   parseAmount(r[cOther]),
+        gstin:         cell(r, cGstin) || null,
+        phone:         cell(r, cMobile) || null,
       };
       invoices.push(cur);
     } else if (cur && item) {
@@ -145,7 +150,7 @@ router.post('/import', requirePermission('manage_invoices'), asyncHandler(async 
   // an unambiguous component (>12) still wins per row.
   const dateOrder = inferDateOrder(invoices.map((inv) => inv.dateStr));
 
-  let imported = 0, skippedDuplicates = 0, datesFixed = 0, cancelled = 0, unmatchedCustomers = 0, missingDueDays = 0;
+  let imported = 0, skippedDuplicates = 0, datesFixed = 0, cancelled = 0, customersCreated = 0, unmatchedCustomers = 0, missingDueDays = 0;
   const errors = [];
   const seen = new Set();
 
@@ -186,7 +191,18 @@ router.post('/import', requirePermission('manage_invoices'), asyncHandler(async 
 
       if (!date) { errors.push({ invoiceNumber: inv.invoiceNumber, message: `Unreadable date "${inv.dateStr || '(blank)'}"` }); continue; }
 
-      const match = byName.get(normName(inv.customerName));
+      // Match the customer by name; auto-create one (with GSTIN/phone/state from
+      // the register) when there's no match, then link the invoice to it.
+      let match = inv.customerName ? byName.get(normName(inv.customerName)) : null;
+      if (!match && inv.customerName) {
+        match = await createCustomerRecord({
+          companyId: req.tenant.companyId, createdById: req.auth.userId,
+          name: inv.customerName, gstNumber: inv.gstin, phone: inv.phone,
+        });
+        byName.set(normName(match.name), match);   // cache for later rows
+        byId.set(match.id, match);
+        customersCreated++;
+      }
       let dueDate = null;
       if (!match) unmatchedCustomers++;
       else if (match.dueDays == null) missingDueDays++;
@@ -220,7 +236,7 @@ router.post('/import', requirePermission('manage_invoices'), asyncHandler(async 
   }
 
   res.json({
-    imported, skippedDuplicates, datesFixed, cancelled, unmatchedCustomers, missingDueDays,
+    imported, skippedDuplicates, datesFixed, cancelled, customersCreated, unmatchedCustomers, missingDueDays,
     totalInvoicesInFile: invoices.length,
     errors: errors.slice(0, 100),
   });
@@ -309,12 +325,13 @@ router.get('/aging', requirePermission('manage_invoices'), asyncHandler(async (r
 
 /* ---------- GET / — paginated list ---------- */
 router.get('/', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
-  const { page, pageSize, search, status, filter } = z.object({
+  const { page, pageSize, search, status, filter, docType } = z.object({
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(10000).default(50),
     search: z.string().trim().max(120).optional(),
     status: z.enum(['UNPAID', 'PARTIAL', 'PAID', 'OVERDUE', 'ALL']).default('ALL'),
     filter: z.enum(['ALL', 'ATTENTION']).default('ALL'),
+    docType: z.enum(['ALL', 'INVOICE', 'CREDIT_NOTE']).default('ALL'),
   }).parse(req.query);
   const skip = (page - 1) * pageSize;
 
@@ -323,6 +340,7 @@ router.get('/', requirePermission('manage_invoices'), asyncHandler(async (req, r
   if (status === 'OVERDUE') where += " AND si.`status` <> 'PAID' AND si.`dueDate` IS NOT NULL AND si.`dueDate` < NOW()";
   else if (status !== 'ALL') { where += ' AND si.`status` = ?'; params.push(status); }
   if (filter === 'ATTENTION') where += ' AND (si.`customerId` IS NULL OR si.`dueDate` IS NULL)';
+  if (docType !== 'ALL') { where += ' AND si.`docType` = ?'; params.push(docType); }
   if (search) { const like = `%${search}%`; where += ' AND (si.`invoiceNumber` LIKE ? OR si.`customerName` LIKE ?)'; params.push(like, like); }
 
   const base = `FROM \`SalesInvoice\` si LEFT JOIN \`Customer\` c ON c.\`id\` = si.\`customerId\` WHERE ${where}`;
@@ -393,6 +411,7 @@ router.post('/bulk-delete', requirePermission('manage_invoices'), asyncHandler(a
     status: z.enum(['UNPAID', 'PARTIAL', 'PAID', 'OVERDUE', 'ALL']).default('ALL'),
     search: z.string().trim().max(120).optional(),
     filter: z.enum(['ALL', 'ATTENTION']).default('ALL'),
+    docType: z.enum(['ALL', 'INVOICE', 'CREDIT_NOTE']).default('ALL'),
   }).parse(req.body);
 
   // Resolve the target invoice ids, always re-scoped to the active company.
@@ -403,6 +422,7 @@ router.post('/bulk-delete', requirePermission('manage_invoices'), asyncHandler(a
     if (body.status === 'OVERDUE') where += " AND si.`status` <> 'PAID' AND si.`dueDate` IS NOT NULL AND si.`dueDate` < NOW()";
     else if (body.status !== 'ALL') { where += ' AND si.`status` = ?'; params.push(body.status); }
     if (body.filter === 'ATTENTION') where += ' AND (si.`customerId` IS NULL OR si.`dueDate` IS NULL)';
+    if (body.docType !== 'ALL') { where += ' AND si.`docType` = ?'; params.push(body.docType); }
     if (body.search) { const like = `%${body.search}%`; where += ' AND (si.`invoiceNumber` LIKE ? OR si.`customerName` LIKE ?)'; params.push(like, like); }
     const rows = await q(`SELECT si.\`id\` FROM \`SalesInvoice\` si WHERE ${where}`, params);
     ids = rows.map((r) => r.id);
