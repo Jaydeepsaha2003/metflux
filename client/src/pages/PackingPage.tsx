@@ -7,11 +7,13 @@ import {
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
+import { useHideCustomerNames } from '@/store/auth';
 
 type PendingDispatch = {
   id: string;
   poNumber: string;
   customerName: string;
+  customerCode: string | null;
   coreType: 'TOROIDAL' | 'RECTANGULAR';
   grade: string;
   material: string;
@@ -34,6 +36,7 @@ type PackingListItem = {
   totalWeight: number;
   poNumber: string | null;
   customerName: string | null;
+  customerCode: string | null;
   dispatchDate: string | null;
   createdAt: string;
 };
@@ -142,6 +145,7 @@ export const PackingPage = () => {
   const [selected, setSelected]   = useState<Set<string>>(new Set());
   const [editing, setEditing]     = useState<PackingListItem | null>(null);
   const { confirm, confirmDialog } = useConfirm();
+  const hideNames = useHideCustomerNames();
 
   const { data: pending, isLoading: loadingPending } = useQuery({
     queryKey: ['packing-pending', search],
@@ -276,7 +280,11 @@ export const PackingPage = () => {
                             onChange={() => toggleRow(d.id)} onClick={(e) => e.stopPropagation()}
                             className="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
                         </td>
-                        <td className="px-4 py-3 font-medium">{d.customerName}</td>
+                        <td className="px-4 py-3 font-medium">
+                          {hideNames
+                            ? <span className="font-mono text-xs font-semibold text-brand-700">{d.customerCode ?? '••••'}</span>
+                            : d.customerName}
+                        </td>
                         <td className="px-4 py-3 text-slate-600 font-mono text-xs">{d.poNumber}</td>
                         <td className="px-4 py-3">
                           <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium',
@@ -371,7 +379,11 @@ export const PackingPage = () => {
                     <tr key={pl.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3 font-semibold text-brand-700">{pl.plNumber}</td>
                       <td className="px-4 py-3 text-slate-600">{fmt(pl.plDate)}</td>
-                      <td className="px-4 py-3 font-medium">{pl.customerName ?? '—'}</td>
+                      <td className="px-4 py-3 font-medium">
+                        {hideNames
+                          ? <span className="font-mono text-xs font-semibold text-brand-700">{pl.customerCode ?? '••••'}</span>
+                          : (pl.customerName ?? '—')}
+                      </td>
                       <td className="px-4 py-3 text-slate-600 font-mono text-xs">{pl.poNumber ?? '—'}</td>
                       <td className="px-4 py-3 text-slate-600">{fmt(pl.dispatchDate)}</td>
                       <td className="px-4 py-3 text-center">

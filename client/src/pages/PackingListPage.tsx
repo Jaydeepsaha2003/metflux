@@ -13,7 +13,7 @@ import html2pdf from 'html2pdf.js';
 /* ── Types ────────────────────────────────────────────────────── */
 type DispatchDetail = {
   id: string; poNumber: string; orderDate: string;
-  customerName: string; customerState: string | null;
+  customerName: string; customerCode: string | null; customerState: string | null;
   customerPhone: string | null;
   coreType: 'TOROIDAL' | 'RECTANGULAR';
   grade: string; material: string; measure: string;
@@ -233,7 +233,10 @@ export const PackingListPage = () => {
     .filter((cg) => cg.grades.length > 0);
 
   /* Display helpers */
-  const uniqueCustomers = [...new Set(dispatches.map((d) => d.customerName))];
+  // Customer NAME is never printed on the packing list — only the customer code
+  // is shown (this holds even for admins). A record with no code shows a dash
+  // rather than ever leaking the name.
+  const uniqueCustomers = [...new Set(dispatches.map((d) => d.customerCode || '—'))];
   const uniqueStates = [...new Set(dispatches.map((d) => d.customerState).filter(Boolean))];
   const customerLabel = uniqueCustomers.join(', ');
   const stateLabel = uniqueStates.join(', ') || '—';
@@ -525,7 +528,7 @@ export const PackingListPage = () => {
 
           {/* Info rows */}
           <div className="grid grid-cols-2 border-b border-slate-300 text-sm">
-            <InfoRow label="Customer" value={customerLabel} border="border-r border-b" />
+            <InfoRow label="Customer Code" value={customerLabel} border="border-r border-b" />
             <InfoRow label="State" value={stateLabel} border="border-b" />
             <InfoRow label="WO No." value={woNo || '—'} border="border-r border-b" />
             <InfoRow label="WO Date" value={woDate ? fmtDate(woDate) : '—'} border="border-b" />

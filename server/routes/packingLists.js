@@ -65,6 +65,7 @@ const flattenDispatch = (d) => ({
   poNumber:      d.po_number      ?? null,
   orderDate:     d.po_orderDate   ?? null,
   customerName:  d.customer_name  ?? null,
+  customerCode:  d.customer_code  ?? null,
   customerState: d.customer_state ?? null,
   customerPhone: d.customer_phone ?? null,
   coreType:      d.item_coreType  ?? null,
@@ -102,7 +103,8 @@ const loadDispatchesForPls = async (plIds) => {
             it.\`turns\` AS item_turns, it.\`flux\` AS item_flux,
             it.\`testVoltage\` AS item_testVoltage, it.\`testCurrent\` AS item_testCurrent,
             po.\`poNumber\` AS po_number, po.\`orderDate\` AS po_orderDate,
-            c.\`name\` AS customer_name, c.\`state\` AS customer_state, c.\`phone\` AS customer_phone
+            c.\`name\` AS customer_name, c.\`customerCode\` AS customer_code,
+            c.\`state\` AS customer_state, c.\`phone\` AS customer_phone
        FROM \`PackingListItem\` pli
        INNER JOIN \`Dispatch\`    d  ON d.\`id\`  = pli.\`dispatchId\`
        INNER JOIN \`PoOrderItem\` it ON it.\`id\` = d.\`poOrderItemId\`
@@ -141,6 +143,7 @@ const flattenPl = (pl, dispatchRows = []) => {
     totalWeight,
     poNumber:     first.poNumber ?? null,
     customerName: first.customerName ?? null,
+    customerCode: first.customerCode ?? null,
     dispatchDate: first.dispatchDate ?? null,
     dispatches,
   };
@@ -160,7 +163,7 @@ router.get('/pending', requirePermission('dispatch'), asyncHandler(async (req, r
 
   const rows = await q(
     `SELECT d.*, it.\`coreType\`, it.\`grade\`, it.\`material\`,
-            po.\`poNumber\`, c.\`name\` AS customerName
+            po.\`poNumber\`, c.\`name\` AS customerName, c.\`customerCode\` AS customerCode
        FROM \`Dispatch\` d
        LEFT JOIN \`PackingListItem\` pli ON pli.\`dispatchId\` = d.\`id\`
        INNER JOIN \`PoOrderItem\` it ON it.\`id\` = d.\`poOrderItemId\`
@@ -175,6 +178,7 @@ router.get('/pending', requirePermission('dispatch'), asyncHandler(async (req, r
     id:           d.id,
     poNumber:     d.poNumber,
     customerName: d.customerName,
+    customerCode: d.customerCode,
     coreType:     d.coreType,
     grade:        d.grade,
     material:     d.material,

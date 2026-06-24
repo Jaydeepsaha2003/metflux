@@ -23,6 +23,8 @@ export const PERMISSION_KEYS = Object.freeze([
   // Production
   'rec_production',
   'modify_prod_qty',
+  // Testing calculator & report
+  'view_testing',
   // Master data
   'add_customer',
   'add_supplier',
@@ -48,6 +50,7 @@ export const PERMISSION_LABELS = Object.freeze({
   assign_work:      'Assign Work (Work Allotment)',
   rec_production:   'Record Production',
   modify_prod_qty:  'Modify Production',
+  view_testing:     'Testing Calculator & Report',
   add_customer:     'Manage Customers',
   add_supplier:     'Manage Suppliers',
   add_staff:        'Manage Workers (Labours)',
