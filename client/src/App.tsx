@@ -28,6 +28,7 @@ import { DispatchListPage } from '@/pages/DispatchListPage';
 import { DispatchNewPage } from '@/pages/DispatchNewPage';
 import { DispatchEditPage } from '@/pages/DispatchEditPage';
 import { PackingPage } from '@/pages/PackingPage';
+import { WarehousePage } from '@/pages/WarehousePage';
 import { PackingListPage } from '@/pages/PackingListPage';
 import { LaboursPage } from '@/pages/LaboursPage';
 import { LabourFormPage } from '@/pages/LabourFormPage';
@@ -80,6 +81,7 @@ export const App = () => (
       {/* Dispatch */}
       <Route path="/dispatch"        element={<DispatchListPage />} />
       <Route path="/dispatch/new"    element={<DispatchNewPage />} />
+      <Route path="/dispatch/warehouse" element={<WarehousePage />} />
       <Route path="/dispatch/:id"    element={<DispatchEditPage />} />
 
       {/* Testing calculator */}

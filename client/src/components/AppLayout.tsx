@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, LogOut, ChevronDown, FileText, Settings as SettingsIcon,
   Plus, ListChecks, BarChart3, Layers, Building2, Factory, Inbox, ClipboardList,
   PanelLeftClose, Users2, Truck, PackageCheck, ShoppingCart, Activity, RotateCcw, Menu, X, ShieldAlert,
-  Receipt, Clock, Wallet, TrendingUp, Calculator, CreditCard,
+  Receipt, Clock, Wallet, TrendingUp, Calculator, CreditCard, Warehouse,
 } from 'lucide-react';
 import { useAuthStore, can, activeMembership } from '@/store/auth';
 import type { PermissionKey } from '@/lib/permissions';
@@ -53,6 +53,7 @@ const NAV: NavItem[] = [
       { kind: 'leaf', to: '/dispatch/new', label: 'Dispatch',        icon: Truck,        perm: 'dispatch' },
       { kind: 'leaf', to: '/packing',      label: 'Packing',         icon: PackageCheck, perm: 'dispatch' },
       { kind: 'leaf', to: '/dispatch',     label: 'Modify Dispatch', icon: ClipboardList, perm: 'dispatch' },
+      { kind: 'leaf', to: '/dispatch/warehouse', label: 'Store / Warehouse', icon: Warehouse, perm: 'dispatch' },
     ],
   },
   { kind: 'leaf', to: '/returns', label: 'Return', icon: RotateCcw, perm: 'manage_returns' },

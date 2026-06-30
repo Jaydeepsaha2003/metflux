@@ -57,11 +57,13 @@ const DISPATCH_ROW_SQL = `
          c.\`name\`         AS customer_name,
          c.\`customerCode\` AS customer_code,
          c.\`state\`        AS customer_state,
-         c.\`phone\`        AS customer_phone
+         c.\`phone\`        AS customer_phone,
+         w.\`name\`         AS warehouse_name
     FROM \`Dispatch\` d
     INNER JOIN \`PoOrderItem\` it ON it.\`id\` = d.\`poOrderItemId\`
     INNER JOIN \`PoOrder\`     po ON po.\`id\` = it.\`poOrderId\`
-    INNER JOIN \`Customer\`    c  ON c.\`id\`  = po.\`customerId\``;
+    INNER JOIN \`Customer\`    c  ON c.\`id\`  = po.\`customerId\`
+    LEFT  JOIN \`Warehouse\`   w  ON w.\`id\`  = d.\`warehouseId\``;
 
 const flatten = (r) => {
   const lineAmount = r.item_totalAmount ?? null;
@@ -94,6 +96,8 @@ const flatten = (r) => {
     vehicleNo: r.vehicleNo,
     notes: r.notes,
     createdAt: r.createdAt,
+    sourceType:    r.sourceType ?? 'PRODUCTION',
+    warehouseName: r.warehouse_name ?? null,
     rateBasis:   r.item_rateBasis ?? null,
     rateValue:   r.item_rateValue ?? null,
     ratePerKg:   r.item_ratePerKg ?? null,
@@ -128,7 +132,8 @@ router.get('/ready', requirePermission('dispatch'), asyncHandler(async (req, res
             c.\`name\`          AS customer_name,
             c.\`customerCode\`  AS customer_code,
             (SELECT COALESCE(SUM(pp.\`pcs\`),0) FROM \`Production\` pp WHERE pp.\`poOrderItemId\` = it.\`id\`) AS produced,
-            (SELECT COALESCE(SUM(dd.\`pcs\`),0) FROM \`Dispatch\`   dd WHERE dd.\`poOrderItemId\` = it.\`id\`) AS dispatched
+            (SELECT COALESCE(SUM(dd.\`pcs\`),0) FROM \`Dispatch\`   dd WHERE dd.\`poOrderItemId\` = it.\`id\`) AS dispatched,
+            (SELECT COALESCE(SUM(sm.\`pcs\`),0) FROM \`StockMovement\` sm WHERE sm.\`poOrderItemId\` = it.\`id\` AND sm.\`direction\` = 'IN') AS stockedIn
        FROM \`PoOrderItem\` it
        INNER JOIN \`PoOrder\`  po ON po.\`id\` = it.\`poOrderId\`
        INNER JOIN \`Customer\` c  ON c.\`id\`  = po.\`customerId\`
@@ -140,7 +145,10 @@ router.get('/ready', requirePermission('dispatch'), asyncHandler(async (req, res
   const ready = rows.map((it) => {
     const produced   = Number(it.produced ?? 0);
     const dispatched = Number(it.dispatched ?? 0);
-    const readyPcs   = Math.max(produced - dispatched, 0);
+    const stockedIn  = Number(it.stockedIn ?? 0);
+    // Goods moved into a store leave the production-floor pool, so they no longer
+    // count as ready-to-dispatch here (they're dispatched later via stock-out).
+    const readyPcs   = Math.max(produced - dispatched - stockedIn, 0);
     const readyAmount = (it.totalAmount != null && it.pcs > 0)
       ? +(it.totalAmount * (readyPcs / it.pcs)).toFixed(2)
       : null;
@@ -155,6 +163,7 @@ router.get('/ready', requirePermission('dispatch'), asyncHandler(async (req, res
       orderedPcs: it.pcs,
       producedPcs: produced,
       dispatchedPcs: dispatched,
+      stockedInPcs: stockedIn,
       readyPcs,
       excessPcs: Math.max(produced - Number(it.pcs), 0),
       rateBasis:   it.rateBasis   ?? null,

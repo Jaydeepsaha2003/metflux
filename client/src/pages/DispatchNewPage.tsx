@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search, Loader2, Truck, ArrowLeft, CheckCircle2, FileText, Download } from 'lucide-react';
+import { Search, Loader2, Truck, ArrowLeft, CheckCircle2, FileText, Download, Warehouse, X } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { downloadXlsx, todayStamp } from '@/lib/excel';
@@ -41,6 +41,7 @@ export const DispatchNewPage = () => {
 
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<ReadyItem | null>(null);
+  const [sendStore, setSendStore] = useState<ReadyItem | null>(null);
 
   const { data: readyResp, isLoading } = useQuery({
     queryKey: ['dispatch-ready', search],
@@ -421,6 +422,13 @@ export const DispatchNewPage = () => {
 
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
               <Link to="/dispatch" className="btn-ghost w-full sm:w-auto justify-center">Cancel</Link>
+              <button
+                onClick={() => setSendStore(selected)}
+                className="btn-ghost border border-slate-300 text-indigo-700 hover:bg-indigo-50 w-full sm:w-auto justify-center"
+                title="Send these pcs into a store instead of to the customer"
+              >
+                <Warehouse className="h-4 w-4" /> Send to Store
+              </button>
               <button onClick={onSave} disabled={submit.isPending} className="btn-primary w-full sm:w-auto justify-center">
                 {submit.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
                 Dispatch
@@ -429,6 +437,95 @@ export const DispatchNewPage = () => {
           </div>
         )}
       </section>
+
+      {sendStore && (
+        <StockInModal
+          item={sendStore}
+          onClose={() => setSendStore(null)}
+          onDone={() => {
+            queryClient.invalidateQueries({ queryKey: ['dispatch-ready'] });
+            queryClient.invalidateQueries({ queryKey: ['warehouse-stock'] });
+            setSelected(null);
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+/* ── Send-to-store modal ── */
+type Store = { id: string; name: string; isActive: boolean };
+const StockInModal = ({ item, onClose, onDone }: { item: ReadyItem; onClose: () => void; onDone: () => void }) => {
+  const [warehouseId, setWarehouseId] = useState('');
+  const [pcs, setPcs] = useState(item.readyPcs);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  const { data: stores, isLoading } = useQuery({ queryKey: ['warehouses'], queryFn: () => api<{ items: Store[] }>('/warehouses') });
+  const active = (stores?.items ?? []).filter((s) => s.isActive);
+
+  const submit = useMutation({
+    mutationFn: () => api('/warehouses/stock-in', { method: 'POST', json: { warehouseId, poOrderItemId: item.id, pcs } }),
+    onSuccess: () => { setDone(true); onDone(); },
+    onError: (e) => setError(e instanceof Error ? e.message : 'Could not send to store'),
+  });
+
+  const onSave = () => {
+    setError(null);
+    if (!warehouseId) return setError('Pick a store');
+    if (pcs <= 0) return setError('Pcs must be greater than 0');
+    if (pcs > item.readyPcs) return setError(`Pcs ≤ ready (${item.readyPcs})`);
+    submit.mutate();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="w-full max-w-md rounded-xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><Warehouse className="h-4 w-4 text-indigo-600" /> Send to Store</h2>
+          <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
+        </div>
+        {done ? (
+          <div className="px-5 py-6 space-y-3">
+            <div className="flex items-center gap-2 text-emerald-700 text-sm font-medium"><CheckCircle2 className="h-5 w-5" /> {pcs} pcs moved into store.</div>
+            <div className="flex gap-2">
+              <Link to="/dispatch/warehouse" className="btn-primary text-sm"><Warehouse className="h-4 w-4" /> View Store</Link>
+              <button onClick={onClose} className="btn-ghost text-sm border border-slate-300">Done</button>
+            </div>
+          </div>
+        ) : (
+          <div className="px-5 py-4 space-y-4">
+            <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              {item.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'} · {item.grade} · {item.measure} · ready <strong className="text-slate-900">{item.readyPcs}</strong>
+              {item.excessPcs > 0 && <span className="ml-1 text-orange-700">(+{item.excessPcs} excess)</span>}
+            </div>
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Store</span>
+              {isLoading ? <div className="text-sm text-slate-400 py-2">Loading…</div> : !active.length ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  No store yet — add one on the <Link to="/dispatch/warehouse" className="underline">Store / Warehouse</Link> page.
+                </div>
+              ) : (
+                <select className="input" value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
+                  <option value="">Select store…</option>
+                  {active.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              )}
+            </label>
+            <label className="block w-40">
+              <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Pcs (max {item.readyPcs})</span>
+              <input className="input" type="number" min={1} max={item.readyPcs} value={pcs || ''} onChange={(e) => setPcs(parseInt(e.target.value || '0', 10))} />
+            </label>
+            {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>}
+            <div className="flex justify-end gap-3 border-t border-slate-200 pt-3">
+              <button onClick={onClose} className="btn-ghost text-sm">Cancel</button>
+              <button onClick={onSave} disabled={submit.isPending || !active.length} className="btn-primary text-sm">
+                {submit.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Warehouse className="h-4 w-4" />} Send to Store
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
