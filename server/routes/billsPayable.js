@@ -54,10 +54,12 @@ router.post('/preview', requirePermission('manage_invoices'), asyncHandler(async
 
   const bySupplier = await loadOpenPayablesBySupplier(req.tenant.companyId);
 
+  const matchedKeys = new Set();
   const items = parties.map((p) => {
     const key = normName(p.name);
     const g = bySupplier.get(key);
     if (!g) return { name: p.name, matched: false, fileBalance: p.balance };
+    matchedKeys.add(key);
     const systemPending = round2(Math.max(0, g.pending));
     const { adjustment, action } = classifyAdjustment(systemPending, p.balance);
     return {
@@ -72,6 +74,25 @@ router.post('/preview', requirePermission('manage_invoices'), asyncHandler(async
     };
   });
 
+  // Suppliers with open bills but ABSENT from the file. The file only lists
+  // suppliers still owed, so absence means Tally has them fully paid — clear
+  // their open bills to ₹0 to match.
+  for (const [key, g] of bySupplier) {
+    const pending = round2(Math.max(0, g.pending));
+    if (matchedKeys.has(key) || pending <= TOL) continue;
+    items.push({
+      name: g.displayName,
+      matched: true,
+      absent: true,
+      supplierKey: key,
+      supplierName: g.displayName,
+      fileBalance: 0,
+      systemPending: pending,
+      adjustment: pending,
+      action: 'clear',
+    });
+  }
+
   const sum = (pred, pick) => round2(items.filter(pred).reduce((s, x) => s + pick(x), 0));
   res.json({
     asOn,
@@ -82,10 +103,11 @@ router.post('/preview', requirePermission('manage_invoices'), asyncHandler(async
       matched:    items.filter((x) => x.matched).length,
       unmatched:  items.filter((x) => !x.matched).length,
       toPost:     items.filter((x) => x.action === 'post').length,
+      toClear:    items.filter((x) => x.action === 'clear').length,
       alreadyOk:  items.filter((x) => x.action === 'ok').length,
       shortfalls: items.filter((x) => x.action === 'shortfall').length,
       fileTotal:  round2(items.reduce((s, x) => s + (x.fileBalance ?? 0), 0)),
-      postTotal:  sum((x) => x.action === 'post', (x) => x.adjustment),
+      postTotal:  sum((x) => x.action === 'post' || x.action === 'clear', (x) => x.adjustment),
     },
   });
 }));

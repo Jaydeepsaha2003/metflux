@@ -32,10 +32,12 @@ router.post('/preview', requirePermission('manage_invoices'), asyncHandler(async
   const { rows } = z.object({ rows: z.array(z.array(z.any())).max(10000) }).parse(req.body);
   const { parties, asOn } = parseBalanceMatrix(rows);
 
-  // Customer lookup by normalized name.
+  // Customer lookup by normalized name + by id.
   const customers = await q('SELECT `id`, `name`, `customerCode` FROM `Customer` WHERE `companyId` = ?', [req.tenant.companyId]);
   const byName = new Map();
+  const byId = new Map();
   for (const c of customers) {
+    byId.set(c.id, c);
     const k = normName(c.name);
     if (k && !byName.has(k)) byName.set(k, c);
   }
@@ -50,11 +52,13 @@ router.post('/preview', requirePermission('manage_invoices'), asyncHandler(async
   );
   const pendingByCustomer = new Map(pendingRows.map((r) => [r.customerId, round2(Number(r.pending))]));
 
+  const matchedIds = new Set();
   const items = parties.map((p) => {
     const customer = byName.get(normName(p.name));
     if (!customer) {
       return { name: p.name, matched: false, fileBalance: p.balance };
     }
+    matchedIds.add(customer.id);
     const systemPending = pendingByCustomer.get(customer.id) ?? 0;
     const { adjustment, action } = classifyAdjustment(systemPending, p.balance);
     return {
@@ -70,6 +74,27 @@ router.post('/preview', requirePermission('manage_invoices'), asyncHandler(async
     };
   });
 
+  // Parties with pending in the system but ABSENT from the file. The file only
+  // lists parties that still owe, so absence means Tally has them fully settled —
+  // clear their open invoices to ₹0 to match.
+  for (const [customerId, pending] of pendingByCustomer) {
+    if (matchedIds.has(customerId) || pending <= TOL) continue;
+    const c = byId.get(customerId);
+    if (!c) continue;
+    items.push({
+      name: c.name,
+      matched: true,
+      absent: true,
+      customerId,
+      customerCode: c.customerCode,
+      customerName: c.name,
+      fileBalance: 0,
+      systemPending: pending,
+      adjustment: pending,
+      action: 'clear',
+    });
+  }
+
   const sum = (pred, pick) => round2(items.filter(pred).reduce((s, x) => s + pick(x), 0));
   res.json({
     asOn,
@@ -80,10 +105,11 @@ router.post('/preview', requirePermission('manage_invoices'), asyncHandler(async
       matched:      items.filter((x) => x.matched).length,
       unmatched:    items.filter((x) => !x.matched).length,
       toPost:       items.filter((x) => x.action === 'post').length,
+      toClear:      items.filter((x) => x.action === 'clear').length,
       alreadyOk:    items.filter((x) => x.action === 'ok').length,
       shortfalls:   items.filter((x) => x.action === 'shortfall').length,
       fileTotal:    round2(items.reduce((s, x) => s + (x.fileBalance ?? 0), 0)),
-      postTotal:    sum((x) => x.action === 'post', (x) => x.adjustment),
+      postTotal:    sum((x) => x.action === 'post' || x.action === 'clear', (x) => x.adjustment),
     },
   });
 }));

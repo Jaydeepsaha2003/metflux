@@ -19,12 +19,13 @@ import { useConfirm } from '@/hooks/useConfirm';
 type PreviewItem = {
   name: string;
   matched: boolean;
+  absent?: boolean;
   supplierKey?: string;
   supplierName?: string;
   fileBalance?: number;
   systemPending?: number;
   adjustment?: number;
-  action?: 'post' | 'ok' | 'shortfall';
+  action?: 'post' | 'clear' | 'ok' | 'shortfall';
 };
 type Preview = {
   asOn: string | null;
@@ -32,7 +33,7 @@ type Preview = {
   items: PreviewItem[];
   summary: {
     total: number; matched: number; unmatched: number;
-    toPost: number; alreadyOk: number; shortfalls: number;
+    toPost: number; toClear: number; alreadyOk: number; shortfalls: number;
     fileTotal: number; postTotal: number;
   };
 };
@@ -66,7 +67,7 @@ export const BillsPayablePage = () => {
       setPaymentDate(data.asOn ?? todayISO());
       setReference(data.defaultReference);
       const inc: Record<string, boolean> = {};
-      for (const it of data.items) if (it.action === 'post' && it.supplierKey) inc[it.supplierKey] = true;
+      for (const it of data.items) if ((it.action === 'post' || it.action === 'clear') && it.supplierKey) inc[it.supplierKey] = true;
       setIncluded(inc);
     } catch (e) {
       setUploadErr(e instanceof Error ? e.message : 'Could not read the file');
@@ -89,14 +90,14 @@ export const BillsPayablePage = () => {
     },
   });
 
-  const postRows = (preview?.items ?? []).filter((x) => x.action === 'post' && x.supplierKey);
+  const postRows = (preview?.items ?? []).filter((x) => (x.action === 'post' || x.action === 'clear') && x.supplierKey);
   const selected = postRows.filter((x) => included[x.supplierKey!]);
   const selectedTotal = selected.reduce((s, x) => s + (x.adjustment ?? 0), 0);
 
   const handlePost = async () => {
     const ok = await confirm({
       title: 'Post reconciling payments?',
-      message: <>This records <strong>{selected.length}</strong> supplier payment{selected.length !== 1 ? 's' : ''} totalling <strong>{inr(selectedTotal)}</strong>, clearing each party down to its file balance.</>,
+      message: <>This records <strong>{selected.length}</strong> supplier payment{selected.length !== 1 ? 's' : ''} totalling <strong>{inr(selectedTotal)}</strong>, clearing each party to its file balance (₹0 for parties not in the file).</>,
       confirmLabel: 'Post payments',
     });
     if (!ok) return;
@@ -151,11 +152,12 @@ export const BillsPayablePage = () => {
       {preview && (
         <>
           {/* Summary cards */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
             <Stat label="Parties in file" value={String(preview.summary.total)} />
             <Stat label="Matched" value={String(preview.summary.matched)} tone="emerald" />
             <Stat label="Unmatched" value={String(preview.summary.unmatched)} tone={preview.summary.unmatched ? 'amber' : undefined} />
-            <Stat label="To post" value={String(preview.summary.toPost)} tone="brand" />
+            <Stat label="Reduce to file" value={String(preview.summary.toPost)} tone="brand" />
+            <Stat label="Clear to ₹0" value={String(preview.summary.toClear)} tone={preview.summary.toClear ? 'brand' : undefined} />
             <Stat label="Already ok" value={String(preview.summary.alreadyOk)} />
             <Stat label="Shortfalls" value={String(preview.summary.shortfalls)} tone={preview.summary.shortfalls ? 'red' : undefined} />
           </div>
@@ -205,7 +207,7 @@ export const BillsPayablePage = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {preview.items.map((it, i) => {
-                    const canPost = it.action === 'post' && it.supplierKey;
+                    const canPost = (it.action === 'post' || it.action === 'clear') && it.supplierKey;
                     const isOn = canPost ? !!included[it.supplierKey!] : false;
                     return (
                       <tr key={i} className={cn(!it.matched && 'bg-amber-50/40', it.action === 'shortfall' && 'bg-red-50/40')}>
@@ -218,14 +220,17 @@ export const BillsPayablePage = () => {
                             />
                           )}
                         </td>
-                        <td className="px-4 py-2.5 font-medium">{it.name}</td>
+                        <td className="px-4 py-2.5 font-medium">
+                          {it.name}
+                          {it.absent && <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">not in file</span>}
+                        </td>
                         <td className="px-4 py-2.5 text-slate-600">
                           {it.matched ? it.supplierName : <span className="text-amber-600">— no bills found —</span>}
                         </td>
                         <td className="px-4 py-2.5 text-right tabular-nums text-slate-600">{it.matched ? inr(it.systemPending) : '—'}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums font-medium">{inr(it.fileBalance)}</td>
+                        <td className="px-4 py-2.5 text-right tabular-nums font-medium">{it.absent ? <span className="text-slate-400">₹0</span> : inr(it.fileBalance)}</td>
                         <td className="px-4 py-2.5 text-right tabular-nums font-semibold">
-                          {it.action === 'post' ? inr(it.adjustment) : '—'}
+                          {(it.action === 'post' || it.action === 'clear') ? inr(it.adjustment) : '—'}
                         </td>
                         <td className="px-4 py-2.5"><StatusPill item={it} /></td>
                       </tr>
@@ -270,5 +275,6 @@ const StatusPill = ({ item }: { item: PreviewItem }) => {
   if (!item.matched) return <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700"><AlertTriangle className="h-3 w-3" /> Unmatched</span>;
   if (item.action === 'ok') return <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600"><CheckCircle2 className="h-3 w-3" /> Already matches</span>;
   if (item.action === 'shortfall') return <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700"><MinusCircle className="h-3 w-3" /> Shortfall</span>;
-  return <span className="inline-flex items-center gap-1 rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-medium text-brand-700"><ArrowUpFromLine className="h-3 w-3" /> Will clear</span>;
+  if (item.action === 'clear') return <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-medium text-indigo-700"><ArrowUpFromLine className="h-3 w-3" /> Clear to ₹0</span>;
+  return <span className="inline-flex items-center gap-1 rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-medium text-brand-700"><ArrowUpFromLine className="h-3 w-3" /> Reduce to file</span>;
 };
