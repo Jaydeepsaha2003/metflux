@@ -23,7 +23,8 @@
     "migrate:sales-invoice-gst": "node scripts/migrate-sales-invoice-gst.js",
     "migrate:customer-portal-auth": "node scripts/migrate-customer-portal-auth.js",
     "migrate:accounts": "node scripts/migrate-accounts.js",
-    "migrate": "npm run migrate:supplier-membership && npm run migrate:customer-code && npm run migrate:hide-customer-names && npm run migrate:logo-column && npm run migrate:share-token && npm run migrate:supplier-item-notes && npm run migrate:customer-portal-slug && npm run migrate:customer-due-days && npm run migrate:packing-list-wo && npm run migrate:sales-invoices && npm run migrate:sales-invoice-gst && npm run migrate:customer-portal-auth && npm run migrate:accounts"
+    "migrate:bills-payable": "node scripts/migrate-bills-payable.js",
+    "migrate": "npm run migrate:supplier-membership && npm run migrate:customer-code && npm run migrate:hide-customer-names && npm run migrate:logo-column && npm run migrate:share-token && npm run migrate:supplier-item-notes && npm run migrate:customer-portal-slug && npm run migrate:customer-due-days && npm run migrate:packing-list-wo && npm run migrate:sales-invoices && npm run migrate:sales-invoice-gst && npm run migrate:customer-portal-auth && npm run migrate:accounts && npm run migrate:bills-payable"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

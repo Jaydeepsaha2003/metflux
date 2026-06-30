@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, LogOut, ChevronDown, FileText, Settings as SettingsIcon,
   Plus, ListChecks, BarChart3, Layers, Building2, Factory, Inbox, ClipboardList,
   PanelLeftClose, Users2, Truck, PackageCheck, ShoppingCart, Activity, RotateCcw, Menu, X, ShieldAlert,
-  Receipt, Clock, Wallet, TrendingUp, Calculator,
+  Receipt, Clock, Wallet, TrendingUp, Calculator, CreditCard,
 } from 'lucide-react';
 import { useAuthStore, can, activeMembership } from '@/store/auth';
 import type { PermissionKey } from '@/lib/permissions';
@@ -61,6 +61,7 @@ const NAV: NavItem[] = [
     children: [
       { kind: 'leaf', to: '/sales-invoices',          label: 'Sales Register',    icon: FileText,     end: true, perm: 'manage_invoices' },
       { kind: 'leaf', to: '/accounts/purchases',      label: 'Purchase Register', icon: ShoppingCart, perm: 'manage_invoices' },
+      { kind: 'leaf', to: '/accounts/bills-payable',  label: 'Bills Payable',     icon: CreditCard,   perm: 'manage_invoices' },
       { kind: 'leaf', to: '/sales-invoices/aging',    label: 'Debtor Aging',      icon: Clock,        perm: 'manage_invoices' },
       { kind: 'leaf', to: '/sales-invoices/payments', label: 'Receive Payments',  icon: Wallet,       perm: 'manage_invoices' },
       { kind: 'leaf', to: '/sales-invoices/bills-receivable', label: 'Bills Receivable', icon: Receipt, perm: 'manage_invoices' },
