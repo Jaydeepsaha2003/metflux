@@ -63,6 +63,7 @@ const NAV: NavItem[] = [
       { kind: 'leaf', to: '/accounts/purchases',      label: 'Purchase Register', icon: ShoppingCart, perm: 'manage_invoices' },
       { kind: 'leaf', to: '/sales-invoices/aging',    label: 'Debtor Aging',      icon: Clock,        perm: 'manage_invoices' },
       { kind: 'leaf', to: '/sales-invoices/payments', label: 'Receive Payments',  icon: Wallet,       perm: 'manage_invoices' },
+      { kind: 'leaf', to: '/sales-invoices/bills-receivable', label: 'Bills Receivable', icon: Receipt, perm: 'manage_invoices' },
     ],
   },
   {

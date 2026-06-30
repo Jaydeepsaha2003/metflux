@@ -39,6 +39,7 @@ import { TestingReportPage } from '@/pages/TestingReportPage';
 import { SalesInvoicesPage } from '@/pages/SalesInvoicesPage';
 import { DebtorAgingPage } from '@/pages/DebtorAgingPage';
 import { ReceivePaymentsPage } from '@/pages/ReceivePaymentsPage';
+import { BillsReceivablePage } from '@/pages/BillsReceivablePage';
 import { DataCleanupPage } from '@/pages/DataCleanupPage';
 import { CustomerPortalPage } from '@/pages/CustomerPortalPage';
 import { BusinessAnalysisPage } from '@/pages/BusinessAnalysisPage';
@@ -100,6 +101,7 @@ export const App = () => (
       <Route path="/sales-invoices"          element={<SalesInvoicesPage />} />
       <Route path="/sales-invoices/aging"    element={<DebtorAgingPage />} />
       <Route path="/sales-invoices/payments" element={<ReceivePaymentsPage />} />
+      <Route path="/sales-invoices/bills-receivable" element={<BillsReceivablePage />} />
       <Route path="/accounts/purchases"      element={<PurchasesPage />} />
 
       {/* Supplier Order group */}
