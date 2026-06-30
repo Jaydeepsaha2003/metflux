@@ -8,7 +8,7 @@ import { q, qOne, insert } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
-import { round2, parseAmount, inferDateOrder, parseDateWith, isCancelledName } from '../lib/invoicing.js';
+import { round2, parseAmount, inferDateOrder, parseDateWith, isCancelledName, normName } from '../lib/invoicing.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -156,6 +156,56 @@ router.get('/summary', requirePermission('manage_invoices'), asyncHandler(async 
     tds: round2(Number(row?.tds ?? 0)),
     debitNotes: Number(row?.debitNotes ?? 0),
   });
+}));
+
+/* ---------- GET /aging — per-supplier payable aging ---------- */
+// Purchase bills have no due date and suppliers have no credit terms, so bills
+// are aged by BILL DATE (days since the invoice date). Debit notes (negative
+// balance) net the total down and sit in the current 0–30 bucket. Suppliers are
+// grouped by normalized name so name variants from the import don't split a row.
+router.get('/aging', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+  const rows = await q(
+    `SELECT \`id\`, \`invoiceNumber\`, \`invoiceDate\`, \`supplierName\`, \`amount\`, \`paidAmount\`, \`docType\`
+       FROM \`PurchaseInvoice\`
+      WHERE \`companyId\` = ? AND \`status\` <> 'PAID'`,
+    [req.tenant.companyId]
+  );
+  const now = new Date();
+  const todayMid = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const groups = new Map();
+
+  for (const p of rows) {
+    const balance = round2(Number(p.amount) - Number(p.paidAmount));
+    if (Math.abs(balance) <= 0.01) continue; // skip settled
+    const key = normName(p.supplierName) || `__x__:${p.supplierName}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        supplierName: p.supplierName,
+        b0_30: 0, b31_60: 0, b61_90: 0, b90: 0, total: 0, oldestDays: 0, invoices: [],
+      });
+    }
+    const g = groups.get(key);
+    const bill = new Date(p.invoiceDate);
+    const billMid = Date.UTC(bill.getUTCFullYear(), bill.getUTCMonth(), bill.getUTCDate());
+    const ageDays = Math.max(0, Math.floor((todayMid - billMid) / 86400000));
+    if (balance < 0)          g.b0_30 = round2(g.b0_30 + balance); // debit note — reduces, treat as current
+    else if (ageDays <= 30)   g.b0_30 = round2(g.b0_30 + balance);
+    else if (ageDays <= 60)   g.b31_60 = round2(g.b31_60 + balance);
+    else if (ageDays <= 90)   g.b61_90 = round2(g.b61_90 + balance);
+    else                      g.b90 = round2(g.b90 + balance);
+    if (balance > 0 && ageDays > g.oldestDays) g.oldestDays = ageDays;
+    g.total = round2(g.total + balance);
+    g.invoices.push({ id: p.id, invoiceNumber: p.invoiceNumber, invoiceDate: p.invoiceDate, balance, ageDays, docType: p.docType });
+  }
+
+  const suppliers = [...groups.values()].sort((a, b) => b.total - a.total);
+  for (const g of suppliers) g.invoices.sort((a, b) => new Date(a.invoiceDate) - new Date(b.invoiceDate));
+  const totals = suppliers.reduce((t, g) => ({
+    b0_30: round2(t.b0_30 + g.b0_30), b31_60: round2(t.b31_60 + g.b31_60),
+    b61_90: round2(t.b61_90 + g.b61_90), b90: round2(t.b90 + g.b90), total: round2(t.total + g.total),
+  }), { b0_30: 0, b31_60: 0, b61_90: 0, b90: 0, total: 0 });
+
+  res.json({ suppliers, totals });
 }));
 
 /* ---------- GET / — paginated list ---------- */

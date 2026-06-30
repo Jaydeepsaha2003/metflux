@@ -279,7 +279,10 @@ router.get('/aging', requirePermission('manage_invoices'), asyncHandler(async (r
 
   for (const inv of rows) {
     const balance = round2(Number(inv.amount) - Number(inv.paidAmount));
-    if (balance <= 0.01) continue;
+    // Skip only settled (≈0) rows. Negative balances are credit notes /
+    // advances — keep them so the aging total nets out to the true receivable
+    // (matching the Sales Register's net Outstanding).
+    if (Math.abs(balance) <= 0.01) continue;
     const key = inv.customerId ?? `__x__:${inv.customerName}`;
     if (!groups.has(key)) {
       groups.set(key, {
@@ -293,7 +296,11 @@ router.get('/aging', requirePermission('manage_invoices'), asyncHandler(async (r
     }
     const g = groups.get(key);
     let days = null;
-    if (!inv.dueDate) {
+    if (balance < 0) {
+      // Credit note / advance — reduces what's owed; not an overdue item, so it
+      // sits in "Not due" rather than any aging bucket.
+      g.notDue = round2(g.notDue + balance);
+    } else if (!inv.dueDate) {
       g.noTerms = round2(g.noTerms + balance);
     } else {
       const due = new Date(inv.dueDate);
