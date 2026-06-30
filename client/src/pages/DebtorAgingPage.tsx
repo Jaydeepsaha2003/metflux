@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { normalisePhone } from '@/lib/share';
 import { useHideCustomerNames } from '@/store/auth';
 
 type AgingInvoice = { id: string; invoiceNumber: string; invoiceDate: string; dueDate: string | null; balance: number; daysOverdue: number | null };
@@ -34,40 +35,40 @@ const SEV_DOT: Record<string, string> = { ok: 'bg-emerald-400', low: 'bg-amber-4
 export const DebtorAgingPage = () => {
   const hideNames = useHideCustomerNames();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [sending, setSending] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({ queryKey: ['debtor-aging'], queryFn: () => api<AgingResp>('/sales-invoices/aging') });
   const { data: company } = useQuery({ queryKey: ['company-me'], queryFn: () => api<Company>('/companies/me') });
 
   const toggle = (key: string) => setExpanded((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
-  const sendReminder = async (cust: AgingCustomer) => {
+  // Build the wa.me link and open it synchronously inside the click handler.
+  // (Opening after an await trips the popup blocker; building client-side also
+  // means a bare 10-digit number still works — normalisePhone adds +91.)
+  const sendReminder = (cust: AgingCustomer) => {
     if (!cust.phone) return;
-    setSending(cust.customerId ?? cust.customerName);
-    try {
-      const overdue = cust.invoices.filter((i) => (i.daysOverdue ?? 0) > 0);
-      const lines = cust.invoices
-        .slice(0, 12)
-        .map((i) => `• ${i.invoiceNumber} — ${inr2(i.balance)}${i.dueDate ? ` (due ${fmtDate(i.dueDate)}${(i.daysOverdue ?? 0) > 0 ? `, ${i.daysOverdue}d overdue` : ''})` : ''}`);
-      const overdueAmt = cust.d1_30 + cust.d31_60 + cust.d61_90 + cust.d90;
-      const message = [
-        '*Payment Reminder*',
-        `Dear ${cust.customerName},`,
-        '',
-        `As per our records, a total of ${inr2(cust.total)} is outstanding against your account${overdueAmt > 0 ? `, of which ${inr2(overdueAmt)} is past due` : ''}.`,
-        '',
-        `Pending invoice${cust.invoices.length !== 1 ? 's' : ''}:`,
-        ...lines,
-        cust.invoices.length > 12 ? `…and ${cust.invoices.length - 12} more` : '',
-        '',
-        overdue.length ? 'We kindly request you to arrange the payment at your earliest convenience.' : 'This is a gentle reminder for the upcoming dues.',
-        company?.name ? `\nRegards,\n${company.name}` : '',
-      ].filter((l) => l !== '').join('\n');
-      const res = await api<{ url: string }>('/whatsapp/share-url', { method: 'POST', json: { phone: cust.phone, message } });
-      window.open(res.url, '_blank', 'noopener,noreferrer');
-    } finally {
-      setSending(null);
-    }
+    const overdue = cust.invoices.filter((i) => (i.daysOverdue ?? 0) > 0);
+    const lines = cust.invoices
+      .slice(0, 12)
+      .map((i) => `• ${i.invoiceNumber} — ${inr2(i.balance)}${i.dueDate ? ` (due ${fmtDate(i.dueDate)}${(i.daysOverdue ?? 0) > 0 ? `, ${i.daysOverdue}d overdue` : ''})` : ''}`);
+    const overdueAmt = cust.d1_30 + cust.d31_60 + cust.d61_90 + cust.d90;
+    const message = [
+      '*Payment Reminder*',
+      `Dear ${cust.customerName},`,
+      '',
+      `As per our records, a total of ${inr2(cust.total)} is outstanding against your account${overdueAmt > 0 ? `, of which ${inr2(overdueAmt)} is past due` : ''}.`,
+      '',
+      `Pending invoice${cust.invoices.length !== 1 ? 's' : ''}:`,
+      ...lines,
+      cust.invoices.length > 12 ? `…and ${cust.invoices.length - 12} more` : '',
+      '',
+      overdue.length ? 'We kindly request you to arrange the payment at your earliest convenience.' : 'This is a gentle reminder for the upcoming dues.',
+      company?.name ? `\nRegards,\n${company.name}` : '',
+    ].filter((l) => l !== '').join('\n');
+    const phone = normalisePhone(cust.phone);
+    const url = phone
+      ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+      : `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const t = data?.totals;
@@ -146,8 +147,8 @@ export const DebtorAgingPage = () => {
                         <td className="px-3 py-2.5 text-right tabular-nums font-bold text-slate-900">{inr(c.total)}</td>
                         <td className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
                           {c.phone ? (
-                            <button onClick={() => sendReminder(c)} disabled={sending === key} className="btn-ghost text-emerald-700 hover:bg-emerald-50" title="Send WhatsApp reminder">
-                              {sending === (c.customerId ?? c.customerName) ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+                            <button onClick={() => sendReminder(c)} className="btn-ghost text-emerald-700 hover:bg-emerald-50" title="Send WhatsApp reminder">
+                              <MessageCircle className="h-4 w-4" />
                             </button>
                           ) : (
                             <span className="text-[10px] text-slate-400" title="No phone on the customer record">no phone</span>

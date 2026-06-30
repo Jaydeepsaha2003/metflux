@@ -29,15 +29,21 @@ type ShareArgs = {
   pdf?: { blob: Blob; filename: string };
 };
 
-// Normalise "+91 98765-43210" / "00919876543210" → "919876543210"
-const normalisePhone = (raw: string | null | undefined): string => {
+// Normalise "+91 98765-43210" / "00919876543210" / "9876543210" → "919876543210".
+// Bare 10-digit numbers (and "0xxxxxxxxxx") are assumed Indian and get +91, since
+// customer records routinely store mobiles without a country code.
+export const normalisePhone = (raw: string | null | undefined): string => {
   if (!raw) return '';
   let s = String(raw).trim();
   if (s.startsWith('00')) s = '+' + s.slice(2);
   const hasPlus = s.startsWith('+');
-  const digits = s.replace(/\D+/g, '');
-  if (!hasPlus && digits.length <= 10) return ''; // missing country code
-  return digits;
+  let digits = s.replace(/\D+/g, '');
+  if (!digits) return '';
+  if (hasPlus) return digits;                                  // already has country code
+  if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1); // strip trunk 0
+  if (digits.length === 10) return '91' + digits;              // bare Indian mobile
+  if (digits.length < 10) return '';                           // too short to be valid
+  return digits;                                               // 11+ digits — assume it has a country code
 };
 
 const resolveRecipient = (args: ShareArgs): string => {
