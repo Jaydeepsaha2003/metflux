@@ -5,11 +5,13 @@ import { Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Clock, Loader2, MessageCircle, ChevronDown, ChevronRight, AlertTriangle, Wallet,
+  Clock, Loader2, MessageCircle, ChevronDown, ChevronRight, AlertTriangle, Wallet, ImageDown,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { normalisePhone } from '@/lib/share';
+import { makeAgingImageBlob, shareOrDownloadImage } from '@/lib/agingImage';
+import { SearchableSelect } from '@/components/SearchableSelect';
 import { useHideCustomerNames } from '@/store/auth';
 
 type AgingInvoice = { id: string; invoiceNumber: string; invoiceDate: string; dueDate: string | null; balance: number; daysOverdue: number | null };
@@ -35,6 +37,8 @@ const SEV_DOT: Record<string, string> = { ok: 'bg-emerald-400', low: 'bg-amber-4
 export const DebtorAgingPage = () => {
   const hideNames = useHideCustomerNames();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [filterKey, setFilterKey] = useState('');
+  const [imaging, setImaging] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({ queryKey: ['debtor-aging'], queryFn: () => api<AgingResp>('/sales-invoices/aging') });
   const { data: company } = useQuery({ queryKey: ['company-me'], queryFn: () => api<Company>('/companies/me') });
@@ -44,34 +48,70 @@ export const DebtorAgingPage = () => {
   // Build the wa.me link and open it synchronously inside the click handler.
   // (Opening after an await trips the popup blocker; building client-side also
   // means a bare 10-digit number still works — normalisePhone adds +91.)
+  // Short, polite reminder — a couple of lines, no long invoice dump.
+  const reminderText = (cust: AgingCustomer) => {
+    const overdueAmt = cust.d1_30 + cust.d31_60 + cust.d61_90 + cust.d90;
+    return [
+      `*Payment Reminder${company?.name ? ` — ${company.name}` : ''}*`,
+      `Dear ${cust.customerName}, ${inr2(cust.total)} is outstanding against your account${overdueAmt > 0 ? ` (${inr2(overdueAmt)} past due)` : ''}.`,
+      'Kindly arrange the payment at your earliest convenience. Thank you.',
+    ].join('\n');
+  };
+
   const sendReminder = (cust: AgingCustomer) => {
     if (!cust.phone) return;
-    const overdue = cust.invoices.filter((i) => (i.daysOverdue ?? 0) > 0);
-    const lines = cust.invoices
-      .slice(0, 12)
-      .map((i) => `• ${i.invoiceNumber} — ${inr2(i.balance)}${i.dueDate ? ` (due ${fmtDate(i.dueDate)}${(i.daysOverdue ?? 0) > 0 ? `, ${i.daysOverdue}d overdue` : ''})` : ''}`);
-    const overdueAmt = cust.d1_30 + cust.d31_60 + cust.d61_90 + cust.d90;
-    const message = [
-      '*Payment Reminder*',
-      `Dear ${cust.customerName},`,
-      '',
-      `As per our records, a total of ${inr2(cust.total)} is outstanding against your account${overdueAmt > 0 ? `, of which ${inr2(overdueAmt)} is past due` : ''}.`,
-      '',
-      `Pending invoice${cust.invoices.length !== 1 ? 's' : ''}:`,
-      ...lines,
-      cust.invoices.length > 12 ? `…and ${cust.invoices.length - 12} more` : '',
-      '',
-      overdue.length ? 'We kindly request you to arrange the payment at your earliest convenience.' : 'This is a gentle reminder for the upcoming dues.',
-      company?.name ? `\nRegards,\n${company.name}` : '',
-    ].filter((l) => l !== '').join('\n');
     const phone = normalisePhone(cust.phone);
+    const message = reminderText(cust);
     const url = phone
       ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
       : `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
+  // Generate a PNG statement of this customer's aging and share it (WhatsApp on
+  // mobile) or download it (desktop).
+  const shareImage = async (cust: AgingCustomer) => {
+    const k = cust.customerId ?? cust.customerName;
+    setImaging(k);
+    try {
+      const blob = await makeAgingImageBlob({
+        companyName: company?.name ?? 'Statement',
+        title: 'Account Statement (Outstanding)',
+        partyName: hideNames ? (cust.customerCode ?? 'Customer') : cust.customerName,
+        partySub: cust.customerCode && !hideNames ? cust.customerCode : null,
+        dateLabel: `As on ${fmtDate(new Date().toISOString())}`,
+        buckets: [
+          { label: 'Not due', value: cust.notDue },
+          { label: '1–30 days', value: cust.d1_30 },
+          { label: '31–60 days', value: cust.d31_60 },
+          { label: '61–90 days', value: cust.d61_90 },
+          { label: '90+ days', value: cust.d90 },
+          ...(cust.noTerms ? [{ label: 'No terms', value: cust.noTerms }] : []),
+        ],
+        total: cust.total,
+        lines: cust.invoices.slice(0, 14).map(
+          (i) => `${i.invoiceNumber}  —  ${inr2(i.balance)}${i.dueDate ? `  (due ${fmtDate(i.dueDate)}${(i.daysOverdue ?? 0) > 0 ? `, ${i.daysOverdue}d overdue` : ''})` : ''}`,
+        ),
+        footer: cust.invoices.length > 14 ? `…and ${cust.invoices.length - 14} more invoice(s)` : (company?.name ?? ''),
+      });
+      const name = (hideNames ? cust.customerCode : cust.customerName) ?? 'statement';
+      await shareOrDownloadImage(blob, `aging-${name}`.replace(/[^\w-]+/g, '_'), reminderText(cust));
+    } finally {
+      setImaging(null);
+    }
+  };
+
   const t = data?.totals;
+
+  const allCustomers = data?.customers ?? [];
+  const keyOf = (c: AgingCustomer) => c.customerId ?? `x:${c.customerName}`;
+  const custOptions = allCustomers.map((c) => ({
+    value: keyOf(c),
+    label: hideNames
+      ? (c.customerCode ?? c.customerName)
+      : (c.customerCode ? `${c.customerCode} · ${c.customerName}` : c.customerName),
+  }));
+  const shownCustomers = filterKey ? allCustomers.filter((c) => keyOf(c) === filterKey) : allCustomers;
 
   return (
     <div className="space-y-5">
@@ -79,9 +119,19 @@ export const DebtorAgingPage = () => {
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <Clock className="h-5 w-5 text-brand-600" /> Debtor Aging
         </h1>
-        <Link to="/sales-invoices/payments" className="btn-ghost border border-slate-300 text-emerald-700 hover:bg-emerald-50">
-          <Wallet className="h-4 w-4" /> Receive Payments
-        </Link>
+        <div className="flex items-center gap-2">
+          <div className="w-full sm:w-72">
+            <SearchableSelect
+              value={filterKey}
+              onChange={setFilterKey}
+              options={custOptions}
+              placeholder="Search customer…"
+            />
+          </div>
+          <Link to="/sales-invoices/payments" className="btn-ghost border border-slate-300 text-emerald-700 hover:bg-emerald-50 shrink-0">
+            <Wallet className="h-4 w-4" /> <span className="hidden sm:inline">Receive Payments</span>
+          </Link>
+        </div>
       </div>
 
       {/* Aging totals strip */}
@@ -114,11 +164,11 @@ export const DebtorAgingPage = () => {
                   <th className="px-3 py-2.5 text-right">61–90</th>
                   <th className="px-3 py-2.5 text-right">90+</th>
                   <th className="px-3 py-2.5 text-right">Total</th>
-                  <th className="px-3 py-2.5 text-center">Remind</th>
+                  <th className="px-3 py-2.5 text-center">Send</th>
                 </tr>
               </thead>
               <tbody>
-                {data.customers.map((c) => {
+                {shownCustomers.map((c) => {
                   const key = c.customerId ?? `x:${c.customerName}`;
                   const open = expanded.has(key);
                   const sev = severity(c.maxDaysOverdue);
@@ -146,13 +196,23 @@ export const DebtorAgingPage = () => {
                         <td className="px-3 py-2.5 text-right tabular-nums text-red-700 font-medium">{c.d90 ? inr(c.d90) : '—'}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums font-bold text-slate-900">{inr(c.total)}</td>
                         <td className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
-                          {c.phone ? (
-                            <button onClick={() => sendReminder(c)} className="btn-ghost text-emerald-700 hover:bg-emerald-50" title="Send WhatsApp reminder">
-                              <MessageCircle className="h-4 w-4" />
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              onClick={() => shareImage(c)}
+                              disabled={imaging === (c.customerId ?? c.customerName)}
+                              className="btn-ghost text-brand-700 hover:bg-brand-50"
+                              title="Share aging as image"
+                            >
+                              {imaging === (c.customerId ?? c.customerName) ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageDown className="h-4 w-4" />}
                             </button>
-                          ) : (
-                            <span className="text-[10px] text-slate-400" title="No phone on the customer record">no phone</span>
-                          )}
+                            {c.phone ? (
+                              <button onClick={() => sendReminder(c)} className="btn-ghost text-emerald-700 hover:bg-emerald-50" title="Send WhatsApp reminder">
+                                <MessageCircle className="h-4 w-4" />
+                              </button>
+                            ) : (
+                              <span className="text-[10px] text-slate-400" title="No phone on the customer record">no phone</span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                       {open && (

@@ -5,9 +5,11 @@
 import { Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Clock, Loader2, ChevronDown, ChevronRight, CreditCard } from 'lucide-react';
+import { Clock, Loader2, ChevronDown, ChevronRight, CreditCard, ImageDown } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { makeAgingImageBlob, shareOrDownloadImage } from '@/lib/agingImage';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 type AgingBill = { id: string; invoiceNumber: string; invoiceDate: string; balance: number; ageDays: number; docType: 'INVOICE' | 'DEBIT_NOTE' };
 type AgingSupplier = {
@@ -30,9 +32,42 @@ const SEV_DOT: Record<string, string> = { low: 'bg-amber-400', mid: 'bg-orange-5
 
 export const CreditorAgingPage = () => {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [filterKey, setFilterKey] = useState('');
+  const [imaging, setImaging] = useState<string | null>(null);
   const { data, isLoading } = useQuery({ queryKey: ['creditor-aging'], queryFn: () => api<AgingResp>('/purchases/aging') });
+  const { data: company } = useQuery({ queryKey: ['company-me'], queryFn: () => api<{ name: string }>('/companies/me') });
   const toggle = (key: string) => setExpanded((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
   const t = data?.totals;
+
+  const allSuppliers = data?.suppliers ?? [];
+  const supOptions = allSuppliers.map((s) => ({ value: s.supplierName, label: s.supplierName }));
+  const shownSuppliers = filterKey ? allSuppliers.filter((s) => s.supplierName === filterKey) : allSuppliers;
+
+  const shareImage = async (s: AgingSupplier) => {
+    setImaging(s.supplierName);
+    try {
+      const blob = await makeAgingImageBlob({
+        companyName: company?.name ?? 'Statement',
+        title: 'Payable Statement (aged by bill date)',
+        partyName: s.supplierName,
+        dateLabel: `As on ${fmtDate(new Date().toISOString())}`,
+        buckets: [
+          { label: '0–30 days', value: s.b0_30 },
+          { label: '31–60 days', value: s.b31_60 },
+          { label: '61–90 days', value: s.b61_90 },
+          { label: '90+ days', value: s.b90 },
+        ],
+        total: s.total,
+        lines: s.invoices.slice(0, 14).map(
+          (i) => `${i.invoiceNumber}  —  ${inr2(i.balance)}  (${fmtDate(i.invoiceDate)}, ${i.ageDays}d${i.docType === 'DEBIT_NOTE' ? ', debit note' : ''})`,
+        ),
+        footer: s.invoices.length > 14 ? `…and ${s.invoices.length - 14} more bill(s)` : (company?.name ?? ''),
+      });
+      await shareOrDownloadImage(blob, `payable-${s.supplierName}`.replace(/[^\w-]+/g, '_'));
+    } finally {
+      setImaging(null);
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -40,9 +75,14 @@ export const CreditorAgingPage = () => {
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <Clock className="h-5 w-5 text-brand-600" /> Creditor Aging
         </h1>
-        <Link to="/accounts/bills-payable" className="btn-ghost border border-slate-300 text-emerald-700 hover:bg-emerald-50">
-          <CreditCard className="h-4 w-4" /> Bills Payable
-        </Link>
+        <div className="flex items-center gap-2">
+          <div className="w-full sm:w-72">
+            <SearchableSelect value={filterKey} onChange={setFilterKey} options={supOptions} placeholder="Search supplier…" />
+          </div>
+          <Link to="/accounts/bills-payable" className="btn-ghost border border-slate-300 text-emerald-700 hover:bg-emerald-50 shrink-0">
+            <CreditCard className="h-4 w-4" /> <span className="hidden sm:inline">Bills Payable</span>
+          </Link>
+        </div>
       </div>
 
       <p className="text-xs text-slate-500 -mt-2">
@@ -77,10 +117,11 @@ export const CreditorAgingPage = () => {
                   <th className="px-3 py-2.5 text-right">61–90</th>
                   <th className="px-3 py-2.5 text-right">90+</th>
                   <th className="px-3 py-2.5 text-right">Total</th>
+                  <th className="px-3 py-2.5 text-center">Share</th>
                 </tr>
               </thead>
               <tbody>
-                {data.suppliers.map((s) => {
+                {shownSuppliers.map((s) => {
                   const key = s.supplierName;
                   const open = expanded.has(key);
                   const sev = severity(s.oldestDays);
@@ -99,11 +140,21 @@ export const CreditorAgingPage = () => {
                         <td className="px-3 py-2.5 text-right tabular-nums text-orange-800">{s.b61_90 ? inr(s.b61_90) : '—'}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums text-red-700 font-medium">{s.b90 ? inr(s.b90) : '—'}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums font-bold text-slate-900">{inr(s.total)}</td>
+                        <td className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => shareImage(s)}
+                            disabled={imaging === s.supplierName}
+                            className="btn-ghost text-brand-700 hover:bg-brand-50"
+                            title="Share payable aging as image"
+                          >
+                            {imaging === s.supplierName ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageDown className="h-4 w-4" />}
+                          </button>
+                        </td>
                       </tr>
                       {open && (
                         <tr className="bg-slate-50/60">
                           <td />
-                          <td colSpan={6} className="px-3 py-2">
+                          <td colSpan={7} className="px-3 py-2">
                             <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
                               <table className="w-full text-xs">
                                 <thead className="bg-slate-50 text-left text-slate-500">
