@@ -4,7 +4,7 @@
 import { useRef, useState, useEffect, useMemo, Fragment } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueries } from '@tanstack/react-query';
-import { ArrowLeft, Download, Package, Loader2, MessageCircle, ClipboardCheck, Check, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Download, Package, Loader2, MessageCircle, ClipboardCheck, Check, RotateCcw, Save } from 'lucide-react';
 import { api } from '@/lib/api';
 import { shareViaWhatsApp, type ShareTarget } from '@/lib/share';
 import { readDraft, useFormDraft, fmtDraftTime } from '@/hooks/useFormDraft';
@@ -159,6 +159,10 @@ export const PackingListPage = () => {
   const [invoiceDate, setInvoiceDate] = useState('');
   const [testedBy, setTestedBy] = useState('');
   const [approvedBy, setApprovedBy] = useState('');
+  // Once a NEW packing list is saved, remember its id so later actions update it
+  // (PUT) instead of trying to create it again (which would 409).
+  const [createdPlId, setCreatedPlId] = useState<string | null>(null);
+  const effectivePlId = plId ?? createdPlId;
 
   /* Auto-generate WO NO. Format: <3-letter company prefix>WO-<3-digit serial>
      e.g. METWO-001, TORWO-007. The series advances per company across all
@@ -251,7 +255,7 @@ export const PackingListPage = () => {
     rows: rows.map((r) => ({ dispatchId: r.dispatchId, remarks: r.remarks })),
   };
   const { savedAt: draftSavedAt, clear: clearDraft } =
-    useFormDraft<PlDraft>(plId ? null : PL_DRAFT_KEY, draftData, !plId && rows.length > 0);
+    useFormDraft<PlDraft>(effectivePlId ? null : PL_DRAFT_KEY, draftData, !effectivePlId && rows.length > 0);
 
   /* Formatted address */
   const addressLine = company?.address?.replace(/\n+/g, ', ').trim() ?? '';
@@ -260,10 +264,12 @@ export const PackingListPage = () => {
   const printRef = useRef<HTMLDivElement>(null);
   const [generating, setGenerating] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [savedOk, setSavedOk] = useState(false);
 
   // Returns the server-assigned WO No. so the downloaded PDF matches the saved
   // record. plNumber is NOT sent — the server owns it (assign on create, keep on update).
-  const persistPackingList = async (): Promise<{ ok: boolean; plNumber?: string }> => {
+  const persistPackingList = async (): Promise<{ ok: boolean; plNumber?: string; plId?: string }> => {
     try {
       const payload = {
         plDate: woDate || today,
@@ -273,15 +279,16 @@ export const PackingListPage = () => {
         approvedBy: approvedBy || null,
         remarks: null,
       };
-      if (plId) {
-        await api(`/packing-lists/${plId}`, { method: 'PUT', body: JSON.stringify(payload) });
-        return { ok: true, plNumber: woNo };
+      if (effectivePlId) {
+        await api(`/packing-lists/${effectivePlId}`, { method: 'PUT', body: JSON.stringify(payload) });
+        return { ok: true, plNumber: woNo, plId: effectivePlId };
       }
-      const created = await api<{ plNumber: string }>('/packing-lists', {
+      const created = await api<{ id: string; plNumber: string }>('/packing-lists', {
         method: 'POST',
         body: JSON.stringify({ dispatchIds: effectiveIds, ...payload }),
       });
-      return { ok: true, plNumber: created.plNumber };
+      setCreatedPlId(created.id);
+      return { ok: true, plNumber: created.plNumber, plId: created.id };
     } catch (e: unknown) {
       setSaveError(e instanceof Error ? e.message : 'Save failed');
       return { ok: false };
@@ -398,6 +405,36 @@ export const PackingListPage = () => {
     if (saved.ok) clearDraft(); // persisted server-side — drop the local draft
   };
 
+  // Save invoice no / date / tested-by / approved-by (and create the PL if new)
+  // without generating a PDF.
+  const handleSave = async () => {
+    setSaving(true); setSaveError(null); setSavedOk(false);
+    const saved = await persistPackingList();
+    if (saved.ok) {
+      if (saved.plNumber && saved.plNumber !== woNo) setWoNo(saved.plNumber);
+      setSavedOk(true);
+      clearDraft();
+    }
+    setSaving(false);
+  };
+
+  // Open the Testing Report — persist first so the invoice no / date / tested /
+  // approved are saved and the report opens by plId (which auto-fills them).
+  const goTestingReport = async () => {
+    if (effectivePlId) { navigate('/testing-report', { state: { plId: effectivePlId } }); return; }
+    setSaving(true); setSaveError(null);
+    const saved = await persistPackingList();
+    setSaving(false);
+    if (saved.ok && saved.plId) {
+      if (saved.plNumber && saved.plNumber !== woNo) setWoNo(saved.plNumber);
+      clearDraft();
+      navigate('/testing-report', { state: { plId: saved.plId } });
+    } else {
+      // Save failed — still open the report so the user isn't blocked.
+      navigate('/testing-report', { state: { dispatchIds: effectiveIds } });
+    }
+  };
+
   if (isLoading) return <div className="card p-10 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-slate-400" /></div>;
   if (!dispatches.length && !isLoading) return (
     <div className="card p-10 text-center text-slate-400">
@@ -435,19 +472,19 @@ export const PackingListPage = () => {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <label className="block">
             <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Invoice No.</span>
-            <input className="input" value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value.toUpperCase())} placeholder="INV-0001" />
+            <input className="input" value={invoiceNo} onChange={(e) => { setInvoiceNo(e.target.value.toUpperCase()); setSavedOk(false); }} placeholder="INV-0001" />
           </label>
           <label className="block">
             <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Invoice Date</span>
-            <input className="input" type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
+            <input className="input" type="date" value={invoiceDate} onChange={(e) => { setInvoiceDate(e.target.value); setSavedOk(false); }} />
           </label>
           <label className="block">
             <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Tested By</span>
-            <input className="input" value={testedBy} onChange={(e) => setTestedBy(e.target.value.toUpperCase())} placeholder="NAME" />
+            <input className="input" value={testedBy} onChange={(e) => { setTestedBy(e.target.value.toUpperCase()); setSavedOk(false); }} placeholder="NAME" />
           </label>
           <label className="block">
             <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Approved By</span>
-            <input className="input" value={approvedBy} onChange={(e) => setApprovedBy(e.target.value.toUpperCase())} placeholder="NAME" />
+            <input className="input" value={approvedBy} onChange={(e) => { setApprovedBy(e.target.value.toUpperCase()); setSavedOk(false); }} placeholder="NAME" />
           </label>
         </div>
 
@@ -469,13 +506,22 @@ export const PackingListPage = () => {
         )}
 
         {/* Row 3 — action buttons (stack on mobile, right-aligned desktop) */}
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-3">
+          {savedOk && (
+            <span className="hidden sm:inline-flex items-center gap-1 text-[12px] font-medium text-emerald-600 mr-auto">
+              <Check className="h-4 w-4" /> Saved {woNo && `— ${woNo}`}
+            </span>
+          )}
           <button
-            onClick={() =>
-              navigate('/testing-report', {
-                state: plId ? { plId } : { dispatchIds: stateIds ?? [] },
-              })
-            }
+            onClick={handleSave}
+            disabled={saving || generating}
+            className="btn-ghost border border-slate-300 text-slate-700 hover:bg-slate-50 w-full sm:w-auto"
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save
+          </button>
+          <button
+            onClick={goTestingReport}
+            disabled={saving}
             className="btn-ghost border border-slate-300 text-violet-700 hover:bg-violet-50 w-full sm:w-auto"
           >
             <ClipboardCheck className="h-4 w-4" /> Testing Report
