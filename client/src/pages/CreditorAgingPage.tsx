@@ -63,7 +63,8 @@ export const CreditorAgingPage = () => {
         ),
         footer: s.invoices.length > 14 ? `…and ${s.invoices.length - 14} more bill(s)` : (company?.name ?? ''),
       });
-      await shareOrDownloadImage(blob, `payable-${s.supplierName}`.replace(/[^\w-]+/g, '_'));
+      const caption = `*Payable Statement${company?.name ? ` — ${company.name}` : ''}*\n${s.supplierName}: ${inr2(s.total)} outstanding as on ${fmtDate(new Date().toISOString())}.`;
+      await shareOrDownloadImage(blob, `payable-${s.supplierName}`.replace(/[^\w-]+/g, '_'), caption);
     } finally {
       setImaging(null);
     }
