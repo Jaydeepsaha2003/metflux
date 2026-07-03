@@ -1,6 +1,8 @@
-// Render a party's aging as a shareable "statement" PNG — drawn directly on a
-// canvas so it uses the app's loaded web fonts (Poppins for text, Calibri Bold
-// → Poppins Bold for figures). Dark card themed in the Metflux brand green.
+// Render a party's aging as a shareable "statement" — drawn directly on a canvas
+// so it uses the app's loaded web fonts (Poppins for text, Calibri Bold → Poppins
+// Bold for figures). Dark card themed in the Metflux brand green. Exported as a
+// PNG (WhatsApp / inline) or a PDF (email attachment).
+import html2pdf from 'html2pdf.js';
 
 const inr = (n: number) => '₹ ' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const TXT = (px: number, weight = 400) => `${weight} ${px}px "Poppins", ui-sans-serif, sans-serif`;
@@ -66,7 +68,7 @@ const rr = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: n
   else ctx.rect(x, y, w, h);
 };
 
-export const makeStatementImageBlob = async (i: StatementInput): Promise<Blob> => {
+const renderStatementCanvas = async (i: StatementInput): Promise<HTMLCanvasElement> => {
   await ensureFonts();
 
   const scale = 2, W = 760, frame = 14, pad = 30;
@@ -191,9 +193,54 @@ export const makeStatementImageBlob = async (i: StatementInput): Promise<Blob> =
   ctx.fillStyle = C.dim; ctx.font = TXT(11, 400);
   ctx.fillText('This is a system-generated statement.', innerX, y + 90);
 
+  return canvas;
+};
+
+export const makeStatementImageBlob = async (i: StatementInput): Promise<Blob> => {
+  const canvas = await renderStatementCanvas(i);
   return new Promise<Blob>((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/png')
   );
+};
+
+/** The statement as a single-page PDF (the rendered card, fit to the page).
+ *  Uses html2pdf (bundles jsPDF) — jspdf isn't importable on its own here. */
+export const makeStatementPdfBlob = async (i: StatementInput): Promise<Blob> => {
+  const canvas = await renderStatementCanvas(i);
+  const dataUrl = canvas.toDataURL('image/png');
+  const W = 720;
+  const H = Math.round((W * canvas.height) / canvas.width);
+
+  const wrap = document.createElement('div');
+  wrap.style.width = `${W}px`;
+  wrap.style.background = '#0d0e11';
+  const img = document.createElement('img');
+  img.src = dataUrl;
+  img.style.width = '100%';
+  img.style.display = 'block';
+  wrap.appendChild(img);
+
+  const offscreen = document.createElement('div');
+  offscreen.style.position = 'fixed';
+  offscreen.style.left = '-10000px';
+  offscreen.style.top = '0';
+  offscreen.appendChild(wrap);
+  document.body.appendChild(offscreen);
+
+  try {
+    await new Promise<void>((res) => { if (img.complete) res(); else img.onload = () => res(); });
+    const worker = html2pdf().set({
+      margin: 0,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, backgroundColor: '#0d0e11', windowWidth: W },
+      jsPDF: { unit: 'px', format: [W, H], orientation: 'portrait' },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any).from(wrap);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (await (worker as any).output('blob')) as Blob;
+  } finally {
+    document.body.removeChild(offscreen);
+  }
 };
 
 /**

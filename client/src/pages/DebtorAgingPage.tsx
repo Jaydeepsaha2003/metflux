@@ -10,8 +10,8 @@ import {
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { normalisePhone } from '@/lib/share';
-import { makeStatementImageBlob, shareOrDownloadImage, type StatementBill, type StatementInput } from '@/lib/agingImage';
-import { buildStatementXlsxBlob, buildStatementHtml, blobToBase64, uploadStatementImage } from '@/lib/statement';
+import { makeStatementImageBlob, makeStatementPdfBlob, shareOrDownloadImage, type StatementBill, type StatementInput } from '@/lib/agingImage';
+import { buildStatementXlsxBlob, buildStatementHtml, blobToBase64 } from '@/lib/statement';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useHideCustomerNames } from '@/store/auth';
 
@@ -318,15 +318,11 @@ const EmailReminderModal = ({
     if (!/^\S+@\S+\.\S+$/.test(to.trim())) { setError('Enter a valid email address'); return; }
     setSending(true);
     try {
-      const png = await makeStatementImageBlob(input);
-      const xlsx = buildStatementXlsxBlob(input);
       const base = `Statement-${(input.partyName || 'customer').replace(/[^\w-]+/g, '_')}`;
-      // Host the PNG so it renders inline in the email body (data: images are
-      // blocked by Gmail); fall back to the HTML table if the upload fails.
-      let imageUrl: string | undefined;
-      try { imageUrl = await uploadStatementImage(png, base); } catch { imageUrl = undefined; }
-      const [pngB64, xlsxB64] = await Promise.all([blobToBase64(png), blobToBase64(xlsx)]);
-      const html = buildStatementHtml(input, imageUrl);
+      const pdf = await makeStatementPdfBlob(input);
+      const xlsx = buildStatementXlsxBlob(input);
+      const [pdfB64, xlsxB64] = await Promise.all([blobToBase64(pdf), blobToBase64(xlsx)]);
+      const html = buildStatementHtml(input); // responsive HTML body; PDF + Excel attached
       await api('/email/reminder', {
         method: 'POST',
         json: {
@@ -336,7 +332,7 @@ const EmailReminderModal = ({
           subject: `${input.companyName} — Outstanding Statement for ${input.partyName} (${inr2(input.total)})`,
           html,
           attachments: [
-            { name: `${base}.png`, content: pngB64 },
+            { name: `${base}.pdf`, content: pdfB64 },
             { name: `${base}.xlsx`, content: xlsxB64 },
           ],
         },
@@ -365,7 +361,7 @@ const EmailReminderModal = ({
           <div className="px-5 py-4 space-y-4">
             <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
               {input.partyName} · <strong>{inr2(input.total)}</strong> outstanding{input.overdue ? ` · ${inr2(input.overdue)} past due` : ''}
-              <div className="mt-0.5 text-slate-400">Sends the statement (image) with an Excel attachment.</div>
+              <div className="mt-0.5 text-slate-400">Sends the statement as a PDF with an Excel attachment.</div>
             </div>
             {!configured && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
