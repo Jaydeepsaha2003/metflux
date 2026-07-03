@@ -10,18 +10,26 @@ import {
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { normalisePhone } from '@/lib/share';
-import { makeAgingImageBlob, shareOrDownloadImage } from '@/lib/agingImage';
+import { makeStatementImageBlob, shareOrDownloadImage, type StatementBill } from '@/lib/agingImage';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useHideCustomerNames } from '@/store/auth';
 
 type AgingInvoice = { id: string; invoiceNumber: string; invoiceDate: string; dueDate: string | null; balance: number; daysOverdue: number | null };
 type AgingCustomer = {
   customerId: string | null; customerName: string; customerCode: string | null; phone: string | null;
+  dueDays: number | null;
   notDue: number; d1_30: number; d31_60: number; d61_90: number; d90: number; noTerms: number;
   total: number; maxDaysOverdue: number; invoices: AgingInvoice[];
 };
 type AgingResp = { customers: AgingCustomer[]; totals: { notDue: number; d1_30: number; d31_60: number; d61_90: number; d90: number; noTerms: number; total: number } };
-type Company = { name: string };
+type Company = { name: string; email?: string | null };
+
+// dd-MMM-yyyy for the statement image (e.g. 03-Jun-2025).
+const fmtStmt = (iso: string | null) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-');
+};
 
 const inr = (n: number) => '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const inr2 = (n: number) => '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -74,32 +82,41 @@ export const DebtorAgingPage = () => {
 
   // Generate a PNG statement of this customer's aging and share it (WhatsApp on
   // mobile) or download it (desktop).
+  const paymentTerm = (d: number | null) => (d == null ? 'As agreed' : d === 0 ? 'Advance' : `${d} Days`);
+
   const shareImage = async (cust: AgingCustomer) => {
     const k = cust.customerId ?? cust.customerName;
     setImaging(k);
     try {
-      const blob = await makeAgingImageBlob({
+      const bills: StatementBill[] = cust.invoices.slice(0, 10).map((i) => {
+        const od = i.daysOverdue ?? 0;
+        return {
+          no: i.invoiceNumber,
+          date: fmtStmt(i.invoiceDate),
+          due: fmtStmt(i.dueDate),
+          badge: i.dueDate == null ? 'No terms' : od > 0 ? `${od} Days` : 'Not due',
+          level: od > 60 ? 'bad' : od > 0 ? 'warn' : 'ok',
+          amount: i.balance,
+        };
+      });
+      const blob = await makeStatementImageBlob({
         companyName: company?.name ?? 'Statement',
-        title: 'Account Statement (Outstanding)',
+        companyEmail: company?.email ?? null,
+        title: 'Outstanding Statement',
+        asOnLabel: `As on ${fmtStmt(new Date().toISOString())}`,
         partyName: hideNames ? (cust.customerCode ?? 'Customer') : cust.customerName,
-        partySub: cust.customerCode && !hideNames ? cust.customerCode : null,
-        dateLabel: `As on ${fmtDate(new Date().toISOString())}`,
-        buckets: [
-          { label: 'Not due', value: cust.notDue },
-          { label: '1–30 days', value: cust.d1_30 },
-          { label: '31–60 days', value: cust.d31_60 },
-          { label: '61–90 days', value: cust.d61_90 },
-          { label: '90+ days', value: cust.d90 },
-          ...(cust.noTerms ? [{ label: 'No terms', value: cust.noTerms }] : []),
-        ],
+        paymentTerm: paymentTerm(cust.dueDays),
+        totalLabel: 'TOTAL OUTSTANDING',
         total: cust.total,
-        lines: cust.invoices.slice(0, 14).map(
-          (i) => `${i.invoiceNumber}  —  ${inr2(i.balance)}${i.dueDate ? `  (due ${fmtDate(i.dueDate)}${(i.daysOverdue ?? 0) > 0 ? `, ${i.daysOverdue}d overdue` : ''})` : ''}`,
-        ),
-        footer: cust.invoices.length > 14 ? `…and ${cust.invoices.length - 14} more invoice(s)` : (company?.name ?? ''),
+        columns: ['Invoice No', 'Invoice Date', 'Due Date', 'Overdue', 'Outstanding'],
+        bills,
+        closing1: 'If payment has already been processed, kindly ignore this communication.',
+        closing2: 'If not, we request you to arrange the payment as per mutually agreed terms.',
+        teamLabel: 'Accounts Receivable Team',
+        extraCount: Math.max(cust.invoices.length - 10, 0),
       });
       const name = (hideNames ? cust.customerCode : cust.customerName) ?? 'statement';
-      await shareOrDownloadImage(blob, `aging-${name}`.replace(/[^\w-]+/g, '_'), reminderText(cust));
+      await shareOrDownloadImage(blob, `statement-${name}`.replace(/[^\w-]+/g, '_'), reminderText(cust));
     } finally {
       setImaging(null);
     }

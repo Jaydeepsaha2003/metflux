@@ -8,7 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Clock, Loader2, ChevronDown, ChevronRight, CreditCard, ImageDown } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
-import { makeAgingImageBlob, shareOrDownloadImage } from '@/lib/agingImage';
+import { makeStatementImageBlob, shareOrDownloadImage, type StatementBill } from '@/lib/agingImage';
 import { SearchableSelect } from '@/components/SearchableSelect';
 
 type AgingBill = { id: string; invoiceNumber: string; invoiceDate: string; balance: number; ageDays: number; docType: 'INVOICE' | 'DEBIT_NOTE' };
@@ -27,6 +27,12 @@ const fmtDate = (iso: string | null) => {
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
+const fmtStmt = (iso: string | null) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-');
+};
+
 const severity = (days: number) => (days <= 30 ? 'low' : days <= 60 ? 'mid' : 'high');
 const SEV_DOT: Record<string, string> = { low: 'bg-amber-400', mid: 'bg-orange-500', high: 'bg-red-500' };
 
@@ -35,7 +41,7 @@ export const CreditorAgingPage = () => {
   const [filterKey, setFilterKey] = useState('');
   const [imaging, setImaging] = useState<string | null>(null);
   const { data, isLoading } = useQuery({ queryKey: ['creditor-aging'], queryFn: () => api<AgingResp>('/purchases/aging') });
-  const { data: company } = useQuery({ queryKey: ['company-me'], queryFn: () => api<{ name: string }>('/companies/me') });
+  const { data: company } = useQuery({ queryKey: ['company-me'], queryFn: () => api<{ name: string; email?: string | null }>('/companies/me') });
   const toggle = (key: string) => setExpanded((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
   const t = data?.totals;
 
@@ -46,24 +52,31 @@ export const CreditorAgingPage = () => {
   const shareImage = async (s: AgingSupplier) => {
     setImaging(s.supplierName);
     try {
-      const blob = await makeAgingImageBlob({
+      const bills: StatementBill[] = s.invoices.slice(0, 10).map((i) => ({
+        no: i.invoiceNumber,
+        date: fmtStmt(i.invoiceDate),
+        due: i.docType === 'DEBIT_NOTE' ? 'Debit note' : 'Bill',
+        badge: `${i.ageDays} Days`,
+        level: i.ageDays > 60 ? 'bad' : i.ageDays > 30 ? 'warn' : 'ok',
+        amount: i.balance,
+      }));
+      const blob = await makeStatementImageBlob({
         companyName: company?.name ?? 'Statement',
-        title: 'Payable Statement (aged by bill date)',
+        companyEmail: company?.email ?? null,
+        title: 'Payable Statement',
+        asOnLabel: `As on ${fmtStmt(new Date().toISOString())}`,
         partyName: s.supplierName,
-        dateLabel: `As on ${fmtDate(new Date().toISOString())}`,
-        buckets: [
-          { label: '0–30 days', value: s.b0_30 },
-          { label: '31–60 days', value: s.b31_60 },
-          { label: '61–90 days', value: s.b61_90 },
-          { label: '90+ days', value: s.b90 },
-        ],
+        paymentTerm: 'As agreed',
+        totalLabel: 'TOTAL PAYABLE',
         total: s.total,
-        lines: s.invoices.slice(0, 14).map(
-          (i) => `${i.invoiceNumber}  —  ${inr2(i.balance)}  (${fmtDate(i.invoiceDate)}, ${i.ageDays}d${i.docType === 'DEBIT_NOTE' ? ', debit note' : ''})`,
-        ),
-        footer: s.invoices.length > 14 ? `…and ${s.invoices.length - 14} more bill(s)` : (company?.name ?? ''),
+        columns: ['Bill No', 'Bill Date', 'Type', 'Age', 'Outstanding'],
+        bills,
+        closing1: 'This is a summary of outstanding payables as per our records.',
+        closing2: 'Kindly reconcile and revert with any discrepancies.',
+        teamLabel: 'Accounts Payable Team',
+        extraCount: Math.max(s.invoices.length - 10, 0),
       });
-      const caption = `*Payable Statement${company?.name ? ` — ${company.name}` : ''}*\n${s.supplierName}: ${inr2(s.total)} outstanding as on ${fmtDate(new Date().toISOString())}.`;
+      const caption = `*Payable Statement${company?.name ? ` — ${company.name}` : ''}*\n${s.supplierName}: ${inr2(s.total)} outstanding as on ${fmtStmt(new Date().toISOString())}.`;
       await shareOrDownloadImage(blob, `payable-${s.supplierName}`.replace(/[^\w-]+/g, '_'), caption);
     } finally {
       setImaging(null);
