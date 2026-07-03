@@ -36,7 +36,9 @@ const sweepStale = () => {
   });
 };
 
-const upload = multer({
+const EXT = { 'application/pdf': 'pdf', 'image/png': 'png', 'image/jpeg': 'jpg' };
+
+const makeUpload = (allowed) => multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, SHARED_DIR),
     filename: (_req, file, cb) => {
@@ -44,23 +46,25 @@ const upload = multer({
         .replace(/\.[^.]+$/, '')
         .replace(/[^A-Za-z0-9_-]+/g, '-')
         .slice(0, 60) || 'document';
-      cb(null, `${crypto.randomUUID()}-${slug}.pdf`);
+      cb(null, `${crypto.randomUUID()}-${slug}.${EXT[file.mimetype] ?? 'bin'}`);
     },
   }),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    const ok = file.mimetype === 'application/pdf';
-    cb(ok ? null : new Error('Only PDF files are allowed'), ok);
+    const ok = allowed.includes(file.mimetype);
+    cb(ok ? null : new Error(`Only ${allowed.join(', ')} allowed`), ok);
   },
 });
+
+const uploadPdf = makeUpload(['application/pdf']);
+const uploadImage = makeUpload(['image/png', 'image/jpeg']);
 
 const router = Router();
 router.use(requireAuth);
 
-/* POST /api/share/pdf — accepts a single PDF and returns a public URL good
-   for 7 days. The URL is unguessable (UUID) but otherwise unauthenticated —
-   anyone with the link can view the file. */
-router.post('/pdf', upload.single('file'), asyncHandler(async (req, res) => {
+// Save the just-uploaded file and return an unguessable (UUID) public URL, good
+// for 7 days. Anyone with the link can view it, but the path can't be guessed.
+const respondWithFile = (req, res) => {
   if (!req.file) throw new AppError('No file uploaded', 400, 'NO_FILE');
   sweepStale();
 
@@ -80,6 +84,12 @@ router.post('/pdf', upload.single('file'), asyncHandler(async (req, res) => {
   const expiresAt = new Date(Date.now() + SEVEN_DAYS_MS).toISOString();
 
   res.status(201).json({ url: absUrl, path: relUrl, expiresAt });
-}));
+};
+
+/* POST /api/share/pdf   — host a PDF (used by wa.me shares) */
+router.post('/pdf', uploadPdf.single('file'), asyncHandler(async (req, res) => respondWithFile(req, res)));
+
+/* POST /api/share/image — host a PNG/JPEG (used to embed the statement in emails) */
+router.post('/image', uploadImage.single('file'), asyncHandler(async (req, res) => respondWithFile(req, res)));
 
 export default router;

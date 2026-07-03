@@ -11,7 +11,7 @@ import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { normalisePhone } from '@/lib/share';
 import { makeStatementImageBlob, shareOrDownloadImage, type StatementBill, type StatementInput } from '@/lib/agingImage';
-import { buildStatementXlsxBlob, buildStatementHtml, blobToBase64 } from '@/lib/statement';
+import { buildStatementXlsxBlob, buildStatementHtml, blobToBase64, uploadStatementImage } from '@/lib/statement';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useHideCustomerNames } from '@/store/auth';
 
@@ -320,9 +320,13 @@ const EmailReminderModal = ({
     try {
       const png = await makeStatementImageBlob(input);
       const xlsx = buildStatementXlsxBlob(input);
-      const [pngB64, xlsxB64] = await Promise.all([blobToBase64(png), blobToBase64(xlsx)]);
-      const html = buildStatementHtml(input);
       const base = `Statement-${(input.partyName || 'customer').replace(/[^\w-]+/g, '_')}`;
+      // Host the PNG so it renders inline in the email body (data: images are
+      // blocked by Gmail); fall back to the HTML table if the upload fails.
+      let imageUrl: string | undefined;
+      try { imageUrl = await uploadStatementImage(png, base); } catch { imageUrl = undefined; }
+      const [pngB64, xlsxB64] = await Promise.all([blobToBase64(png), blobToBase64(xlsx)]);
+      const html = buildStatementHtml(input, imageUrl);
       await api('/email/reminder', {
         method: 'POST',
         json: {
