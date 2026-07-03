@@ -80,11 +80,11 @@ export const buildStatementHtml = (i: StatementInput, imageUrl?: string): string
   // When we have a hosted image, the statement PNG *is* the body (with a short
   // text summary above it for accessibility / when images are blocked).
   const imageBlock = `
-      <p style="margin:0 0 14px;font-size:13px;color:#334155">
-        <strong>${esc(i.totalLabel)}:</strong> ${rupee(i.total)} &nbsp;•&nbsp;
-        <strong>${esc(i.overdueLabel ?? 'Past Due')}:</strong> ${rupee(i.overdue ?? 0)} &nbsp;•&nbsp;
-        <strong>Payment Term:</strong> ${esc(i.paymentTerm)}
-      </p>
+      <div style="margin:0 0 14px;font-size:13px;color:#334155;line-height:1.8">
+        <div><strong>${esc(i.totalLabel)}:</strong> ${rupee(i.total)}</div>
+        <div><strong>${esc(i.overdueLabel ?? 'Past Due')}:</strong> ${rupee(i.overdue ?? 0)}</div>
+        <div><strong>Payment Term:</strong> ${esc(i.paymentTerm)}</div>
+      </div>
       <img src="${esc(imageUrl ?? '')}" alt="Outstanding statement" width="100%" style="display:block;width:100%;max-width:100%;height:auto;border:1px solid #e5e7eb;border-radius:10px" />`;
 
   const middle = imageUrl ? imageBlock : detailBlock;
