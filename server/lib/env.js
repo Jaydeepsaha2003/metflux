@@ -29,6 +29,11 @@ const schema = z.object({
   VAPID_PRIVATE_KEY: z.string().optional().default(''),
   VAPID_SUBJECT: z.string().default('mailto:admin@metflux.com'),
 
+  // Brevo (transactional email) — optional; email reminders are disabled until set.
+  BREVO_API_KEY: z.string().optional().default(''),
+  BREVO_SENDER_EMAIL: z.string().optional().default(''),
+  BREVO_SENDER_NAME: z.string().optional().default(''),
+
   SEED_SUPERADMIN_EMAIL: z.string().email().optional(),
   SEED_SUPERADMIN_USERNAME: z.string().optional(),
   SEED_SUPERADMIN_PASSWORD: z.string().optional(),

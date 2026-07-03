@@ -23,6 +23,7 @@ const LEVEL: Record<string, { fg: string; bg: string }> = {
 export type StatementBill = {
   no: string; date: string; due: string;
   badge: string; level: 'ok' | 'warn' | 'bad';
+  overdueDays: number;        // numeric age/overdue (for the Excel column)
   amount: number;
 };
 export type StatementInput = {
@@ -34,6 +35,8 @@ export type StatementInput = {
   paymentTerm: string;        // "Advance" / "30 Days" / "As agreed"
   totalLabel: string;         // "TOTAL OUTSTANDING"
   total: number;
+  overdue?: number;           // amount past the payment term (shown as "Past Due")
+  overdueLabel?: string;      // "PAST DUE"
   columns: [string, string, string, string, string];
   bills: StatementBill[];
   closing1: string;
@@ -108,19 +111,25 @@ export const makeStatementImageBlob = async (i: StatementInput): Promise<Blob> =
   ctx.fillText('Please find below the outstanding summary as per our records.', innerX, y + 44);
   y += INTRO;
 
-  // Cards
-  const cardH = 82, gap = 16, cardW = (innerW - gap) / 2;
+  // Cards — Payment Term | Total Outstanding | Past Due
+  const cardH = 82, gap = 14, cardW = (innerW - 2 * gap) / 3;
+  const x0 = innerX, x1 = innerX + cardW + gap, x2 = innerX + 2 * (cardW + gap);
   // Payment term
-  ctx.fillStyle = C.panel; rr(ctx, innerX, y, cardW, cardH, 12); ctx.fill();
+  ctx.fillStyle = C.panel; rr(ctx, x0, y, cardW, cardH, 12); ctx.fill();
   ctx.strokeStyle = C.panelBorder; ctx.stroke();
-  ctx.fillStyle = C.sub; ctx.font = TXT(11, 600); ctx.fillText('PAYMENT TERM', innerX + 18, y + 30);
-  ctx.fillStyle = C.white; ctx.font = TXT(17, 600); ctx.fillText(i.paymentTerm, innerX + 18, y + 58);
+  ctx.fillStyle = C.sub; ctx.font = TXT(10.5, 600); ctx.fillText('PAYMENT TERM', x0 + 16, y + 28);
+  ctx.fillStyle = C.white; ctx.font = TXT(15, 600); ctx.fillText(i.paymentTerm, x0 + 16, y + 56);
   // Total (brand)
-  const tx = innerX + cardW + gap;
-  ctx.fillStyle = C.brandBg; rr(ctx, tx, y, cardW, cardH, 12); ctx.fill();
+  ctx.fillStyle = C.brandBg; rr(ctx, x1, y, cardW, cardH, 12); ctx.fill();
   ctx.strokeStyle = C.brandBorder; ctx.stroke();
-  ctx.fillStyle = C.brandDim; ctx.font = TXT(11, 600); ctx.fillText(i.totalLabel, tx + 18, y + 30);
-  ctx.fillStyle = C.brand; ctx.font = NUM(23); ctx.fillText(inr(i.total), tx + 18, y + 62);
+  ctx.fillStyle = C.brandDim; ctx.font = TXT(10.5, 600); ctx.fillText(i.totalLabel, x1 + 16, y + 28);
+  ctx.fillStyle = C.brand; ctx.font = NUM(20); ctx.fillText(inr(i.total), x1 + 16, y + 58);
+  // Past due (amber)
+  const overdue = i.overdue ?? 0;
+  ctx.fillStyle = 'rgba(245,158,11,0.12)'; rr(ctx, x2, y, cardW, cardH, 12); ctx.fill();
+  ctx.strokeStyle = 'rgba(245,158,11,0.38)'; ctx.stroke();
+  ctx.fillStyle = '#fcd34d'; ctx.font = TXT(10.5, 600); ctx.fillText(i.overdueLabel ?? 'PAST DUE', x2 + 16, y + 28);
+  ctx.fillStyle = '#fbbf24'; ctx.font = NUM(20); ctx.fillText(inr(overdue), x2 + 16, y + 58);
   y += CARDS;
 
   // Section title

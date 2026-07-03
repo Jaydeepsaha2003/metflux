@@ -5,19 +5,20 @@ import { Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Clock, Loader2, MessageCircle, ChevronDown, ChevronRight, AlertTriangle, Wallet, ImageDown,
+  Clock, Loader2, MessageCircle, ChevronDown, ChevronRight, AlertTriangle, Wallet, ImageDown, Mail, X, CheckCircle2,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { normalisePhone } from '@/lib/share';
-import { makeStatementImageBlob, shareOrDownloadImage, type StatementBill } from '@/lib/agingImage';
+import { makeStatementImageBlob, shareOrDownloadImage, type StatementBill, type StatementInput } from '@/lib/agingImage';
+import { buildStatementXlsxBlob, buildStatementHtml, blobToBase64 } from '@/lib/statement';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useHideCustomerNames } from '@/store/auth';
 
 type AgingInvoice = { id: string; invoiceNumber: string; invoiceDate: string; dueDate: string | null; balance: number; daysOverdue: number | null };
 type AgingCustomer = {
   customerId: string | null; customerName: string; customerCode: string | null; phone: string | null;
-  dueDays: number | null;
+  dueDays: number | null; email: string | null;
   notDue: number; d1_30: number; d31_60: number; d61_90: number; d90: number; noTerms: number;
   total: number; maxDaysOverdue: number; invoices: AgingInvoice[];
 };
@@ -47,9 +48,11 @@ export const DebtorAgingPage = () => {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [filterKey, setFilterKey] = useState('');
   const [imaging, setImaging] = useState<string | null>(null);
+  const [emailFor, setEmailFor] = useState<AgingCustomer | null>(null);
 
   const { data, isLoading } = useQuery({ queryKey: ['debtor-aging'], queryFn: () => api<AgingResp>('/sales-invoices/aging') });
   const { data: company } = useQuery({ queryKey: ['company-me'], queryFn: () => api<Company>('/companies/me') });
+  const { data: emailCfg } = useQuery({ queryKey: ['email-config'], queryFn: () => api<{ configured: boolean; senderEmail: string }>('/email/config') });
 
   const toggle = (key: string) => setExpanded((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
@@ -83,38 +86,47 @@ export const DebtorAgingPage = () => {
   // Generate a PNG statement of this customer's aging and share it (WhatsApp on
   // mobile) or download it (desktop).
   const paymentTerm = (d: number | null) => (d == null ? 'As agreed' : d === 0 ? 'Advance' : `${d} Days`);
+  const overdueAmt = (c: AgingCustomer) => c.d1_30 + c.d31_60 + c.d61_90 + c.d90;
+
+  // Shared statement definition — feeds the PNG, the Excel and the email HTML.
+  const statementInputFor = (cust: AgingCustomer): StatementInput => {
+    const bills: StatementBill[] = cust.invoices.slice(0, 10).map((i) => {
+      const od = i.daysOverdue ?? 0;
+      return {
+        no: i.invoiceNumber,
+        date: fmtStmt(i.invoiceDate),
+        due: fmtStmt(i.dueDate),
+        badge: i.dueDate == null ? 'No terms' : od > 0 ? `${od} Days` : 'Not due',
+        level: od > 60 ? 'bad' : od > 0 ? 'warn' : 'ok',
+        overdueDays: Math.max(od, 0),
+        amount: i.balance,
+      };
+    });
+    return {
+      companyName: company?.name ?? 'Statement',
+      companyEmail: company?.email ?? null,
+      title: 'Outstanding Statement',
+      asOnLabel: `As on ${fmtStmt(new Date().toISOString())}`,
+      partyName: hideNames ? (cust.customerCode ?? 'Customer') : cust.customerName,
+      paymentTerm: paymentTerm(cust.dueDays),
+      totalLabel: 'TOTAL OUTSTANDING',
+      total: cust.total,
+      overdue: overdueAmt(cust),
+      overdueLabel: 'PAST DUE',
+      columns: ['Invoice No', 'Invoice Date', 'Due Date', 'Overdue', 'Outstanding'],
+      bills,
+      closing1: 'If payment has already been processed, kindly ignore this communication.',
+      closing2: 'If not, we request you to arrange the payment as per mutually agreed terms.',
+      teamLabel: 'Accounts Receivable Team',
+      extraCount: Math.max(cust.invoices.length - 10, 0),
+    };
+  };
 
   const shareImage = async (cust: AgingCustomer) => {
     const k = cust.customerId ?? cust.customerName;
     setImaging(k);
     try {
-      const bills: StatementBill[] = cust.invoices.slice(0, 10).map((i) => {
-        const od = i.daysOverdue ?? 0;
-        return {
-          no: i.invoiceNumber,
-          date: fmtStmt(i.invoiceDate),
-          due: fmtStmt(i.dueDate),
-          badge: i.dueDate == null ? 'No terms' : od > 0 ? `${od} Days` : 'Not due',
-          level: od > 60 ? 'bad' : od > 0 ? 'warn' : 'ok',
-          amount: i.balance,
-        };
-      });
-      const blob = await makeStatementImageBlob({
-        companyName: company?.name ?? 'Statement',
-        companyEmail: company?.email ?? null,
-        title: 'Outstanding Statement',
-        asOnLabel: `As on ${fmtStmt(new Date().toISOString())}`,
-        partyName: hideNames ? (cust.customerCode ?? 'Customer') : cust.customerName,
-        paymentTerm: paymentTerm(cust.dueDays),
-        totalLabel: 'TOTAL OUTSTANDING',
-        total: cust.total,
-        columns: ['Invoice No', 'Invoice Date', 'Due Date', 'Overdue', 'Outstanding'],
-        bills,
-        closing1: 'If payment has already been processed, kindly ignore this communication.',
-        closing2: 'If not, we request you to arrange the payment as per mutually agreed terms.',
-        teamLabel: 'Accounts Receivable Team',
-        extraCount: Math.max(cust.invoices.length - 10, 0),
-      });
+      const blob = await makeStatementImageBlob(statementInputFor(cust));
       const name = (hideNames ? cust.customerCode : cust.customerName) ?? 'statement';
       await shareOrDownloadImage(blob, `statement-${name}`.replace(/[^\w-]+/g, '_'), reminderText(cust));
     } finally {
@@ -226,6 +238,13 @@ export const DebtorAgingPage = () => {
                             >
                               {imaging === (c.customerId ?? c.customerName) ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageDown className="h-4 w-4" />}
                             </button>
+                            <button
+                              onClick={() => setEmailFor(c)}
+                              className="btn-ghost text-sky-700 hover:bg-sky-50"
+                              title="Email statement (image + Excel)"
+                            >
+                              <Mail className="h-4 w-4" />
+                            </button>
                             {c.phone ? (
                               <button onClick={() => sendReminder(c)} className="btn-ghost text-emerald-700 hover:bg-emerald-50" title="Send WhatsApp reminder">
                                 <MessageCircle className="h-4 w-4" />
@@ -268,6 +287,102 @@ export const DebtorAgingPage = () => {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+      </div>
+
+      {emailFor && (
+        <EmailReminderModal
+          cust={emailFor}
+          input={statementInputFor(emailFor)}
+          configured={!!emailCfg?.configured}
+          onClose={() => setEmailFor(null)}
+        />
+      )}
+    </div>
+  );
+};
+
+/* ── Email statement modal ── */
+const EmailReminderModal = ({
+  cust, input, configured, onClose,
+}: { cust: AgingCustomer; input: StatementInput; configured: boolean; onClose: () => void }) => {
+  const [to, setTo] = useState(cust.email ?? '');
+  const [save, setSave] = useState(!cust.email);
+  const [sending, setSending] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const send = async () => {
+    setError(null);
+    if (!/^\S+@\S+\.\S+$/.test(to.trim())) { setError('Enter a valid email address'); return; }
+    setSending(true);
+    try {
+      const png = await makeStatementImageBlob(input);
+      const xlsx = buildStatementXlsxBlob(input);
+      const [pngB64, xlsxB64] = await Promise.all([blobToBase64(png), blobToBase64(xlsx)]);
+      const html = buildStatementHtml(input);
+      const base = `Statement-${(input.partyName || 'customer').replace(/[^\w-]+/g, '_')}`;
+      await api('/email/reminder', {
+        method: 'POST',
+        json: {
+          customerId: cust.customerId,
+          to: to.trim(),
+          saveEmail: save,
+          subject: `Outstanding Statement — ${input.companyName} — ${inr2(input.total)}`,
+          html,
+          attachments: [
+            { name: `${base}.png`, content: pngB64 },
+            { name: `${base}.xlsx`, content: xlsxB64 },
+          ],
+        },
+      });
+      setDone(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not send email');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="w-full max-w-md rounded-xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><Mail className="h-4 w-4 text-sky-600" /> Email statement</h2>
+          <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
+        </div>
+        {done ? (
+          <div className="px-5 py-6 space-y-3">
+            <div className="flex items-center gap-2 text-emerald-700 text-sm font-medium"><CheckCircle2 className="h-5 w-5" /> Statement emailed to {to}.</div>
+            <button onClick={onClose} className="btn-primary text-sm">Done</button>
+          </div>
+        ) : (
+          <div className="px-5 py-4 space-y-4">
+            <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              {input.partyName} · <strong>{inr2(input.total)}</strong> outstanding{input.overdue ? ` · ${inr2(input.overdue)} past due` : ''}
+              <div className="mt-0.5 text-slate-400">Sends the statement (image) with an Excel attachment.</div>
+            </div>
+            {!configured && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                Email isn’t set up on the server yet. Ask the admin to configure Brevo (API key + sender).
+              </div>
+            )}
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Recipient email</span>
+              <input className="input" type="email" value={to} onChange={(e) => setTo(e.target.value)} placeholder="customer@example.com" />
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" checked={save} onChange={(e) => setSave(e.target.checked)} className="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+              Save this email on the customer &amp; use it every time
+            </label>
+            {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>}
+            <div className="flex justify-end gap-3 border-t border-slate-200 pt-3">
+              <button onClick={onClose} className="btn-ghost text-sm">Cancel</button>
+              <button onClick={send} disabled={sending || !configured} className="btn-primary text-sm">
+                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />} Send email
+              </button>
+            </div>
           </div>
         )}
       </div>

@@ -58,6 +58,7 @@ export const CreditorAgingPage = () => {
         due: i.docType === 'DEBIT_NOTE' ? 'Debit note' : 'Bill',
         badge: `${i.ageDays} Days`,
         level: i.ageDays > 60 ? 'bad' : i.ageDays > 30 ? 'warn' : 'ok',
+        overdueDays: i.ageDays,
         amount: i.balance,
       }));
       const blob = await makeStatementImageBlob({
@@ -69,6 +70,8 @@ export const CreditorAgingPage = () => {
         paymentTerm: 'As agreed',
         totalLabel: 'TOTAL PAYABLE',
         total: s.total,
+        overdue: s.b31_60 + s.b61_90 + s.b90,
+        overdueLabel: 'AGED > 30D',
         columns: ['Bill No', 'Bill Date', 'Type', 'Age', 'Outstanding'],
         bills,
         closing1: 'This is a summary of outstanding payables as per our records.',

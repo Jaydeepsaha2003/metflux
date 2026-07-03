@@ -267,7 +267,7 @@ router.get('/summary', requirePermission('manage_invoices'), asyncHandler(async 
 /* ---------- GET /aging — per-customer aging buckets (powers reminders) ---------- */
 router.get('/aging', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
   const rows = await q(
-    `SELECT si.*, c.\`name\` AS cName, c.\`phone\` AS cPhone, c.\`customerCode\` AS cCode, c.\`dueDays\` AS cDueDays
+    `SELECT si.*, c.\`name\` AS cName, c.\`phone\` AS cPhone, c.\`customerCode\` AS cCode, c.\`dueDays\` AS cDueDays, c.\`email\` AS cEmail
        FROM \`SalesInvoice\` si
        LEFT JOIN \`Customer\` c ON c.\`id\` = si.\`customerId\`
       WHERE si.\`companyId\` = ? AND si.\`status\` <> 'PAID'`,
@@ -295,6 +295,7 @@ router.get('/aging', requirePermission('manage_invoices'), asyncHandler(async (r
         customerCode: inv.cCode ?? null,
         phone: inv.cPhone ?? null,
         dueDays: inv.cDueDays ?? null,
+        email: inv.cEmail ?? null,
         credit: 0, bills: [],
       });
     }
@@ -325,7 +326,7 @@ router.get('/aging', requirePermission('manage_invoices'), asyncHandler(async (r
 
     const c = {
       customerId: g.customerId, customerName: g.customerName, customerCode: g.customerCode,
-      phone: g.phone, dueDays: g.dueDays,
+      phone: g.phone, dueDays: g.dueDays, email: g.email,
       notDue: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90: 0, noTerms: 0, total: 0,
       maxDaysOverdue: 0, invoices: [],
     };
