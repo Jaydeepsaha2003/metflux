@@ -275,14 +275,18 @@ router.get('/aging', requirePermission('manage_invoices'), asyncHandler(async (r
   );
   const now = new Date();
   const todayMid = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const groups = new Map();
+  const daysOverdue = (dueIso) => {
+    if (!dueIso) return null;
+    const due = new Date(dueIso);
+    return Math.floor((todayMid - Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate())) / 86400000);
+  };
 
+  // Pass 1 — split each customer's rows into open bills (positive balance) and a
+  // running credit total (sales returns / credit notes / advances, negative).
+  const groups = new Map();
   for (const inv of rows) {
     const balance = round2(Number(inv.amount) - Number(inv.paidAmount));
-    // Skip only settled (≈0) rows. Negative balances are credit notes /
-    // advances — keep them so the aging total nets out to the true receivable
-    // (matching the Sales Register's net Outstanding).
-    if (Math.abs(balance) <= 0.01) continue;
+    if (Math.abs(balance) <= 0.01) continue; // settled
     const key = inv.customerId ?? `__x__:${inv.customerName}`;
     if (!groups.has(key)) {
       groups.set(key, {
@@ -291,37 +295,64 @@ router.get('/aging', requirePermission('manage_invoices'), asyncHandler(async (r
         customerCode: inv.cCode ?? null,
         phone: inv.cPhone ?? null,
         dueDays: inv.cDueDays ?? null,
-        notDue: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90: 0, noTerms: 0, total: 0,
-        maxDaysOverdue: 0, invoices: [],
+        credit: 0, bills: [],
       });
     }
     const g = groups.get(key);
-    let days = null;
-    if (balance < 0) {
-      // Credit note / advance — reduces what's owed; not an overdue item, so it
-      // sits in "Not due" rather than any aging bucket.
-      g.notDue = round2(g.notDue + balance);
-    } else if (!inv.dueDate) {
-      g.noTerms = round2(g.noTerms + balance);
-    } else {
-      const due = new Date(inv.dueDate);
-      const dueMid = Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate());
-      days = Math.floor((todayMid - dueMid) / 86400000);
-      if (days <= 0) g.notDue = round2(g.notDue + balance);
-      else if (days <= 30) g.d1_30 = round2(g.d1_30 + balance);
-      else if (days <= 60) g.d31_60 = round2(g.d31_60 + balance);
-      else if (days <= 90) g.d61_90 = round2(g.d61_90 + balance);
-      else g.d90 = round2(g.d90 + balance);
-      if (days > g.maxDaysOverdue) g.maxDaysOverdue = days;
-    }
-    g.total = round2(g.total + balance);
-    g.invoices.push({ id: inv.id, invoiceNumber: inv.invoiceNumber, invoiceDate: inv.invoiceDate, dueDate: inv.dueDate, balance, daysOverdue: days });
+    if (balance < 0) g.credit = round2(g.credit - balance); // accumulate magnitude
+    else g.bills.push({ id: inv.id, invoiceNumber: inv.invoiceNumber, invoiceDate: inv.invoiceDate, dueDate: inv.dueDate, balance });
   }
 
-  const customers = [...groups.values()].sort((a, b) => b.total - a.total);
-  for (const g of customers) {
-    g.invoices.sort((a, b) => new Date(a.dueDate || a.invoiceDate) - new Date(b.dueDate || b.invoiceDate));
+  // Pass 2 — knock each customer's credit off their OLDEST open bills (FIFO), then
+  // bucket the *remaining* balances. A sales return therefore squares off the
+  // oldest pending invoice instead of showing as its own line; only leftover
+  // credit (customer in net credit) surfaces as a single "Credit / Advance" row.
+  const customers = [];
+  for (const g of groups.values()) {
+    g.bills.sort((a, b) => {
+      const ad = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+      const bd = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+      if (ad !== bd) return ad - bd;
+      return new Date(a.invoiceDate).getTime() - new Date(b.invoiceDate).getTime();
+    });
+    let remaining = g.credit;
+    for (const bill of g.bills) {
+      if (remaining <= 0.01) break;
+      const applied = Math.min(remaining, bill.balance);
+      bill.balance = round2(bill.balance - applied);
+      remaining = round2(remaining - applied);
+    }
+
+    const c = {
+      customerId: g.customerId, customerName: g.customerName, customerCode: g.customerCode,
+      phone: g.phone, dueDays: g.dueDays,
+      notDue: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90: 0, noTerms: 0, total: 0,
+      maxDaysOverdue: 0, invoices: [],
+    };
+    for (const bill of g.bills) {
+      if (bill.balance <= 0.01) continue; // fully squared off by the credit
+      const days = daysOverdue(bill.dueDate);
+      if (days == null) c.noTerms = round2(c.noTerms + bill.balance);
+      else if (days <= 0) c.notDue = round2(c.notDue + bill.balance);
+      else if (days <= 30) c.d1_30 = round2(c.d1_30 + bill.balance);
+      else if (days <= 60) c.d31_60 = round2(c.d31_60 + bill.balance);
+      else if (days <= 90) c.d61_90 = round2(c.d61_90 + bill.balance);
+      else c.d90 = round2(c.d90 + bill.balance);
+      if (days != null && days > c.maxDaysOverdue) c.maxDaysOverdue = days;
+      c.invoices.push({ id: bill.id, invoiceNumber: bill.invoiceNumber, invoiceDate: bill.invoiceDate, dueDate: bill.dueDate, balance: bill.balance, daysOverdue: days });
+    }
+    if (remaining > 0.01) {
+      // Customer is in net credit — show the unadjusted balance as one line.
+      c.notDue = round2(c.notDue - remaining);
+      c.invoices.push({ id: `credit:${g.customerId ?? g.customerName}`, invoiceNumber: 'Credit / Advance', invoiceDate: null, dueDate: null, balance: round2(-remaining), daysOverdue: null });
+    }
+    c.total = round2(c.notDue + c.d1_30 + c.d31_60 + c.d61_90 + c.d90 + c.noTerms);
+    // Drop customers who net to zero (bills fully squared off by credits).
+    if (Math.abs(c.total) <= 0.01 && c.invoices.length === 0) continue;
+    customers.push(c);
   }
+
+  customers.sort((a, b) => b.total - a.total);
   const totals = customers.reduce((t, g) => ({
     notDue: round2(t.notDue + g.notDue), d1_30: round2(t.d1_30 + g.d1_30),
     d31_60: round2(t.d31_60 + g.d31_60), d61_90: round2(t.d61_90 + g.d61_90),
