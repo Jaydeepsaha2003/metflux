@@ -48,14 +48,18 @@ export const DebtorAgingPage = () => {
   // Build the wa.me link and open it synchronously inside the click handler.
   // (Opening after an await trips the popup blocker; building client-side also
   // means a bare 10-digit number still works — normalisePhone adds +91.)
-  // Short, polite reminder — a couple of lines, no long invoice dump.
+  // Polite reminder — totals only, no per-invoice dump.
   const reminderText = (cust: AgingCustomer) => {
     const overdueAmt = cust.d1_30 + cust.d31_60 + cust.d61_90 + cust.d90;
-    return [
-      `*Payment Reminder${company?.name ? ` — ${company.name}` : ''}*`,
-      `Dear ${cust.customerName}, ${inr2(cust.total)} is outstanding against your account${overdueAmt > 0 ? ` (${inr2(overdueAmt)} past due)` : ''}.`,
-      'Kindly arrange the payment at your earliest convenience. Thank you.',
-    ].join('\n');
+    const lines = [
+      '*Payment Reminder*',
+      `Dear ${cust.customerName},`,
+      `As per our records, a total of ${inr2(cust.total)} is outstanding against your account${overdueAmt > 0 ? `, of which ${inr2(overdueAmt)} is past due` : ''}.`,
+      '',
+      'We kindly request you to arrange the payment at your earliest convenience.',
+    ];
+    if (company?.name) lines.push('Regards,', company.name);
+    return lines.join('\n');
   };
 
   const sendReminder = (cust: AgingCustomer) => {
