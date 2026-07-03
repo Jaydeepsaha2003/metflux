@@ -23,7 +23,7 @@ type AgingCustomer = {
   total: number; maxDaysOverdue: number; invoices: AgingInvoice[];
 };
 type AgingResp = { customers: AgingCustomer[]; totals: { notDue: number; d1_30: number; d31_60: number; d61_90: number; d90: number; noTerms: number; total: number } };
-type Company = { name: string; email?: string | null };
+type Company = { name: string; email?: string | null; phone?: string | null };
 
 // dd-MMM-yyyy for the statement image (e.g. 03-Jun-2025).
 const fmtStmt = (iso: string | null) => {
@@ -90,7 +90,8 @@ export const DebtorAgingPage = () => {
 
   // Shared statement definition — feeds the PNG, the Excel and the email HTML.
   const statementInputFor = (cust: AgingCustomer): StatementInput => {
-    const bills: StatementBill[] = cust.invoices.slice(0, 10).map((i) => {
+    // ALL bills — the PDF and Excel list every invoice; the PNG caps at 10 itself.
+    const bills: StatementBill[] = cust.invoices.map((i) => {
       const od = i.daysOverdue ?? 0;
       return {
         no: i.invoiceNumber,
@@ -105,6 +106,7 @@ export const DebtorAgingPage = () => {
     return {
       companyName: company?.name ?? 'Statement',
       companyEmail: company?.email ?? null,
+      companyPhone: company?.phone ?? null,
       title: 'Outstanding Statement',
       asOnLabel: `As on ${fmtStmt(new Date().toISOString())}`,
       partyName: hideNames ? (cust.customerCode ?? 'Customer') : cust.customerName,
@@ -112,13 +114,12 @@ export const DebtorAgingPage = () => {
       totalLabel: 'TOTAL OUTSTANDING',
       total: cust.total,
       overdue: overdueAmt(cust),
-      overdueLabel: 'PAST DUE',
+      overdueLabel: 'DUE',
       columns: ['Invoice No', 'Invoice Date', 'Due Date', 'Overdue', 'Outstanding'],
       bills,
       closing1: 'If payment has already been processed, kindly ignore this communication.',
-      closing2: 'If not, we request you to arrange the payment as per mutually agreed terms.',
+      closing2: 'If not, we request you to arrange the payment at your earliest convenience as per mutually agreed terms.',
       teamLabel: 'Accounts Receivable Team',
-      extraCount: Math.max(cust.invoices.length - 10, 0),
     };
   };
 

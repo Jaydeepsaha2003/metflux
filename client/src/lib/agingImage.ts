@@ -31,6 +31,7 @@ export type StatementBill = {
 export type StatementInput = {
   companyName: string;
   companyEmail?: string | null;
+  companyPhone?: string | null;
   title: string;              // "Outstanding Statement" / "Payable Statement"
   asOnLabel: string;          // "As on 29-Jun-2026"
   partyName: string;
@@ -68,13 +69,14 @@ const rr = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: n
   else ctx.rect(x, y, w, h);
 };
 
-const renderStatementCanvas = async (i: StatementInput): Promise<HTMLCanvasElement> => {
+const renderStatementCanvas = async (i: StatementInput, maxRows = i.bills.length): Promise<HTMLCanvasElement> => {
   await ensureFonts();
 
   const scale = 2, W = 760, frame = 14, pad = 30;
   const innerX = frame + pad, innerW = W - 2 * innerX;
-  const bills = i.bills.slice(0, 10);
+  const bills = i.bills.slice(0, maxRows);
   const n = bills.length;
+  const extra = i.bills.length - n;
 
   const HDR = 60, INTRO = 66, CARDS = 112, SECT = 34, THEAD = 34, ROW = 40, TGAP = 16, CLOSE = 82, FOOT = 104;
   const H = frame + pad + HDR + INTRO + CARDS + SECT + THEAD + n * ROW + TGAP + CLOSE + FOOT + pad;
@@ -126,17 +128,17 @@ const renderStatementCanvas = async (i: StatementInput): Promise<HTMLCanvasEleme
   ctx.strokeStyle = C.brandBorder; ctx.stroke();
   ctx.fillStyle = C.brandDim; ctx.font = TXT(10.5, 600); ctx.fillText(i.totalLabel, x1 + 16, y + 28);
   ctx.fillStyle = C.brand; ctx.font = NUM(20); ctx.fillText(inr(i.total), x1 + 16, y + 58);
-  // Past due (amber)
+  // Due (same green theme, neutral card + green figure)
   const overdue = i.overdue ?? 0;
-  ctx.fillStyle = 'rgba(245,158,11,0.12)'; rr(ctx, x2, y, cardW, cardH, 12); ctx.fill();
-  ctx.strokeStyle = 'rgba(245,158,11,0.38)'; ctx.stroke();
-  ctx.fillStyle = '#fcd34d'; ctx.font = TXT(10.5, 600); ctx.fillText(i.overdueLabel ?? 'PAST DUE', x2 + 16, y + 28);
-  ctx.fillStyle = '#fbbf24'; ctx.font = NUM(20); ctx.fillText(inr(overdue), x2 + 16, y + 58);
+  ctx.fillStyle = C.panel; rr(ctx, x2, y, cardW, cardH, 12); ctx.fill();
+  ctx.strokeStyle = C.panelBorder; ctx.stroke();
+  ctx.fillStyle = C.sub; ctx.font = TXT(10.5, 600); ctx.fillText(i.overdueLabel ?? 'DUE', x2 + 16, y + 28);
+  ctx.fillStyle = C.brand; ctx.font = NUM(20); ctx.fillText(inr(overdue), x2 + 16, y + 58);
   y += CARDS;
 
   // Section title
   ctx.fillStyle = C.white; ctx.font = TXT(14.5, 600);
-  ctx.fillText(`Bill-wise Outstanding${n ? ` (Top ${n})` : ''}`, innerX, y + 20);
+  ctx.fillText('Bill-wise Outstanding', innerX, y + 20);
   y += SECT;
 
   // Column geometry
@@ -175,7 +177,7 @@ const renderStatementCanvas = async (i: StatementInput): Promise<HTMLCanvasEleme
 
   // Closing
   ctx.fillStyle = C.body; ctx.font = TXT(12.5, 400);
-  if (i.extraCount && i.extraCount > 0) { ctx.fillStyle = C.dim; ctx.font = TXT(11.5, 400); ctx.fillText(`…and ${i.extraCount} more bill(s) not shown.`, innerX, y - 2); }
+  if (extra > 0) { ctx.fillStyle = C.dim; ctx.font = TXT(11.5, 400); ctx.fillText(`…and ${extra} more bill(s) — see the attached PDF / Excel.`, innerX, y - 2); }
   ctx.fillStyle = C.body; ctx.font = TXT(12.5, 400);
   ctx.fillText(i.closing1, innerX, y + 24);
   ctx.fillText(i.closing2, innerX, y + 50);
@@ -185,10 +187,11 @@ const renderStatementCanvas = async (i: StatementInput): Promise<HTMLCanvasEleme
   ctx.strokeStyle = C.border; ctx.beginPath(); ctx.moveTo(innerX, y + 6); ctx.lineTo(innerX + innerW, y + 6); ctx.stroke();
   ctx.fillStyle = C.brandDim; ctx.font = TXT(12, 600); ctx.fillText(i.teamLabel, innerX, y + 30);
   ctx.fillStyle = C.body; ctx.font = TXT(12, 400); ctx.fillText(i.companyName, innerX, y + 50);
-  if (i.companyEmail) {
+  const contact = [i.companyEmail, i.companyPhone].filter(Boolean).join('   ·   ');
+  if (contact) {
     ctx.fillStyle = C.dim; ctx.font = TXT(11.5, 400); ctx.fillText('Email: ', innerX, y + 70);
     const ew = ctx.measureText('Email: ').width;
-    ctx.fillStyle = C.brandDim; ctx.fillText(i.companyEmail, innerX + ew, y + 70);
+    ctx.fillStyle = C.brandDim; ctx.fillText(contact, innerX + ew, y + 70);
   }
   ctx.fillStyle = C.dim; ctx.font = TXT(11, 400);
   ctx.fillText('This is a system-generated statement.', innerX, y + 90);
@@ -197,7 +200,9 @@ const renderStatementCanvas = async (i: StatementInput): Promise<HTMLCanvasEleme
 };
 
 export const makeStatementImageBlob = async (i: StatementInput): Promise<Blob> => {
-  const canvas = await renderStatementCanvas(i);
+  // WhatsApp PNG stays bounded to 10 rows (a tall image is impractical);
+  // the PDF (below) renders every bill.
+  const canvas = await renderStatementCanvas(i, 10);
   return new Promise<Blob>((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/png')
   );
