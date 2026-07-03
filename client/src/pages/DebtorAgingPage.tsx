@@ -329,7 +329,7 @@ const EmailReminderModal = ({
           customerId: cust.customerId,
           to: to.trim(),
           saveEmail: save,
-          subject: `Outstanding Statement — ${input.companyName} — ${inr2(input.total)}`,
+          subject: `${input.companyName} — Outstanding Statement for ${input.partyName} (${inr2(input.total)})`,
           html,
           attachments: [
             { name: `${base}.png`, content: pngB64 },
