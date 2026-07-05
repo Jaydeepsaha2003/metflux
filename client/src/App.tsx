@@ -44,6 +44,7 @@ import { BillsReceivablePage } from '@/pages/BillsReceivablePage';
 import { BillsPayablePage } from '@/pages/BillsPayablePage';
 import { CreditorAgingPage } from '@/pages/CreditorAgingPage';
 import { DataCleanupPage } from '@/pages/DataCleanupPage';
+import { UserLogsPage } from '@/pages/UserLogsPage';
 import { CustomerPortalPage } from '@/pages/CustomerPortalPage';
 import { BusinessAnalysisPage } from '@/pages/BusinessAnalysisPage';
 import { TestingCalculatorPage } from '@/pages/TestingCalculatorPage';
@@ -137,6 +138,7 @@ export const App = () => (
       <Route path="/settings/suppliers/new" element={<SupplierFormPage />} />
       <Route path="/settings/suppliers/:id" element={<SupplierFormPage />} />
       <Route path="/settings/data-cleanup"  element={<DataCleanupPage />} />
+      <Route path="/settings/user-logs"     element={<UserLogsPage />} />
     </Route>
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes>

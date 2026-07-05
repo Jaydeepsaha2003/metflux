@@ -264,6 +264,13 @@ router.patch('/:id', asyncHandler(async (req, res) => {
   if (data.password) patch.passwordHash = await hashPassword(data.password);
 
   if (Object.keys(patch).length > 0) await update('User', req.params.id, patch);
+
+  // Security: a password reset (or deactivation) logs the user out of every
+  // device by revoking all their active refresh tokens.
+  if (data.password || data.isActive === false) {
+    await q('UPDATE `RefreshToken` SET `revokedAt` = ? WHERE `userId` = ? AND `revokedAt` IS NULL', [new Date(), req.params.id]);
+  }
+
   const fresh = await loadUserWithMemberships(req.params.id);
   res.json(publicUser(fresh));
 }));
@@ -277,6 +284,7 @@ router.delete('/:id', asyncHandler(async (req, res) => {
     throw new AppError('User not found', 404, 'NOT_FOUND');
   }
   await update('User', req.params.id, { isActive: false });
+  await q('UPDATE `RefreshToken` SET `revokedAt` = ? WHERE `userId` = ? AND `revokedAt` IS NULL', [new Date(), req.params.id]);
   res.status(204).end();
 }));
 

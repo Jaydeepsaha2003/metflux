@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, LogOut, ChevronDown, FileText, Settings as SettingsIcon,
   Plus, ListChecks, BarChart3, Layers, Building2, Factory, Inbox, ClipboardList,
   PanelLeftClose, Users2, Truck, PackageCheck, ShoppingCart, Activity, RotateCcw, Menu, X, ShieldAlert,
-  Receipt, Clock, Wallet, TrendingUp, Calculator, CreditCard, Warehouse,
+  Receipt, Clock, Wallet, TrendingUp, Calculator, CreditCard, Warehouse, MonitorSmartphone,
 } from 'lucide-react';
 import { useAuthStore, can, activeMembership } from '@/store/auth';
 import type { PermissionKey } from '@/lib/permissions';
@@ -19,6 +19,7 @@ type NavLeaf = {
   end?: boolean;
   perm?: PermissionKey;
   platformOnly?: boolean;
+  adminOnly?: boolean; // company admin (or platform admin) only
 };
 type NavGroup = {
   kind: 'group'; key: string; label: string;
@@ -87,6 +88,7 @@ const NAV: NavItem[] = [
       { kind: 'leaf', to: '/settings/flux-grades', label: 'Flux Grades', icon: Activity, perm: 'add_material' },
       { kind: 'leaf', to: '/settings/labours',   label: 'Workers',   icon: Users2,    perm: 'add_staff' },
       { kind: 'leaf', to: '/settings/suppliers', label: 'Suppliers', icon: Truck,     perm: 'add_supplier' },
+      { kind: 'leaf', to: '/settings/user-logs',   label: 'User Logs',   icon: MonitorSmartphone, adminOnly: true },
       { kind: 'leaf', to: '/settings/data-cleanup', label: 'Data Cleanup', icon: ShieldAlert, perm: 'manage_users' },
     ],
   },
@@ -131,8 +133,10 @@ export const AppLayout = () => {
   };
 
   const isPlatform = !!user?.isPlatformAdmin;
+  const isAdmin = isPlatform || useAuthStore.getState().activeRole === 'COMPANY_ADMIN';
   const isVisible = (n: NavLeaf) => {
     if (n.platformOnly && !isPlatform) return false;
+    if (n.adminOnly && !isAdmin) return false;
     return can(n.perm);
   };
   const visibleNav = useMemo<NavItem[]>(
