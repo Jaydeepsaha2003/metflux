@@ -113,11 +113,27 @@ export const AppLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, clear } = useAuthStore();
-  const [collapsed, setCollapsed] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
+  );
   const [openGroupKey, setOpenGroupKey] = useState<string | null>(
     () => findActiveGroupKey(location.pathname)
   );
+
+  // Track the desktop breakpoint so the rail behaves as hover-to-expand on
+  // desktop but as a full-width drawer on mobile.
+  useEffect(() => {
+    const m = window.matchMedia('(min-width: 768px)');
+    const onChange = () => setIsDesktop(m.matches);
+    m.addEventListener('change', onChange);
+    return () => m.removeEventListener('change', onChange);
+  }, []);
+
+  // The sidebar is a slim icon rail by default and expands while hovered
+  // (desktop only). On mobile it's the full drawer, never collapsed.
+  const collapsed = isDesktop ? !hovered : false;
 
   // Keep accordion in sync when user navigates (back/forward).
   useEffect(() => {
@@ -177,47 +193,37 @@ export const AppLayout = () => {
         />
       )}
 
-      {/* Sidebar — fixed drawer on mobile, normal flex column on md+ */}
+      {/* Desktop spacer — reserves the slim rail width so the hover-expanded
+          sidebar overlays the content instead of pushing it around. */}
+      <div className="hidden md:block w-16 shrink-0 print:hidden" aria-hidden />
+
+      {/* Sidebar — full drawer on mobile; on desktop a fixed slim rail that
+          expands to full width while hovered. */}
       <aside
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
         className={cn(
-          'shrink-0 flex-col bg-ink-900 text-white overflow-hidden print:!hidden',
-          'transition-[width,transform] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]',
-          // Mobile: fixed overlay that slides in from the left.
+          'flex-col bg-ink-900 text-white overflow-hidden print:!hidden',
+          'transition-[width,transform] duration-200 ease-[cubic-bezier(0.4,0,0.2,1)]',
+          // Fixed overlay on every breakpoint.
           'fixed inset-y-0 left-0 z-40 flex w-64',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
-          // md+ : in-flow column, width follows the collapsed toggle.
-          'md:static md:translate-x-0 md:flex',
-          collapsed ? 'md:w-16' : 'md:w-64'
+          'md:translate-x-0 md:flex',
+          isDesktop && hovered ? 'md:w-64 md:shadow-2xl md:shadow-black/40' : 'md:w-16'
         )}
       >
-        {/* Top bar — just the collapse / close toggle now. The Metflux brand
-            block was removed; the CompanySwitcher below carries the active
-            company's identity, and the collapsed rail stays intentionally
-            bare so the nav icons get all the focus. */}
-        <div className="flex items-center justify-end border-b border-white/5 px-4 py-4 min-w-0">
-          {/* Mobile: close-drawer X. Desktop: collapse/expand toggle. */}
+        {/* Top bar — mobile close button only. On desktop the rail expands on
+            hover, so there's no manual collapse toggle. */}
+        <div className="flex items-center border-b border-white/5 px-3 py-4 min-w-0 justify-end md:justify-center">
           <button
-            onClick={() => {
-              if (window.matchMedia('(min-width: 768px)').matches) {
-                setCollapsed((v) => !v);
-              } else {
-                setMobileOpen(false);
-              }
-            }}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className={cn(
-              'shrink-0 rounded p-1 text-white/40 hover:bg-white/10 hover:text-white transition-colors',
-              collapsed ? 'ml-0' : 'ml-auto'
-            )}
+            onClick={() => setMobileOpen(false)}
+            title="Close menu"
+            className="shrink-0 rounded p-1 text-white/40 hover:bg-white/10 hover:text-white transition-colors md:hidden"
           >
-            <X className="h-4 w-4 md:hidden" />
-            <PanelLeftClose
-              className={cn(
-                'hidden md:block h-4 w-4 transition-transform duration-300',
-                collapsed ? 'rotate-180' : 'rotate-0'
-              )}
-            />
+            <X className="h-4 w-4" />
           </button>
+          {/* Desktop hint that the rail is hover-expandable. */}
+          <PanelLeftClose className="hidden h-4 w-4 shrink-0 text-white/25 md:block" />
         </div>
 
         {/* overflow-hidden only when collapsed so the open dropdown isn't clipped */}
@@ -283,16 +289,7 @@ export const AppLayout = () => {
       </aside>
 
       <main className="flex flex-1 flex-col min-w-0 print:block">
-        <PageHeader
-          onToggleSidebar={() => {
-            // Mobile: open/close the drawer. Desktop: collapse/expand the column.
-            if (window.matchMedia('(min-width: 768px)').matches) {
-              setCollapsed((v) => !v);
-            } else {
-              setMobileOpen((v) => !v);
-            }
-          }}
-        />
+        <PageHeader onToggleSidebar={() => setMobileOpen((v) => !v)} />
         <div className="flex-1 p-4 sm:p-6 print:p-0">
           <Outlet />
         </div>
@@ -415,7 +412,7 @@ const PageHeader = ({ onToggleSidebar }: { onToggleSidebar: () => void }) => {
           onClick={onToggleSidebar}
           aria-label="Toggle navigation menu"
           title="Toggle navigation menu"
-          className="grid h-9 w-9 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 transition-colors shrink-0"
+          className="grid h-9 w-9 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 transition-colors shrink-0 md:hidden"
         >
           <Menu className="h-5 w-5" />
         </button>

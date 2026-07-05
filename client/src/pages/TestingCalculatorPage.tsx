@@ -210,8 +210,9 @@ export const TestingCalculatorPage = () => {
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-            <Calculator className="h-5 w-5 text-brand-600" /> Testing Calculator
+          <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-50 text-brand-600"><Calculator className="h-5 w-5" /></span>
+            Testing Calculator
           </h1>
           <p className="mt-1 text-sm text-slate-500">Pick a core type per row, set turns &amp; flux levels → get Volt + Ie max, then export the lab sheet.</p>
         </div>
@@ -231,6 +232,28 @@ export const TestingCalculatorPage = () => {
         </div>
       </div>
 
+      {/* Summary strip */}
+      {items.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-700">
+            {items.length} line{items.length === 1 ? '' : 's'}
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-700">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> {exportRows.length} ready to export
+          </span>
+          {items.some((i) => i.coreType === 'TOROIDAL') && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 font-medium text-amber-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> {items.filter((i) => i.coreType === 'TOROIDAL').length} toroidal
+            </span>
+          )}
+          {items.some((i) => i.coreType === 'RECTANGULAR') && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1 font-medium text-rose-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-rose-400" /> {items.filter((i) => i.coreType === 'RECTANGULAR').length} rectangular
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Item editors */}
       <div className="space-y-3">
         {items.map((it, idx) => {
@@ -239,7 +262,7 @@ export const TestingCalculatorPage = () => {
           const g = it.coreType === 'RECTANGULAR' && numOk(it) ? rectGeom(it) : null;
           const isTor = it.coreType === 'TOROIDAL';
           return (
-            <div key={it.key} className="card p-4">
+            <div key={it.key} className={cn('card border-l-4 p-4 transition', isTor ? 'border-l-amber-400' : 'border-l-rose-400')}>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-3">
                   <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
