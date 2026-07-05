@@ -34,6 +34,12 @@ const schema = z.object({
   BREVO_SENDER_EMAIL: z.string().optional().default(''),
   BREVO_SENDER_NAME: z.string().optional().default(''),
 
+  // Daily reminders (production-summary + invoice due). Times are in REMINDER_TZ.
+  REMINDERS_ENABLED: z.string().default('true').transform((v) => v.toLowerCase() !== 'false'),
+  REMINDER_TZ: z.string().default('Asia/Kolkata'),
+  REMINDER_PROD_HOUR: z.coerce.number().int().min(0).max(23).default(18), // 6 PM
+  REMINDER_DUE_HOUR: z.coerce.number().int().min(0).max(23).default(9),   // 9 AM
+
   SEED_SUPERADMIN_EMAIL: z.string().email().optional(),
   SEED_SUPERADMIN_USERNAME: z.string().optional(),
   SEED_SUPERADMIN_PASSWORD: z.string().optional(),

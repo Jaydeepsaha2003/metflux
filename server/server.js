@@ -14,6 +14,7 @@ import { errorHandler, notFoundHandler } from './lib/errors.js';
 import { hostRouter } from './lib/hostRouter.js';
 import { apiRouter } from './routes/index.js';
 import shortLinkRouter from './routes/shortlink.js';
+import { startReminders } from './lib/reminders.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.resolve(__dirname, 'public');
@@ -91,6 +92,7 @@ process.on('unhandledRejection', (err) => console.error('[metflux] unhandledReje
     server = app.listen(env.PORT, () => {
       console.log(`[metflux] api listening on :${env.PORT} (${env.NODE_ENV})`);
     });
+    startReminders();
   } catch (err) {
     console.error('[metflux] startup failed:', err);
     process.exit(1);

@@ -59,6 +59,7 @@ router.post('/import', requireAnyPermission('view_purchase_register', 'manage_in
   const cCgst    = findCol('cgst');
   const cSgst    = findCol('sgst');
   const cOther   = findCol('other');   // = TDS
+  const cDue     = findCol('due date', 'payment due', 'due dt');
   if (cVch < 0 || cTotal < 0) throw new AppError('The sheet needs a Vch/Bill No column and a Total Amount column.', 400, 'BAD_HEADER');
 
   const cell = (r, i) => (i >= 0 ? (r[i] ?? '').trim() : '');
@@ -76,6 +77,7 @@ router.post('/import', requireAnyPermission('view_purchase_register', 'manage_in
     invoices.push({
       invoiceNumber: vch,
       dateStr: cell(r, cDate),
+      dueStr: cell(r, cDue),
       supplierName: cell(r, cAcct),
       gstin: cell(r, cGstin) || null,
       taxType: cell(r, cType) || null,
@@ -114,12 +116,14 @@ router.post('/import', requireAnyPermission('view_purchase_register', 'manage_in
       if (existingByNum.has(inv.invoiceNumber)) { skippedDuplicates++; continue; }
       const date = parseDateWith(inv.dateStr, dateOrder);
       if (!date) { errors.push({ invoiceNumber: inv.invoiceNumber, message: `Unreadable date "${inv.dateStr || '(blank)'}"` }); continue; }
+      const dueDate = inv.dueStr ? parseDateWith(inv.dueStr, dateOrder) : null;
       const docType = round2(inv.amount) < 0 ? 'DEBIT_NOTE' : 'INVOICE';
       if (docType === 'DEBIT_NOTE') debitNotes++;
       await insert('PurchaseInvoice', {
         companyId: req.tenant.companyId,
         invoiceNumber: inv.invoiceNumber.slice(0, 80),
         invoiceDate: date,
+        dueDate,
         supplierName: (inv.supplierName || '—').slice(0, 200),
         gstin: inv.gstin ? inv.gstin.slice(0, 40) : null,
         taxType: inv.taxType ? inv.taxType.slice(0, 40) : null,

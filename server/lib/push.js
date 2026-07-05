@@ -75,3 +75,21 @@ export const sendToUser = async (userId, payload) => {
   const results = await Promise.all(subs.map((s) => sendOne(s, payload)));
   return { sent: results.filter((r) => r.ok).length };
 };
+
+// Push to every active company admin (used by login alerts + daily reminders).
+export const notifyCompanyAdmins = async (companyId, payload) => {
+  if (!ensureConfigured()) return { sent: 0, admins: 0 };
+  const admins = await q(
+    `SELECT DISTINCT u.\`id\` AS id FROM \`User\` u
+       INNER JOIN \`Membership\` m ON m.\`userId\` = u.\`id\`
+      WHERE m.\`companyId\` = ? AND m.\`role\` = 'COMPANY_ADMIN'
+        AND m.\`isActive\` = 1 AND u.\`isActive\` = 1`,
+    [companyId]
+  );
+  let sent = 0;
+  for (const a of admins) {
+    const r = await sendToUser(a.id, payload);
+    sent += r.sent;
+  }
+  return { sent, admins: admins.length };
+};

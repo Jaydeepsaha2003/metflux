@@ -29,7 +29,8 @@
     "migrate:granular-perms": "node scripts/migrate-granular-perms.js",
     "migrate:link-invoices": "node scripts/migrate-link-invoices.js",
     "migrate:audit-log": "node scripts/migrate-audit-log.js",
-    "migrate": "npm run migrate:supplier-membership && npm run migrate:customer-code && npm run migrate:hide-customer-names && npm run migrate:logo-column && npm run migrate:share-token && npm run migrate:supplier-item-notes && npm run migrate:customer-portal-slug && npm run migrate:customer-due-days && npm run migrate:packing-list-wo && npm run migrate:sales-invoices && npm run migrate:sales-invoice-gst && npm run migrate:customer-portal-auth && npm run migrate:accounts && npm run migrate:bills-payable && npm run migrate:warehouse && npm run migrate:user-logs && npm run migrate:granular-perms && npm run migrate:link-invoices && npm run migrate:audit-log"
+    "migrate:reminders": "node scripts/migrate-reminders.js",
+    "migrate": "npm run migrate:supplier-membership && npm run migrate:customer-code && npm run migrate:hide-customer-names && npm run migrate:logo-column && npm run migrate:share-token && npm run migrate:supplier-item-notes && npm run migrate:customer-portal-slug && npm run migrate:customer-due-days && npm run migrate:packing-list-wo && npm run migrate:sales-invoices && npm run migrate:sales-invoice-gst && npm run migrate:customer-portal-auth && npm run migrate:accounts && npm run migrate:bills-payable && npm run migrate:warehouse && npm run migrate:user-logs && npm run migrate:granular-perms && npm run migrate:link-invoices && npm run migrate:audit-log && npm run migrate:reminders"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
