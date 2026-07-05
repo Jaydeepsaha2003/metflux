@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Save, Loader2, Calendar, Hash, User2, Package, Pencil } from 'lucide-react';
+import { Plus, Trash2, Save, Loader2, Calendar, Hash, User2, Package, Pencil, Copy } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc } from '@/lib/calc';
@@ -86,6 +86,16 @@ export const POOrderNewPage = () => {
   /* ----- entry state (current item being built) ----- */
   const [coreType, setCoreType] = useState<CoreType | ''>('');
   const [items, setItems] = useState<Item[]>([]);
+
+  /* Copy grade / material / rate-basis from an existing row into the entry form.
+     Switches the form to that row's core type and hands it a one-shot prefill. */
+  const [prefill, setPrefill] = useState<
+    null | { coreType: CoreType; grade: string; material: string; rateBasis: 'PER_KG' | 'PER_PCS' }
+  >(null);
+  const copyToForm = (it: Item) => {
+    setCoreType(it.coreType);
+    setPrefill({ coreType: it.coreType, grade: it.grade, material: it.material, rateBasis: it.rateBasis ?? 'PER_KG' });
+  };
 
   /* ----- localStorage draft: restore on mount, auto-save on change ----- */
   const [draftAvailable, setDraftAvailable] = useState(false);
@@ -464,6 +474,8 @@ export const POOrderNewPage = () => {
             grades={gradesResp?.grades ?? []}
             fluxGrades={fluxResp?.grades ?? []}
             onAdd={(item) => { setItems((prev) => [...prev, item]); }}
+            prefill={prefill}
+            onPrefillConsumed={() => setPrefill(null)}
           />
         )}
         {coreType === 'RECTANGULAR' && (
@@ -471,6 +483,8 @@ export const POOrderNewPage = () => {
             grades={gradesResp?.grades ?? []}
             fluxGrades={fluxRespRect?.grades ?? []}
             onAdd={(item) => { setItems((prev) => [...prev, item]); }}
+            prefill={prefill}
+            onPrefillConsumed={() => setPrefill(null)}
           />
         )}
         {!coreType && (
@@ -530,6 +544,15 @@ export const POOrderNewPage = () => {
                 )}
               </div>
               <div className="flex-shrink-0 flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => copyToForm(it)}
+                  title="Copy grade, material & rate basis to the form"
+                  aria-label="Copy to form"
+                  className="rounded-md p-1.5 text-slate-400 transition hover:bg-brand-50 hover:text-brand-600"
+                >
+                  <Copy className="h-4 w-4" />
+                </button>
                 {isEdit && it._dbId && !it._locked && (
                   <Link
                     to={`/po/manage/${it._dbId}`}
@@ -608,6 +631,15 @@ export const POOrderNewPage = () => {
                   </td>
                   <td className="px-3 py-2 text-right">
                     <div className="inline-flex items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => copyToForm(it)}
+                        title="Copy grade, material & rate basis to the form"
+                        aria-label="Copy to form"
+                        className="rounded-md p-1.5 text-slate-400 transition hover:bg-brand-50 hover:text-brand-600"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </button>
                       {isEdit && it._dbId && !it._locked && (
                         <Link
                           to={`/po/manage/${it._dbId}`}
@@ -804,11 +836,13 @@ const Stat = ({ label, value, accent }: { label: string; value: string; accent?:
 
 /* ---------- TOROIDAL ---------- */
 export const ToroidalForm = ({
-  grades, fluxGrades, onAdd,
+  grades, fluxGrades, onAdd, prefill, onPrefillConsumed,
 }: {
   grades: GradeRow[];
   fluxGrades: FluxGroup[];
   onAdd: (item: Item) => void;
+  prefill?: { coreType: CoreType; grade: string; material: string; rateBasis: 'PER_KG' | 'PER_PCS' } | null;
+  onPrefillConsumed?: () => void;
 }) => {
   const [grade, setGrade] = useState('');
   const [material, setMaterial] = useState('');
@@ -831,6 +865,16 @@ export const ToroidalForm = ({
 
   // Reset flux whenever the grade changes — last grade's fluxes don't apply.
   useEffect(() => { setFlux(0); }, [grade]);
+
+  // Apply a one-shot "copy from row" prefill (grade / material / rate basis).
+  useEffect(() => {
+    if (!prefill || prefill.coreType !== 'TOROIDAL') return;
+    setGrade(prefill.grade);
+    setMaterial(prefill.material);
+    setRateBasis(prefill.rateBasis);
+    onPrefillConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill]);
 
   const calc = useMemo(() => toroidalCalc({ id, od, ht, pcs }), [id, od, ht, pcs]);
   const fluxCalc = useMemo(
@@ -980,11 +1024,13 @@ export const ToroidalForm = ({
 
 /* ---------- RECTANGULAR ---------- */
 export const RectangularForm = ({
-  grades, fluxGrades, onAdd,
+  grades, fluxGrades, onAdd, prefill, onPrefillConsumed,
 }: {
   grades: GradeRow[];
   fluxGrades: FluxGroup[];
   onAdd: (item: Item) => void;
+  prefill?: { coreType: CoreType; grade: string; material: string; rateBasis: 'PER_KG' | 'PER_PCS' } | null;
+  onPrefillConsumed?: () => void;
 }) => {
   const [grade, setGrade] = useState('');
   const [material, setMaterial] = useState('');
@@ -1007,6 +1053,16 @@ export const RectangularForm = ({
 
   // Reset flux when grade changes — a new grade rarely has the same flux row.
   useEffect(() => { setFlux(0); }, [grade]);
+
+  // Apply a one-shot "copy from row" prefill (grade / material / rate basis).
+  useEffect(() => {
+    if (!prefill || prefill.coreType !== 'RECTANGULAR') return;
+    setGrade(prefill.grade);
+    setMaterial(prefill.material);
+    setRateBasis(prefill.rateBasis);
+    onPrefillConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill]);
 
   const calc = useMemo(
     () => rectangularCalc({ id1, id2, od1, od2, ht, pcs }),
