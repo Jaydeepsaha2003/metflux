@@ -4,8 +4,8 @@ import {
   LayoutDashboard, Users, LogOut, ChevronDown, FileText, Settings as SettingsIcon,
   Plus, ListChecks, BarChart3, Layers, Building2, Factory, Inbox, ClipboardList,
   PanelLeftClose, Users2, Truck, PackageCheck, ShoppingCart, Activity, RotateCcw, Menu, X, ShieldAlert,
-  Receipt, Clock, Wallet, TrendingUp, Calculator, CreditCard, Warehouse, MonitorSmartphone, History,
-  Image as ImageIcon,
+  Receipt, Clock, Wallet, TrendingUp, Calculator, Warehouse, MonitorSmartphone, History,
+  Image as ImageIcon, ArrowLeftRight,
 } from 'lucide-react';
 import { useAuthStore, can, activeMembership } from '@/store/auth';
 import { useBranding } from '@/store/branding';
@@ -67,11 +67,10 @@ const NAV: NavItem[] = [
     children: [
       { kind: 'leaf', to: '/sales-invoices',          label: 'Sales Register',    icon: FileText,     end: true, perm: 'view_sales_register' },
       { kind: 'leaf', to: '/accounts/purchases',      label: 'Purchase Register', icon: ShoppingCart, perm: 'view_purchase_register' },
-      { kind: 'leaf', to: '/accounts/bills-payable',  label: 'Bills Payable',     icon: CreditCard,   perm: 'view_bills_payable' },
+      { kind: 'leaf', to: '/accounts/receipts-payments', label: 'Receipts & Payments', icon: ArrowLeftRight, perm: 'receive_payments' },
       { kind: 'leaf', to: '/accounts/creditor-aging', label: 'Creditor Aging',    icon: Clock,        perm: 'view_creditor_aging' },
       { kind: 'leaf', to: '/sales-invoices/aging',    label: 'Debtor Aging',      icon: Clock,        perm: 'view_debtor_aging' },
       { kind: 'leaf', to: '/sales-invoices/payments', label: 'Receive Payments',  icon: Wallet,       perm: 'receive_payments' },
-      { kind: 'leaf', to: '/sales-invoices/bills-receivable', label: 'Bills Receivable', icon: Receipt, perm: 'view_bills_receivable' },
     ],
   },
   {

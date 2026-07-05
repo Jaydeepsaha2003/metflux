@@ -14,8 +14,7 @@ export const PERMISSION_KEYS = [
   // Accounts — granular per page (manage_invoices kept as a legacy umbrella
   // that still passes server-side, but is no longer shown as a checkbox).
   'view_sales_register', 'view_debtor_aging', 'receive_payments',
-  'view_bills_receivable', 'view_purchase_register', 'view_creditor_aging',
-  'view_bills_payable',
+  'view_purchase_register', 'view_creditor_aging',
   'manage_invoices',
   'manage_users',
   'view_audit_log',
@@ -43,11 +42,9 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   manage_returns:   'Manage Returns',
   view_sales_register:   'Sales Register',
   view_debtor_aging:     'Debtor Aging + Reminders',
-  receive_payments:      'Receive Payments',
-  view_bills_receivable: 'Bills Receivable',
+  receive_payments:      'Receive Payments / Receipts & Payments',
   view_purchase_register:'Purchase Register',
   view_creditor_aging:   'Creditor Aging',
-  view_bills_payable:    'Bills Payable',
   manage_invoices:  'Accounts (all — legacy)',
   manage_users:     'Manage Users',
   view_audit_log:   'View Audit Log + Restore',
@@ -64,7 +61,7 @@ export const PERMISSION_GROUPS: { label: string; keys: PermissionKey[] }[] = [
   { label: 'Testing',         keys: ['view_testing'] },
   { label: 'Dispatch',        keys: ['dispatch'] },
   { label: 'Returns',         keys: ['manage_returns'] },
-  { label: 'Accounts', keys: ['view_sales_register', 'view_debtor_aging', 'receive_payments', 'view_bills_receivable', 'view_purchase_register', 'view_creditor_aging', 'view_bills_payable'] },
+  { label: 'Accounts', keys: ['view_sales_register', 'view_debtor_aging', 'receive_payments', 'view_purchase_register', 'view_creditor_aging'] },
   { label: 'Master Data',     keys: ['add_customer', 'add_supplier', 'add_staff', 'add_material'] },
   { label: 'Administration',  keys: ['manage_users', 'view_audit_log'] },
 ];

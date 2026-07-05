@@ -96,8 +96,8 @@ export const CreditorAgingPage = () => {
           <div className="w-full sm:w-72">
             <SearchableSelect value={filterKey} onChange={setFilterKey} options={supOptions} placeholder="Search supplier…" />
           </div>
-          <Link to="/accounts/bills-payable" className="btn-ghost border border-slate-300 text-emerald-700 hover:bg-emerald-50 shrink-0">
-            <CreditCard className="h-4 w-4" /> <span className="hidden sm:inline">Bills Payable</span>
+          <Link to="/accounts/receipts-payments" className="btn-ghost border border-slate-300 text-emerald-700 hover:bg-emerald-50 shrink-0">
+            <CreditCard className="h-4 w-4" /> <span className="hidden sm:inline">Receipts &amp; Payments</span>
           </Link>
         </div>
       </div>

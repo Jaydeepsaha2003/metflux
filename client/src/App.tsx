@@ -43,8 +43,7 @@ import { TestingReportPage } from '@/pages/TestingReportPage';
 import { SalesInvoicesPage } from '@/pages/SalesInvoicesPage';
 import { DebtorAgingPage } from '@/pages/DebtorAgingPage';
 import { ReceivePaymentsPage } from '@/pages/ReceivePaymentsPage';
-import { BillsReceivablePage } from '@/pages/BillsReceivablePage';
-import { BillsPayablePage } from '@/pages/BillsPayablePage';
+import { ReceiptsPaymentsPage } from '@/pages/ReceiptsPaymentsPage';
 import { CreditorAgingPage } from '@/pages/CreditorAgingPage';
 import { DataCleanupPage } from '@/pages/DataCleanupPage';
 import { UserLogsPage } from '@/pages/UserLogsPage';
@@ -115,9 +114,8 @@ export const App = () => {
       <Route path="/sales-invoices"          element={<SalesInvoicesPage />} />
       <Route path="/sales-invoices/aging"    element={<DebtorAgingPage />} />
       <Route path="/sales-invoices/payments" element={<ReceivePaymentsPage />} />
-      <Route path="/sales-invoices/bills-receivable" element={<BillsReceivablePage />} />
+      <Route path="/accounts/receipts-payments" element={<ReceiptsPaymentsPage />} />
       <Route path="/accounts/purchases"      element={<PurchasesPage />} />
-      <Route path="/accounts/bills-payable"  element={<BillsPayablePage />} />
       <Route path="/accounts/creditor-aging" element={<CreditorAgingPage />} />
 
       {/* Supplier Order group */}
