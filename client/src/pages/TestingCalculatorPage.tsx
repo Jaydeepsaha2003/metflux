@@ -1,7 +1,7 @@
-// Testing Calculator — build a flux-test sheet for toroidal OR rectangular cores.
-// Pick the core type, add items (or import from POs), set turns, choose a grade +
-// one or more flux levels, and the page computes Volt + Ie max per flux (same math
-// as the PO / Testing Report). Export the lab sheet as Excel or a styled PDF.
+// Testing Calculator — build a flux-test sheet mixing toroidal AND rectangular
+// cores. Each row picks its own core type; the inputs, flux grades and Volt +
+// Ie-max math adapt per row (same math as the PO / Testing Report). Export the
+// lab sheet as Excel or a styled PDF.
 import { useMemo, useRef, useState, Fragment } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
@@ -19,6 +19,7 @@ type FluxPoint = { flux: number; ateCm: number };
 type FluxGroup = { grade: string; points: FluxPoint[] };
 type Item = {
   key: string;
+  coreType: CoreType;
   // toroidal dims
   id: string; od: string; ht: string;
   // rectangular dims
@@ -40,16 +41,20 @@ type CompanyDetail = {
 
 let seq = 0;
 const mkItem = (p: Partial<Item> = {}): Item => ({
-  key: `it_${++seq}`, id: '', od: '', ht: '',
+  key: `it_${++seq}`, coreType: 'TOROIDAL', id: '', od: '', ht: '',
   id1: '', id2: '', od1: '', od2: '', turns: '', grade: '', fluxes: [], ...p,
 });
 
-const numOk = (it: Item, ct: CoreType) => ct === 'TOROIDAL'
+const numOk = (it: Item) => it.coreType === 'TOROIDAL'
   ? (+it.id > 0 && +it.od > 0 && +it.ht > 0 && +it.turns > 0 && +it.od > +it.id)
   : (+it.id1 > 0 && +it.id2 > 0 && +it.od1 > 0 && +it.od2 > 0 && +it.ht > 0 && +it.turns > 0 && +it.od1 > +it.id1 && +it.od2 > +it.id2);
 
 const rectGeom = (it: Item) =>
   rectangularCalc({ id1: +it.id1, id2: +it.id2, od1: +it.od1, od2: +it.od2, ht: +it.ht, pcs: 0 });
+
+const measureOf = (it: Item) => it.coreType === 'TOROIDAL'
+  ? `${+it.id} x ${+it.od} x ${+it.ht}`
+  : rectGeom(it).measure;
 
 /* Parse a toroidal measure "180 x 110 x 200" → { id, od, ht }. */
 const parseToroidal = (measure: string) => {
@@ -65,31 +70,40 @@ const parseRectangular = (measure: string) => {
 const fmtDate = (d: Date) => d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
 export const TestingCalculatorPage = () => {
-  const [coreType, setCoreType] = useState<CoreType>('TOROIDAL');
   const [items, setItems] = useState<Item[]>([mkItem()]);
   const [importOpen, setImportOpen] = useState(false);
-  const isTor = coreType === 'TOROIDAL';
 
-  const { data: fluxData } = useQuery({
-    queryKey: ['flux-grades-grouped', coreType],
-    queryFn: () => api<{ grades: FluxGroup[] }>(`/flux-grades/grouped?coreType=${coreType}`),
+  const torQ = useQuery({
+    queryKey: ['flux-grades-grouped', 'TOROIDAL'],
+    queryFn: () => api<{ grades: FluxGroup[] }>('/flux-grades/grouped?coreType=TOROIDAL'),
+  });
+  const rectQ = useQuery({
+    queryKey: ['flux-grades-grouped', 'RECTANGULAR'],
+    queryFn: () => api<{ grades: FluxGroup[] }>('/flux-grades/grouped?coreType=RECTANGULAR'),
   });
   const { data: company } = useQuery({
     queryKey: ['company-me'],
     queryFn: () => api<CompanyDetail>('/companies/me'),
   });
-  const grades = fluxData?.grades ?? [];
-  const pointsFor = (grade: string) => grades.find((g) => g.grade === grade)?.points ?? [];
-  const ateFor = (grade: string, flux: number) => pointsFor(grade).find((p) => p.flux === flux)?.ateCm ?? 0;
+
+  const gradesFor = (ct: CoreType) => (ct === 'TOROIDAL' ? torQ.data?.grades : rectQ.data?.grades) ?? [];
+  const pointsFor = (ct: CoreType, grade: string) => gradesFor(ct).find((g) => g.grade === grade)?.points ?? [];
+  const ateFor = (ct: CoreType, grade: string, flux: number) => pointsFor(ct, grade).find((p) => p.flux === flux)?.ateCm ?? 0;
 
   const patch = (key: string, p: Partial<Item>) => setItems((its) => its.map((i) => (i.key === key ? { ...i, ...p } : i)));
   const remove = (key: string) => setItems((its) => its.filter((i) => i.key !== key));
   const addBlank = () => setItems((its) => [...its, mkItem()]);
 
-  // Switching core type clears the sheet — dimensions + grades differ per shape.
-  const switchCore = (ct: CoreType) => { if (ct === coreType) return; setCoreType(ct); setItems([mkItem()]); };
+  // Changing a row's core type resets its dims / grade / flux (they differ per shape).
+  const setItemCore = (key: string, coreType: CoreType) => setItems((its) => its.map((i) => (
+    i.key === key
+      ? { ...i, coreType, id: '', od: '', ht: '', id1: '', id2: '', od1: '', od2: '', grade: '', fluxes: [] }
+      : i
+  )));
 
-  const onGrade = (key: string, grade: string) => patch(key, { grade, fluxes: pointsFor(grade).map((p) => p.flux) });
+  const onGrade = (key: string, grade: string) => setItems((its) => its.map((i) => (
+    i.key === key ? { ...i, grade, fluxes: pointsFor(i.coreType, grade).map((p) => p.flux) } : i
+  )));
   const toggleFlux = (key: string, flux: number) => setItems((its) => its.map((i) => {
     if (i.key !== key) return i;
     const has = i.fluxes.includes(flux);
@@ -102,12 +116,10 @@ export const TestingCalculatorPage = () => {
     return [...s].sort((a, b) => a - b);
   }, [items]);
 
-  const ok = (it: Item) => numOk(it, coreType);
-
   const cell = (it: Item, flux: number) => {
-    if (!ok(it) || !it.fluxes.includes(flux)) return null;
-    const ateCm = ateFor(it.grade, flux);
-    if (isTor) {
+    if (!numOk(it) || !it.fluxes.includes(flux)) return null;
+    const ateCm = ateFor(it.coreType, it.grade, flux);
+    if (it.coreType === 'TOROIDAL') {
       const r = fluxTestCalc({ id: +it.id, od: +it.od, ht: +it.ht, turns: +it.turns, flux, ateCm });
       return { volt: r.testVoltage, leMax: r.testCurrent };
     }
@@ -116,27 +128,27 @@ export const TestingCalculatorPage = () => {
     return { volt: r.testVoltage, leMax: r.testCurrent };
   };
 
-  // Fixed (dimension) columns + a per-item row of their values — shared by Excel + PDF.
-  const fixedCols = isTor
-    ? ['ID', 'OD', 'HT', 'TURNS', 'GRADE']
-    : ['ID1', 'ID2', 'OD1', 'OD2', 'HT', 'BUILTUP', 'TURNS', 'GRADE'];
-  const dimsOf = (it: Item): (string | number)[] => {
-    if (isTor) return [+it.id, +it.od, +it.ht, +it.turns, it.grade || '—'];
-    const g = rectGeom(it);
-    return [+it.id1, +it.id2, +it.od1, +it.od2, +it.ht, g.builtup, +it.turns, it.grade || '—'];
-  };
+  // Unified export columns — a Core + Measure pair keeps mixed rows aligned.
+  const fixedCols = ['CORE', 'MEASURE', 'TURNS', 'GRADE'];
+  const dimsOf = (it: Item): (string | number)[] => [
+    it.coreType === 'TOROIDAL' ? 'Toroidal' : 'Rectangular',
+    measureOf(it),
+    +it.turns,
+    it.grade || '—',
+  ];
 
   const addFromPo = (po: PoSummaryItem) => {
-    const grade = grades.some((g) => g.grade === po.grade) ? po.grade : '';
-    const dims = isTor ? parseToroidal(po.measure) : parseRectangular(po.measure);
+    const ct = po.coreType;
+    const grade = gradesFor(ct).some((g) => g.grade === po.grade) ? po.grade : '';
+    const dims = ct === 'TOROIDAL' ? parseToroidal(po.measure) : parseRectangular(po.measure);
     setItems((its) => [...its, mkItem({
-      ...dims,
+      coreType: ct, ...dims,
       turns: po.turns != null ? String(po.turns) : '',
-      grade, fluxes: grade ? pointsFor(grade).map((p) => p.flux) : [], source: po.poNumber,
+      grade, fluxes: grade ? pointsFor(ct, grade).map((p) => p.flux) : [], source: po.poNumber,
     })]);
   };
 
-  const exportRows = items.filter((it) => ok(it) && it.fluxes.length);
+  const exportRows = items.filter((it) => numOk(it) && it.fluxes.length);
   const exportable = exportRows.length > 0 && fluxCols.length > 0;
 
   /* ── Excel export (merged two-row header per the lab sheet) ── */
@@ -161,12 +173,12 @@ export const TestingCalculatorPage = () => {
     fluxCols.forEach((_, i) => { const c = fixedCols.length + i * 2; merges.push({ s: { r: 0, c }, e: { r: 0, c: c + 1 } }); });
     ws['!merges'] = merges;
     ws['!cols'] = [
-      ...fixedCols.map((h) => ({ wch: h === 'GRADE' ? 12 : 8 })),
+      { wch: 12 }, { wch: 34 }, { wch: 8 }, { wch: 12 },
       ...fluxCols.flatMap(() => [{ wch: 10 }, { wch: 12 }]),
     ];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Testing');
-    XLSX.writeFile(wb, `testing-calc-${coreType.toLowerCase()}-${todayStamp()}.xlsx`);
+    XLSX.writeFile(wb, `testing-calc-${todayStamp()}.xlsx`);
   };
 
   /* ── PDF export — styled lab sheet, captured offscreen via html2pdf ── */
@@ -180,7 +192,7 @@ export const TestingCalculatorPage = () => {
     try {
       await html2pdf().set({
         margin: 6,
-        filename: `testing-calc-${coreType.toLowerCase()}-${todayStamp()}.pdf`,
+        filename: `testing-calc-${todayStamp()}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff', windowWidth: 1040 },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
@@ -201,7 +213,7 @@ export const TestingCalculatorPage = () => {
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
             <Calculator className="h-5 w-5 text-brand-600" /> Testing Calculator
           </h1>
-          <p className="mt-1 text-sm text-slate-500">Pick core type, items, turns &amp; flux levels → get Volt + Ie max, then export the lab sheet.</p>
+          <p className="mt-1 text-sm text-slate-500">Pick a core type per row, set turns &amp; flux levels → get Volt + Ie max, then export the lab sheet.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => setImportOpen(true)} className="btn-ghost border border-slate-300 text-slate-600 hover:bg-slate-50">
@@ -219,37 +231,31 @@ export const TestingCalculatorPage = () => {
         </div>
       </div>
 
-      {/* Core-type selector */}
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Core type</span>
-        <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-          {(['TOROIDAL', 'RECTANGULAR'] as CoreType[]).map((ct) => (
-            <button key={ct} onClick={() => switchCore(ct)}
-              className={cn('rounded-md px-3.5 py-1.5 text-sm font-medium transition',
-                coreType === ct ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900')}>
-              {ct === 'TOROIDAL' ? 'Toroidal' : 'Rectangular'}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {grades.length === 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          No {isTor ? 'toroidal' : 'rectangular'} flux grades found. Add them under <strong>Settings → Flux Grades</strong> so Ie max can be computed (Volt still works without).
-        </div>
-      )}
-
       {/* Item editors */}
       <div className="space-y-3">
         {items.map((it, idx) => {
-          const pts = pointsFor(it.grade);
-          const g = !isTor && ok(it) ? rectGeom(it) : null;
+          const pts = pointsFor(it.coreType, it.grade);
+          const rowGrades = gradesFor(it.coreType);
+          const g = it.coreType === 'RECTANGULAR' && numOk(it) ? rectGeom(it) : null;
+          const isTor = it.coreType === 'TOROIDAL';
           return (
             <div key={it.key} className="card p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Item {idx + 1}{it.source && <span className="ml-2 rounded bg-brand-50 px-1.5 py-0.5 font-mono text-[10px] text-brand-700">{it.source}</span>}
-                </span>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Item {idx + 1}{it.source && <span className="ml-2 rounded bg-brand-50 px-1.5 py-0.5 font-mono text-[10px] text-brand-700">{it.source}</span>}
+                  </span>
+                  {/* Per-row core type selector */}
+                  <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+                    {(['TOROIDAL', 'RECTANGULAR'] as CoreType[]).map((ct) => (
+                      <button key={ct} onClick={() => setItemCore(it.key, ct)}
+                        className={cn('rounded-md px-3 py-1 text-xs font-medium transition',
+                          it.coreType === ct ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900')}>
+                        {ct === 'TOROIDAL' ? 'Toroidal' : 'Rectangular'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <button onClick={() => remove(it.key)} className="btn-ghost text-red-600 hover:bg-red-50" title="Remove item"><Trash2 className="h-4 w-4" /></button>
               </div>
 
@@ -262,7 +268,7 @@ export const TestingCalculatorPage = () => {
                   <Field label="Grade">
                     <select className="input" value={it.grade} onChange={(e) => onGrade(it.key, e.target.value)}>
                       <option value="">— Select —</option>
-                      {grades.map((gr) => <option key={gr.grade} value={gr.grade}>{gr.grade}</option>)}
+                      {rowGrades.map((gr) => <option key={gr.grade} value={gr.grade}>{gr.grade}</option>)}
                     </select>
                   </Field>
                 </div>
@@ -278,7 +284,7 @@ export const TestingCalculatorPage = () => {
                     <Field label="Grade">
                       <select className="input" value={it.grade} onChange={(e) => onGrade(it.key, e.target.value)}>
                         <option value="">— Select —</option>
-                        {grades.map((gr) => <option key={gr.grade} value={gr.grade}>{gr.grade}</option>)}
+                        {rowGrades.map((gr) => <option key={gr.grade} value={gr.grade}>{gr.grade}</option>)}
                       </select>
                     </Field>
                   </div>
@@ -290,6 +296,12 @@ export const TestingCalculatorPage = () => {
                     </div>
                   )}
                 </>
+              )}
+
+              {rowGrades.length === 0 && (
+                <p className="mt-2 text-xs text-amber-600">
+                  No {isTor ? 'toroidal' : 'rectangular'} flux grades yet — add them under Settings → Flux Grades (Volt still computes without a grade).
+                </p>
               )}
 
               {/* Flux chips */}
@@ -317,7 +329,7 @@ export const TestingCalculatorPage = () => {
               </div>
 
               {/* Live preview */}
-              {ok(it) && it.fluxes.length > 0 && (
+              {numOk(it) && it.fluxes.length > 0 && (
                 <div className="mt-3 overflow-x-auto rounded-lg border border-slate-100">
                   <table className="w-full text-xs">
                     <thead className="bg-slate-50 text-slate-500">
@@ -342,7 +354,7 @@ export const TestingCalculatorPage = () => {
         </div>
       )}
 
-      {importOpen && <ImportDialog coreType={coreType} onClose={() => setImportOpen(false)} onAdd={addFromPo} />}
+      {importOpen && <ImportDialog onClose={() => setImportOpen(false)} onAdd={addFromPo} />}
 
       {/* ── Offscreen printable document for the PDF ── */}
       <div style={{ position: 'fixed', left: -10000, top: 0, width: 1040 }} aria-hidden>
@@ -370,7 +382,6 @@ export const TestingCalculatorPage = () => {
           </div>
 
           <div className="flex justify-between border-b border-slate-300 px-6 py-2 text-sm">
-            <span><b>Core Type:</b> {isTor ? 'Toroidal' : 'Rectangular'}</span>
             <span><b>Date:</b> {fmtDate(new Date())}</span>
             <span><b>Items:</b> {exportRows.length}</span>
           </div>
@@ -399,7 +410,7 @@ export const TestingCalculatorPage = () => {
                 {exportRows.map((it) => (
                   <tr key={it.key}>
                     {dimsOf(it).map((v, ci) => (
-                      <td key={ci} className="border border-slate-300 px-2 py-1.5 text-center tabular-nums">{v}</td>
+                      <td key={ci} className={cn('border border-slate-300 px-2 py-1.5 tabular-nums', ci === 1 ? 'text-left' : 'text-center')}>{v}</td>
                     ))}
                     {fluxCols.map((fx) => {
                       const c = cell(it, fx);
@@ -433,23 +444,21 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
   </label>
 );
 
-/* ── Import-from-PO dialog ── */
-const ImportDialog = ({ coreType, onClose, onAdd }: { coreType: CoreType; onClose: () => void; onAdd: (po: PoSummaryItem) => void }) => {
+/* ── Import-from-PO dialog (both core types) ── */
+const ImportDialog = ({ onClose, onAdd }: { onClose: () => void; onAdd: (po: PoSummaryItem) => void }) => {
   const [search, setSearch] = useState('');
   const { data, isLoading } = useQuery({
     queryKey: ['testing-po-items'],
     queryFn: () => api<{ items: PoSummaryItem[] }>('/po-orders/summary?status=ACTIVE&pageSize=10000'),
   });
-  const label = coreType === 'TOROIDAL' ? 'toroidal' : 'rectangular';
   const items = (data?.items ?? [])
-    .filter((i) => i.coreType === coreType)
     .filter((i) => !search.trim() || `${i.poNumber} ${i.measure} ${i.grade}`.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-          <h3 className="font-bold capitalize text-slate-900">Import {label} PO items</h3>
+          <h3 className="font-bold text-slate-900">Import PO items</h3>
           <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
         </div>
         <div className="border-b border-slate-100 p-3">
@@ -462,14 +471,20 @@ const ImportDialog = ({ coreType, onClose, onAdd }: { coreType: CoreType; onClos
           {isLoading ? (
             <div className="py-10 text-center text-slate-400"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></div>
           ) : !items.length ? (
-            <div className="py-10 text-center text-sm text-slate-400">No matching {label} items.</div>
+            <div className="py-10 text-center text-sm text-slate-400">No matching items.</div>
           ) : items.map((i) => (
             <button key={i.id} onClick={() => onAdd(i)} className="flex w-full items-center justify-between gap-3 border-t border-slate-100 px-4 py-2.5 text-left hover:bg-brand-50/50">
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium text-slate-800">{i.measure}</div>
                 <div className="text-[11px] text-slate-500">{i.poNumber} · {i.grade || 'no grade'} · {i.turns ?? '—'} turns</div>
               </div>
-              <Plus className="h-4 w-4 shrink-0 text-brand-600" />
+              <span className="flex shrink-0 items-center gap-2">
+                <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium',
+                  i.coreType === 'TOROIDAL' ? 'bg-sky-50 text-sky-700' : 'bg-violet-50 text-violet-700')}>
+                  {i.coreType === 'TOROIDAL' ? 'Toroidal' : 'Rectangular'}
+                </span>
+                <Plus className="h-4 w-4 text-brand-600" />
+              </span>
             </button>
           ))}
         </div>
