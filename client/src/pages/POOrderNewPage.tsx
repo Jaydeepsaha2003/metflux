@@ -83,6 +83,8 @@ const coreBadge = (ct: CoreType) =>
   : ct === 'RECTANGULAR' ? 'bg-rose-50 text-rose-700'
   : 'bg-violet-50 text-violet-700';
 const coreShort = (ct: CoreType) => (ct === 'TOROIDAL' ? 'Toro' : ct === 'RECTANGULAR' ? 'Rect' : 'Nano');
+// Prices are shown as whole rupees (no decimals).
+const money0 = (n: number | undefined | null) => Math.round(Number(n) || 0).toLocaleString('en-IN');
 
 /* ============================================================ */
 export const POOrderNewPage = () => {
@@ -388,7 +390,7 @@ export const POOrderNewPage = () => {
   const subtotal = items.reduce((s, x) => s + (x.totalAmount ?? 0), 0);
   const gstAmount  = +(subtotal * gstRate / 100).toFixed(2);
   const grandTotal = +(subtotal + gstAmount).toFixed(2);
-  const fmtMoney = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtMoney = (n: number) => Math.round(n).toLocaleString('en-IN');
 
   return (
     <div className="space-y-4 pb-4">
@@ -599,9 +601,9 @@ export const POOrderNewPage = () => {
                 {it.totalAmount != null && (
                   <div className="mt-0.5 flex justify-between text-[11px]">
                     <span className="text-slate-400 font-mono tabular-nums">
-                      ₹{it.rateValue?.toFixed(2)}{it.rateBasis === 'PER_KG' ? '/kg' : '/pc'}
+                      ₹{money0(it.rateValue)}{it.rateBasis === 'PER_KG' ? '/kg' : '/pc'}
                     </span>
-                    <span className="font-semibold text-brand-700 tabular-nums">₹{it.totalAmount.toFixed(2)}</span>
+                    <span className="font-semibold text-brand-700 tabular-nums">₹{money0(it.totalAmount)}</span>
                   </div>
                 )}
               </div>
@@ -696,11 +698,11 @@ export const POOrderNewPage = () => {
                   <td className="px-3 py-2 text-right font-mono font-semibold tabular-nums">{it.totalWeight.toFixed(3)}</td>
                   <td className="px-3 py-2 text-right font-mono text-xs tabular-nums text-slate-600">
                     {it.rateValue
-                      ? `₹${it.rateValue.toFixed(2)} ${it.rateBasis === 'PER_KG' ? '/kg' : '/pc'}`
+                      ? `₹${money0(it.rateValue)} ${it.rateBasis === 'PER_KG' ? '/kg' : '/pc'}`
                       : '—'}
                   </td>
                   <td className="px-3 py-2 text-right font-mono font-semibold tabular-nums">
-                    {it.totalAmount ? `₹${it.totalAmount.toFixed(2)}` : '—'}
+                    {it.totalAmount ? `₹${money0(it.totalAmount)}` : '—'}
                   </td>
                   <td className="px-3 py-2 text-right">
                     <div className="inline-flex items-center gap-0.5">
@@ -1109,9 +1111,9 @@ export const ToroidalForm = ({
         </div>
         {rateValue > 0 && (
           <div className="mt-2 grid grid-cols-3 gap-x-3 gap-y-1.5 border-t border-amber-100 pt-2">
-            <Stat label="Rate / Kg"  value={`₹${ratePerKg.toFixed(2)}`} />
-            <Stat label="Rate / Pc"  value={`₹${ratePerPc.toFixed(2)}`} />
-            <Stat label="Line Total" value={`₹${totalAmount.toFixed(2)}`} accent="primary" />
+            <Stat label="Rate / Kg"  value={`₹${money0(ratePerKg)}`} />
+            <Stat label="Rate / Pc"  value={`₹${money0(ratePerPc)}`} />
+            <Stat label="Line Total" value={`₹${money0(totalAmount)}`} accent="primary" />
           </div>
         )}
       </div>
@@ -1340,9 +1342,9 @@ export const RectangularForm = ({
         </div>
         {rateValue > 0 && (
           <div className="mt-2 grid grid-cols-3 gap-x-3 gap-y-1.5 border-t border-rose-100 pt-2">
-            <Stat label="Rate / Kg"  value={`₹${ratePerKg.toFixed(2)}`} />
-            <Stat label="Rate / Pc"  value={`₹${ratePerPc.toFixed(2)}`} />
-            <Stat label="Line Total" value={`₹${totalAmount.toFixed(2)}`} accent="primary" />
+            <Stat label="Rate / Kg"  value={`₹${money0(ratePerKg)}`} />
+            <Stat label="Rate / Pc"  value={`₹${money0(ratePerPc)}`} />
+            <Stat label="Line Total" value={`₹${money0(totalAmount)}`} accent="primary" />
           </div>
         )}
       </div>
@@ -1542,8 +1544,8 @@ export const NanoForm = ({
             <Stat label="AT/cm" value={ateCm > 0 ? ateCm.toFixed(4) : '—'} />
             <Stat label="V (Volts)" value={test.testVoltage > 0 ? test.testVoltage.toFixed(3) : '—'} />
             <Stat label="V (mV)" value={test.testVoltageMv > 0 ? test.testVoltageMv.toFixed(2) : '—'} />
-            <Stat label="Ie max (mA)" value={test.testCurrent > 0 ? test.testCurrent.toFixed(2) : (ateCm === 0 ? 'Set AT/cm' : '—')} />
-            <Stat label="Ie max (A)" value={test.testCurrentA > 0 ? test.testCurrentA.toFixed(5) : '—'} />
+            <Stat label="Ie max (A)" value={test.testCurrentA > 0 ? test.testCurrentA.toFixed(5) : (ateCm === 0 ? 'Set AT/cm' : '—')} />
+            <Stat label="Ie max (mA)" value={test.testCurrent > 0 ? test.testCurrent.toFixed(2) : '—'} />
           </div>
         )}
       </div>
@@ -1558,10 +1560,10 @@ export const NanoForm = ({
           <Stat label="Finish Size"   value={finished ?? '—'} accent={finished ? 'primary' : undefined} />
         </div>
         <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 border-t border-violet-100 pt-2 sm:grid-cols-4">
-          <Stat label="Nano+Case / Pc" value={`₹${nanoCasePc.toFixed(2)}`} />
-          <Stat label="SO Rate/Pcs"    value={soRate > 0 ? `₹${soRate.toFixed(2)}` : '— (auto)'} />
-          <Stat label="Applied / Pc"   value={`₹${effRate.toFixed(2)}`} />
-          <Stat label="Line Total"     value={`₹${lineTotal.toFixed(2)}`} accent="primary" />
+          <Stat label="Nano+Case / Pc" value={`₹${money0(nanoCasePc)}`} />
+          <Stat label="SO Rate/Pcs"    value={soRate > 0 ? `₹${money0(soRate)}` : '— (auto)'} />
+          <Stat label="Applied / Pc"   value={`₹${money0(effRate)}`} />
+          <Stat label="Line Total"     value={`₹${money0(lineTotal)}`} accent="primary" />
         </div>
       </div>
 
