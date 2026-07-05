@@ -849,9 +849,9 @@ const Field = ({
 );
 
 const NumField = ({
-  label, value, onChange,
-}: { label: string; value: number; onChange: (v: number) => void }) => (
-  <Field label={label}>
+  label, value, onChange, w,
+}: { label: string; value: number; onChange: (v: number) => void; w?: string }) => (
+  <Field label={label} className={w}>
     <input
       className={inputCls}
       type="number"
@@ -1491,37 +1491,37 @@ export const NanoForm = ({
         <span className="text-[11px] font-semibold uppercase tracking-wider text-violet-800">Nano core</span>
       </div>
 
-      {/* Row 1 — Grade · Material · Nano price · Case price */}
-      <div className="grid grid-cols-2 gap-x-2 gap-y-2 md:grid-cols-4">
+      {/* Grade + Material (constrained width) */}
+      <div className="grid max-w-xl grid-cols-2 gap-x-2 gap-y-2">
         <GradeMaterialPicker
           grades={grades} grade={grade} material={material}
           onGrade={setGrade} onMaterial={setMaterial} listIdSuffix="nano"
         />
-        <NumField label="Nano Price (₹/kg)" value={nanoPrice} onChange={setNanoPrice} />
-        <NumField label="Case Price (₹/kg)" value={casePrice} onChange={setCasePrice} />
       </div>
 
-      {/* Optional manual SO rate/pc — blank uses the computed Nano+Case price */}
-      <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-2 md:grid-cols-4">
-        <NumField label="SO Rate/Pcs (optional)" value={soRate} onChange={setSoRate} />
+      {/* Prices + optional SO rate — compact, packed */}
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-2">
+        <NumField label="Nano Price (₹/kg)" value={nanoPrice} onChange={setNanoPrice} w="w-32" />
+        <NumField label="Case Price (₹/kg)" value={casePrice} onChange={setCasePrice} w="w-32" />
+        <NumField label="SO Rate/Pcs (optional)" value={soRate} onChange={setSoRate} w="w-36" />
       </div>
 
-      {/* Row 2 — dimensions (ID × OD × HT) + pcs */}
-      <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-2 sm:grid-cols-4">
-        <NumField label="ID" value={id} onChange={setId} />
-        <NumField label="OD" value={od} onChange={setOd} />
-        <NumField label="HT" value={ht} onChange={setHt} />
-        <NumField label="Pcs" value={pcs} onChange={setPcs} />
+      {/* Dimensions (ID × OD × HT) + pcs — compact */}
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-2">
+        <NumField label="ID" value={id} onChange={setId} w="w-20" />
+        <NumField label="OD" value={od} onChange={setOd} w="w-20" />
+        <NumField label="HT" value={ht} onChange={setHt} w="w-20" />
+        <NumField label="Pcs" value={pcs} onChange={setPcs} w="w-20" />
       </div>
 
       {/* Testing parameters — Turns / Frequency / Sfac / Flux (Bmax) → V + Ie max */}
       <div className="mt-2 rounded-md border border-violet-100 bg-white/50 px-3 py-2">
         <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-violet-800">Testing parameters</div>
-        <div className="grid grid-cols-2 gap-x-2 gap-y-2 sm:grid-cols-4">
-          <NumField label="Turns" value={turns} onChange={setTurns} />
-          <NumField label="Frequency (Hz)" value={freq} onChange={setFreq} />
-          <NumField label="Stacking factor" value={sfac} onChange={setSfac} />
-          <Field label="Flux (Bmax)">
+        <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+          <NumField label="Turns" value={turns} onChange={setTurns} w="w-20" />
+          <NumField label="Frequency (Hz)" value={freq} onChange={setFreq} w="w-24" />
+          <NumField label="Stacking factor" value={sfac} onChange={setSfac} w="w-24" />
+          <Field label="Flux (Bmax)" className="w-44">
             <SearchableSelect
               dense
               value={flux > 0 ? String(flux) : ''}
