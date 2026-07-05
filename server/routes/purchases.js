@@ -174,36 +174,77 @@ router.get('/aging', requireAnyPermission('view_creditor_aging', 'manage_invoice
       WHERE \`companyId\` = ? AND \`status\` <> 'PAID'`,
     [req.tenant.companyId]
   );
+  // Contra netting — a party that is BOTH a supplier and a customer has their
+  // payable offset against what they owe us (their sales receivable), so the
+  // aging shows the single net position. Receivable summed per normalized name.
+  const recvRows = await q(
+    `SELECT \`customerName\`, \`amount\`, \`paidAmount\`
+       FROM \`SalesInvoice\`
+      WHERE \`companyId\` = ? AND \`status\` <> 'PAID'`,
+    [req.tenant.companyId]
+  );
+  const receivableByName = new Map();
+  for (const s of recvRows) {
+    const bal = round2(Number(s.amount) - Number(s.paidAmount));
+    if (Math.abs(bal) <= 0.01) continue;
+    const nk = normName(s.customerName);
+    if (!nk) continue;
+    receivableByName.set(nk, round2((receivableByName.get(nk) || 0) + bal));
+  }
+
   const now = new Date();
   const todayMid = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const groups = new Map();
 
+  // Pass 1 — split each supplier's rows into open bills (positive) and a running
+  // credit total (debit notes, negative). Bills aged by bill date.
+  const groups = new Map();
   for (const p of rows) {
     const balance = round2(Number(p.amount) - Number(p.paidAmount));
     if (Math.abs(balance) <= 0.01) continue; // skip settled
     const key = normName(p.supplierName) || `__x__:${p.supplierName}`;
-    if (!groups.has(key)) {
-      groups.set(key, {
-        supplierName: p.supplierName,
-        b0_30: 0, b31_60: 0, b61_90: 0, b90: 0, total: 0, oldestDays: 0, invoices: [],
-      });
-    }
+    if (!groups.has(key)) groups.set(key, { supplierName: p.supplierName, credit: 0, bills: [] });
     const g = groups.get(key);
     const bill = new Date(p.invoiceDate);
     const billMid = Date.UTC(bill.getUTCFullYear(), bill.getUTCMonth(), bill.getUTCDate());
     const ageDays = Math.max(0, Math.floor((todayMid - billMid) / 86400000));
-    if (balance < 0)          g.b0_30 = round2(g.b0_30 + balance); // debit note — reduces, treat as current
-    else if (ageDays <= 30)   g.b0_30 = round2(g.b0_30 + balance);
-    else if (ageDays <= 60)   g.b31_60 = round2(g.b31_60 + balance);
-    else if (ageDays <= 90)   g.b61_90 = round2(g.b61_90 + balance);
-    else                      g.b90 = round2(g.b90 + balance);
-    if (balance > 0 && ageDays > g.oldestDays) g.oldestDays = ageDays;
-    g.total = round2(g.total + balance);
-    g.invoices.push({ id: p.id, invoiceNumber: p.invoiceNumber, invoiceDate: p.invoiceDate, balance, ageDays, docType: p.docType });
+    if (balance < 0) g.credit = round2(g.credit - balance); // debit note magnitude
+    else g.bills.push({ id: p.id, invoiceNumber: p.invoiceNumber, invoiceDate: p.invoiceDate, balance, ageDays, docType: p.docType });
   }
 
-  const suppliers = [...groups.values()].sort((a, b) => b.total - a.total);
-  for (const g of suppliers) g.invoices.sort((a, b) => new Date(a.invoiceDate) - new Date(b.invoiceDate));
+  // Pass 2 — knock each supplier's credit (debit notes + contra receivable) off
+  // their OLDEST open bills FIFO, then bucket the remaining balances.
+  const suppliers = [];
+  for (const g of groups.values()) {
+    g.bills.sort((a, b) => new Date(a.invoiceDate) - new Date(b.invoiceDate));
+    const contra = Math.max(0, receivableByName.get(normName(g.supplierName)) || 0);
+    let remaining = round2(g.credit + contra);
+    for (const bill of g.bills) {
+      if (remaining <= 0.01) break;
+      const applied = Math.min(remaining, bill.balance);
+      bill.balance = round2(bill.balance - applied);
+      remaining = round2(remaining - applied);
+    }
+
+    const s = { supplierName: g.supplierName, contra, b0_30: 0, b31_60: 0, b61_90: 0, b90: 0, total: 0, oldestDays: 0, invoices: [] };
+    for (const bill of g.bills) {
+      if (bill.balance <= 0.01) continue; // squared off by credit / contra
+      if (bill.ageDays <= 30)      s.b0_30 = round2(s.b0_30 + bill.balance);
+      else if (bill.ageDays <= 60) s.b31_60 = round2(s.b31_60 + bill.balance);
+      else if (bill.ageDays <= 90) s.b61_90 = round2(s.b61_90 + bill.balance);
+      else                         s.b90 = round2(s.b90 + bill.balance);
+      if (bill.ageDays > s.oldestDays) s.oldestDays = bill.ageDays;
+      s.invoices.push({ id: bill.id, invoiceNumber: bill.invoiceNumber, invoiceDate: bill.invoiceDate, balance: bill.balance, ageDays: bill.ageDays, docType: bill.docType });
+    }
+    if (remaining > 0.01) {
+      // Supplier in net credit (we're owed / advanced) — one summary line.
+      s.b0_30 = round2(s.b0_30 - remaining);
+      s.invoices.push({ id: `credit:${g.supplierName}`, invoiceNumber: 'Credit / Advance', invoiceDate: null, balance: round2(-remaining), ageDays: 0, docType: null });
+    }
+    s.total = round2(s.b0_30 + s.b31_60 + s.b61_90 + s.b90);
+    if (Math.abs(s.total) <= 0.01 && s.invoices.length === 0) continue; // fully netted
+    suppliers.push(s);
+  }
+  suppliers.sort((a, b) => b.total - a.total);
   const totals = suppliers.reduce((t, g) => ({
     b0_30: round2(t.b0_30 + g.b0_30), b31_60: round2(t.b31_60 + g.b31_60),
     b61_90: round2(t.b61_90 + g.b61_90), b90: round2(t.b90 + g.b90), total: round2(t.total + g.total),

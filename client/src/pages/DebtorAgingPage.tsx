@@ -18,7 +18,7 @@ import { useHideCustomerNames } from '@/store/auth';
 type AgingInvoice = { id: string; invoiceNumber: string; invoiceDate: string; dueDate: string | null; balance: number; daysOverdue: number | null };
 type AgingCustomer = {
   customerId: string | null; customerName: string; customerCode: string | null; phone: string | null;
-  dueDays: number | null; email: string | null;
+  dueDays: number | null; email: string | null; contra?: number;
   notDue: number; d1_30: number; d31_60: number; d61_90: number; d90: number; noTerms: number;
   total: number; maxDaysOverdue: number; invoices: AgingInvoice[];
 };
@@ -221,6 +221,7 @@ export const DebtorAgingPage = () => {
                               </span>
                             )}
                             {c.noTerms > 0 && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700" title="Has invoices with no due date">no-terms {inr(c.noTerms)}</span>}
+                            {!!c.contra && c.contra > 0 && <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] text-violet-700" title="Also a supplier — receivable shown net of their purchase payable">net of {inr(c.contra)} purch.</span>}
                           </div>
                         </td>
                         <td className="px-3 py-2.5 text-right tabular-nums text-slate-500">{c.notDue ? inr(c.notDue) : '—'}</td>

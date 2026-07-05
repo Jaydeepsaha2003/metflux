@@ -11,9 +11,9 @@ import { cn } from '@/lib/cn';
 import { makeStatementImageBlob, shareOrDownloadImage, type StatementBill } from '@/lib/agingImage';
 import { SearchableSelect } from '@/components/SearchableSelect';
 
-type AgingBill = { id: string; invoiceNumber: string; invoiceDate: string; balance: number; ageDays: number; docType: 'INVOICE' | 'DEBIT_NOTE' };
+type AgingBill = { id: string; invoiceNumber: string; invoiceDate: string | null; balance: number; ageDays: number; docType: 'INVOICE' | 'DEBIT_NOTE' | null };
 type AgingSupplier = {
-  supplierName: string;
+  supplierName: string; contra?: number;
   b0_30: number; b31_60: number; b61_90: number; b90: number;
   total: number; oldestDays: number; invoices: AgingBill[];
 };
@@ -150,6 +150,7 @@ export const CreditorAgingPage = () => {
                           <div className="flex items-center gap-2">
                             <span className={cn('h-2 w-2 rounded-full shrink-0', SEV_DOT[sev])} title={`oldest bill ${s.oldestDays}d`} />
                             <span className="font-medium text-slate-900">{s.supplierName}</span>
+                            {!!s.contra && s.contra > 0 && <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] text-violet-700" title="Also a customer — payable shown net of their sales receivable">net of {inr(s.contra)} sales</span>}
                           </div>
                         </td>
                         <td className="px-3 py-2.5 text-right tabular-nums text-slate-500">{s.b0_30 ? inr(s.b0_30) : '—'}</td>
@@ -182,7 +183,7 @@ export const CreditorAgingPage = () => {
                                     <tr key={i.id} className="border-t border-slate-100">
                                       <td className="px-2 py-1.5 font-medium">{i.invoiceNumber}</td>
                                       <td className="px-2 py-1.5 text-slate-500">{fmtDate(i.invoiceDate)}</td>
-                                      <td className="px-2 py-1.5">{i.docType === 'DEBIT_NOTE' ? <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] text-rose-700">Debit note</span> : <span className="text-slate-400">Bill</span>}</td>
+                                      <td className="px-2 py-1.5">{i.docType === 'DEBIT_NOTE' ? <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] text-rose-700">Debit note</span> : i.docType === null ? <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] text-violet-700">Net credit</span> : <span className="text-slate-400">Bill</span>}</td>
                                       <td className="px-2 py-1.5 text-right tabular-nums">{inr2(i.balance)}</td>
                                       <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{i.ageDays}d</td>
                                     </tr>

@@ -273,6 +273,24 @@ router.get('/aging', requireAnyPermission('view_debtor_aging', 'manage_invoices'
       WHERE si.\`companyId\` = ? AND si.\`status\` <> 'PAID'`,
     [req.tenant.companyId]
   );
+  // Contra netting — a party that is BOTH a customer and a supplier has their
+  // receivable offset against what we owe them (their purchase payable), so the
+  // aging reflects the single net position. Payable summed per normalized name.
+  const payRows = await q(
+    `SELECT \`supplierName\`, \`amount\`, \`paidAmount\`
+       FROM \`PurchaseInvoice\`
+      WHERE \`companyId\` = ? AND \`status\` <> 'PAID'`,
+    [req.tenant.companyId]
+  );
+  const payableByName = new Map();
+  for (const p of payRows) {
+    const bal = round2(Number(p.amount) - Number(p.paidAmount));
+    if (Math.abs(bal) <= 0.01) continue;
+    const nk = normName(p.supplierName);
+    if (!nk) continue;
+    payableByName.set(nk, round2((payableByName.get(nk) || 0) + bal));
+  }
+
   const now = new Date();
   const todayMid = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   const daysOverdue = (dueIso) => {
@@ -316,7 +334,10 @@ router.get('/aging', requireAnyPermission('view_debtor_aging', 'manage_invoices'
       if (ad !== bd) return ad - bd;
       return new Date(a.invoiceDate).getTime() - new Date(b.invoiceDate).getTime();
     });
-    let remaining = g.credit;
+    // Fold in the contra (their purchase payable) as additional credit so a
+    // party who is both customer & supplier nets to a single position.
+    const contra = Math.max(0, payableByName.get(normName(g.customerName)) || 0);
+    let remaining = round2(g.credit + contra);
     for (const bill of g.bills) {
       if (remaining <= 0.01) break;
       const applied = Math.min(remaining, bill.balance);
@@ -326,7 +347,7 @@ router.get('/aging', requireAnyPermission('view_debtor_aging', 'manage_invoices'
 
     const c = {
       customerId: g.customerId, customerName: g.customerName, customerCode: g.customerCode,
-      phone: g.phone, dueDays: g.dueDays, email: g.email,
+      phone: g.phone, dueDays: g.dueDays, email: g.email, contra,
       notDue: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90: 0, noTerms: 0, total: 0,
       maxDaysOverdue: 0, invoices: [],
     };
