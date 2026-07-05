@@ -9,10 +9,10 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeftRight, Loader2, Upload, CheckCircle2, ArrowDownToLine, ArrowUpFromLine,
-  UserPlus, Truck, Tag, BarChart3, Search, ChevronLeft, ChevronRight, ListChecks,
+  UserPlus, Truck, Tag, BarChart3, Search, ChevronLeft, ChevronRight, ListChecks, Download,
 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { readXlsxMatrix } from '@/lib/excel';
+import { readXlsxMatrix, downloadXlsx, todayStamp } from '@/lib/excel';
 import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
 import { useAuthStore, activeMembership } from '@/store/auth';
@@ -281,11 +281,30 @@ const EntriesSection = () => {
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / pageSize));
+  const [exporting, setExporting] = useState(false);
+
+  const exportExcel = async () => {
+    setExporting(true);
+    try {
+      const eqs = new URLSearchParams(qs); eqs.set('all', '1'); eqs.delete('page'); eqs.delete('pageSize');
+      const all = await api<EntriesResp>(`/cashbook/entries?${eqs.toString()}`);
+      downloadXlsx(`cashbook-entries-${todayStamp()}`, 'Entries', (all.items ?? []).map((e) => ({
+        Date: e.entryDate ? new Date(e.entryDate).toLocaleDateString('en-GB') : '',
+        Party: e.account, Side: e.side === 'RECEIPT' ? 'Receipt' : 'Payment',
+        Type: e.type, Category: e.category, Amount: e.amount, Allocated: e.posted ? 'Yes' : 'No',
+      })));
+    } finally { setExporting(false); }
+  };
 
   return (
     <div className="card overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700">
-        <ListChecks className="h-4 w-4" /> Cashbook entries <span className="font-normal text-slate-400">({total})</span>
+      <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2.5">
+        <span className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+          <ListChecks className="h-4 w-4" /> Cashbook entries <span className="font-normal text-slate-400">({total})</span>
+        </span>
+        <button onClick={exportExcel} disabled={exporting || total === 0} className="btn-ghost h-8 border border-slate-300 px-2 text-xs text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
+          {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Excel
+        </button>
       </div>
 
       {/* Filters */}
@@ -403,7 +422,9 @@ const ClassifySection = ({ rows, companyId, onChanged }: { rows: Unmatched[]; co
                   <td className="px-4 py-2">
                     {otherFor === u.name ? (
                       <div className="flex items-center gap-1.5">
-                        <input autoFocus className="input h-8 w-40" placeholder="Category e.g. Salary" value={cat} onChange={(e) => setCat(e.target.value)} />
+                        <input autoFocus className="input h-8 w-40" placeholder="Category e.g. Salary" value={cat}
+                          onChange={(e) => setCat(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' && cat.trim() && !isBusy) { e.preventDefault(); asOther(u.name); } }} />
                         <button disabled={isBusy || !cat.trim()} onClick={() => asOther(u.name)} className="btn-primary h-8 px-2 text-xs">
                           {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
                         </button>

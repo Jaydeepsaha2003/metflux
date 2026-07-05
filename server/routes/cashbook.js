@@ -186,7 +186,7 @@ router.get('/summary', requireAnyPermission(...PERM), asyncHandler(async (req, r
 
 /* ---------- Entries list (filterable) ---------- */
 router.get('/entries', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
-  const { from, to, side, type, search, page, pageSize } = z.object({
+  const { from, to, side, type, search, page, pageSize, all } = z.object({
     from: z.string().optional(),
     to: z.string().optional(),
     side: z.enum(['ALL', 'RECEIPT', 'PAYMENT']).default('ALL'),
@@ -194,6 +194,7 @@ router.get('/entries', requireAnyPermission(...PERM), asyncHandler(async (req, r
     search: z.string().trim().max(120).optional(),
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(200).default(50),
+    all: z.enum(['1']).optional(), // return every matching row (for export)
   }).parse(req.query);
   const companyId = req.tenant.companyId;
 
@@ -223,7 +224,61 @@ router.get('/entries', requireAnyPermission(...PERM), asyncHandler(async (req, r
     payments: round2(items.filter((i) => i.side === 'PAYMENT').reduce((s, i) => s + i.amount, 0)),
   };
   const start = (page - 1) * pageSize;
-  res.json({ items: items.slice(start, start + pageSize), total, page, pageSize, totals });
+  res.json({ items: all ? items : items.slice(start, start + pageSize), total, page, pageSize, totals });
+}));
+
+/* ---------- Overview totals (Sales / Purchase / Receipts / Payments / notes) ---------- */
+router.get('/overview', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
+  const { from, to } = z.object({ from: z.string().optional(), to: z.string().optional() }).parse(req.query);
+  const companyId = req.tenant.companyId;
+  const clause = (col) => {
+    let s = ''; const p = [];
+    if (from) { s += ` AND ${col} >= ?`; p.push(new Date(from)); }
+    if (to) { s += ` AND ${col} <= ?`; p.push(new Date(new Date(to).getTime() + 86400000 - 1)); }
+    return { s, p };
+  };
+  const inv = clause('`invoiceDate`');
+  const cb = clause('`entryDate`');
+  let sales = 0, creditNote = 0, purchase = 0, debitNote = 0, receipts = 0, payments = 0;
+  try {
+    const r = await qOne(`SELECT COALESCE(SUM(CASE WHEN \`docType\`='CREDIT_NOTE' THEN 0 ELSE \`amount\` END),0) s, COALESCE(SUM(CASE WHEN \`docType\`='CREDIT_NOTE' THEN \`amount\` ELSE 0 END),0) cn FROM \`SalesInvoice\` WHERE \`companyId\`=?${inv.s}`, [companyId, ...inv.p]);
+    sales = round2(Number(r?.s ?? 0)); creditNote = round2(Number(r?.cn ?? 0));
+  } catch { /* table absent */ }
+  try {
+    const r = await qOne(`SELECT COALESCE(SUM(CASE WHEN \`docType\`='DEBIT_NOTE' THEN 0 ELSE \`amount\` END),0) p, COALESCE(SUM(CASE WHEN \`docType\`='DEBIT_NOTE' THEN \`amount\` ELSE 0 END),0) dn FROM \`PurchaseInvoice\` WHERE \`companyId\`=?${inv.s}`, [companyId, ...inv.p]);
+    purchase = round2(Number(r?.p ?? 0)); debitNote = round2(Number(r?.dn ?? 0));
+  } catch { /* table absent */ }
+  try {
+    const r = await qOne(`SELECT COALESCE(SUM(CASE WHEN \`side\`='RECEIPT' THEN \`amount\` ELSE 0 END),0) rc, COALESCE(SUM(CASE WHEN \`side\`='PAYMENT' THEN \`amount\` ELSE 0 END),0) py FROM \`CashbookEntry\` WHERE \`companyId\`=?${cb.s}`, [companyId, ...cb.p]);
+    receipts = round2(Number(r?.rc ?? 0)); payments = round2(Number(r?.py ?? 0));
+  } catch { /* table absent */ }
+  res.json({ sales, purchase, receipts, payments, creditNote, debitNote, net: round2(receipts - payments) });
+}));
+
+/* ---------- Duplicate detection + removal (same party+side+date+amount) ---------- */
+router.get('/duplicates', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
+  const companyId = req.tenant.companyId;
+  const rows = await q(
+    `SELECT MIN(\`account\`) AS account, \`side\`, DATE(\`entryDate\`) AS d, \`amount\`, COUNT(*) AS c
+       FROM \`CashbookEntry\` WHERE \`companyId\` = ?
+      GROUP BY \`normKey\`, \`side\`, DATE(\`entryDate\`), \`amount\`
+      HAVING COUNT(*) > 1 ORDER BY COUNT(*) DESC, \`amount\` DESC`,
+    [companyId]
+  );
+  const items = rows.map((g) => ({ account: g.account, side: g.side, date: g.d, amount: Number(g.amount), count: Number(g.c), extra: Number(g.c) - 1 }));
+  res.json({ items, groups: items.length, totalExtra: items.reduce((s, g) => s + g.extra, 0) });
+}));
+
+router.post('/dedupe', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
+  const companyId = req.tenant.companyId;
+  const r = await q(
+    'DELETE c1 FROM `CashbookEntry` c1 JOIN `CashbookEntry` c2 ' +
+    'ON c1.`companyId` = c2.`companyId` AND c1.`normKey` = c2.`normKey` AND c1.`side` = c2.`side` ' +
+    'AND DATE(c1.`entryDate`) = DATE(c2.`entryDate`) AND c1.`amount` = c2.`amount` AND c1.`id` > c2.`id` ' +
+    'WHERE c1.`companyId` = ?',
+    [companyId]
+  );
+  res.json({ removed: r?.affectedRows ?? 0 });
 }));
 
 /* ---------- Unclassified heads (from stored cashbook) ---------- */

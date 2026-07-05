@@ -3,15 +3,19 @@
 // receipts vs payments per group. Also manages the saved "Other" account heads.
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { BarChart3, Loader2, Trash2, Tag, UserPlus, Truck } from 'lucide-react';
+import { BarChart3, Loader2, Trash2, Tag, UserPlus, Truck, Download, Copy, Pencil, Save, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { downloadXlsx, todayStamp } from '@/lib/excel';
+import { useConfirm } from '@/hooks/useConfirm';
 import { useAuthStore, activeMembership } from '@/store/auth';
 
 type SumItem = { key: string; category: string; type: string; receipts: number; payments: number; net: number; count: number };
 type Summary = { groupBy: string; items: SumItem[]; totals: { receipts: number; payments: number; net: number; count: number } };
 type Head = { id: string; name: string; type: string; category: string | null };
 type UnItem = { normKey: string; name: string; receiptTotal: number; paymentTotal: number; unpostedReceipt: number; unpostedPayment: number; count: number };
+type Overview = { sales: number; purchase: number; receipts: number; payments: number; creditNote: number; debitNote: number; net: number };
+type DupItem = { account: string; side: string; date: string; amount: number; count: number; extra: number };
 
 const inr = (n: number | undefined) =>
   '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -41,6 +45,10 @@ export const CashbookSummaryPage = () => {
     queryKey: ['account-heads'],
     queryFn: () => api<{ heads: Head[]; categories: string[] }>('/cashbook/account-heads'),
   });
+  const { data: overview } = useQuery({
+    queryKey: ['cashbook-overview', from, to],
+    queryFn: () => { const q = new URLSearchParams(); if (from) q.set('from', from); if (to) q.set('to', to); return api<Overview>(`/cashbook/overview?${q.toString()}`); },
+  });
 
   const delHead = useMutation({
     mutationFn: (id: string) => api(`/cashbook/account-heads/${id}`, { method: 'DELETE' }),
@@ -50,14 +58,51 @@ export const CashbookSummaryPage = () => {
   const items = data?.items ?? [];
   const otherHeads = (headsData?.heads ?? []).filter((h) => h.type === 'OTHER');
 
+  const exportExcel = () => {
+    if (!items.length && !overview) return;
+    const rows: Record<string, string | number>[] = [];
+    if (overview) {
+      rows.push({ 'Group': 'Sales', 'Category': 'Overview', 'Receipts': '', 'Payments': '', 'Net': overview.sales });
+      rows.push({ 'Group': 'Purchase', 'Category': 'Overview', 'Receipts': '', 'Payments': '', 'Net': overview.purchase });
+      rows.push({ 'Group': 'Credit Note', 'Category': 'Overview', 'Receipts': '', 'Payments': '', 'Net': overview.creditNote });
+      rows.push({ 'Group': 'Debit Note', 'Category': 'Overview', 'Receipts': '', 'Payments': '', 'Net': overview.debitNote });
+      rows.push({ 'Group': 'Receipts', 'Category': 'Overview', 'Receipts': overview.receipts, 'Payments': '', 'Net': '' });
+      rows.push({ 'Group': 'Payments', 'Category': 'Overview', 'Receipts': '', 'Payments': overview.payments, 'Net': '' });
+      rows.push({ 'Group': 'Net (Receipts − Payments)', 'Category': 'Overview', 'Receipts': '', 'Payments': '', 'Net': overview.net });
+      rows.push({ 'Group': '', 'Category': '', 'Receipts': '', 'Payments': '', 'Net': '' });
+    }
+    items.forEach((it) => rows.push({
+      'Group': it.key, 'Category': it.category, 'Receipts': it.receipts, 'Payments': it.payments, 'Net': it.net,
+    }));
+    downloadXlsx(`cashbook-summary-${todayStamp()}`, 'Cashbook Summary', rows);
+  };
+
   return (
     <div className="space-y-5 max-w-full">
-      <div>
-        <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight">
-          <BarChart3 className="h-5 w-5 text-brand-600" /> Cashbook Summary
-        </h1>
-        <p className="mt-1 text-sm text-slate-500">Receipts vs payments from your imported bank/cash book, grouped by category or account.</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight">
+            <BarChart3 className="h-5 w-5 text-brand-600" /> Cashbook Summary
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">Receipts vs payments from your imported bank/cash book, grouped by category or account.</p>
+        </div>
+        <button onClick={exportExcel} className="btn-ghost border border-slate-300 text-emerald-700 hover:bg-emerald-50 text-sm shrink-0">
+          <Download className="h-4 w-4" /> Export Excel
+        </button>
       </div>
+
+      {/* Overview — Sales / Purchase / Receipts / Payments / notes / Net */}
+      {overview && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+          <Stat label="Sales" value={inr(overview.sales)} />
+          <Stat label="Purchase" value={inr(overview.purchase)} />
+          <Stat label="Receipts" value={inr(overview.receipts)} tone="emerald" />
+          <Stat label="Payments" value={inr(overview.payments)} tone="brand" />
+          <Stat label="Credit Note" value={inr(overview.creditNote)} />
+          <Stat label="Debit Note" value={inr(overview.debitNote)} />
+          <Stat label="Net (R − P)" value={inr(overview.net)} tone={overview.net >= 0 ? 'emerald' : 'red'} />
+        </div>
+      )}
 
       {/* Controls */}
       <div className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-end sm:justify-between">
@@ -94,6 +139,9 @@ export const CashbookSummaryPage = () => {
 
       {/* Unclassified heads → classify + auto-adjust */}
       <UnclassifiedSection />
+
+      {/* Duplicate check + remove */}
+      <DuplicatesSection />
 
       {/* Summary table */}
       <div className="card overflow-hidden">
@@ -157,12 +205,7 @@ export const CashbookSummaryPage = () => {
           </div>
           <div className="divide-y divide-slate-100">
             {otherHeads.map((h) => (
-              <div key={h.id} className="flex items-center justify-between px-4 py-2 text-sm">
-                <div><span className="font-medium">{h.name}</span> <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">{h.category}</span></div>
-                <button onClick={() => delHead.mutate(h.id)} disabled={delHead.isPending} className="btn-ghost text-red-600 hover:bg-red-50" title="Remove (it'll become unclassified again)">
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
+              <HeadRow key={h.id} head={h} onDelete={() => delHead.mutate(h.id)} deleting={delHead.isPending} />
             ))}
           </div>
         </div>
@@ -244,7 +287,9 @@ const UnclassifiedSection = () => {
                   <td className="px-4 py-2">
                     {otherFor === u.name ? (
                       <div className="flex items-center gap-1.5">
-                        <input autoFocus className="input h-8 w-40" placeholder="Category e.g. Salary" value={cat} onChange={(e) => setCat(e.target.value)} />
+                        <input autoFocus className="input h-8 w-40" placeholder="Category e.g. Salary" value={cat}
+                          onChange={(e) => setCat(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' && cat.trim() && !isBusy) { e.preventDefault(); asOther(u.name); } }} />
                         <button disabled={isBusy || !cat.trim()} onClick={() => asOther(u.name)} className="btn-primary h-8 px-2 text-xs">{isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}</button>
                         <button onClick={() => { setOtherFor(null); setCat(''); }} className="btn-ghost h-8 px-2 text-xs text-slate-500">Cancel</button>
                       </div>
@@ -263,6 +308,114 @@ const UnclassifiedSection = () => {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+};
+
+/* A saved "Other" account head — inline category edit + delete. */
+const HeadRow = ({ head, onDelete, deleting }: { head: Head; onDelete: () => void; deleting: boolean }) => {
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [cat, setCat] = useState(head.category ?? '');
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    if (!cat.trim()) return;
+    setBusy(true);
+    try {
+      await api('/cashbook/account-heads', { method: 'POST', body: JSON.stringify({ name: head.name, category: cat.trim() }) });
+      qc.invalidateQueries({ queryKey: ['account-heads'] });
+      qc.invalidateQueries({ queryKey: ['cashbook-summary'] });
+      setEditing(false);
+    } finally { setBusy(false); }
+  };
+  return (
+    <div className="flex items-center justify-between px-4 py-2 text-sm">
+      <div className="flex items-center gap-2">
+        <span className="font-medium">{head.name}</span>
+        {editing ? (
+          <input autoFocus className="input h-8 w-40" value={cat} onChange={(e) => setCat(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } }} />
+        ) : (
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">{head.category}</span>
+        )}
+      </div>
+      <div className="flex items-center gap-1">
+        {editing ? (
+          <>
+            <button onClick={save} disabled={busy || !cat.trim()} className="btn-ghost text-brand-700 hover:bg-brand-50" title="Save">
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            </button>
+            <button onClick={() => { setEditing(false); setCat(head.category ?? ''); }} className="btn-ghost text-slate-500 hover:bg-slate-100" title="Cancel"><X className="h-4 w-4" /></button>
+          </>
+        ) : (
+          <>
+            <button onClick={() => setEditing(true)} className="btn-ghost text-brand-700 hover:bg-brand-50" title="Edit category"><Pencil className="h-4 w-4" /></button>
+            <button onClick={onDelete} disabled={deleting} className="btn-ghost text-red-600 hover:bg-red-50" title="Remove (it'll become unclassified again)"><Trash2 className="h-4 w-4" /></button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* Duplicate detector — same party + side + date + amount appearing more than once. */
+const DuplicatesSection = () => {
+  const qc = useQueryClient();
+  const { confirm, confirmDialog } = useConfirm();
+  const { data, isLoading } = useQuery({
+    queryKey: ['cashbook-duplicates'],
+    queryFn: () => api<{ items: DupItem[]; groups: number; totalExtra: number }>('/cashbook/duplicates'),
+  });
+  const dedupe = useMutation({
+    mutationFn: () => api<{ removed: number }>('/cashbook/dedupe', { method: 'POST' }),
+    onSuccess: () => {
+      ['cashbook-duplicates', 'cashbook-summary', 'cashbook-overview', 'cashbook-entries'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+    },
+  });
+  const items = data?.items ?? [];
+
+  const onRemove = async () => {
+    const ok = await confirm({
+      title: 'Remove duplicate entries?',
+      message: <>This deletes <strong>{data?.totalExtra ?? 0}</strong> duplicate row{(data?.totalExtra ?? 0) === 1 ? '' : 's'} (same party, side, date &amp; amount), keeping one of each. This can't be undone.</>,
+      confirmLabel: 'Remove duplicates', tone: 'danger',
+    });
+    if (ok) dedupe.mutate();
+  };
+
+  if (isLoading) return null;
+  if (!items.length) return null;
+
+  return (
+    <div className="card overflow-hidden">
+      <div className="flex flex-col gap-2 border-b border-amber-200 bg-amber-50/60 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 text-sm font-semibold text-amber-800">
+          <Copy className="h-4 w-4" /> Possible duplicates ({data?.groups}) · {data?.totalExtra} extra row{(data?.totalExtra ?? 0) === 1 ? '' : 's'}
+        </div>
+        <button onClick={onRemove} disabled={dedupe.isPending} className="btn-primary h-8 text-xs">
+          {dedupe.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Remove duplicates
+        </button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm whitespace-nowrap">
+          <thead><tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <th className="px-4 py-2.5 text-left">Party</th><th className="px-4 py-2.5 text-left">Side</th>
+            <th className="px-4 py-2.5 text-left">Date</th><th className="px-4 py-2.5 text-right">Amount</th><th className="px-4 py-2.5 text-right">Copies</th>
+          </tr></thead>
+          <tbody className="divide-y divide-slate-100">
+            {items.slice(0, 100).map((d, i) => (
+              <tr key={i}>
+                <td className="px-4 py-2 font-medium">{d.account}</td>
+                <td className="px-4 py-2 text-slate-500">{d.side === 'RECEIPT' ? 'Receipt' : 'Payment'}</td>
+                <td className="px-4 py-2 text-slate-600">{d.date ? new Date(d.date).toLocaleDateString('en-GB') : '—'}</td>
+                <td className="px-4 py-2 text-right tabular-nums">{inr(d.amount)}</td>
+                <td className="px-4 py-2 text-right tabular-nums font-semibold text-amber-700">{d.count}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {confirmDialog}
     </div>
   );
 };
