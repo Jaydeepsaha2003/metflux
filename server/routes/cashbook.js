@@ -335,16 +335,18 @@ router.get('/overview', requireAnyPermission(...PERM), asyncHandler(async (req, 
 }));
 
 /* ---------- Duplicate detection + removal (same party+side+date+amount) ---------- */
+// A duplicate is the SAME party + side + date + amount + voucher. Different
+// voucher/bill numbers are treated as separate genuine transactions.
 router.get('/duplicates', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
   const companyId = req.tenant.companyId;
   const rows = await q(
-    `SELECT MIN(\`account\`) AS account, \`side\`, DATE(\`entryDate\`) AS d, \`amount\`, COUNT(*) AS c
+    `SELECT MIN(\`account\`) AS account, \`side\`, DATE(\`entryDate\`) AS d, \`amount\`, \`vch\`, COUNT(*) AS c
        FROM \`CashbookEntry\` WHERE \`companyId\` = ?
-      GROUP BY \`normKey\`, \`side\`, DATE(\`entryDate\`), \`amount\`
+      GROUP BY \`normKey\`, \`side\`, DATE(\`entryDate\`), \`amount\`, COALESCE(\`vch\`,'')
       HAVING COUNT(*) > 1 ORDER BY COUNT(*) DESC, \`amount\` DESC`,
     [companyId]
   );
-  const items = rows.map((g) => ({ account: g.account, side: g.side, date: g.d, amount: Number(g.amount), count: Number(g.c), extra: Number(g.c) - 1 }));
+  const items = rows.map((g) => ({ account: g.account, side: g.side, date: g.d, amount: Number(g.amount), vch: g.vch, count: Number(g.c), extra: Number(g.c) - 1 }));
   res.json({ items, groups: items.length, totalExtra: items.reduce((s, g) => s + g.extra, 0) });
 }));
 
@@ -353,11 +355,44 @@ router.post('/dedupe', requireAnyPermission(...PERM), asyncHandler(async (req, r
   const r = await q(
     'DELETE c1 FROM `CashbookEntry` c1 JOIN `CashbookEntry` c2 ' +
     'ON c1.`companyId` = c2.`companyId` AND c1.`normKey` = c2.`normKey` AND c1.`side` = c2.`side` ' +
-    'AND DATE(c1.`entryDate`) = DATE(c2.`entryDate`) AND c1.`amount` = c2.`amount` AND c1.`id` > c2.`id` ' +
+    "AND DATE(c1.`entryDate`) = DATE(c2.`entryDate`) AND c1.`amount` = c2.`amount` " +
+    "AND COALESCE(c1.`vch`,'') = COALESCE(c2.`vch`,'') AND c1.`id` > c2.`id` " +
     'WHERE c1.`companyId` = ?',
     [companyId]
   );
   res.json({ removed: r?.affectedRows ?? 0 });
+}));
+
+/* ---------- Delete a single cashbook entry row ---------- */
+router.delete('/entry/:id', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
+  const row = await qOne('SELECT `id` FROM `CashbookEntry` WHERE `id` = ? AND `companyId` = ?', [req.params.id, req.tenant.companyId]);
+  if (!row) throw new AppError('Entry not found', 404, 'NOT_FOUND');
+  await del('CashbookEntry', row.id);
+  res.json({ ok: true });
+}));
+
+/* ---------- Account ledger — one party's whole journey ---------- */
+router.get('/account-ledger', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
+  const { name } = z.object({ name: z.string().trim().min(1).max(200) }).parse(req.query);
+  const companyId = req.tenant.companyId;
+  const key = normName(name);
+  const items = [];
+  const tot = { sale: 0, purchase: 0, creditNote: 0, debitNote: 0, receipt: 0, payment: 0 };
+  try {
+    const rows = await q('SELECT `invoiceNumber` ref, `invoiceDate` dt, `customerName` party, `amount` amt, `docType` doc FROM `SalesInvoice` WHERE `companyId` = ?', [companyId]);
+    for (const r of rows) if (normName(r.party) === key) { const t = r.doc === 'CREDIT_NOTE' ? 'CREDIT_NOTE' : 'SALE'; items.push({ date: r.dt, type: t, ref: r.ref, amount: Number(r.amt) }); if (t === 'SALE') tot.sale += Number(r.amt); else tot.creditNote += Number(r.amt); }
+  } catch { /* absent */ }
+  try {
+    const rows = await q('SELECT `invoiceNumber` ref, `invoiceDate` dt, `supplierName` party, `amount` amt, `docType` doc FROM `PurchaseInvoice` WHERE `companyId` = ?', [companyId]);
+    for (const r of rows) if (normName(r.party) === key) { const t = r.doc === 'DEBIT_NOTE' ? 'DEBIT_NOTE' : 'PURCHASE'; items.push({ date: r.dt, type: t, ref: r.ref, amount: Number(r.amt) }); if (t === 'PURCHASE') tot.purchase += Number(r.amt); else tot.debitNote += Number(r.amt); }
+  } catch { /* absent */ }
+  try {
+    const rows = await q('SELECT `id`, `entryDate` dt, `account` party, `side`, `amount` amt, `vch` ref FROM `CashbookEntry` WHERE `companyId` = ?', [companyId]);
+    for (const r of rows) if (normName(r.party) === key) { const t = r.side === 'RECEIPT' ? 'RECEIPT' : 'PAYMENT'; items.push({ id: r.id, date: r.dt, type: t, ref: r.ref, amount: Number(r.amt) }); if (t === 'RECEIPT') tot.receipt += Number(r.amt); else tot.payment += Number(r.amt); }
+  } catch { /* absent */ }
+  items.sort((a, b) => (a.date ? new Date(a.date).getTime() : 0) - (b.date ? new Date(b.date).getTime() : 0));
+  const round = (n) => Math.round(n * 100) / 100;
+  res.json({ name, items, totals: Object.fromEntries(Object.entries(tot).map(([k, v]) => [k, round(v)])) });
 }));
 
 /* ---------- Unclassified heads (from stored cashbook) ---------- */

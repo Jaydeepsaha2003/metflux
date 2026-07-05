@@ -29,7 +29,8 @@ const TYPE_TONE: Record<string, string> = {
 
 export const CashbookSummaryPage = () => {
   const qc = useQueryClient();
-  const [tab, setTab] = useState<'overview' | 'transactions'>('overview');
+  const [tab, setTab] = useState<'overview' | 'transactions' | 'manage'>('overview');
+  const [ledgerName, setLedgerName] = useState<string | null>(null);
   const [groupBy, setGroupBy] = useState<'category' | 'account'>('category');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -103,11 +104,11 @@ export const CashbookSummaryPage = () => {
 
       {/* Tabs */}
       <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-        {(['overview', 'transactions'] as const).map((t) => (
+        {(['overview', 'transactions', 'manage'] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)}
-            className={cn('rounded-md px-4 py-1.5 text-sm font-medium transition',
+            className={cn('rounded-md px-4 py-1.5 text-sm font-medium capitalize transition',
               tab === t ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900')}>
-            {t === 'overview' ? 'Overview' : 'Transactions'}
+            {t}
           </button>
         ))}
       </div>
@@ -161,12 +162,6 @@ export const CashbookSummaryPage = () => {
         </div>
       )}
 
-      {/* Unclassified heads → classify + auto-adjust */}
-      <UnclassifiedSection />
-
-      {/* Duplicate check + remove */}
-      <DuplicatesSection />
-
       {/* Summary table */}
       <div className="card overflow-hidden">
         {isLoading ? (
@@ -188,8 +183,10 @@ export const CashbookSummaryPage = () => {
               </tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {items.map((it) => (
-                  <tr key={it.key} className="hover:bg-slate-50/60">
+                  <tr key={it.key} className={cn('hover:bg-slate-50/60', groupBy === 'account' && 'cursor-pointer')}
+                    onClick={groupBy === 'account' ? () => setLedgerName(it.key) : undefined}>
                     <td className="px-4 py-2.5 font-medium">
+                      {groupBy === 'account' && <span className="mr-1 text-brand-500">›</span>}
                       {it.key}
                       {groupBy === 'category' && (
                         <span className={cn('ml-2 rounded-full px-2 py-0.5 text-[10px] font-medium', TYPE_TONE[it.type] ?? 'bg-slate-100 text-slate-600')}>
@@ -221,20 +218,27 @@ export const CashbookSummaryPage = () => {
         )}
       </div>
 
-      {/* Saved "Other" account heads */}
-      {otherHeads.length > 0 && (
-        <div className="card overflow-hidden">
-          <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700">
-            <Tag className="h-4 w-4" /> Saved account heads (Other) <span className="font-normal text-slate-400">({otherHeads.length})</span>
-          </div>
-          <div className="divide-y divide-slate-100">
-            {otherHeads.map((h) => (
-              <HeadRow key={h.id} head={h} onDelete={() => delHead.mutate(h.id)} deleting={delHead.isPending} />
-            ))}
-          </div>
-        </div>
-      )}
       </>}
+
+      {tab === 'manage' && <>
+        <UnclassifiedSection />
+        <DuplicatesSection />
+        {/* Saved "Other" account heads */}
+        {otherHeads.length > 0 && (
+          <div className="card overflow-hidden">
+            <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700">
+              <Tag className="h-4 w-4" /> Saved account heads (Other) <span className="font-normal text-slate-400">({otherHeads.length})</span>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {otherHeads.map((h) => (
+                <HeadRow key={h.id} head={h} onDelete={() => delHead.mutate(h.id)} deleting={delHead.isPending} />
+              ))}
+            </div>
+          </div>
+        )}
+      </>}
+
+      {ledgerName && <AccountLedgerModal name={ledgerName} onClose={() => setLedgerName(null)} />}
     </div>
   );
 };
@@ -570,6 +574,73 @@ const DuplicatesSection = () => {
         </table>
       </div>
       {confirmDialog}
+    </div>
+  );
+};
+
+/* ── One party's whole journey: Sales / Purchase / notes / Receipts / Payments ── */
+type LedgerItem = { id?: string; date: string | null; type: string; ref: string | null; amount: number };
+const AccountLedgerModal = ({ name, onClose }: { name: string; onClose: () => void }) => {
+  const qc = useQueryClient();
+  const { confirm, confirmDialog } = useConfirm();
+  const { data, isLoading } = useQuery({
+    queryKey: ['cashbook-ledger', name],
+    queryFn: () => api<{ name: string; items: LedgerItem[]; totals: Record<string, number> }>(`/cashbook/account-ledger?name=${encodeURIComponent(name)}`),
+  });
+  const delEntry = useMutation({
+    mutationFn: (id: string) => api(`/cashbook/entry/${id}`, { method: 'DELETE' }),
+    onSuccess: () => ['cashbook-ledger', 'cashbook-summary', 'cashbook-transactions', 'cashbook-overview', 'cashbook-entries', 'cashbook-duplicates'].forEach((k) => qc.invalidateQueries({ queryKey: [k] })),
+  });
+  const items = data?.items ?? [];
+  const t = data?.totals ?? {};
+  const onDel = async (r: LedgerItem) => {
+    if (!r.id) return;
+    const ok = await confirm({ title: 'Delete this row?', message: <>Remove this {TXN_LABEL[r.type] ?? r.type} of {inr(r.amount)} from the cashbook?</>, tone: 'danger', confirmLabel: 'Delete' });
+    if (ok) delEntry.mutate(r.id);
+  };
+  const cards: [string, string][] = [['Sales', 'sale'], ['Purchase', 'purchase'], ['Credit Note', 'creditNote'], ['Debit Note', 'debitNote'], ['Receipts', 'receipt'], ['Payments', 'payment']];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+      <div className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
+          <h2 className="truncate pr-3 text-sm font-semibold text-slate-900">{name} — Account journey</h2>
+          <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
+        </div>
+        <div className="grid grid-cols-3 gap-2 border-b border-slate-200 bg-slate-50 px-5 py-3 text-center sm:grid-cols-6">
+          {cards.map(([lbl, k]) => (
+            <div key={k}><div className="text-[10px] uppercase tracking-wide text-slate-400">{lbl}</div><div className="text-sm font-semibold tabular-nums text-slate-800">{inr(t[k])}</div></div>
+          ))}
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {isLoading ? (
+            <div className="py-12 text-center text-slate-400"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></div>
+          ) : !items.length ? (
+            <div className="py-12 text-center text-sm text-slate-400">No transactions for this account.</div>
+          ) : (
+            <table className="w-full text-sm whitespace-nowrap">
+              <thead className="sticky top-0 bg-white"><tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-4 py-2.5 text-left">Date</th><th className="px-4 py-2.5 text-left">Type</th>
+                <th className="px-4 py-2.5 text-left">Ref</th><th className="px-4 py-2.5 text-right">Amount</th><th className="w-10 px-2 py-2.5" />
+              </tr></thead>
+              <tbody className="divide-y divide-slate-100">
+                {items.map((r, i) => (
+                  <tr key={i} className="hover:bg-slate-50/60">
+                    <td className="px-4 py-2 text-slate-600">{r.date ? new Date(r.date).toLocaleDateString('en-GB') : '—'}</td>
+                    <td className="px-4 py-2"><span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', TXN_TONE[r.type] ?? 'bg-slate-100 text-slate-600')}>{TXN_LABEL[r.type] ?? r.type}</span></td>
+                    <td className="px-4 py-2 font-mono text-xs text-slate-500">{r.ref || '—'}</td>
+                    <td className="px-4 py-2 text-right tabular-nums font-semibold">{inr(r.amount)}</td>
+                    <td className="px-2 py-2 text-center">
+                      {r.id && <button onClick={() => onDel(r)} disabled={delEntry.isPending} title="Delete cashbook row" className="rounded p-1 text-red-500 hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" /></button>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        {confirmDialog}
+      </div>
     </div>
   );
 };
