@@ -383,6 +383,8 @@ export const TestingCalculatorPage = () => {
                     </thead>
                     <tbody>
                       <tr className="border-t border-slate-100"><td className="px-2 py-1.5 font-medium text-slate-600">Volt (V)</td>{it.fluxes.map((f) => <td key={f} className="px-2 py-1.5 text-right tabular-nums">{cell(it, f)?.volt.toFixed(3) ?? '—'}</td>)}</tr>
+                      <tr className="border-t border-slate-100"><td className="px-2 py-1.5 font-medium text-slate-600">V (mV)</td>{it.fluxes.map((f) => <td key={f} className="px-2 py-1.5 text-right tabular-nums">{cell(it, f)?.mv.toFixed(2) ?? '—'}</td>)}</tr>
+                      <tr className="border-t border-slate-100"><td className="px-2 py-1.5 font-medium text-slate-600">Ie max (A)</td>{it.fluxes.map((f) => <td key={f} className="px-2 py-1.5 text-right tabular-nums">{(cell(it, f)?.ieA ?? 0) > 0 ? cell(it, f)?.ieA.toFixed(5) : '—'}</td>)}</tr>
                       <tr className="border-t border-slate-100"><td className="px-2 py-1.5 font-medium text-slate-600">Ie max (mA)</td>{it.fluxes.map((f) => <td key={f} className="px-2 py-1.5 text-right tabular-nums">{(cell(it, f)?.leMax ?? 0) > 0 ? cell(it, f)?.leMax.toFixed(2) : '—'}</td>)}</tr>
                     </tbody>
                   </table>

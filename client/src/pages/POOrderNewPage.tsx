@@ -2,10 +2,10 @@
 // Header (PO#, customer, dates) + per-item entry (toroidal OR rectangular)
 // with live calculations + accumulated items list. Submit creates one PoOrder
 // with many PoOrderItems in a single API call.
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, Fragment } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Trash2, Save, Loader2, Calendar, Hash, User2, Package, Pencil, Copy } from 'lucide-react';
+import { Plus, Trash2, Save, Loader2, Calendar, Hash, User2, Package, Pencil, Copy, ChevronDown, ChevronRight } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc, nanoCalc, nanoTestCalc } from '@/lib/calc';
@@ -86,6 +86,40 @@ const coreShort = (ct: CoreType) => (ct === 'TOROIDAL' ? 'Toro' : ct === 'RECTAN
 // Prices are shown as whole rupees (no decimals).
 const money0 = (n: number | undefined | null) => Math.round(Number(n) || 0).toLocaleString('en-IN');
 
+/* Expanded details for an added line — weights, testing + pricing breakdown. */
+const ItemDetails = ({ it }: { it: Item }) => {
+  const rows: [string, string][] = [['Grade', it.grade], ['Material', it.material], ['Measure', it.measure]];
+  if (it.coreType === 'NANO') {
+    const coreW = Math.max(0, (it.weightPerPc ?? 0) - (it.caseWeight ?? 0));
+    rows.push(['Core Wt (kg)', coreW.toFixed(3)]);
+    rows.push(['Case Wt (kg)', (it.caseWeight ?? 0).toFixed(3)]);
+    rows.push(['Total Wt (kg)', (it.totalWeight ?? 0).toFixed(3)]);
+    if (it.nanoPrice) rows.push(['Nano Price', `₹${money0(it.nanoPrice)}/kg`]);
+    if (it.casePrice) rows.push(['Case Price', `₹${money0(it.casePrice)}/kg`]);
+  } else {
+    rows.push(['Wt / pc (kg)', (it.weightPerPc ?? 0).toFixed(3)]);
+    rows.push(['Total Wt (kg)', (it.totalWeight ?? 0).toFixed(3)]);
+    if (it.builtup != null) rows.push(['Built-up', it.builtup.toFixed(3)]);
+    if (it.coreAc != null) rows.push(['Core A/C', it.coreAc.toFixed(3)]);
+  }
+  if (it.turns) rows.push(['Turns', String(it.turns)]);
+  if (it.flux) rows.push(['Flux', it.coreType === 'NANO' ? `${Math.round(it.flux * 10000)} G` : `${it.flux} T`]);
+  if (it.testVoltage) rows.push(['Test V', it.coreType === 'NANO' ? `${(it.testVoltage * 1000).toFixed(2)} mV` : `${it.testVoltage.toFixed(3)} V`]);
+  if (it.testCurrent) rows.push(['Ie max', it.coreType === 'NANO' ? `${(it.testCurrent / 1000).toFixed(5)} A` : `${it.testCurrent.toFixed(2)} mA`]);
+  if (it.rateValue) rows.push(['Rate', `₹${money0(it.rateValue)} ${it.rateBasis === 'PER_KG' ? '/kg' : '/pc'}`]);
+  if (it.totalAmount) rows.push(['Amount', `₹${money0(it.totalAmount)}`]);
+  return (
+    <div className="grid grid-cols-2 gap-x-4 gap-y-2 bg-slate-50/70 px-4 py-3 text-xs sm:grid-cols-4 lg:grid-cols-6">
+      {rows.map(([k, v]) => (
+        <div key={k} className="min-w-0">
+          <div className="text-[10px] uppercase tracking-wide text-slate-400">{k}</div>
+          <div className="truncate font-medium text-slate-700 tabular-nums" title={v}>{v || '—'}</div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 /* ============================================================ */
 export const POOrderNewPage = () => {
   const navigate = useNavigate();
@@ -106,6 +140,8 @@ export const POOrderNewPage = () => {
   /* ----- entry state (current item being built) ----- */
   const [coreType, setCoreType] = useState<CoreType | ''>('');
   const [items, setItems] = useState<Item[]>([]);
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+  const toggleExpand = (idx: number) => setExpandedIdx((p) => (p === idx ? null : idx));
 
   /* Copy grade / material / rate-basis from an existing row into the entry form.
      Switches the form to that row's core type and hands it a one-shot prefill. */
@@ -575,7 +611,8 @@ export const POOrderNewPage = () => {
             <div className="px-4 py-8 text-center text-sm text-slate-400">No items added yet.</div>
           )}
           {items.map((it, idx) => (
-            <div key={idx} className="flex items-start gap-3 px-3 py-2.5">
+            <div key={idx} className="px-3 py-2.5">
+              <div className="flex items-start gap-3">
               <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 font-mono text-[11px] text-slate-600">
                 {idx + 1}
               </div>
@@ -608,6 +645,15 @@ export const POOrderNewPage = () => {
                 )}
               </div>
               <div className="flex-shrink-0 flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(idx)}
+                  title={expandedIdx === idx ? 'Hide details' : 'Show details'}
+                  aria-label="Toggle details"
+                  className="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                >
+                  {expandedIdx === idx ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                </button>
                 {!it._dbId && (
                   <button
                     type="button"
@@ -653,6 +699,10 @@ export const POOrderNewPage = () => {
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
+              </div>
+              {expandedIdx === idx && (
+                <div className="mt-2 -mx-3 -mb-2.5 overflow-hidden rounded-b-lg border-t border-slate-100"><ItemDetails it={it} /></div>
+              )}
             </div>
           ))}
         </div>
@@ -680,7 +730,8 @@ export const POOrderNewPage = () => {
                 <tr><td colSpan={11} className="px-3 py-8 text-center text-sm text-slate-400">No items added yet.</td></tr>
               )}
               {items.map((it, idx) => (
-                <tr key={idx} className="border-t border-slate-100 hover:bg-slate-50/60">
+                <Fragment key={idx}>
+                <tr className="border-t border-slate-100 hover:bg-slate-50/60">
                   <td className="px-3 py-2 font-mono text-xs text-slate-500">{idx + 1}</td>
                   <td className="px-3 py-2">
                     <span className={cn(
@@ -706,6 +757,15 @@ export const POOrderNewPage = () => {
                   </td>
                   <td className="px-3 py-2 text-right">
                     <div className="inline-flex items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpand(idx)}
+                        title={expandedIdx === idx ? 'Hide details' : 'Show details'}
+                        aria-label="Toggle details"
+                        className="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                      >
+                        {expandedIdx === idx ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      </button>
                       {!it._dbId && (
                         <button
                           type="button"
@@ -753,6 +813,10 @@ export const POOrderNewPage = () => {
                     </div>
                   </td>
                 </tr>
+                {expandedIdx === idx && (
+                  <tr><td colSpan={11} className="p-0"><ItemDetails it={it} /></td></tr>
+                )}
+                </Fragment>
               ))}
             </tbody>
           </table>
