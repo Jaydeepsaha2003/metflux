@@ -6,9 +6,11 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Warehouse, Plus, Loader2, PackageOpen, Truck, X, FileText, CheckCircle2,
+  Pencil, Trash2, PackagePlus, Check,
 } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { useConfirm } from '@/hooks/useConfirm';
 
 type Store = { id: string; name: string; isActive: boolean; notes: string | null };
 type StockLine = {
@@ -23,14 +25,20 @@ type SoLine = {
 };
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
-const specLabel = (s: StockLine) => `${s.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'} · ${s.grade} · ${s.measure}`;
+const coreShort = (ct: string) => (ct === 'TOROIDAL' ? 'Toro' : ct === 'NANO' ? 'Nano' : 'Rect');
+const specLabel = (s: StockLine) => `${coreShort(s.coreType)} · ${s.grade} · ${s.measure}`;
 
 export const WarehousePage = () => {
   const qc = useQueryClient();
+  const { confirm, confirmDialog } = useConfirm();
   const [warehouseId, setWarehouseId] = useState<string>('');
   const [newName, setNewName] = useState('');
   const [adding, setAdding] = useState(false);
   const [stockOut, setStockOut] = useState<StockLine | null>(null);
+  const [renameId, setRenameId] = useState<string | null>(null);
+  const [renameVal, setRenameVal] = useState('');
+  const [openingOpen, setOpeningOpen] = useState(false);
+  const [storeErr, setStoreErr] = useState<string | null>(null);
 
   const { data: stores } = useQuery({ queryKey: ['warehouses'], queryFn: () => api<{ items: Store[] }>('/warehouses') });
   const { data: stock, isLoading } = useQuery({
@@ -40,8 +48,29 @@ export const WarehousePage = () => {
 
   const createStore = useMutation({
     mutationFn: (name: string) => api('/warehouses', { method: 'POST', json: { name } }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['warehouses'] }); setNewName(''); setAdding(false); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['warehouses'] }); setNewName(''); setAdding(false); setStoreErr(null); },
+    onError: (e) => setStoreErr(e instanceof ApiError ? e.message : 'Failed to add store'),
   });
+  const renameStore = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => api(`/warehouses/${id}`, { method: 'PATCH', json: { name } }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['warehouses'] }); setRenameId(null); setStoreErr(null); },
+    onError: (e) => setStoreErr(e instanceof ApiError ? e.message : 'Failed to rename'),
+  });
+  const deleteStore = useMutation({
+    mutationFn: (id: string) => api(`/warehouses/${id}`, { method: 'DELETE' }),
+    onSuccess: (_d, id) => { qc.invalidateQueries({ queryKey: ['warehouses'] }); if (warehouseId === id) setWarehouseId(''); setStoreErr(null); },
+    onError: (e) => setStoreErr(e instanceof ApiError ? e.message : 'Failed to delete'),
+  });
+
+  const selStore = (stores?.items ?? []).find((s) => s.id === warehouseId);
+  const askDelete = async (s: Store) => {
+    const ok = await confirm({
+      title: 'Delete store?',
+      message: <>Delete <strong>{s.name}</strong>? Only stores with no stock records can be deleted.</>,
+      tone: 'danger', confirmLabel: 'Delete',
+    });
+    if (ok) deleteStore.mutate(s.id);
+  };
 
   return (
     <div className="space-y-5 max-w-[1400px]">
@@ -84,15 +113,39 @@ export const WarehousePage = () => {
               <Plus className="h-3.5 w-3.5" /> Add store
             </button>
           )}
+
+          {/* Rename / delete the selected store */}
+          {selStore && (
+            renameId === selStore.id ? (
+              <span className="inline-flex items-center gap-1 border-l border-slate-200 pl-2">
+                <input autoFocus className="input h-8 w-40 text-sm" value={renameVal}
+                  onChange={(e) => setRenameVal(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && renameVal.trim()) renameStore.mutate({ id: selStore.id, name: renameVal.trim() }); if (e.key === 'Escape') setRenameId(null); }} />
+                <button onClick={() => renameVal.trim() && renameStore.mutate({ id: selStore.id, name: renameVal.trim() })} disabled={renameStore.isPending} className="btn-primary h-8 px-2 text-xs">
+                  {renameStore.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                </button>
+                <button onClick={() => setRenameId(null)} className="btn-ghost h-8 px-2 text-xs">Cancel</button>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-0.5 border-l border-slate-200 pl-2">
+                <button onClick={() => { setRenameId(selStore.id); setRenameVal(selStore.name); setStoreErr(null); }} title="Rename store" className="rounded p-1.5 text-slate-500 hover:bg-slate-100"><Pencil className="h-3.5 w-3.5" /></button>
+                <button onClick={() => askDelete(selStore)} disabled={deleteStore.isPending} title="Delete store (only if empty)" className="rounded p-1.5 text-red-500 hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" /></button>
+              </span>
+            )
+          )}
         </div>
+        {storeErr && <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700">{storeErr}</div>}
       </section>
 
       {/* Stock on hand */}
       <section className="card overflow-hidden">
-        <div className="border-b border-slate-200 px-4 py-3">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
             <PackageOpen className="h-4 w-4 text-slate-500" /> Stock on hand
           </h2>
+          <button onClick={() => setOpeningOpen(true)} className="btn-ghost border border-slate-300 text-brand-700 hover:bg-brand-50 text-sm">
+            <PackagePlus className="h-4 w-4" /> Opening Stock
+          </button>
         </div>
         {isLoading ? (
           <div className="py-12 text-center text-slate-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
@@ -121,8 +174,8 @@ export const WarehousePage = () => {
                   <tr key={`${s.warehouseId}:${s.specKey}`} className="border-t border-slate-100 hover:bg-slate-50/60">
                     <td className="px-3 py-2.5 text-slate-600">{s.warehouseName}</td>
                     <td className="px-3 py-2.5">
-                      <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', s.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700')}>
-                        {s.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
+                      <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', s.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : s.coreType === 'NANO' ? 'bg-violet-50 text-violet-700' : 'bg-rose-50 text-rose-700')}>
+                        {coreShort(s.coreType)}
                       </span>
                     </td>
                     <td className="px-3 py-2.5">{s.grade}</td>
@@ -151,6 +204,110 @@ export const WarehousePage = () => {
           onDone={() => { qc.invalidateQueries({ queryKey: ['warehouse-stock'] }); qc.invalidateQueries({ queryKey: ['dispatch'] }); }}
         />
       )}
+
+      {openingOpen && (
+        <OpeningStockModal
+          stores={(stores?.items ?? []).filter((s) => s.isActive)}
+          defaultStoreId={warehouseId}
+          onClose={() => setOpeningOpen(false)}
+          onDone={() => qc.invalidateQueries({ queryKey: ['warehouse-stock'] })}
+        />
+      )}
+
+      {confirmDialog}
+    </div>
+  );
+};
+
+/* ── Opening-stock modal — manual IN with a user-entered spec ── */
+const OpeningStockModal = ({
+  stores, defaultStoreId, onClose, onDone,
+}: { stores: Store[]; defaultStoreId: string; onClose: () => void; onDone: () => void }) => {
+  const [warehouseId, setWarehouseId] = useState(defaultStoreId || stores[0]?.id || '');
+  const [coreType, setCoreType] = useState<'TOROIDAL' | 'RECTANGULAR' | 'NANO'>('TOROIDAL');
+  const [grade, setGrade] = useState('');
+  const [material, setMaterial] = useState('');
+  const [measure, setMeasure] = useState('');
+  const [weightPerPc, setWeightPerPc] = useState(0);
+  const [pcs, setPcs] = useState(0);
+  const [movementDate, setMovementDate] = useState(todayISO());
+  const [notes, setNotes] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  const submit = useMutation({
+    mutationFn: () => api('/warehouses/opening-stock', {
+      method: 'POST',
+      json: {
+        warehouseId, coreType, grade: grade.trim(), material: material.trim(),
+        measure: measure.trim() || null, weightPerPc, pcs,
+        movementDate, notes: notes.trim() || 'Opening stock',
+      },
+    }),
+    onSuccess: () => { setDone(true); onDone(); },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Failed to add opening stock'),
+  });
+
+  const onSave = () => {
+    setError(null);
+    if (!warehouseId) return setError('Pick a store');
+    if (!grade.trim() || !material.trim()) return setError('Grade and material are required');
+    if (pcs <= 0) return setError('Pcs must be greater than 0');
+    submit.mutate();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900"><PackagePlus className="h-4 w-4 text-brand-600" /> Add Opening Stock</h2>
+          <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
+        </div>
+        {done ? (
+          <div className="space-y-4 px-5 py-6">
+            <div className="flex items-center gap-2 text-sm font-medium text-emerald-700"><CheckCircle2 className="h-5 w-5" /> Opening stock added ({pcs} pcs).</div>
+            <div className="flex justify-end"><button onClick={onClose} className="btn-primary text-sm">Done</button></div>
+          </div>
+        ) : (
+          <div className="space-y-4 px-5 py-4">
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Store</span>
+                <select className="input" value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
+                  <option value="">Select store…</option>
+                  {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select></label>
+              <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Core type</span>
+                <select className="input" value={coreType} onChange={(e) => setCoreType(e.target.value as 'TOROIDAL' | 'RECTANGULAR' | 'NANO')}>
+                  <option value="TOROIDAL">Toroidal</option><option value="RECTANGULAR">Rectangular</option><option value="NANO">Nano</option>
+                </select></label>
+              <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Grade</span>
+                <input className="input" value={grade} onChange={(e) => setGrade(e.target.value.toUpperCase())} placeholder="e.g. M4" /></label>
+              <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Material</span>
+                <input className="input" value={material} onChange={(e) => setMaterial(e.target.value.toUpperCase())} placeholder="e.g. 0.23 DABBA" /></label>
+              <label className="col-span-2 block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Measure</span>
+                <input className="input" value={measure} onChange={(e) => setMeasure(e.target.value)} placeholder="e.g. 90 x 140 x 40" /></label>
+              <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Wt / pc (kg)</span>
+                <input className="input" type="number" step="any" value={weightPerPc || ''} onChange={(e) => setWeightPerPc(parseFloat(e.target.value) || 0)} placeholder="0" /></label>
+              <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Pcs</span>
+                <input className="input" type="number" min={1} value={pcs || ''} onChange={(e) => setPcs(parseInt(e.target.value || '0', 10))} /></label>
+              <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Date</span>
+                <input className="input" type="date" value={movementDate} onChange={(e) => setMovementDate(e.target.value)} /></label>
+              <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Notes</span>
+                <input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Opening stock" /></label>
+            </div>
+            {pcs > 0 && weightPerPc > 0 && (
+              <div className="text-xs text-slate-500">Total weight: <strong className="text-slate-700">{(pcs * weightPerPc).toFixed(3)} kg</strong></div>
+            )}
+            {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>}
+            <div className="flex justify-end gap-3 border-t border-slate-200 pt-3">
+              <button onClick={onClose} className="btn-ghost text-sm">Cancel</button>
+              <button onClick={onSave} disabled={submit.isPending} className="btn-primary text-sm">
+                {submit.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />} Add Stock
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

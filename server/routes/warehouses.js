@@ -9,7 +9,7 @@
 //   POST   /warehouses/stock-out       dispatch stock to a customer SO line (normal sale)
 import { Router } from 'express';
 import { z } from 'zod';
-import { q, qOne, insert, update, txn } from '../lib/db.js';
+import { q, qOne, insert, update, del, txn } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
@@ -49,10 +49,26 @@ router.patch('/:id', requirePermission('dispatch'), asyncHandler(async (req, res
   const wh = await qOne('SELECT `id` FROM `Warehouse` WHERE `id` = ? AND `companyId` = ?', [req.params.id, req.tenant.companyId]);
   if (!wh) throw new AppError('Store not found', 404, 'NOT_FOUND');
   const patch = {};
-  if (data.name !== undefined) patch.name = data.name;
+  if (data.name !== undefined) {
+    const dupe = await qOne('SELECT `id` FROM `Warehouse` WHERE `companyId` = ? AND `name` = ? AND `id` <> ?', [req.tenant.companyId, data.name, wh.id]);
+    if (dupe) throw new AppError('A store with that name already exists', 409, 'DUPLICATE');
+    patch.name = data.name;
+  }
   if (data.isActive !== undefined) patch.isActive = data.isActive ? 1 : 0;
   if (data.notes !== undefined) patch.notes = data.notes ?? null;
   if (Object.keys(patch).length) await update('Warehouse', wh.id, patch);
+  res.json({ ok: true });
+}));
+
+/* ---------- Delete a store (only when it has no stock movements) ---------- */
+router.delete('/:id', requirePermission('dispatch'), asyncHandler(async (req, res) => {
+  const wh = await qOne('SELECT `id` FROM `Warehouse` WHERE `id` = ? AND `companyId` = ?', [req.params.id, req.tenant.companyId]);
+  if (!wh) throw new AppError('Store not found', 404, 'NOT_FOUND');
+  const used = await qOne('SELECT COUNT(*) AS n FROM `StockMovement` WHERE `warehouseId` = ? AND `companyId` = ?', [wh.id, req.tenant.companyId]);
+  if (Number(used?.n ?? 0) > 0) {
+    throw new AppError('Cannot delete — this store has stock records. Only empty stores (no items) can be deleted.', 400, 'HAS_STOCK');
+  }
+  await del('Warehouse', wh.id);
   res.json({ ok: true });
 }));
 
@@ -174,6 +190,54 @@ router.post('/stock-in', requirePermission('dispatch'), asyncHandler(async (req,
     totalWeight: w3(data.pcs * weightPerPc),
     movementDate: data.movementDate ?? new Date(),
     notes: data.notes ?? null,
+    createdById: req.auth.userId,
+  });
+  res.status(201).json({ id: created.id, stored: data.pcs });
+}));
+
+/* ---------- Opening stock — a manual IN with a user-entered spec (no PO line) ---------- */
+router.post('/opening-stock', requirePermission('dispatch'), asyncHandler(async (req, res) => {
+  const data = z.object({
+    warehouseId: z.string().min(1),
+    coreType:    z.enum(['TOROIDAL', 'RECTANGULAR', 'NANO']).optional(),
+    grade:       z.string().trim().min(1).max(80),
+    material:    z.string().trim().min(1).max(120),
+    measure:     z.string().trim().max(160).optional().nullable(),
+    id1: z.coerce.number().optional().nullable(),
+    id2: z.coerce.number().optional().nullable(),
+    od1: z.coerce.number().optional().nullable(),
+    od2: z.coerce.number().optional().nullable(),
+    ht:  z.coerce.number().optional().nullable(),
+    weightPerPc: z.coerce.number().nonnegative().optional(),
+    pcs:         z.coerce.number().int().positive(),
+    movementDate: z.coerce.date().optional(),
+    notes:       z.string().trim().max(400).optional().nullable(),
+  }).parse(req.body);
+
+  const wh = await qOne('SELECT `id` FROM `Warehouse` WHERE `id` = ? AND `companyId` = ? AND `isActive` = 1', [data.warehouseId, req.tenant.companyId]);
+  if (!wh) throw new AppError('Store not found or inactive', 404, 'NOT_FOUND');
+
+  const spec = {
+    coreType: data.coreType ?? 'TOROIDAL',
+    grade: data.grade, material: data.material,
+    measure: data.measure ?? null,
+    id1: data.id1 ?? null, id2: data.id2 ?? null,
+    od1: data.od1 ?? null, od2: data.od2 ?? null, ht: data.ht ?? null,
+  };
+  const weightPerPc = Number(data.weightPerPc) || 0;
+  const created = await insert('StockMovement', {
+    companyId: req.tenant.companyId,
+    warehouseId: data.warehouseId,
+    direction: 'IN',
+    poOrderItemId: null,
+    dispatchId: null,
+    specKey: specKeyOf(spec),
+    ...spec,
+    weightPerPc,
+    pcs: data.pcs,
+    totalWeight: w3(data.pcs * weightPerPc),
+    movementDate: data.movementDate ?? new Date(),
+    notes: data.notes ?? 'Opening stock',
     createdById: req.auth.userId,
   });
   res.status(201).json({ id: created.id, stored: data.pcs });
