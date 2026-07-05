@@ -213,6 +213,7 @@ CREATE TABLE `PoOrderItem` (
     `nanoPrice` DOUBLE NULL,
     `casePrice` DOUBLE NULL,
     `caseWeight` DOUBLE NULL,
+    `nanoSoRate` DOUBLE NULL,
     `status` ENUM('ACTIVE', 'CANCELLED') NOT NULL DEFAULT 'ACTIVE',
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 

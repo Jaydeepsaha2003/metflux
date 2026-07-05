@@ -35,10 +35,12 @@ const itemSchema = z.object({
   testCurrent: z.coerce.number().nonnegative().optional().nullable(),
   rateBasis: z.enum(['PER_KG', 'PER_PCS']).optional().nullable(),
   rateValue: z.coerce.number().nonnegative().optional().nullable(),
-  // Nano core — per-kg prices for the nano ribbon + SS case, plus derived case weight.
+  // Nano core — per-kg prices for the nano ribbon + SS case, derived case weight,
+  // and an optional manual SO rate/pc (overrides the Nano+Case price).
   nanoPrice:  z.coerce.number().nonnegative().optional().nullable(),
   casePrice:  z.coerce.number().nonnegative().optional().nullable(),
   caseWeight: z.coerce.number().nonnegative().optional().nullable(),
+  nanoSoRate: z.coerce.number().nonnegative().optional().nullable(),
 });
 
 const deriveRate = ({ rateBasis, rateValue, weightPerPc, pcs, totalWeight }) => {
@@ -157,6 +159,7 @@ router.post('/', requirePermission('add_po'), asyncHandler(async (req, res) => {
         nanoPrice:   it.nanoPrice   ?? null,
         casePrice:   it.casePrice   ?? null,
         caseWeight:  it.caseWeight  ?? null,
+        nanoSoRate:  it.nanoSoRate  ?? null,
       });
       items.push(inserted);
     }
@@ -261,6 +264,7 @@ const flattenItem = (it) => {
     nanoPrice:   it.nanoPrice   ?? null,
     casePrice:   it.casePrice   ?? null,
     caseWeight:  it.caseWeight  ?? null,
+    nanoSoRate:  it.nanoSoRate  ?? null,
     // Flux-test calibration (toroidal + rectangular). The Edit page needs
     // these to pre-fill the flux/turns inputs.
     turns:       it.turns       ?? null,
@@ -506,6 +510,10 @@ router.get('/summary', requirePermission('po_summary'), asyncHandler(async (req,
     ratePerKg:     it.ratePerKg   ?? null,
     ratePerPc:     it.ratePerPc   ?? null,
     totalAmount:   it.totalAmount ?? null,
+    nanoPrice:     it.nanoPrice   ?? null,
+    casePrice:     it.casePrice   ?? null,
+    caseWeight:    it.caseWeight  ?? null,
+    nanoSoRate:    it.nanoSoRate  ?? null,
     status:        it.status,
   }));
 

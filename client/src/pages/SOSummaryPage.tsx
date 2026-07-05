@@ -24,7 +24,7 @@ type SummaryItem = {
   deliveryDate: string;
   customerName: string;
   customerCode: string | null;
-  coreType: 'TOROIDAL' | 'RECTANGULAR';
+  coreType: 'TOROIDAL' | 'RECTANGULAR' | 'NANO';
   grade: string;
   material: string;
   measure: string;
@@ -40,6 +40,14 @@ type SummaryItem = {
   ateCm:       number | null;
   testVoltage: number | null;
   testCurrent: number | null;
+  rateBasis:   'PER_KG' | 'PER_PCS' | null;
+  ratePerKg:   number | null;
+  ratePerPc:   number | null;
+  totalAmount: number | null;
+  nanoPrice:   number | null;
+  casePrice:   number | null;
+  caseWeight:  number | null;
+  nanoSoRate:  number | null;
   status: 'ACTIVE' | 'CANCELLED';
 };
 
@@ -63,7 +71,10 @@ const fmtDate = (iso: string | null | undefined) => {
 const coreBadge: Record<SummaryItem['coreType'], string> = {
   TOROIDAL:    'bg-amber-50 text-amber-700 border border-amber-200',
   RECTANGULAR: 'bg-rose-50 text-rose-700 border border-rose-200',
+  NANO:        'bg-violet-50 text-violet-700 border border-violet-200',
 };
+const coreShort: Record<SummaryItem['coreType'], string> = { TOROIDAL: 'T', RECTANGULAR: 'R', NANO: 'N' };
+const coreName: Record<SummaryItem['coreType'], string> = { TOROIDAL: 'Toro', RECTANGULAR: 'Rect', NANO: 'Nano' };
 
 const PAGE_SIZE = 20;
 
@@ -359,7 +370,7 @@ export const SOSummaryPage = () => {
                           )}>
                             <td className="px-2 py-2 pl-8 text-center">
                               <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', coreBadge[it.coreType])}>
-                                {it.coreType === 'TOROIDAL' ? 'T' : 'R'}
+                                {coreShort[it.coreType]}
                               </span>
                             </td>
                             <td className="px-3 py-2 text-slate-500 text-xs">{it.grade}</td>
@@ -505,7 +516,7 @@ export const SOSummaryPage = () => {
                               <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-1.5">
                                   <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium', coreBadge[it.coreType])}>
-                                    {it.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
+                                    {coreName[it.coreType]}
                                   </span>
                                   <span className="text-xs text-slate-600 font-medium">{it.grade}</span>
                                   <span className="text-xs text-slate-500">{it.material}</span>
@@ -623,11 +634,34 @@ export const SOSummaryPage = () => {
   );
 };
 
+const inr2 = (n: number | null | undefined) => (n == null ? '—' : '₹' + Number(n).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 }));
+
 /* ---------- expanded test panel ---------- */
 const TestPanel = ({ item }: { item: SummaryItem }) => {
   const hasTest = item.flux != null || item.testVoltage != null || item.testCurrent != null;
+  const isNano = item.coreType === 'NANO';
+  // Nano "actual" rate = the computed Nano+Case price/pc; manual = nanoSoRate.
+  const nanoCasePc = isNano ? (item.weightPerPc * (item.nanoPrice ?? 0) + (item.caseWeight ?? 0) * (item.casePrice ?? 0)) : null;
   return (
     <div className="space-y-3">
+      {/* Pricing */}
+      <div className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50/70 to-white shadow-sm">
+        <div className="flex items-center gap-1.5 border-b border-emerald-100 px-3 py-2 text-[11px] font-bold tracking-wide text-emerald-800">
+          <FileText className="h-3.5 w-3.5" /> Pricing
+        </div>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2 px-3 py-2.5 sm:grid-cols-3 lg:grid-cols-5">
+          {isNano ? (
+            <>
+              <FieldCell label="Nano+Case / Pc (actual)" value={inr2(nanoCasePc)} mono />
+              <FieldCell label="SO Rate / Pcs (manual)" value={item.nanoSoRate != null ? inr2(item.nanoSoRate) : '— (auto)'} mono />
+              <FieldCell label="Applied / Pc" value={inr2(item.ratePerPc)} mono />
+            </>
+          ) : (
+            <FieldCell label={item.rateBasis === 'PER_KG' ? 'Rate / Kg' : 'Rate / Pc'} value={inr2(item.rateBasis === 'PER_KG' ? item.ratePerKg : item.ratePerPc)} mono />
+          )}
+          <FieldCell label="Line Total" value={inr2(item.totalAmount)} mono />
+        </div>
+      </div>
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center gap-1.5 border-b border-slate-100 px-3 py-2 text-[11px] font-bold tracking-wide text-slate-600">
           <FileText className="h-3.5 w-3.5 text-slate-500" />

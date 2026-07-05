@@ -28,7 +28,7 @@ const main = async () => {
     console.log('[migrate] PoOrderItem.coreType already allows NANO (or table absent) — skipping');
   }
 
-  for (const c of ['nanoPrice', 'casePrice', 'caseWeight']) {
+  for (const c of ['nanoPrice', 'casePrice', 'caseWeight', 'nanoSoRate']) {
     if (!(await columnExists('PoOrderItem', c))) {
       await pool.query(`ALTER TABLE \`PoOrderItem\` ADD COLUMN \`${c}\` DOUBLE NULL`);
       console.log(`[migrate] added PoOrderItem.${c}`);
