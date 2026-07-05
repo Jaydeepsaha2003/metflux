@@ -130,15 +130,15 @@ export const TestingCalculatorPage = () => {
     const ateCm = ateFor(it.coreType, it.grade, flux);
     if (it.coreType === 'NANO') {
       const r = nanoTestCalc({ id: +it.id, od: +it.od, ht: +it.ht, turns: +it.turns, flux, ateCm, freq: +it.freq || 50, sfac: +it.sfac || 0.8 });
-      return { volt: r.testVoltage, leMax: r.testCurrent };
+      return { volt: r.testVoltage, leMax: r.testCurrent, mv: r.testVoltageMv, ieA: r.testCurrentA };
     }
     if (it.coreType === 'TOROIDAL') {
       const r = fluxTestCalc({ id: +it.id, od: +it.od, ht: +it.ht, turns: +it.turns, flux, ateCm });
-      return { volt: r.testVoltage, leMax: r.testCurrent };
+      return { volt: r.testVoltage, leMax: r.testCurrent, mv: r.testVoltage * 1000, ieA: r.testCurrent / 1000 };
     }
     const g = rectGeom(it);
     const r = rectangularFluxTestCalc({ area: g.coreAc, meanPath: g.coreMl, turns: +it.turns, flux, ateCm });
-    return { volt: r.testVoltage, leMax: r.testCurrent };
+    return { volt: r.testVoltage, leMax: r.testCurrent, mv: r.testVoltage * 1000, ieA: r.testCurrent / 1000 };
   };
 
   // Unified export columns — a Core + Measure pair keeps mixed rows aligned.
@@ -208,8 +208,8 @@ export const TestingCalculatorPage = () => {
         margin: 10,
         filename: `testing-report-${todayStamp()}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff', windowWidth: 720 },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff', windowWidth: 1040 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
         pagebreak: { mode: ['css', 'legacy'], avoid: ['tr'] },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any).from(el).save();
@@ -403,10 +403,10 @@ export const TestingCalculatorPage = () => {
       {importOpen && <ImportDialog onClose={() => setImportOpen(false)} onAdd={addFromPo} />}
 
       {/* ── Offscreen printable document — one size per A4 page ── */}
-      <div style={{ position: 'fixed', left: -10000, top: 0, width: 720 }} aria-hidden>
-        <div ref={printRef} style={{ width: 720, fontFamily: 'Poppins, sans-serif', color: '#000', background: '#fff' }}>
+      <div style={{ position: 'fixed', left: -10000, top: 0, width: 1040 }} aria-hidden>
+        <div ref={printRef} style={{ width: 1040, fontFamily: 'Poppins, sans-serif', color: '#000', background: '#fff' }}>
           {exportRows.map((it, idx) => {
-            const core = it.coreType === 'TOROIDAL' ? 'Toroidal' : 'Rectangular';
+            const core = coreLabel[it.coreType];
             const measure = measureOf(it);
             const n = it.fluxes.length;
             return (
@@ -444,8 +444,8 @@ export const TestingCalculatorPage = () => {
                   <table className="w-full border-collapse text-[15px]">
                     <thead>
                       <tr className="bg-slate-100">
-                        {['Core', 'Measure', 'Turns', 'Grade', 'Flux (T)', 'Volt (V)', 'Ie max (mA)'].map((h) => (
-                          <th key={h} className="border border-slate-500 px-3 py-2.5 text-center text-[13px] font-bold uppercase tracking-wide">{h}</th>
+                        {['Core', 'Measure', 'Turns', 'Grade', 'Flux (T)', 'Volt (V)', 'V (mV)', 'Ie max (A)', 'Ie max (mA)'].map((h) => (
+                          <th key={h} className="border border-slate-500 px-3 py-2.5 text-center text-[12px] font-bold uppercase tracking-wide">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -462,6 +462,8 @@ export const TestingCalculatorPage = () => {
                             </>}
                             <td className="border border-slate-500 px-3 py-2.5 text-center tabular-nums">{f.toFixed(2)}</td>
                             <td className="border border-slate-500 px-3 py-2.5 text-right tabular-nums">{c ? c.volt.toFixed(3) : '—'}</td>
+                            <td className="border border-slate-500 px-3 py-2.5 text-right tabular-nums">{c ? c.mv.toFixed(2) : '—'}</td>
+                            <td className="border border-slate-500 px-3 py-2.5 text-right tabular-nums">{c && c.ieA > 0 ? c.ieA.toFixed(5) : '—'}</td>
                             <td className="border border-slate-500 px-3 py-2.5 text-right tabular-nums">{c && c.leMax > 0 ? c.leMax.toFixed(2) : '—'}</td>
                           </tr>
                         );
