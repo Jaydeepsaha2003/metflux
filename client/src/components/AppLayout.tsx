@@ -218,7 +218,7 @@ export const AppLayout = () => {
       >
         {/* Top bar — global app logo + mobile close button. On desktop the rail
             expands on hover, so there's no manual collapse toggle. */}
-        <div className="flex items-center gap-2 border-b border-white/5 px-3 py-4 min-w-0">
+        <div className="flex items-center gap-2 border-b border-white/5 px-3 py-4 min-w-0" style={{ paddingTop: 'calc(1rem + env(safe-area-inset-top))' }}>
           {appLogo
             ? <img src={appLogo} alt="Logo" className="h-8 w-8 shrink-0 rounded object-contain" />
             : <PanelLeftClose className="h-5 w-5 shrink-0 text-white/25" />}
@@ -412,7 +412,10 @@ const PageHeader = ({ onToggleSidebar }: { onToggleSidebar: () => void }) => {
   // Show only the first word of the company name (e.g. "Lakshay Steel Industries" → "Lakshay").
   const firstWord = (active?.companyName ?? 'Metflux').trim().split(/\s+/)[0];
   return (
-    <header className="page-header flex items-center justify-between border-b border-slate-200 bg-white/70 px-3 sm:px-6 py-3 backdrop-blur print:hidden">
+    <header
+      className="page-header flex items-center justify-between border-b border-slate-200 bg-white/70 px-3 sm:px-6 py-3 backdrop-blur print:hidden"
+      style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top))' }}
+    >
       <div className="flex items-center gap-2.5 min-w-0">
         {/* Sidebar toggle — mobile drawer open/close, desktop collapse/expand. */}
         <button

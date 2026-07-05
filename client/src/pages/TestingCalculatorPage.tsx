@@ -11,10 +11,11 @@ import {
 import html2pdf from 'html2pdf.js';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
-import { fluxTestCalc, rectangularCalc, rectangularFluxTestCalc } from '@/lib/calc';
+import { fluxTestCalc, rectangularCalc, rectangularFluxTestCalc, nanoTestCalc } from '@/lib/calc';
 import { todayStamp } from '@/lib/excel';
 
-type CoreType = 'TOROIDAL' | 'RECTANGULAR';
+type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO';
+const coreLabel: Record<CoreType, string> = { TOROIDAL: 'Toroidal', RECTANGULAR: 'Rectangular', NANO: 'Nano' };
 type FluxPoint = { flux: number; ateCm: number };
 type FluxGroup = { grade: string; points: FluxPoint[] };
 type Item = {
@@ -27,6 +28,8 @@ type Item = {
   turns: string;
   grade: string;
   fluxes: number[];      // selected flux levels (T)
+  freq: string;          // nano only — frequency (Hz)
+  sfac: string;          // nano only — stacking factor
   source?: string;       // e.g. PO number when imported
 };
 type PoSummaryItem = {
@@ -42,19 +45,20 @@ type CompanyDetail = {
 let seq = 0;
 const mkItem = (p: Partial<Item> = {}): Item => ({
   key: `it_${++seq}`, coreType: 'TOROIDAL', id: '', od: '', ht: '',
-  id1: '', id2: '', od1: '', od2: '', turns: '', grade: '', fluxes: [], ...p,
+  id1: '', id2: '', od1: '', od2: '', turns: '', grade: '', fluxes: [], freq: '', sfac: '', ...p,
 });
 
-const numOk = (it: Item) => it.coreType === 'TOROIDAL'
-  ? (+it.id > 0 && +it.od > 0 && +it.ht > 0 && +it.turns > 0 && +it.od > +it.id)
-  : (+it.id1 > 0 && +it.id2 > 0 && +it.od1 > 0 && +it.od2 > 0 && +it.ht > 0 && +it.turns > 0 && +it.od1 > +it.id1 && +it.od2 > +it.id2);
+// Toroidal + Nano share the OD/ID/HT geometry; only Rectangular differs.
+const numOk = (it: Item) => it.coreType === 'RECTANGULAR'
+  ? (+it.id1 > 0 && +it.id2 > 0 && +it.od1 > 0 && +it.od2 > 0 && +it.ht > 0 && +it.turns > 0 && +it.od1 > +it.id1 && +it.od2 > +it.id2)
+  : (+it.id > 0 && +it.od > 0 && +it.ht > 0 && +it.turns > 0 && +it.od > +it.id);
 
 const rectGeom = (it: Item) =>
   rectangularCalc({ id1: +it.id1, id2: +it.id2, od1: +it.od1, od2: +it.od2, ht: +it.ht, pcs: 0 });
 
-const measureOf = (it: Item) => it.coreType === 'TOROIDAL'
-  ? `${+it.id} x ${+it.od} x ${+it.ht}`
-  : rectGeom(it).measure;
+const measureOf = (it: Item) => it.coreType === 'RECTANGULAR'
+  ? rectGeom(it).measure
+  : `${+it.id} x ${+it.od} x ${+it.ht}`;
 
 /* Parse a toroidal measure "180 x 110 x 200" → { id, od, ht }. */
 const parseToroidal = (measure: string) => {
@@ -81,12 +85,16 @@ export const TestingCalculatorPage = () => {
     queryKey: ['flux-grades-grouped', 'RECTANGULAR'],
     queryFn: () => api<{ grades: FluxGroup[] }>('/flux-grades/grouped?coreType=RECTANGULAR'),
   });
+  const nanoQ = useQuery({
+    queryKey: ['flux-grades-grouped', 'NANO'],
+    queryFn: () => api<{ grades: FluxGroup[] }>('/flux-grades/grouped?coreType=NANO'),
+  });
   const { data: company } = useQuery({
     queryKey: ['company-me'],
     queryFn: () => api<CompanyDetail>('/companies/me'),
   });
 
-  const gradesFor = (ct: CoreType) => (ct === 'TOROIDAL' ? torQ.data?.grades : rectQ.data?.grades) ?? [];
+  const gradesFor = (ct: CoreType) => (ct === 'TOROIDAL' ? torQ.data?.grades : ct === 'RECTANGULAR' ? rectQ.data?.grades : nanoQ.data?.grades) ?? [];
   const pointsFor = (ct: CoreType, grade: string) => gradesFor(ct).find((g) => g.grade === grade)?.points ?? [];
   const ateFor = (ct: CoreType, grade: string, flux: number) => pointsFor(ct, grade).find((p) => p.flux === flux)?.ateCm ?? 0;
 
@@ -97,7 +105,8 @@ export const TestingCalculatorPage = () => {
   // Changing a row's core type resets its dims / grade / flux (they differ per shape).
   const setItemCore = (key: string, coreType: CoreType) => setItems((its) => its.map((i) => (
     i.key === key
-      ? { ...i, coreType, id: '', od: '', ht: '', id1: '', id2: '', od1: '', od2: '', grade: '', fluxes: [] }
+      ? { ...i, coreType, id: '', od: '', ht: '', id1: '', id2: '', od1: '', od2: '', grade: '', fluxes: [],
+          freq: coreType === 'NANO' ? '50' : '', sfac: coreType === 'NANO' ? '0.8' : '' }
       : i
   )));
 
@@ -119,6 +128,10 @@ export const TestingCalculatorPage = () => {
   const cell = (it: Item, flux: number) => {
     if (!numOk(it) || !it.fluxes.includes(flux)) return null;
     const ateCm = ateFor(it.coreType, it.grade, flux);
+    if (it.coreType === 'NANO') {
+      const r = nanoTestCalc({ id: +it.id, od: +it.od, ht: +it.ht, turns: +it.turns, flux, ateCm, freq: +it.freq || 50, sfac: +it.sfac || 0.8 });
+      return { volt: r.testVoltage, leMax: r.testCurrent };
+    }
     if (it.coreType === 'TOROIDAL') {
       const r = fluxTestCalc({ id: +it.id, od: +it.od, ht: +it.ht, turns: +it.turns, flux, ateCm });
       return { volt: r.testVoltage, leMax: r.testCurrent };
@@ -131,7 +144,7 @@ export const TestingCalculatorPage = () => {
   // Unified export columns — a Core + Measure pair keeps mixed rows aligned.
   const fixedCols = ['CORE', 'MEASURE', 'TURNS', 'GRADE'];
   const dimsOf = (it: Item): (string | number)[] => [
-    it.coreType === 'TOROIDAL' ? 'Toroidal' : 'Rectangular',
+    coreLabel[it.coreType],
     measureOf(it),
     +it.turns,
     it.grade || '—',
@@ -140,10 +153,11 @@ export const TestingCalculatorPage = () => {
   const addFromPo = (po: PoSummaryItem) => {
     const ct = po.coreType;
     const grade = gradesFor(ct).some((g) => g.grade === po.grade) ? po.grade : '';
-    const dims = ct === 'TOROIDAL' ? parseToroidal(po.measure) : parseRectangular(po.measure);
+    const dims = ct === 'RECTANGULAR' ? parseRectangular(po.measure) : parseToroidal(po.measure);
     setItems((its) => [...its, mkItem({
       coreType: ct, ...dims,
       turns: po.turns != null ? String(po.turns) : '',
+      freq: ct === 'NANO' ? '50' : '', sfac: ct === 'NANO' ? '0.8' : '',
       grade, fluxes: grade ? pointsFor(ct, grade).map((p) => p.flux) : [], source: po.poNumber,
     })]);
   };
@@ -260,9 +274,10 @@ export const TestingCalculatorPage = () => {
           const pts = pointsFor(it.coreType, it.grade);
           const rowGrades = gradesFor(it.coreType);
           const g = it.coreType === 'RECTANGULAR' && numOk(it) ? rectGeom(it) : null;
-          const isTor = it.coreType === 'TOROIDAL';
+          const isNano = it.coreType === 'NANO';
+          const accent = it.coreType === 'TOROIDAL' ? 'border-l-amber-400' : isNano ? 'border-l-violet-400' : 'border-l-rose-400';
           return (
-            <div key={it.key} className={cn('card border-l-4 p-4 transition', isTor ? 'border-l-amber-400' : 'border-l-rose-400')}>
+            <div key={it.key} className={cn('card border-l-4 p-4 transition', accent)}>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-3">
                   <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -270,11 +285,11 @@ export const TestingCalculatorPage = () => {
                   </span>
                   {/* Per-row core type selector */}
                   <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-                    {(['TOROIDAL', 'RECTANGULAR'] as CoreType[]).map((ct) => (
+                    {(['TOROIDAL', 'RECTANGULAR', 'NANO'] as CoreType[]).map((ct) => (
                       <button key={ct} onClick={() => setItemCore(it.key, ct)}
                         className={cn('rounded-md px-3 py-1 text-xs font-medium transition',
                           it.coreType === ct ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900')}>
-                        {ct === 'TOROIDAL' ? 'Toroidal' : 'Rectangular'}
+                        {coreLabel[ct]}
                       </button>
                     ))}
                   </div>
@@ -282,19 +297,27 @@ export const TestingCalculatorPage = () => {
                 <button onClick={() => remove(it.key)} className="btn-ghost text-red-600 hover:bg-red-50" title="Remove item"><Trash2 className="h-4 w-4" /></button>
               </div>
 
-              {isTor ? (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-                  <Field label="ID (mm)"><input className="input" type="number" inputMode="decimal" value={it.id} onChange={(e) => patch(it.key, { id: e.target.value })} /></Field>
-                  <Field label="OD (mm)"><input className="input" type="number" inputMode="decimal" value={it.od} onChange={(e) => patch(it.key, { od: e.target.value })} /></Field>
-                  <Field label="HT (mm)"><input className="input" type="number" inputMode="decimal" value={it.ht} onChange={(e) => patch(it.key, { ht: e.target.value })} /></Field>
-                  <Field label="Turns"><input className="input" type="number" inputMode="numeric" value={it.turns} onChange={(e) => patch(it.key, { turns: e.target.value })} /></Field>
-                  <Field label="Grade">
-                    <select className="input" value={it.grade} onChange={(e) => onGrade(it.key, e.target.value)}>
-                      <option value="">— Select —</option>
-                      {rowGrades.map((gr) => <option key={gr.grade} value={gr.grade}>{gr.grade}</option>)}
-                    </select>
-                  </Field>
-                </div>
+              {it.coreType !== 'RECTANGULAR' ? (
+                <>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                    <Field label="ID (mm)"><input className="input" type="number" inputMode="decimal" value={it.id} onChange={(e) => patch(it.key, { id: e.target.value })} /></Field>
+                    <Field label="OD (mm)"><input className="input" type="number" inputMode="decimal" value={it.od} onChange={(e) => patch(it.key, { od: e.target.value })} /></Field>
+                    <Field label="HT (mm)"><input className="input" type="number" inputMode="decimal" value={it.ht} onChange={(e) => patch(it.key, { ht: e.target.value })} /></Field>
+                    <Field label="Turns"><input className="input" type="number" inputMode="numeric" value={it.turns} onChange={(e) => patch(it.key, { turns: e.target.value })} /></Field>
+                    <Field label="Grade">
+                      <select className="input" value={it.grade} onChange={(e) => onGrade(it.key, e.target.value)}>
+                        <option value="">— Select —</option>
+                        {rowGrades.map((gr) => <option key={gr.grade} value={gr.grade}>{gr.grade}</option>)}
+                      </select>
+                    </Field>
+                  </div>
+                  {isNano && (
+                    <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <Field label="Frequency (Hz)"><input className="input" type="number" inputMode="decimal" value={it.freq} onChange={(e) => patch(it.key, { freq: e.target.value })} /></Field>
+                      <Field label="Stacking factor"><input className="input" type="number" inputMode="decimal" value={it.sfac} onChange={(e) => patch(it.key, { sfac: e.target.value })} /></Field>
+                    </div>
+                  )}
+                </>
               ) : (
                 <>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
@@ -323,7 +346,7 @@ export const TestingCalculatorPage = () => {
 
               {rowGrades.length === 0 && (
                 <p className="mt-2 text-xs text-amber-600">
-                  No {isTor ? 'toroidal' : 'rectangular'} flux grades yet — add them under Settings → Flux Grades (Volt still computes without a grade).
+                  No {coreLabel[it.coreType].toLowerCase()} flux grades yet — add them under Settings → Flux Grades (Volt still computes without a grade).
                 </p>
               )}
 

@@ -13,7 +13,7 @@ router.use(requireAuth, resolveTenant);
 const inputSchema = z.object({
   grade:    z.string().trim().min(1).max(80),
   flux:     z.coerce.number().positive().max(10),
-  coreType: z.enum(['TOROIDAL', 'RECTANGULAR']),
+  coreType: z.enum(['TOROIDAL', 'RECTANGULAR', 'NANO']),
   ateCm:    z.coerce.number().nonnegative().max(50).optional(),
   notes:    z.string().trim().max(200).optional().nullable(),
 });
@@ -30,7 +30,7 @@ router.get('/', asyncHandler(async (req, res) => {
 /* ---------- GET /api/flux-grades/grouped — for the calculator ---------- */
 router.get('/grouped', asyncHandler(async (req, res) => {
   const { coreType } = z.object({
-    coreType: z.enum(['TOROIDAL', 'RECTANGULAR']).optional(),
+    coreType: z.enum(['TOROIDAL', 'RECTANGULAR', 'NANO']).optional(),
   }).parse(req.query);
 
   let sql = 'SELECT * FROM `FluxGrade` WHERE `companyId` = ?';

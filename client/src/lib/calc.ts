@@ -108,6 +108,31 @@ export const fluxTestCalc = ({
   return { area, meanPath, testVoltage, testCurrent };
 };
 
+// Nano-core testing parameters — ported from the "nano core tech data" sheet.
+// Same maths for SS-case and Epoxy/Plastic-case; only the AT/cm benchmark (from
+// the grade) differs.
+//   A (m²)     = ((OD − ID)/2 × HT) / 1e6
+//   V (Volts)  = 4.44 × Bmax(T) × Ns × A × Sfac × f      (Ns = turns)
+//   MML (cm)   = (OD + ID)/2 × 22/70
+//   Ie max(mA) = (AT/cm × MML / Np) × 1000               (Np = turns)
+export const nanoTestCalc = ({
+  id, od, ht, turns, flux, ateCm, freq = 50, sfac = 0.8,
+}: {
+  id: number; od: number; ht: number; turns: number;
+  flux: number; ateCm: number; freq?: number; sfac?: number;
+}) => {
+  const geomOk = id > 0 && od > 0 && ht > 0 && od > id && turns > 0;
+  const area = geomOk ? ((od - id) / 2 * ht) / 1_000_000 : 0;            // sq.m
+  const meanPath = geomOk ? round3(((od + id) / 2) * 22 / 70) : 0;        // cm (MML)
+  const testVoltage = geomOk && flux > 0
+    ? Math.round(4.44 * flux * turns * area * sfac * freq * 1000) / 1000  // Volts, 3 dp
+    : 0;
+  const testCurrent = geomOk && ateCm > 0
+    ? Math.round((ateCm * meanPath / turns) * 1000 * 100) / 100           // mA, 2 dp
+    : 0;
+  return { area, meanPath, testVoltage, testCurrent };
+};
+
 // Rectangular flux-test calculation. The geometry helper rectangularCalc()
 // already computes the area (coreAc) and mean magnetic path (coreMl); we only
 // need to feed those plus turns/flux/ATe-cm into the shared V & Ie-max math.

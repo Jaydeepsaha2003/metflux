@@ -12,7 +12,7 @@ import { cn } from '@/lib/cn';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useConfirm } from '@/hooks/useConfirm';
 
-type CoreType = 'TOROIDAL' | 'RECTANGULAR';
+type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO';
 type Row = {
   id: string;
   grade: string;
@@ -27,8 +27,10 @@ type GradeOption = { grade: string; materials: { id: string; material: string }[
 const coreBadge: Record<CoreType, string> = {
   TOROIDAL:    'bg-amber-50 text-amber-700 border border-amber-200',
   RECTANGULAR: 'bg-rose-50 text-rose-700 border border-rose-200',
+  NANO:        'bg-violet-50 text-violet-700 border border-violet-200',
 };
-const coreShort: Record<CoreType, string> = { TOROIDAL: 'Toro', RECTANGULAR: 'Rect' };
+const coreShort: Record<CoreType, string> = { TOROIDAL: 'Toro', RECTANGULAR: 'Rect', NANO: 'Nano' };
+const coreName: Record<CoreType, string> = { TOROIDAL: 'Toroidal', RECTANGULAR: 'Rectangular', NANO: 'Nano' };
 
 export const FluxGradesPage = () => {
   const queryClient = useQueryClient();
@@ -131,7 +133,7 @@ export const FluxGradesPage = () => {
         const notes    = pick(row, 'Notes', 'notes');
 
         if (!grade || fluxRaw == null) continue;            // skip blank rows silently
-        const coreType = ctRaw === 'RECTANGULAR' ? 'RECTANGULAR' : 'TOROIDAL';
+        const coreType: CoreType = ctRaw === 'RECTANGULAR' ? 'RECTANGULAR' : ctRaw === 'NANO' ? 'NANO' : 'TOROIDAL';
         rows.push({
           grade,
           flux:  Number(fluxRaw),
@@ -391,6 +393,16 @@ const AddRow = ({
                 : 'text-slate-600 hover:text-slate-900'
             )}
           >Rectangular</button>
+          <button
+            type="button"
+            onClick={() => setCoreType('NANO')}
+            className={cn(
+              'rounded-md px-3 py-1 font-medium transition',
+              coreType === 'NANO'
+                ? 'bg-white text-violet-700 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            )}
+          >Nano</button>
         </div>
       </div>
 
@@ -508,7 +520,7 @@ const EditableRow = ({
         <td className="px-4 py-3 font-medium text-slate-900">{row.grade}</td>
         <td className="px-4 py-3">
           <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', coreBadge[row.coreType])}>
-            {row.coreType === 'TOROIDAL' ? 'Toroidal' : 'Rectangular'}
+            {coreName[row.coreType]}
           </span>
         </td>
         <td className="px-4 py-3 text-right tabular-nums font-mono">{row.flux.toFixed(2)}</td>
@@ -682,5 +694,13 @@ const CoreTogglePill = ({ value, onChange }: { value: CoreType; onChange: (v: Co
         value === 'RECTANGULAR' ? 'bg-white text-rose-700 shadow-sm' : 'text-slate-600'
       )}
     >Rect</button>
+    <button
+      type="button"
+      onClick={() => onChange('NANO')}
+      className={cn(
+        'rounded px-2 py-0.5 font-medium transition',
+        value === 'NANO' ? 'bg-white text-violet-700 shadow-sm' : 'text-slate-600'
+      )}
+    >Nano</button>
   </div>
 );
