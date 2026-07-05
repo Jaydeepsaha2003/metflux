@@ -124,13 +124,15 @@ export const nanoTestCalc = ({
   const geomOk = id > 0 && od > 0 && ht > 0 && od > id && turns > 0;
   const area = geomOk ? ((od - id) / 2 * ht) / 1_000_000 : 0;            // sq.m
   const meanPath = geomOk ? round3(((od + id) / 2) * 22 / 70) : 0;        // cm (MML)
-  const testVoltage = geomOk && flux > 0
-    ? Math.round(4.44 * flux * turns * area * sfac * freq * 1000) / 1000  // Volts, 3 dp
-    : 0;
-  const testCurrent = geomOk && ateCm > 0
-    ? Math.round((ateCm * meanPath / turns) * 1000 * 100) / 100           // mA, 2 dp
-    : 0;
-  return { area, meanPath, testVoltage, testCurrent };
+  const rawV = geomOk && flux > 0 ? 4.44 * flux * turns * area * sfac * freq : 0;      // Volts
+  const rawIeA = geomOk && ateCm > 0 ? (ateCm * meanPath / turns) : 0;                  // Amps
+  return {
+    area, meanPath,
+    testVoltage:   Math.round(rawV * 1000) / 1000,        // V, 3 dp
+    testVoltageMv: Math.round(rawV * 1000 * 100) / 100,   // mV, 2 dp
+    testCurrent:   Math.round(rawIeA * 1000 * 100) / 100, // mA, 2 dp
+    testCurrentA:  Math.round(rawIeA * 100000) / 100000,  // A, 5 dp
+  };
 };
 
 // Rectangular flux-test calculation. The geometry helper rectangularCalc()

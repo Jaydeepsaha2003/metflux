@@ -1422,7 +1422,7 @@ export const NanoForm = ({
               dense
               value={flux > 0 ? String(flux) : ''}
               onChange={(v) => setFlux(parseFloat(v) || 0)}
-              options={fluxPoints.map((p) => ({ value: String(p.flux), label: `${Math.round(p.flux * 10000)} G` }))}
+              options={fluxPoints.map((p) => ({ value: String(p.flux), label: `${p.flux} T (${Math.round(p.flux * 10000)} G)` }))}
               placeholder={
                 !grade ? 'Pick grade first'
                 : !hasFluxData ? `No test data for "${grade}"`
@@ -1434,10 +1434,10 @@ export const NanoForm = ({
         </div>
         {flux > 0 && (
           <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-4">
-            <Stat label="Bmax" value={`${Math.round(flux * 10000)} G`} />
+            <Stat label="Bmax (G)" value={`${Math.round(flux * 10000)} G`} />
             <Stat label="AT/cm" value={ateCm > 0 ? ateCm.toFixed(4) : '—'} />
-            <Stat label="V (Volts)" value={test.testVoltage > 0 ? test.testVoltage.toFixed(3) : '—'} />
-            <Stat label="Ie max (mA)" value={test.testCurrent > 0 ? test.testCurrent.toFixed(2) : (flux > 0 && ateCm === 0 ? 'Set AT/cm' : '—')} />
+            <Stat label="V (mV)" value={test.testVoltageMv > 0 ? test.testVoltageMv.toFixed(2) : '—'} />
+            <Stat label="Ie max (A)" value={test.testCurrentA > 0 ? test.testCurrentA.toFixed(5) : (flux > 0 && ateCm === 0 ? 'Set AT/cm' : '—')} />
           </div>
         )}
       </div>
