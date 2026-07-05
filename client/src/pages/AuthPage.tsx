@@ -4,6 +4,7 @@ import { Lock, AtSign, Loader2, Eye, EyeOff } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import type { LoginPayload } from '@/store/auth';
+import { applyDomainCompany } from '@/lib/domainCompany';
 import { cn } from '@/lib/cn';
 
 const getBrand = () => {
@@ -32,7 +33,7 @@ export const AuthPage = () => {
         method: 'POST',
         json: { identifier, password },
       });
-      setSession(data);
+      setSession(await applyDomainCompany(data));
       navigate('/', { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Sign in failed');

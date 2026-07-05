@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, Check, ChevronsUpDown, ShieldCheck } from 'lucide-react';
+import { Building2, Check, ChevronsUpDown, ShieldCheck, Star } from 'lucide-react';
 
 const CompanyAvatar = ({ name, logoUrl, size = 'md' }: { name?: string; logoUrl?: string | null; size?: 'sm' | 'md' }) => {
   const cls = size === 'sm' ? 'h-6 w-6 rounded-md' : 'h-7 w-7 rounded-md';
@@ -15,6 +15,7 @@ const CompanyAvatar = ({ name, logoUrl, size = 'md' }: { name?: string; logoUrl?
 };
 import { useAuthStore, type LoginPayload } from '@/store/auth';
 import { api } from '@/lib/api';
+import { getDomainCompany, setDomainCompany } from '@/lib/domainCompany';
 import { cn } from '@/lib/cn';
 
 // Sidebar control that shows the active company and lets the user switch
@@ -23,6 +24,14 @@ export const CompanySwitcher = () => {
   const { user, memberships, activeCompanyId, setSession } = useAuthStore();
   const [open, setOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [defaultCompany, setDefaultCompany] = useState<string | null>(getDomainCompany());
+
+  const toggleDefault = (companyId: string) => {
+    const next = defaultCompany === companyId ? null : companyId;
+    setDomainCompany(next);
+    setDefaultCompany(next);
+  };
+  const host = typeof window !== 'undefined' ? window.location.hostname : 'this site';
   const queryClient = useQueryClient();
   const ref = useRef<HTMLDivElement>(null);
 
@@ -116,13 +125,13 @@ export const CompanySwitcher = () => {
               </div>
               <ul className="max-h-60 overflow-y-auto pb-1">
                 {memberships.map((m) => (
-                  <li key={m.companyId}>
+                  <li key={m.companyId} className="flex items-center">
                     <button
                       type="button"
                       onClick={() => switchTo(m.companyId)}
                       disabled={busyId !== null}
                       className={cn(
-                        'flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition',
+                        'flex flex-1 min-w-0 items-center gap-2.5 px-3 py-2 text-left text-sm transition',
                         m.companyId === activeCompanyId
                           ? 'bg-white/5 text-white'
                           : 'text-white/80 hover:bg-white/5 hover:text-white'
@@ -134,6 +143,14 @@ export const CompanySwitcher = () => {
                         <div className="truncate text-[11px] text-white/50">{m.role}</div>
                       </div>
                       {m.companyId === activeCompanyId && <Check className="h-4 w-4 text-brand-400" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleDefault(m.companyId)}
+                      title={defaultCompany === m.companyId ? `Default on ${host}` : `Set as default on ${host}`}
+                      className="shrink-0 px-2.5 py-2 text-white/30 hover:text-white/70"
+                    >
+                      <Star className={cn('h-4 w-4', defaultCompany === m.companyId && 'fill-amber-400 text-amber-400')} />
                     </button>
                   </li>
                 ))}
@@ -149,13 +166,13 @@ export const CompanySwitcher = () => {
               </div>
               <ul className="max-h-60 overflow-y-auto pb-1">
                 {otherCompanies.map((c) => (
-                  <li key={c.id}>
+                  <li key={c.id} className="flex items-center">
                     <button
                       type="button"
                       onClick={() => switchTo(c.id)}
                       disabled={busyId !== null}
                       className={cn(
-                        'flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition',
+                        'flex flex-1 min-w-0 items-center gap-2.5 px-3 py-2 text-left text-sm transition',
                         c.id === activeCompanyId
                           ? 'bg-white/5 text-white'
                           : 'text-white/80 hover:bg-white/5 hover:text-white'
@@ -168,11 +185,24 @@ export const CompanySwitcher = () => {
                       </div>
                       {c.id === activeCompanyId && <Check className="h-4 w-4 text-brand-400" />}
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleDefault(c.id)}
+                      title={defaultCompany === c.id ? `Default on ${host}` : `Set as default on ${host}`}
+                      className="shrink-0 px-2.5 py-2 text-white/30 hover:text-white/70"
+                    >
+                      <Star className={cn('h-4 w-4', defaultCompany === c.id && 'fill-amber-400 text-amber-400')} />
+                    </button>
                   </li>
                 ))}
               </ul>
             </>
           )}
+
+          <div className="border-t border-white/5 px-3 py-2 text-[10.5px] leading-snug text-white/40">
+            <Star className="inline h-3 w-3 -mt-0.5 mr-1 fill-amber-400 text-amber-400" />
+            Starred company opens by default on <span className="text-white/60">{host}</span> (and stays selected on refresh).
+          </div>
 
           {user?.isPlatformAdmin && memberships.length === 0 && otherCompanies.length === 0 && (
             <div className="px-3 py-4 text-center text-[12px] text-white/50">

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore, type LoginPayload } from '@/store/auth';
 import { api } from '@/lib/api';
+import { applyDomainCompany } from '@/lib/domainCompany';
 
 export const RequireAuth = ({ children }: { children: React.ReactNode }) => {
   const { user, accessToken, setSession, clear } = useAuthStore();
@@ -14,7 +15,11 @@ export const RequireAuth = ({ children }: { children: React.ReactNode }) => {
     (async () => {
       try {
         const data = await api<LoginPayload>('/auth/refresh', { method: 'POST' });
-        if (!cancelled && data?.user && data.accessToken) setSession(data);
+        if (!cancelled && data?.user && data.accessToken) {
+          // Honour this domain's preferred company so it stays selected on refresh.
+          const applied = await applyDomainCompany(data);
+          if (!cancelled) setSession(applied);
+        }
       } catch {
         if (!cancelled) clear();
       } finally {
