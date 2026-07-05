@@ -1280,11 +1280,15 @@ export const NanoForm = ({
   const [pcs, setPcs] = useState(0);
   const [nanoPrice, setNanoPrice] = useState(0);
   const [casePrice, setCasePrice] = useState(0);
+  // Rate basis: AUTO = price from Nano+Case; or a manual Per-Kg / Per-Pcs rate.
+  const [basis, setBasis] = useState<'AUTO' | 'PER_KG' | 'PER_PCS'>('AUTO');
+  const [rate, setRate] = useState(0);
 
   useEffect(() => {
     if (!prefill || prefill.coreType !== 'NANO') return;
     setGrade(prefill.grade);
     setMaterial(prefill.material);
+    if (prefill.rateBasis === 'PER_KG' || prefill.rateBasis === 'PER_PCS') setBasis(prefill.rateBasis);
     onPrefillConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill]);
@@ -1294,12 +1298,20 @@ export const NanoForm = ({
     [id, od, ht, pcs, nanoPrice, casePrice]
   );
   const geomOk = id > 0 && od > 0 && ht > 0 && od > id;
+
+  // Effective selling rate — the Nano+Case price for AUTO, else the manual rate.
+  const effBasis: 'PER_KG' | 'PER_PCS' = basis === 'AUTO' ? 'PER_PCS' : basis;
+  const effRate = basis === 'AUTO' ? calc.pricePerPc : rate;
+  const ratePerKg = effRate > 0 ? (effBasis === 'PER_KG' ? effRate : (calc.coreWeight > 0 ? effRate / calc.coreWeight : 0)) : 0;
+  const ratePerPc = effRate > 0 ? (effBasis === 'PER_KG' ? effRate * calc.coreWeight : effRate) : 0;
+  const lineTotal = effRate > 0 ? (effBasis === 'PER_KG' ? effRate * calc.totalWeight : effRate * pcs) : 0;
   const { alert: showAlert, confirmDialog: alertDialog } = useConfirm();
 
   const reset = () => {
     setGrade(''); setMaterial('');
     setId(0); setOd(0); setHt(0); setPcs(0);
     setNanoPrice(0); setCasePrice(0);
+    setBasis('AUTO'); setRate(0);
   };
 
   const add = async () => {
@@ -1318,11 +1330,12 @@ export const NanoForm = ({
       measure: calc.measure,
       id1: id, od1: od, ht, pcs,
       weightPerPc: calc.coreWeight, totalWeight: calc.totalWeight,
-      // Nano is priced per piece = core×nanoPrice + case×casePrice.
-      rateBasis: calc.pricePerPc > 0 ? 'PER_PCS' : undefined,
-      rateValue: calc.pricePerPc > 0 ? calc.pricePerPc : undefined,
-      ratePerPc: calc.pricePerPc > 0 ? calc.pricePerPc : undefined,
-      totalAmount: calc.totalAmount > 0 ? calc.totalAmount : undefined,
+      // AUTO uses the Nano+Case price (per piece); otherwise the manual rate.
+      rateBasis: effRate > 0 ? effBasis : undefined,
+      rateValue: effRate > 0 ? +effRate.toFixed(4) : undefined,
+      ratePerKg: effRate > 0 ? +ratePerKg.toFixed(4) : undefined,
+      ratePerPc: effRate > 0 ? +ratePerPc.toFixed(4) : undefined,
+      totalAmount: effRate > 0 ? +lineTotal.toFixed(2) : undefined,
       nanoPrice: nanoPrice > 0 ? nanoPrice : undefined,
       casePrice: casePrice > 0 ? casePrice : undefined,
       caseWeight: calc.caseWeight > 0 ? calc.caseWeight : undefined,
@@ -1347,10 +1360,24 @@ export const NanoForm = ({
         <NumField label="Case Price (₹/kg)" value={casePrice} onChange={setCasePrice} />
       </div>
 
-      {/* Row 2 — dimensions + pcs */}
+      {/* Rate basis — auto (Nano+Case) or a manual per-kg / per-pcs rate */}
+      <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-2 md:grid-cols-4">
+        <Field label="Rate Basis">
+          <select className={inputCls} value={basis} onChange={(e) => setBasis(e.target.value as 'AUTO' | 'PER_KG' | 'PER_PCS')}>
+            <option value="AUTO">Nano + Case (auto)</option>
+            <option value="PER_KG">Per Kg</option>
+            <option value="PER_PCS">Per Pcs</option>
+          </select>
+        </Field>
+        {basis !== 'AUTO' && (
+          <NumField label={basis === 'PER_KG' ? 'Rate (₹/kg)' : 'Rate (₹/pcs)'} value={rate} onChange={setRate} />
+        )}
+      </div>
+
+      {/* Row 2 — dimensions (ID × OD × HT) + pcs */}
       <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-2 sm:grid-cols-4">
-        <NumField label="OD" value={od} onChange={setOd} />
         <NumField label="ID" value={id} onChange={setId} />
+        <NumField label="OD" value={od} onChange={setOd} />
         <NumField label="HT" value={ht} onChange={setHt} />
         <NumField label="Pcs" value={pcs} onChange={setPcs} />
       </div>
@@ -1363,10 +1390,11 @@ export const NanoForm = ({
           <Stat label="Total Wt (kg)" value={calc.totalWeight.toFixed(3)} />
           <Stat label="Case OD × ID"  value={geomOk ? `${calc.caseOd} × ${calc.caseId}` : '—'} />
         </div>
-        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 border-t border-violet-100 pt-2 sm:grid-cols-3">
-          <Stat label="Measure"    value={calc.measure} />
-          <Stat label="Price / Pc" value={`₹${calc.pricePerPc.toFixed(2)}`} />
-          <Stat label="Line Total" value={`₹${calc.totalAmount.toFixed(2)}`} accent="primary" />
+        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 border-t border-violet-100 pt-2 sm:grid-cols-4">
+          <Stat label="Measure"        value={calc.measure} />
+          <Stat label="Nano+Case / Pc" value={`₹${calc.pricePerPc.toFixed(2)}`} />
+          <Stat label="Rate / Kg"      value={`₹${ratePerKg.toFixed(2)}`} />
+          <Stat label="Line Total"     value={`₹${lineTotal.toFixed(2)}`} accent="primary" />
         </div>
       </div>
 
