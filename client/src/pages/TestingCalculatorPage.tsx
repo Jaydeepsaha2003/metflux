@@ -2,7 +2,7 @@
 // cores. Each row picks its own core type; the inputs, flux grades and Volt +
 // Ie-max math adapt per row (same math as the PO / Testing Report). Export the
 // lab sheet as Excel or a styled PDF.
-import { useMemo, useRef, useState, Fragment } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import {
@@ -191,11 +191,11 @@ export const TestingCalculatorPage = () => {
     await new Promise((r) => requestAnimationFrame(r));
     try {
       await html2pdf().set({
-        margin: 6,
-        filename: `testing-calc-${todayStamp()}.pdf`,
+        margin: 10,
+        filename: `testing-report-${todayStamp()}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff', windowWidth: 1040 },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+        html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff', windowWidth: 720 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
         pagebreak: { mode: ['css', 'legacy'], avoid: ['tr'] },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any).from(el).save();
@@ -379,81 +379,81 @@ export const TestingCalculatorPage = () => {
 
       {importOpen && <ImportDialog onClose={() => setImportOpen(false)} onAdd={addFromPo} />}
 
-      {/* ── Offscreen printable document for the PDF ── */}
-      <div style={{ position: 'fixed', left: -10000, top: 0, width: 1040 }} aria-hidden>
-        <div ref={printRef} className="bg-white text-black" style={{ width: 1040, fontFamily: 'Arial, sans-serif' }}>
-          <div className="flex items-center gap-5 border-b-2 border-black px-6 pt-4 pb-3">
-            {company?.logoUrl
-              ? <img src={company.logoUrl} alt={company.name} className="h-20 w-20 object-contain shrink-0" />
-              : <div className="flex h-20 w-20 items-center justify-center rounded-lg bg-slate-100 text-xs text-slate-400">LOGO</div>}
-            <div className="min-w-0">
-              <div className="text-lg font-black uppercase tracking-wide leading-tight">{company?.name ?? 'Company Name'}</div>
-              {addressLine && <div className="mt-0.5 max-w-2xl text-[11px] font-semibold leading-snug text-slate-700">{addressLine}</div>}
-              {(company?.phone || company?.whatsappNumber || company?.email) && (
-                <div className="mt-0.5 text-[11px] text-slate-600">
-                  <span className="font-semibold">Contact:</span> {[company.phone, company.whatsappNumber, company.email].filter(Boolean).join('  |  ')}
+      {/* ── Offscreen printable document — one size per A4 page ── */}
+      <div style={{ position: 'fixed', left: -10000, top: 0, width: 720 }} aria-hidden>
+        <div ref={printRef} style={{ width: 720, fontFamily: 'Poppins, sans-serif', color: '#000', background: '#fff' }}>
+          {exportRows.map((it, idx) => {
+            const core = it.coreType === 'TOROIDAL' ? 'Toroidal' : 'Rectangular';
+            const measure = measureOf(it);
+            const n = it.fluxes.length;
+            return (
+              <div key={it.key} style={idx > 0 ? { pageBreakBefore: 'always' } : undefined}>
+                {/* Company header */}
+                <div className="flex items-center gap-4 border-b-2 border-black px-2 pb-3 pt-2">
+                  {company?.logoUrl
+                    ? <img src={company.logoUrl} alt={company.name} className="h-16 w-16 shrink-0 object-contain" />
+                    : <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-slate-100 text-xs text-slate-400">LOGO</div>}
+                  <div className="min-w-0">
+                    <div className="text-xl font-bold uppercase leading-tight tracking-wide">{company?.name ?? 'Company Name'}</div>
+                    {addressLine && <div className="mt-0.5 text-[13px] font-medium leading-snug text-slate-700">{addressLine}</div>}
+                    {(company?.phone || company?.whatsappNumber || company?.email) && (
+                      <div className="mt-0.5 text-[12px] text-slate-600">{[company.phone, company.whatsappNumber, company.email].filter(Boolean).join('  |  ')}</div>
+                    )}
+                    {company?.gstNumber && <div className="mt-0.5 text-[12px] text-slate-600">GSTIN: {company.gstNumber}</div>}
+                  </div>
                 </div>
-              )}
-              {company?.gstNumber && <div className="mt-0.5 text-[11px] text-slate-600">GSTIN: {company.gstNumber}</div>}
-            </div>
-          </div>
 
-          <div className="border-b-2 border-black px-6 py-2.5 text-center">
-            <span className="inline-block rounded border-2 border-slate-800 px-6 py-1.5 text-lg font-extrabold uppercase tracking-[0.25em] text-slate-900">
-              Testing Calculation Sheet
-            </span>
-          </div>
+                {/* Title */}
+                <div className="border-b-2 border-black px-2 py-3 text-center">
+                  <span className="inline-block rounded border-2 border-slate-900 px-8 py-2 text-xl font-extrabold uppercase tracking-[0.22em]">
+                    Testing Report
+                  </span>
+                </div>
 
-          <div className="flex justify-between border-b border-slate-300 px-6 py-2 text-sm">
-            <span><b>Date:</b> {fmtDate(new Date())}</span>
-            <span><b>Items:</b> {exportRows.length}</span>
-          </div>
+                {/* Meta */}
+                <div className="flex justify-between px-2 py-2.5 text-[13px] font-medium text-slate-700">
+                  <span>Size {idx + 1} of {exportRows.length}</span>
+                  <span>Date: {fmtDate(new Date())}</span>
+                </div>
 
-          <div className="px-6 py-4">
-            <table className="w-full border-collapse text-[11px]">
-              <thead>
-                <tr>
-                  {fixedCols.map((h) => (
-                    <th key={h} rowSpan={2} className="border border-slate-400 bg-slate-100 px-2 py-1.5 text-center font-bold uppercase tracking-wide">{h}</th>
-                  ))}
-                  {fluxCols.map((fx) => (
-                    <th key={fx} colSpan={2} className="border border-slate-400 bg-slate-100 px-2 py-1.5 text-center font-bold">{fx} T</th>
-                  ))}
-                </tr>
-                <tr>
-                  {fluxCols.map((fx) => (
-                    <Fragment key={fx}>
-                      <th className="border border-slate-400 bg-slate-50 px-2 py-1 text-center font-semibold">Volt (V)</th>
-                      <th className="border border-slate-400 bg-slate-50 px-2 py-1 text-center font-semibold">Ie max (mA)</th>
-                    </Fragment>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {exportRows.map((it) => (
-                  <tr key={it.key}>
-                    {dimsOf(it).map((v, ci) => (
-                      <td key={ci} className={cn('border border-slate-300 px-2 py-1.5 tabular-nums', ci === 1 ? 'text-left' : 'text-center')}>{v}</td>
-                    ))}
-                    {fluxCols.map((fx) => {
-                      const c = cell(it, fx);
-                      return (
-                        <Fragment key={fx}>
-                          <td className="border border-slate-300 px-2 py-1.5 text-right tabular-nums">{c ? c.volt.toFixed(3) : '—'}</td>
-                          <td className="border border-slate-300 px-2 py-1.5 text-right tabular-nums">{c && c.leMax > 0 ? c.leMax.toFixed(2) : '—'}</td>
-                        </Fragment>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                {/* Per-size table */}
+                <div className="px-2 pb-4">
+                  <table className="w-full border-collapse text-[15px]">
+                    <thead>
+                      <tr className="bg-slate-100">
+                        {['Core', 'Measure', 'Turns', 'Grade', 'Flux (T)', 'Volt (V)', 'Ie max (mA)'].map((h) => (
+                          <th key={h} className="border border-slate-500 px-3 py-2.5 text-center text-[13px] font-bold uppercase tracking-wide">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {it.fluxes.map((f, fi) => {
+                        const c = cell(it, f);
+                        return (
+                          <tr key={f}>
+                            {fi === 0 && <>
+                              <td rowSpan={n} className="border border-slate-500 px-3 py-2.5 text-center align-middle font-medium">{core}</td>
+                              <td rowSpan={n} className="border border-slate-500 px-3 py-2.5 text-center align-middle font-semibold">{measure}</td>
+                              <td rowSpan={n} className="border border-slate-500 px-3 py-2.5 text-center align-middle tabular-nums">{it.turns}</td>
+                              <td rowSpan={n} className="border border-slate-500 px-3 py-2.5 text-center align-middle font-medium">{it.grade}</td>
+                            </>}
+                            <td className="border border-slate-500 px-3 py-2.5 text-center tabular-nums">{f.toFixed(2)}</td>
+                            <td className="border border-slate-500 px-3 py-2.5 text-right tabular-nums">{c ? c.volt.toFixed(3) : '—'}</td>
+                            <td className="border border-slate-500 px-3 py-2.5 text-right tabular-nums">{c && c.leMax > 0 ? c.leMax.toFixed(2) : '—'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
 
-          <div className="px-6 pb-6 pt-1 text-[9px] leading-relaxed text-slate-500">
-            Volt = 222 × Flux × A × Turns ÷ 10000&nbsp;&nbsp;·&nbsp;&nbsp;Ie max = ATe/cm × 1000 × mean-path ÷ Turns.
-            {company?.name ? ` Generated by ${company.name}.` : ''}
-          </div>
+                <div className="px-2 text-[11px] leading-relaxed text-slate-500">
+                  Volt = 222 × Flux × A × Turns ÷ 10000&nbsp;&nbsp;·&nbsp;&nbsp;Ie max = ATe/cm × 1000 × mean-path ÷ Turns.
+                  {company?.name ? ` Generated by ${company.name}.` : ''}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
