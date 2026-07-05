@@ -1,52 +1,82 @@
-// Testing Calculator — build a flux-test sheet for toroidal cores.
-// Add PO items (or your own), set turns, pick a grade + one or more flux levels,
-// and the page computes Volt + Ie max per flux (same math as the PO/Testing
-// Report) and exports an Excel matching the lab template.
-import { useMemo, useState } from 'react';
+// Testing Calculator — build a flux-test sheet for toroidal OR rectangular cores.
+// Pick the core type, add items (or import from POs), set turns, choose a grade +
+// one or more flux levels, and the page computes Volt + Ie max per flux (same math
+// as the PO / Testing Report). Export the lab sheet as Excel or a styled PDF.
+import { useMemo, useRef, useState, Fragment } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import {
-  Calculator, Plus, Trash2, Download, FileDown, X, Search, Loader2, Beaker,
+  Calculator, Plus, Trash2, Download, FileDown, FileText, X, Search, Loader2, Beaker,
 } from 'lucide-react';
+import html2pdf from 'html2pdf.js';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
-import { fluxTestCalc } from '@/lib/calc';
+import { fluxTestCalc, rectangularCalc, rectangularFluxTestCalc } from '@/lib/calc';
 import { todayStamp } from '@/lib/excel';
 
+type CoreType = 'TOROIDAL' | 'RECTANGULAR';
 type FluxPoint = { flux: number; ateCm: number };
 type FluxGroup = { grade: string; points: FluxPoint[] };
 type Item = {
   key: string;
-  id: string; od: string; ht: string; turns: string;
+  // toroidal dims
+  id: string; od: string; ht: string;
+  // rectangular dims
+  id1: string; id2: string; od1: string; od2: string;
+  turns: string;
   grade: string;
   fluxes: number[];      // selected flux levels (T)
   source?: string;       // e.g. PO number when imported
 };
 type PoSummaryItem = {
-  id: string; poNumber: string; coreType: 'TOROIDAL' | 'RECTANGULAR';
+  id: string; poNumber: string; coreType: CoreType;
   grade: string; measure: string; turns: number | null;
+};
+type CompanyDetail = {
+  name: string; address: string | null; phone: string | null;
+  whatsappNumber: string | null; email: string | null;
+  logoUrl: string | null; gstNumber: string | null;
 };
 
 let seq = 0;
 const mkItem = (p: Partial<Item> = {}): Item => ({
-  key: `it_${++seq}`, id: '', od: '', ht: '', turns: '', grade: '', fluxes: [], ...p,
+  key: `it_${++seq}`, id: '', od: '', ht: '',
+  id1: '', id2: '', od1: '', od2: '', turns: '', grade: '', fluxes: [], ...p,
 });
 
-const numOk = (it: Item) => +it.id > 0 && +it.od > 0 && +it.ht > 0 && +it.turns > 0 && +it.od > +it.id;
+const numOk = (it: Item, ct: CoreType) => ct === 'TOROIDAL'
+  ? (+it.id > 0 && +it.od > 0 && +it.ht > 0 && +it.turns > 0 && +it.od > +it.id)
+  : (+it.id1 > 0 && +it.id2 > 0 && +it.od1 > 0 && +it.od2 > 0 && +it.ht > 0 && +it.turns > 0 && +it.od1 > +it.id1 && +it.od2 > +it.id2);
+
+const rectGeom = (it: Item) =>
+  rectangularCalc({ id1: +it.id1, id2: +it.id2, od1: +it.od1, od2: +it.od2, ht: +it.ht, pcs: 0 });
 
 /* Parse a toroidal measure "180 x 110 x 200" → { id, od, ht }. */
 const parseToroidal = (measure: string) => {
   const nums = (measure || '').split(/[x×*]/i).map((s) => s.trim()).filter(Boolean);
   return { id: nums[0] ?? '', od: nums[1] ?? '', ht: nums[2] ?? '' };
 };
+/* Parse a rectangular measure "id1 x id2 x od1 x od2 x ht x builtup" (builtup derived). */
+const parseRectangular = (measure: string) => {
+  const n = (measure || '').split(/[x×*]/i).map((s) => s.trim()).filter(Boolean);
+  return { id1: n[0] ?? '', id2: n[1] ?? '', od1: n[2] ?? '', od2: n[3] ?? '', ht: n[4] ?? '' };
+};
+
+const fmtDate = (d: Date) => d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
 export const TestingCalculatorPage = () => {
+  const [coreType, setCoreType] = useState<CoreType>('TOROIDAL');
   const [items, setItems] = useState<Item[]>([mkItem()]);
   const [importOpen, setImportOpen] = useState(false);
+  const isTor = coreType === 'TOROIDAL';
 
   const { data: fluxData } = useQuery({
-    queryKey: ['flux-grades-grouped', 'TOROIDAL'],
-    queryFn: () => api<{ grades: FluxGroup[] }>('/flux-grades/grouped?coreType=TOROIDAL'),
+    queryKey: ['flux-grades-grouped', coreType],
+    queryFn: () => api<{ grades: FluxGroup[] }>(`/flux-grades/grouped?coreType=${coreType}`),
+  });
+  const { data: company } = useQuery({
+    queryKey: ['company-me'],
+    queryFn: () => api<CompanyDetail>('/companies/me'),
   });
   const grades = fluxData?.grades ?? [];
   const pointsFor = (grade: string) => grades.find((g) => g.grade === grade)?.points ?? [];
@@ -56,7 +86,9 @@ export const TestingCalculatorPage = () => {
   const remove = (key: string) => setItems((its) => its.filter((i) => i.key !== key));
   const addBlank = () => setItems((its) => [...its, mkItem()]);
 
-  // Picking a grade pre-selects all its flux points (user can trim).
+  // Switching core type clears the sheet — dimensions + grades differ per shape.
+  const switchCore = (ct: CoreType) => { if (ct === coreType) return; setCoreType(ct); setItems([mkItem()]); };
+
   const onGrade = (key: string, grade: string) => patch(key, { grade, fluxes: pointsFor(grade).map((p) => p.flux) });
   const toggleFlux = (key: string, flux: number) => setItems((its) => its.map((i) => {
     if (i.key !== key) return i;
@@ -64,70 +96,112 @@ export const TestingCalculatorPage = () => {
     return { ...i, fluxes: (has ? i.fluxes.filter((f) => f !== flux) : [...i.fluxes, flux]).sort((a, b) => a - b) };
   }));
 
-  // Columns = every flux level picked across all items, ascending.
   const fluxCols = useMemo(() => {
     const s = new Set<number>();
     items.forEach((i) => i.fluxes.forEach((f) => s.add(f)));
     return [...s].sort((a, b) => a - b);
   }, [items]);
 
+  const ok = (it: Item) => numOk(it, coreType);
+
   const cell = (it: Item, flux: number) => {
-    if (!numOk(it) || !it.fluxes.includes(flux)) return null;
-    const r = fluxTestCalc({ id: +it.id, od: +it.od, ht: +it.ht, turns: +it.turns, flux, ateCm: ateFor(it.grade, flux) });
+    if (!ok(it) || !it.fluxes.includes(flux)) return null;
+    const ateCm = ateFor(it.grade, flux);
+    if (isTor) {
+      const r = fluxTestCalc({ id: +it.id, od: +it.od, ht: +it.ht, turns: +it.turns, flux, ateCm });
+      return { volt: r.testVoltage, leMax: r.testCurrent };
+    }
+    const g = rectGeom(it);
+    const r = rectangularFluxTestCalc({ area: g.coreAc, meanPath: g.coreMl, turns: +it.turns, flux, ateCm });
     return { volt: r.testVoltage, leMax: r.testCurrent };
   };
 
+  // Fixed (dimension) columns + a per-item row of their values — shared by Excel + PDF.
+  const fixedCols = isTor
+    ? ['ID', 'OD', 'HT', 'TURNS', 'GRADE']
+    : ['ID1', 'ID2', 'OD1', 'OD2', 'HT', 'BUILTUP', 'TURNS', 'GRADE'];
+  const dimsOf = (it: Item): (string | number)[] => {
+    if (isTor) return [+it.id, +it.od, +it.ht, +it.turns, it.grade || '—'];
+    const g = rectGeom(it);
+    return [+it.id1, +it.id2, +it.od1, +it.od2, +it.ht, g.builtup, +it.turns, it.grade || '—'];
+  };
+
   const addFromPo = (po: PoSummaryItem) => {
-    const { id, od, ht } = parseToroidal(po.measure);
     const grade = grades.some((g) => g.grade === po.grade) ? po.grade : '';
+    const dims = isTor ? parseToroidal(po.measure) : parseRectangular(po.measure);
     setItems((its) => [...its, mkItem({
-      id, od, ht, turns: po.turns != null ? String(po.turns) : '',
+      ...dims,
+      turns: po.turns != null ? String(po.turns) : '',
       grade, fluxes: grade ? pointsFor(grade).map((p) => p.flux) : [], source: po.poNumber,
     })]);
   };
 
+  const exportRows = items.filter((it) => ok(it) && it.fluxes.length);
+  const exportable = exportRows.length > 0 && fluxCols.length > 0;
+
   /* ── Excel export (merged two-row header per the lab sheet) ── */
   const exportExcel = () => {
-    const rows = items.filter((it) => numOk(it) && it.fluxes.length);
-    if (!rows.length || !fluxCols.length) return;
-    const fixed = ['ID', 'OD', 'HT', 'TURNS', 'GRADE'];
-    const head0: (string | number)[] = [...fixed];
-    const head1: (string | number)[] = fixed.map(() => '');
+    if (!exportable) return;
+    const head0: (string | number)[] = [...fixedCols];
+    const head1: (string | number)[] = fixedCols.map(() => '');
     fluxCols.forEach((fx) => { head0.push(`${fx} T`, ''); head1.push('Volt (V)', 'Ie max (mA)'); });
 
-    const body = rows.map((it) => {
-      const r: (string | number)[] = [+it.id, +it.od, +it.ht, +it.turns, it.grade || '—'];
+    const body = exportRows.map((it) => {
+      const r: (string | number)[] = [...dimsOf(it)];
       fluxCols.forEach((fx) => {
         const c = cell(it, fx);
-        r.push(c ? c.volt : '', c ? c.leMax : '');
+        r.push(c ? c.volt : '', c && c.leMax > 0 ? c.leMax : '');
       });
       return r;
     });
 
     const ws = XLSX.utils.aoa_to_sheet([head0, head1, ...body]);
     const merges: { s: { r: number; c: number }; e: { r: number; c: number } }[] = [];
-    fixed.forEach((_, c) => merges.push({ s: { r: 0, c }, e: { r: 1, c } }));      // vertical span for fixed cols
-    fluxCols.forEach((_, i) => { const c = fixed.length + i * 2; merges.push({ s: { r: 0, c }, e: { r: 0, c: c + 1 } }); }); // flux label spans its pair
+    fixedCols.forEach((_, c) => merges.push({ s: { r: 0, c }, e: { r: 1, c } }));
+    fluxCols.forEach((_, i) => { const c = fixedCols.length + i * 2; merges.push({ s: { r: 0, c }, e: { r: 0, c: c + 1 } }); });
     ws['!merges'] = merges;
     ws['!cols'] = [
-      { wch: 7 }, { wch: 7 }, { wch: 7 }, { wch: 8 }, { wch: 10 },
+      ...fixedCols.map((h) => ({ wch: h === 'GRADE' ? 12 : 8 })),
       ...fluxCols.flatMap(() => [{ wch: 10 }, { wch: 12 }]),
     ];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Testing');
-    XLSX.writeFile(wb, `testing-calc-${todayStamp()}.xlsx`);
+    XLSX.writeFile(wb, `testing-calc-${coreType.toLowerCase()}-${todayStamp()}.xlsx`);
   };
 
-  const exportable = items.some((it) => numOk(it) && it.fluxes.length) && fluxCols.length > 0;
+  /* ── PDF export — styled lab sheet, captured offscreen via html2pdf ── */
+  const printRef = useRef<HTMLDivElement>(null);
+  const [generating, setGenerating] = useState(false);
+  const exportPdf = async () => {
+    const el = printRef.current;
+    if (!el || !exportable) return;
+    setGenerating(true);
+    await new Promise((r) => requestAnimationFrame(r));
+    try {
+      await html2pdf().set({
+        margin: 6,
+        filename: `testing-calc-${coreType.toLowerCase()}-${todayStamp()}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff', windowWidth: 1040 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+        pagebreak: { mode: ['css', 'legacy'], avoid: ['tr'] },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any).from(el).save();
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const addressLine = company?.address?.replace(/\n+/g, ', ').trim() ?? '';
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
             <Calculator className="h-5 w-5 text-brand-600" /> Testing Calculator
           </h1>
-          <p className="mt-1 text-sm text-slate-500">Pick items, turns &amp; flux levels → get Volt + Ie max, then export the lab sheet.</p>
+          <p className="mt-1 text-sm text-slate-500">Pick core type, items, turns &amp; flux levels → get Volt + Ie max, then export the lab sheet.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => setImportOpen(true)} className="btn-ghost border border-slate-300 text-slate-600 hover:bg-slate-50">
@@ -136,15 +210,32 @@ export const TestingCalculatorPage = () => {
           <button onClick={addBlank} className="btn-ghost border border-slate-300 text-slate-600 hover:bg-slate-50">
             <Plus className="h-4 w-4" /> Add item
           </button>
-          <button onClick={exportExcel} disabled={!exportable} className="btn-primary disabled:opacity-50">
-            <Download className="h-4 w-4" /> Download Excel
+          <button onClick={exportExcel} disabled={!exportable} className="btn-ghost border border-slate-300 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
+            <Download className="h-4 w-4" /> Excel
           </button>
+          <button onClick={exportPdf} disabled={!exportable || generating} className="btn-primary disabled:opacity-50">
+            {generating ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating…</> : <><FileText className="h-4 w-4" /> Download PDF</>}
+          </button>
+        </div>
+      </div>
+
+      {/* Core-type selector */}
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Core type</span>
+        <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+          {(['TOROIDAL', 'RECTANGULAR'] as CoreType[]).map((ct) => (
+            <button key={ct} onClick={() => switchCore(ct)}
+              className={cn('rounded-md px-3.5 py-1.5 text-sm font-medium transition',
+                coreType === ct ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900')}>
+              {ct === 'TOROIDAL' ? 'Toroidal' : 'Rectangular'}
+            </button>
+          ))}
         </div>
       </div>
 
       {grades.length === 0 && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          No toroidal flux grades found. Add them under <strong>Settings → Flux Grades</strong> so Ie max can be computed (Volt still works without).
+          No {isTor ? 'toroidal' : 'rectangular'} flux grades found. Add them under <strong>Settings → Flux Grades</strong> so Ie max can be computed (Volt still works without).
         </div>
       )}
 
@@ -152,6 +243,7 @@ export const TestingCalculatorPage = () => {
       <div className="space-y-3">
         {items.map((it, idx) => {
           const pts = pointsFor(it.grade);
+          const g = !isTor && ok(it) ? rectGeom(it) : null;
           return (
             <div key={it.key} className="card p-4">
               <div className="mb-3 flex items-center justify-between">
@@ -161,18 +253,44 @@ export const TestingCalculatorPage = () => {
                 <button onClick={() => remove(it.key)} className="btn-ghost text-red-600 hover:bg-red-50" title="Remove item"><Trash2 className="h-4 w-4" /></button>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-                <Field label="ID (mm)"><input className="input" type="number" inputMode="decimal" value={it.id} onChange={(e) => patch(it.key, { id: e.target.value })} /></Field>
-                <Field label="OD (mm)"><input className="input" type="number" inputMode="decimal" value={it.od} onChange={(e) => patch(it.key, { od: e.target.value })} /></Field>
-                <Field label="HT (mm)"><input className="input" type="number" inputMode="decimal" value={it.ht} onChange={(e) => patch(it.key, { ht: e.target.value })} /></Field>
-                <Field label="Turns"><input className="input" type="number" inputMode="numeric" value={it.turns} onChange={(e) => patch(it.key, { turns: e.target.value })} /></Field>
-                <Field label="Grade">
-                  <select className="input" value={it.grade} onChange={(e) => onGrade(it.key, e.target.value)}>
-                    <option value="">— Select —</option>
-                    {grades.map((g) => <option key={g.grade} value={g.grade}>{g.grade}</option>)}
-                  </select>
-                </Field>
-              </div>
+              {isTor ? (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                  <Field label="ID (mm)"><input className="input" type="number" inputMode="decimal" value={it.id} onChange={(e) => patch(it.key, { id: e.target.value })} /></Field>
+                  <Field label="OD (mm)"><input className="input" type="number" inputMode="decimal" value={it.od} onChange={(e) => patch(it.key, { od: e.target.value })} /></Field>
+                  <Field label="HT (mm)"><input className="input" type="number" inputMode="decimal" value={it.ht} onChange={(e) => patch(it.key, { ht: e.target.value })} /></Field>
+                  <Field label="Turns"><input className="input" type="number" inputMode="numeric" value={it.turns} onChange={(e) => patch(it.key, { turns: e.target.value })} /></Field>
+                  <Field label="Grade">
+                    <select className="input" value={it.grade} onChange={(e) => onGrade(it.key, e.target.value)}>
+                      <option value="">— Select —</option>
+                      {grades.map((gr) => <option key={gr.grade} value={gr.grade}>{gr.grade}</option>)}
+                    </select>
+                  </Field>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+                    <Field label="ID1 (mm)"><input className="input" type="number" inputMode="decimal" value={it.id1} onChange={(e) => patch(it.key, { id1: e.target.value })} /></Field>
+                    <Field label="ID2 (mm)"><input className="input" type="number" inputMode="decimal" value={it.id2} onChange={(e) => patch(it.key, { id2: e.target.value })} /></Field>
+                    <Field label="OD1 (mm)"><input className="input" type="number" inputMode="decimal" value={it.od1} onChange={(e) => patch(it.key, { od1: e.target.value })} /></Field>
+                    <Field label="OD2 (mm)"><input className="input" type="number" inputMode="decimal" value={it.od2} onChange={(e) => patch(it.key, { od2: e.target.value })} /></Field>
+                    <Field label="HT (mm)"><input className="input" type="number" inputMode="decimal" value={it.ht} onChange={(e) => patch(it.key, { ht: e.target.value })} /></Field>
+                    <Field label="Turns"><input className="input" type="number" inputMode="numeric" value={it.turns} onChange={(e) => patch(it.key, { turns: e.target.value })} /></Field>
+                    <Field label="Grade">
+                      <select className="input" value={it.grade} onChange={(e) => onGrade(it.key, e.target.value)}>
+                        <option value="">— Select —</option>
+                        {grades.map((gr) => <option key={gr.grade} value={gr.grade}>{gr.grade}</option>)}
+                      </select>
+                    </Field>
+                  </div>
+                  {g && (
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                      <span>Built-up: <b className="text-slate-700">{g.builtup}</b> mm</span>
+                      <span>Core area: <b className="text-slate-700">{g.coreAc}</b> sq.cm</span>
+                      <span>Mean path: <b className="text-slate-700">{g.coreMl}</b> cm</span>
+                    </div>
+                  )}
+                </>
+              )}
 
               {/* Flux chips */}
               <div className="mt-3">
@@ -199,7 +317,7 @@ export const TestingCalculatorPage = () => {
               </div>
 
               {/* Live preview */}
-              {numOk(it) && it.fluxes.length > 0 && (
+              {ok(it) && it.fluxes.length > 0 && (
                 <div className="mt-3 overflow-x-auto rounded-lg border border-slate-100">
                   <table className="w-full text-xs">
                     <thead className="bg-slate-50 text-slate-500">
@@ -224,7 +342,86 @@ export const TestingCalculatorPage = () => {
         </div>
       )}
 
-      {importOpen && <ImportDialog onClose={() => setImportOpen(false)} onAdd={addFromPo} />}
+      {importOpen && <ImportDialog coreType={coreType} onClose={() => setImportOpen(false)} onAdd={addFromPo} />}
+
+      {/* ── Offscreen printable document for the PDF ── */}
+      <div style={{ position: 'fixed', left: -10000, top: 0, width: 1040 }} aria-hidden>
+        <div ref={printRef} className="bg-white text-black" style={{ width: 1040, fontFamily: 'Arial, sans-serif' }}>
+          <div className="flex items-center gap-5 border-b-2 border-black px-6 pt-4 pb-3">
+            {company?.logoUrl
+              ? <img src={company.logoUrl} alt={company.name} className="h-20 w-20 object-contain shrink-0" />
+              : <div className="flex h-20 w-20 items-center justify-center rounded-lg bg-slate-100 text-xs text-slate-400">LOGO</div>}
+            <div className="min-w-0">
+              <div className="text-lg font-black uppercase tracking-wide leading-tight">{company?.name ?? 'Company Name'}</div>
+              {addressLine && <div className="mt-0.5 max-w-2xl text-[11px] font-semibold leading-snug text-slate-700">{addressLine}</div>}
+              {(company?.phone || company?.whatsappNumber || company?.email) && (
+                <div className="mt-0.5 text-[11px] text-slate-600">
+                  <span className="font-semibold">Contact:</span> {[company.phone, company.whatsappNumber, company.email].filter(Boolean).join('  |  ')}
+                </div>
+              )}
+              {company?.gstNumber && <div className="mt-0.5 text-[11px] text-slate-600">GSTIN: {company.gstNumber}</div>}
+            </div>
+          </div>
+
+          <div className="border-b-2 border-black px-6 py-2.5 text-center">
+            <span className="inline-block rounded border-2 border-slate-800 px-6 py-1.5 text-lg font-extrabold uppercase tracking-[0.25em] text-slate-900">
+              Testing Calculation Sheet
+            </span>
+          </div>
+
+          <div className="flex justify-between border-b border-slate-300 px-6 py-2 text-sm">
+            <span><b>Core Type:</b> {isTor ? 'Toroidal' : 'Rectangular'}</span>
+            <span><b>Date:</b> {fmtDate(new Date())}</span>
+            <span><b>Items:</b> {exportRows.length}</span>
+          </div>
+
+          <div className="px-6 py-4">
+            <table className="w-full border-collapse text-[11px]">
+              <thead>
+                <tr>
+                  {fixedCols.map((h) => (
+                    <th key={h} rowSpan={2} className="border border-slate-400 bg-slate-100 px-2 py-1.5 text-center font-bold uppercase tracking-wide">{h}</th>
+                  ))}
+                  {fluxCols.map((fx) => (
+                    <th key={fx} colSpan={2} className="border border-slate-400 bg-slate-100 px-2 py-1.5 text-center font-bold">{fx} T</th>
+                  ))}
+                </tr>
+                <tr>
+                  {fluxCols.map((fx) => (
+                    <Fragment key={fx}>
+                      <th className="border border-slate-400 bg-slate-50 px-2 py-1 text-center font-semibold">Volt (V)</th>
+                      <th className="border border-slate-400 bg-slate-50 px-2 py-1 text-center font-semibold">Ie max (mA)</th>
+                    </Fragment>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {exportRows.map((it) => (
+                  <tr key={it.key}>
+                    {dimsOf(it).map((v, ci) => (
+                      <td key={ci} className="border border-slate-300 px-2 py-1.5 text-center tabular-nums">{v}</td>
+                    ))}
+                    {fluxCols.map((fx) => {
+                      const c = cell(it, fx);
+                      return (
+                        <Fragment key={fx}>
+                          <td className="border border-slate-300 px-2 py-1.5 text-right tabular-nums">{c ? c.volt.toFixed(3) : '—'}</td>
+                          <td className="border border-slate-300 px-2 py-1.5 text-right tabular-nums">{c && c.leMax > 0 ? c.leMax.toFixed(2) : '—'}</td>
+                        </Fragment>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="px-6 pb-6 pt-1 text-[9px] leading-relaxed text-slate-500">
+            Volt = 222 × Flux × A × Turns ÷ 10000&nbsp;&nbsp;·&nbsp;&nbsp;Ie max = ATe/cm × 1000 × mean-path ÷ Turns.
+            {company?.name ? ` Generated by ${company.name}.` : ''}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
@@ -237,21 +434,22 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
 );
 
 /* ── Import-from-PO dialog ── */
-const ImportDialog = ({ onClose, onAdd }: { onClose: () => void; onAdd: (po: PoSummaryItem) => void }) => {
+const ImportDialog = ({ coreType, onClose, onAdd }: { coreType: CoreType; onClose: () => void; onAdd: (po: PoSummaryItem) => void }) => {
   const [search, setSearch] = useState('');
   const { data, isLoading } = useQuery({
     queryKey: ['testing-po-items'],
     queryFn: () => api<{ items: PoSummaryItem[] }>('/po-orders/summary?status=ACTIVE&pageSize=10000'),
   });
+  const label = coreType === 'TOROIDAL' ? 'toroidal' : 'rectangular';
   const items = (data?.items ?? [])
-    .filter((i) => i.coreType === 'TOROIDAL')
+    .filter((i) => i.coreType === coreType)
     .filter((i) => !search.trim() || `${i.poNumber} ${i.measure} ${i.grade}`.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-          <h3 className="font-bold text-slate-900">Import toroidal PO items</h3>
+          <h3 className="font-bold capitalize text-slate-900">Import {label} PO items</h3>
           <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
         </div>
         <div className="border-b border-slate-100 p-3">
@@ -264,7 +462,7 @@ const ImportDialog = ({ onClose, onAdd }: { onClose: () => void; onAdd: (po: PoS
           {isLoading ? (
             <div className="py-10 text-center text-slate-400"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></div>
           ) : !items.length ? (
-            <div className="py-10 text-center text-sm text-slate-400">No matching toroidal items.</div>
+            <div className="py-10 text-center text-sm text-slate-400">No matching {label} items.</div>
           ) : items.map((i) => (
             <button key={i.id} onClick={() => onAdd(i)} className="flex w-full items-center justify-between gap-3 border-t border-slate-100 px-4 py-2.5 text-left hover:bg-brand-50/50">
               <div className="min-w-0">
