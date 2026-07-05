@@ -44,6 +44,7 @@ import { SalesInvoicesPage } from '@/pages/SalesInvoicesPage';
 import { DebtorAgingPage } from '@/pages/DebtorAgingPage';
 import { ReceivePaymentsPage } from '@/pages/ReceivePaymentsPage';
 import { ReceiptsPaymentsPage } from '@/pages/ReceiptsPaymentsPage';
+import { CashbookSummaryPage } from '@/pages/CashbookSummaryPage';
 import { CreditorAgingPage } from '@/pages/CreditorAgingPage';
 import { DataCleanupPage } from '@/pages/DataCleanupPage';
 import { UserLogsPage } from '@/pages/UserLogsPage';
@@ -115,6 +116,7 @@ export const App = () => {
       <Route path="/sales-invoices/aging"    element={<DebtorAgingPage />} />
       <Route path="/sales-invoices/payments" element={<ReceivePaymentsPage />} />
       <Route path="/accounts/receipts-payments" element={<ReceiptsPaymentsPage />} />
+      <Route path="/accounts/cashbook-summary" element={<CashbookSummaryPage />} />
       <Route path="/accounts/purchases"      element={<PurchasesPage />} />
       <Route path="/accounts/creditor-aging" element={<CreditorAgingPage />} />
 
