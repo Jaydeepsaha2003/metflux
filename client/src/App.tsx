@@ -22,6 +22,7 @@ import { SupplierOrderEditPage } from '@/pages/SupplierOrderEditPage';
 import { SupplierOrderTrackPage } from '@/pages/SupplierOrderTrackPage';
 import { SupplierPOPrintPage } from '@/pages/SupplierPOPrintPage';
 import { ProductionListPage } from '@/pages/ProductionListPage';
+import { ProductionSummaryPage } from '@/pages/ProductionSummaryPage';
 import { ProductionNewPage } from '@/pages/ProductionNewPage';
 import { ProductionEditPage } from '@/pages/ProductionEditPage';
 import { DispatchListPage } from '@/pages/DispatchListPage';
@@ -75,7 +76,8 @@ export const App = () => (
       <Route path="/po/summary"      element={<SOSummaryPage />} />
 
       {/* Production */}
-      <Route path="/production"      element={<ProductionListPage />} />
+      <Route path="/production"          element={<ProductionListPage />} />
+      <Route path="/production/summary"  element={<ProductionSummaryPage />} />
       <Route path="/production/new"  element={<ProductionNewPage />} />
       <Route path="/production/:id"  element={<ProductionEditPage />} />
 

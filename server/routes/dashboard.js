@@ -308,7 +308,7 @@ router.get('/employees', asyncHandler(async (req, res) => {
       topSizePcs:    sizes[0]?.[1] ?? 0,
       sizes:         sizes.slice(0, 5).map(([measure, pcs]) => ({ measure, pcs })),
     };
-  }).sort((a, b) => b.pcs - a.pcs).map((row, idx) => ({ ...row, rank: idx + 1 }));
+  }).sort((a, b) => b.totalWeight - a.totalWeight).map((row, idx) => ({ ...row, rank: idx + 1 }));
 
   res.json({
     from: fromDate.toISOString(),

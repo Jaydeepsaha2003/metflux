@@ -183,6 +183,43 @@ router.get('/', requirePermission('view_po'), asyncHandler(async (req, res) => {
   res.json({ items: rows.map(flatten), total: Number(totalRow?.n ?? 0), page, pageSize });
 }));
 
+/* GET /summary — filtered production report (by date / employee / customer),
+   with per-row amounts and grand totals. Powers the Production Summary page. */
+router.get('/summary', requirePermission('view_po'), asyncHandler(async (req, res) => {
+  const { from, to, labour, customerId, search } = z.object({
+    from:       z.coerce.date().optional(),
+    to:         z.coerce.date().optional(),
+    labour:     z.string().trim().max(120).optional(),
+    customerId: z.string().trim().max(191).optional(),
+    search:     z.string().trim().max(120).optional(),
+  }).parse(req.query);
+
+  let where = 'p.`companyId` = ?';
+  const params = [req.tenant.companyId];
+  if (from) { where += ' AND p.`prodDate` >= ?'; params.push(from); }
+  if (to)   { const end = new Date(to); end.setHours(23, 59, 59, 999); where += ' AND p.`prodDate` <= ?'; params.push(end); }
+  if (labour)     { where += ' AND p.`labourName` = ?'; params.push(labour); }
+  if (customerId) { where += ' AND po.`customerId` = ?'; params.push(customerId); }
+  if (search) {
+    const like = `%${search}%`;
+    where += ' AND (p.`labourName` LIKE ? OR po.`poNumber` LIKE ? OR c.`name` LIKE ? OR it.`grade` LIKE ? OR it.`material` LIKE ? OR it.`measure` LIKE ?)';
+    params.push(like, like, like, like, like, like);
+  }
+
+  const rows = await q(`${PROD_ROW_SQL} WHERE ${where} ORDER BY p.\`prodDate\` DESC LIMIT 20000`, params);
+  const items = rows.map(flatten);
+  const totals = items.reduce((t, r) => ({
+    pcs:    t.pcs + (Number(r.pcs) || 0),
+    weight: +(t.weight + (Number(r.totalWeight) || 0)).toFixed(3),
+    amount: +(t.amount + (Number(r.amount) || 0)).toFixed(2),
+  }), { pcs: 0, weight: 0, amount: 0 });
+  const labours = await q(
+    "SELECT DISTINCT `labourName` FROM `Production` WHERE `companyId` = ? AND `labourName` <> '' ORDER BY `labourName` ASC",
+    [req.tenant.companyId]
+  );
+  res.json({ items, totals, labours: labours.map((r) => r.labourName) });
+}));
+
 /* GET /:id */
 router.get('/:id', requirePermission('view_po'), asyncHandler(async (req, res) => {
   const row = await qOne(

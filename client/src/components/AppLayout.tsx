@@ -45,6 +45,7 @@ const NAV: NavItem[] = [
       { kind: 'leaf', to: '/work-allotment',  label: 'Work Allotment', icon: ClipboardList, perm: 'assign_work' },
       { kind: 'leaf', to: '/production/new',  label: 'Receive',        icon: Inbox,         perm: 'rec_production' },
       { kind: 'leaf', to: '/production',      label: 'Modify',         icon: ClipboardList, perm: 'view_po' },
+      { kind: 'leaf', to: '/production/summary', label: 'Summary',     icon: BarChart3,     perm: 'view_po' },
     ],
   },
   { kind: 'leaf', to: '/testing', label: 'Testing', icon: Calculator, perm: 'view_testing' },

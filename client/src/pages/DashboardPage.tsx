@@ -355,8 +355,8 @@ export const DashboardPage = () => {
                     <tr>
                       <th className="px-4 py-3 w-12 text-center">Rank</th>
                       <th className="px-4 py-3">Worker</th>
-                      <th className="px-4 py-3 text-right">Pcs</th>
                       <th className="px-4 py-3 text-right">Total Kg</th>
+                      <th className="px-4 py-3 text-right">Pcs</th>
                       <th className="px-4 py-3 text-right">Entries</th>
                       <th className="px-4 py-3 text-right">Distinct sizes</th>
                       <th className="px-4 py-3">Top size</th>
@@ -377,8 +377,8 @@ export const DashboardPage = () => {
                           )}
                         </td>
                         <td className="px-4 py-3 font-medium">{row.labourName}</td>
-                        <td className="px-4 py-3 text-right tabular-nums font-semibold">{row.pcs.toLocaleString('en-IN')}</td>
-                        <td className="px-4 py-3 text-right tabular-nums text-slate-700">{row.totalWeight.toFixed(3)}</td>
+                        <td className="px-4 py-3 text-right tabular-nums font-semibold text-slate-900">{row.totalWeight.toFixed(3)}</td>
+                        <td className="px-4 py-3 text-right tabular-nums text-slate-600">{row.pcs.toLocaleString('en-IN')}</td>
                         <td className="px-4 py-3 text-right tabular-nums text-slate-500">{row.entries}</td>
                         <td className="px-4 py-3 text-right tabular-nums text-slate-500">{row.distinctSizes}</td>
                         <td className="px-4 py-3 text-xs tabular-nums text-slate-600">
@@ -390,8 +390,8 @@ export const DashboardPage = () => {
                   <tfoot>
                     <tr className="bg-slate-100 text-xs font-semibold tabular-nums">
                       <td colSpan={2} className="px-4 py-2 text-right uppercase tracking-wide text-slate-500">Total</td>
-                      <td className="px-4 py-2 text-right">{empData?.totalPcs.toLocaleString('en-IN')}</td>
                       <td className="px-4 py-2 text-right">{empData?.totalWeight.toFixed(3)}</td>
+                      <td className="px-4 py-2 text-right">{empData?.totalPcs.toLocaleString('en-IN')}</td>
                       <td colSpan={3}></td>
                     </tr>
                   </tfoot>
@@ -416,8 +416,8 @@ export const DashboardPage = () => {
                         <span className="font-semibold text-sm text-slate-900 truncate">{row.labourName}</span>
                       </div>
                       <div className="text-right shrink-0">
-                        <div className="tabular-nums font-semibold text-sm">{row.pcs.toLocaleString('en-IN')} pcs</div>
-                        <div className="text-[10px] text-slate-500 tabular-nums">{row.totalWeight.toFixed(3)} kg</div>
+                        <div className="tabular-nums font-semibold text-sm">{row.totalWeight.toFixed(3)} kg</div>
+                        <div className="text-[10px] text-slate-500 tabular-nums">{row.pcs.toLocaleString('en-IN')} pcs</div>
                       </div>
                     </div>
                     {row.topSize && (

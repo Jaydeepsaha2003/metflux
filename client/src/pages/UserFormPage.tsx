@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, Save, Trash2, Building2, Star, ShieldCheck, Loader2, EyeOff,
+  ArrowLeft, Save, Trash2, Building2, Star, ShieldCheck, Loader2, Eye, EyeOff,
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
@@ -178,7 +178,7 @@ export const UserFormPage = () => {
             <Field label="Name" value={name} onChange={setName} required />
             <Field label="Email" type="email" value={email} onChange={setEmail} required />
             <Field label="User ID" value={username} onChange={(v) => setUsername(v.toLowerCase())} required hint="3–30 chars: letters, numbers, _ and -" />
-            <Field label={isEdit ? 'New password (leave blank to keep)' : 'Password'} type="password" value={password} onChange={setPassword} required={!isEdit} hint="Min 8 characters" />
+            <PasswordField label={isEdit ? 'New password (leave blank to keep)' : 'Password'} value={password} onChange={setPassword} required={!isEdit} hint="Min 8 characters" />
           </div>
           {me?.isPlatformAdmin && (
             <label className="flex items-center gap-2 text-sm">
@@ -270,6 +270,40 @@ const Field = ({
     {hint && <span className="mt-1 block text-xs text-slate-400">{hint}</span>}
   </label>
 );
+
+// Password field with a show/hide (eye) toggle so you can verify what you type.
+const PasswordField = ({
+  label, value, onChange, required, hint,
+}: {
+  label: string; value: string; onChange: (v: string) => void; required?: boolean; hint?: string;
+}) => {
+  const [show, setShow] = useState(false);
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">{label}</span>
+      <div className="relative">
+        <input
+          className="input pr-10"
+          type={show ? 'text' : 'password'}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          required={required}
+          autoComplete="new-password"
+        />
+        <button
+          type="button"
+          onClick={() => setShow((s) => !s)}
+          tabIndex={-1}
+          title={show ? 'Hide password' : 'Show password'}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+        >
+          {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </div>
+      {hint && <span className="mt-1 block text-xs text-slate-400">{hint}</span>}
+    </label>
+  );
+};
 
 /* ---------- membership card ---------- */
 const MembershipCard = ({
