@@ -7,7 +7,31 @@ import { requireAuth, requireRole, hashPassword } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 import { importBody, cellPick, numOpt, rowIsBlank, errMessage } from '../lib/importHelpers.js';
 import { derivePortalPassword, uniqueShortCode } from '../lib/portal.js';
+import { normName } from '../lib/invoicing.js';
 import { v4 as uuidv4 } from 'uuid';
+
+// Link this customer to any of their sales invoices that were imported without a
+// match (customerId NULL) by comparing normalized names, and set the due date
+// from the credit terms. Fixes "credit terms missing" on the Sales Register when
+// the customer/terms are added after the invoices were imported.
+const linkUnmatchedInvoices = async (companyId, customerId, name, dueDays) => {
+  try {
+    const rows = await q(
+      'SELECT `id`, `customerName` FROM `SalesInvoice` WHERE `companyId` = ? AND `customerId` IS NULL AND `customerName` IS NOT NULL',
+      [companyId]
+    );
+    const target = normName(name);
+    const ids = rows.filter((r) => normName(r.customerName) === target).map((r) => r.id);
+    for (const invId of ids) {
+      if (dueDays != null) {
+        await q('UPDATE `SalesInvoice` SET `customerId` = ?, `dueDate` = DATE_ADD(`invoiceDate`, INTERVAL ? DAY) WHERE `id` = ?', [customerId, dueDays, invId]);
+      } else {
+        await q('UPDATE `SalesInvoice` SET `customerId` = ? WHERE `id` = ?', [customerId, invId]);
+      }
+    }
+    return ids.length;
+  } catch { return 0; }
+};
 
 const router = Router();
 
@@ -223,6 +247,8 @@ router.post('/', requireRole('STAFF'), asyncHandler(async (req, res) => {
     companyId: req.tenant.companyId,
     createdById: req.auth.userId,
   });
+  // Adopt any invoices imported for this name before the customer existed.
+  await linkUnmatchedInvoices(req.tenant.companyId, customerId, data.name, data.dueDays ?? null);
   res.status(201).json(publicCustomer(created));
 }));
 
@@ -307,6 +333,13 @@ router.patch('/:id', requireRole('STAFF'), asyncHandler(async (req, res) => {
       );
     } catch { /* ignore */ }
   }
+
+  // Adopt any still-unmatched invoices for this name and stamp their due dates.
+  await linkUnmatchedInvoices(
+    req.tenant.companyId, id,
+    data.name ?? existing.name,
+    data.dueDays !== undefined ? data.dueDays : existing.dueDays,
+  );
 
   res.json(publicCustomer(updated));
 }));
