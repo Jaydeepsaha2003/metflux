@@ -1487,79 +1487,81 @@ export const NanoForm = ({
   };
 
   return (
-    <div className="rounded-lg border border-violet-200 bg-violet-50/40 p-3">
-      <div className="mb-2 flex items-center gap-2">
-        <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-violet-800">Nano core</span>
+    <div className="overflow-hidden rounded-xl border border-violet-200 bg-white shadow-sm">
+      {/* Header */}
+      <div className="flex items-center gap-2 border-b border-violet-100 bg-violet-50/70 px-4 py-2.5">
+        <span className="h-2 w-2 rounded-full bg-violet-500" />
+        <span className="text-xs font-bold uppercase tracking-wider text-violet-800">Nano Core</span>
       </div>
 
-      {/* Grade + Material (constrained width) */}
-      <div className="grid max-w-xl grid-cols-2 gap-x-2 gap-y-2">
-        <GradeMaterialPicker
-          grades={grades} grade={grade} material={material}
-          onGrade={setGrade} onMaterial={setMaterial} listIdSuffix="nano"
-        />
-      </div>
-
-      {/* Prices + optional SO rate — compact, packed */}
-      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-2">
-        <NumField label="Nano Price (₹/kg)" value={nanoPrice} onChange={setNanoPrice} w="w-32" />
-        <NumField label="Case Price (₹/kg)" value={casePrice} onChange={setCasePrice} w="w-32" />
-        <NumField label="SO Rate/Pcs (optional)" value={soRate} onChange={setSoRate} w="w-36" />
-      </div>
-
-      {/* Dimensions (ID × OD × HT) + pcs — compact */}
-      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-2">
-        <NumField label="ID" value={id} onChange={setId} w="w-20" />
-        <NumField label="OD" value={od} onChange={setOd} w="w-20" />
-        <NumField label="HT" value={ht} onChange={setHt} w="w-20" />
-        <NumField label="Pcs" value={pcs} onChange={setPcs} w="w-20" />
-      </div>
-
-      {/* Testing parameters — Turns / Frequency / Sfac / Flux (Bmax) → V + Ie max */}
-      <div className="mt-2 rounded-md border border-violet-100 bg-white/50 px-3 py-2">
-        <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-violet-800">Testing parameters</div>
-        <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
-          <NumField label="Turns" value={turns} onChange={setTurns} w="w-20" />
-          <NumField label="Frequency (Hz)" value={freq} onChange={setFreq} w="w-24" />
-          <NumField label="Stacking factor" value={sfac} onChange={setSfac} w="w-24" />
-          <Field label="Flux (Bmax)" className="w-44">
-            <SearchableSelect
-              dense
-              value={flux > 0 ? String(flux) : ''}
-              onChange={(v) => setFlux(parseFloat(v) || 0)}
-              options={fluxPoints.map((p) => ({ value: String(p.flux), label: `${p.flux} T (${Math.round(p.flux * 10000)} G)` }))}
-              placeholder={
-                !grade ? 'Pick grade first'
-                : !hasFluxData ? `No test data for "${grade}"`
-                : 'Select flux…'
-              }
-              disabled={!grade || !hasFluxData}
-            />
-          </Field>
+      <div className="space-y-4 p-4">
+        {/* Grade · Material · Prices — one aligned line */}
+        <div className="grid grid-cols-1 gap-x-3 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+          <GradeMaterialPicker
+            grades={grades} grade={grade} material={material}
+            onGrade={setGrade} onMaterial={setMaterial} listIdSuffix="nano"
+          />
+          <NumField label="Nano Price (₹/kg)" value={nanoPrice} onChange={setNanoPrice} />
+          <NumField label="Case Price (₹/kg)" value={casePrice} onChange={setCasePrice} />
         </div>
-        {flux > 0 && (
-          <div className="mt-2 grid grid-cols-3 gap-x-3 gap-y-1 sm:grid-cols-6">
-            <Stat label="Bmax (G)" value={`${Math.round(flux * 10000)}`} />
-            <Stat label="AT/cm" value={ateCm > 0 ? ateCm.toFixed(4) : '—'} />
-            <Stat label="V (Volts)" value={test.testVoltage > 0 ? test.testVoltage.toFixed(3) : '—'} />
-            <Stat label="V (mV)" value={test.testVoltageMv > 0 ? test.testVoltageMv.toFixed(2) : '—'} />
-            <Stat label="Ie max (A)" value={test.testCurrentA > 0 ? test.testCurrentA.toFixed(5) : (ateCm === 0 ? 'Set AT/cm' : '—')} />
-            <Stat label="Ie max (mA)" value={test.testCurrent > 0 ? test.testCurrent.toFixed(2) : '—'} />
+
+        {/* Dimensions + SO rate — one aligned line */}
+        <div>
+          <SecLabel>Dimensions &amp; rate</SecLabel>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-5">
+            <NumField label="ID" value={id} onChange={setId} />
+            <NumField label="OD" value={od} onChange={setOd} />
+            <NumField label="HT" value={ht} onChange={setHt} />
+            <NumField label="Pcs" value={pcs} onChange={setPcs} />
+            <NumField label="SO Rate/Pcs" value={soRate} onChange={setSoRate} />
           </div>
-        )}
+        </div>
+
+        {/* Testing parameters — one aligned line */}
+        <div>
+          <SecLabel>Testing parameters</SecLabel>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-4">
+            <NumField label="Turns" value={turns} onChange={setTurns} />
+            <NumField label="Frequency (Hz)" value={freq} onChange={setFreq} />
+            <NumField label="Stacking factor" value={sfac} onChange={setSfac} />
+            <Field label="Flux (Bmax)">
+              <SearchableSelect
+                dense
+                value={flux > 0 ? String(flux) : ''}
+                onChange={(v) => setFlux(parseFloat(v) || 0)}
+                options={fluxPoints.map((p) => ({ value: String(p.flux), label: `${p.flux} T (${Math.round(p.flux * 10000)} G)` }))}
+                placeholder={
+                  !grade ? 'Pick grade first'
+                  : !hasFluxData ? `No test data for "${grade}"`
+                  : 'Select flux…'
+                }
+                disabled={!grade || !hasFluxData}
+              />
+            </Field>
+          </div>
+          {flux > 0 && (
+            <div className="mt-3 grid grid-cols-3 gap-x-3 gap-y-2 rounded-lg bg-violet-50/60 px-3 py-2.5 sm:grid-cols-6">
+              <Stat label="Bmax (G)" value={`${Math.round(flux * 10000)}`} />
+              <Stat label="AT/cm" value={ateCm > 0 ? ateCm.toFixed(4) : '—'} />
+              <Stat label="V (Volts)" value={test.testVoltage > 0 ? test.testVoltage.toFixed(3) : '—'} />
+              <Stat label="V (mV)" value={test.testVoltageMv > 0 ? test.testVoltageMv.toFixed(2) : '—'} />
+              <Stat label="Ie max (A)" value={test.testCurrentA > 0 ? test.testCurrentA.toFixed(5) : (ateCm === 0 ? 'Set AT/cm' : '—')} />
+              <Stat label="Ie max (mA)" value={test.testCurrent > 0 ? test.testCurrent.toFixed(2) : '—'} />
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Computed values */}
-      <div className="mt-3 rounded-md border border-violet-100 bg-white/60 px-3 py-2">
-        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-5">
+      {/* Computed summary */}
+      <div className="border-t border-violet-100 bg-violet-50/40 px-4 py-3">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-5">
           <Stat label="Core Wt (kg)"  value={calc.coreWeight.toFixed(3)} />
           <Stat label="Case Wt (kg)"  value={calc.caseWeight.toFixed(3)} />
           <Stat label="Total Wt (core+case)" value={totalWt.toFixed(3)} accent="primary" />
           <Stat label="Bare Size"     value={geomOk ? calc.measure : '—'} />
           <Stat label="Finish Size"   value={finished ?? '—'} accent={finished ? 'primary' : undefined} />
         </div>
-        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 border-t border-violet-100 pt-2 sm:grid-cols-4">
+        <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-violet-100 pt-3 sm:grid-cols-4">
           <Stat label="Nano+Case / Pc" value={`₹${money0(nanoCasePc)}`} />
           <Stat label="SO Rate/Pcs"    value={soRate > 0 ? `₹${money0(soRate)}` : '— (auto)'} />
           <Stat label="Applied / Pc"   value={`₹${money0(effRate)}`} />
@@ -1567,7 +1569,8 @@ export const NanoForm = ({
         </div>
       </div>
 
-      <div className="mt-3 flex justify-end">
+      {/* Action */}
+      <div className="flex justify-end border-t border-violet-100 px-4 py-3">
         <button onClick={add} className="btn-primary w-full sm:w-auto" type="button">
           <Plus className="h-4 w-4" /> Add nano item
         </button>
@@ -1576,3 +1579,7 @@ export const NanoForm = ({
     </div>
   );
 };
+
+const SecLabel = ({ children }: { children: React.ReactNode }) => (
+  <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-violet-700">{children}</div>
+);
