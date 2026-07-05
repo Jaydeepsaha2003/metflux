@@ -131,7 +131,7 @@ router.post('/store', requireAnyPermission(...PERM), asyncHandler(async (req, re
   const CHUNK = 400;
   for (let i = 0; i < entries.length; i += CHUNK) {
     const slice = entries.slice(i, i + CHUNK);
-    const placeholders = slice.map(() => '(?,?,?,?,?,?,?)').join(',');
+    const placeholders = slice.map(() => '(?,?,?,?,?,?,?,?)').join(',');
     const params = [];
     for (const e of slice) {
       params.push(newId(), companyId, e.date ?? max, e.side, e.account.slice(0, 200), normName(e.account).slice(0, 200), round2(e.amount), (e.vch || '').slice(0, 80));

@@ -97,6 +97,7 @@ export const ReceiptsPaymentsPage = () => {
       ['payments', 'sales-invoices', 'debtor-aging', 'creditor-aging', 'purchases', 'cashbook-summary'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
       setPreview(null); setRows(null);
     },
+    onError: (e) => setUploadErr(e instanceof Error ? e.message : 'Import failed — nothing was saved.'),
   });
 
   const selReceipts = (preview?.receipts ?? []).filter((x) => rcvOn[x.customerId] && x.willApply > 0);
@@ -111,6 +112,7 @@ export const ReceiptsPaymentsPage = () => {
       confirmLabel: 'Import',
     });
     if (!ok) return;
+    setUploadErr(null);
     importMutation.mutate({
       receipts: selReceipts.map((x) => ({ customerId: x.customerId, amount: round2(x.amount) })),
       payments: selPayments.map((x) => ({ supplierKey: x.supplierKey, amount: round2(x.amount) })),
