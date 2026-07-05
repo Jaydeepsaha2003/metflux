@@ -19,6 +19,30 @@ import {
 } from '../lib/auth.js';
 import { effectivePermissions, sanitizePermissions } from '../lib/permissions.js';
 import { clientIp, parseDevice, geoLookup } from '../lib/session.js';
+import { sendToUser } from '../lib/push.js';
+
+// Push a "new sign-in" alert to every company admin when a non-admin staff
+// member logs in. Fire-and-forget — never blocks or fails the login.
+const notifyAdminsOfLogin = async (companyId, user, meta) => {
+  try {
+    const admins = await q(
+      `SELECT DISTINCT u.\`id\` AS id FROM \`User\` u
+         INNER JOIN \`Membership\` m ON m.\`userId\` = u.\`id\`
+        WHERE m.\`companyId\` = ? AND m.\`role\` = 'COMPANY_ADMIN'
+          AND m.\`isActive\` = 1 AND u.\`isActive\` = 1 AND u.\`id\` <> ?`,
+      [companyId, user.id]
+    );
+    if (!admins.length) return;
+    const detail = [meta.device, meta.ip].filter(Boolean).join(' · ');
+    const payload = {
+      title: 'New sign-in',
+      body: `${user.name} signed in${detail ? ` — ${detail}` : ''}`,
+      url: '/s/admin/settings/user-logs',
+      tag: 'login',
+    };
+    await Promise.all(admins.map((a) => sendToUser(a.id, payload)));
+  } catch { /* ignore */ }
+};
 
 const router = Router();
 
@@ -203,6 +227,10 @@ router.post('/login', authLimiter, asyncHandler(async (req, res) => {
       .then((loc) => { if (loc) return q('UPDATE `RefreshToken` SET `location` = ? WHERE `jti` = ?', [loc, tokens.jti]); })
       .catch(() => {});
   }
+
+  // Alert company admins on staff (non-admin) sign-ins.
+  const isAdminLogin = !!user.isPlatformAdmin || active?.role === 'COMPANY_ADMIN';
+  if (active?.companyId && !isAdminLogin) notifyAdminsOfLogin(active.companyId, user, meta);
 }));
 
 // POST /api/auth/refresh — uses the refresh cookie, rotates it.

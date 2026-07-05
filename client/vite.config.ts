@@ -35,6 +35,9 @@ export default defineConfig({
         // again we should code-split via dynamic import() rather than bumping
         // this further.
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        // Pull in our push-notification handler (login alerts) — the generated
+        // Workbox SW importScripts() this at the top.
+        importScripts: ['/s/admin/push-sw.js'],
         // Always go to network for /api — never cache JSON responses.
         navigateFallbackDenylist: [/^\/api/],
         runtimeCaching: [

@@ -11,6 +11,7 @@ import type { PermissionKey } from '@/lib/permissions';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { CompanySwitcher } from '@/components/CompanySwitcher';
+import { LoginBell } from '@/components/LoginBell';
 
 /* ---------- nav definition ---------- */
 type NavLeaf = {
@@ -415,13 +416,16 @@ const PageHeader = ({ onToggleSidebar }: { onToggleSidebar: () => void }) => {
         )}
         <span className="font-semibold text-slate-900 text-sm sm:text-base truncate">{firstWord}</span>
       </div>
-      <div className="text-sm text-slate-500 truncate ml-2">
-        {user?.name}
-        {user?.isPlatformAdmin && (
-          <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
-            PLATFORM
-          </span>
-        )}
+      <div className="flex items-center gap-2 ml-2 min-w-0">
+        <LoginBell />
+        <div className="text-sm text-slate-500 truncate">
+          {user?.name}
+          {user?.isPlatformAdmin && (
+            <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+              PLATFORM
+            </span>
+          )}
+        </div>
       </div>
     </header>
   );
