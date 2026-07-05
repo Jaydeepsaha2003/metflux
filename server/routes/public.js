@@ -22,6 +22,22 @@ router.get('/app-branding', asyncHandler(async (_req, res) => {
   res.json({ logoUrl });
 }));
 
+/* GET /api/public/app-logo — the global logo as a real image file (not a data
+   URL), so the PWA manifest + apple-touch-icon can point at it and installed /
+   home-screen icons pick it up. Falls back to the bundled default icon. */
+router.get('/app-logo', asyncHandler(async (_req, res) => {
+  let dataUrl = null;
+  try {
+    const row = await qOne("SELECT `settingValue` FROM `AppSetting` WHERE `settingKey` = 'app_logo'");
+    dataUrl = row?.settingValue ?? null;
+  } catch { /* not migrated */ }
+  const m = dataUrl && /^data:([^;]+);base64,(.*)$/s.exec(dataUrl);
+  if (!m) return res.redirect(302, '/s/admin/icons/icon.svg');
+  res.setHeader('Content-Type', m[1]);
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.send(Buffer.from(m[2], 'base64'));
+}));
+
 const contactLimiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 10 minutes
   max: 5,                    // 5 submissions per IP per 10 min

@@ -19,7 +19,12 @@ export default defineConfig({
         display: 'standalone',
         start_url: '/s/admin/',
         scope: '/s/admin/',
+        // Point at the dynamic endpoint so the uploaded App Branding logo is
+        // used for the installed / home-screen icon (new installs). The bundled
+        // SVG stays as a guaranteed-valid fallback for installability.
         icons: [
+          { src: '/api/public/app-logo', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/api/public/app-logo', sizes: '192x192', type: 'image/png', purpose: 'any' },
           { src: '/s/admin/icons/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
         ],
         prefer_related_applications: false,
