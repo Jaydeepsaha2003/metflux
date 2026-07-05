@@ -171,7 +171,7 @@ export const DebtorAgingPage = () => {
       {/* Aging totals strip */}
       {t && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <Bucket label="Total Outstanding" value={inr(t.total)} tone="brand" />
+          <Bucket label="Amount Receivable" value={inr(t.total)} tone="brand" />
           <Bucket label="Not Due" value={inr(t.notDue)} tone="ok" />
           <Bucket label="1–30 days" value={inr(t.d1_30)} tone="low" />
           <Bucket label="31–60 days" value={inr(t.d31_60)} tone="mid" />
@@ -197,7 +197,7 @@ export const DebtorAgingPage = () => {
                   <th className="px-3 py-2.5 text-right">31–60</th>
                   <th className="px-3 py-2.5 text-right">61–90</th>
                   <th className="px-3 py-2.5 text-right">90+</th>
-                  <th className="px-3 py-2.5 text-right">Total</th>
+                  <th className="px-3 py-2.5 text-right">Amount Receivable</th>
                   <th className="px-3 py-2.5 text-center">Send</th>
                 </tr>
               </thead>
