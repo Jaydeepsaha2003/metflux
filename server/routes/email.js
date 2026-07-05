@@ -5,7 +5,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { qOne, update } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
-import { requireAuth, requirePermission } from '../lib/auth.js';
+import { requireAuth, requireAnyPermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 import { env } from '../lib/env.js';
 import { brevoConfigured, sendTransactionalEmail } from '../lib/brevo.js';
@@ -14,7 +14,7 @@ const router = Router();
 router.use(requireAuth, resolveTenant);
 
 /* GET /email/config — is email sending available + the default sender? */
-router.get('/config', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.get('/config', requireAnyPermission('view_debtor_aging', 'manage_invoices'), asyncHandler(async (req, res) => {
   const company = await qOne('SELECT `name`, `email` FROM `Company` WHERE `id` = ?', [req.tenant.companyId]);
   const senderEmail = env.BREVO_SENDER_EMAIL || company?.email || '';
   res.json({ configured: brevoConfigured() && !!senderEmail, senderEmail });
@@ -33,7 +33,7 @@ const schema = z.object({
 });
 
 /* POST /email/reminder — send the outstanding-statement email */
-router.post('/reminder', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.post('/reminder', requireAnyPermission('view_debtor_aging', 'manage_invoices'), asyncHandler(async (req, res) => {
   const data = schema.parse(req.body);
   if (!brevoConfigured()) throw new AppError('Email is not configured on the server (BREVO_API_KEY).', 400, 'EMAIL_NOT_CONFIGURED');
 

@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { q, qOne } from '../lib/db.js';
 import { asyncHandler } from '../lib/errors.js';
-import { requireAuth, requirePermission } from '../lib/auth.js';
+import { requireAuth, requirePermission, requireAnyPermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 
 const router = Router();
@@ -326,7 +326,7 @@ router.get('/employees', asyncHandler(async (req, res) => {
    `from`/`to` window the money + breakdown figures (default: last 12 months);
    the trend is always the trailing 12 months, and receivables/funnel/returns
    are point-in-time. Gated on manage_invoices since it surfaces financials. */
-router.get('/analysis', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.get('/analysis', requireAnyPermission('view_analysis', 'manage_invoices'), asyncHandler(async (req, res) => {
   const companyId = req.tenant.companyId;
   const now = new Date();
   const { from, to } = filterQuery.parse(req.query);

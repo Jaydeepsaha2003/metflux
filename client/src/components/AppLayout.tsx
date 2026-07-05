@@ -30,8 +30,8 @@ type NavGroup = {
 type NavItem = NavLeaf | NavGroup;
 
 const NAV: NavItem[] = [
-  { kind: 'leaf', to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { kind: 'leaf', to: '/analysis', label: 'Analysis', icon: TrendingUp, perm: 'manage_invoices' },
+  { kind: 'leaf', to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true, perm: 'view_dashboard' },
+  { kind: 'leaf', to: '/analysis', label: 'Analysis', icon: TrendingUp, perm: 'view_analysis' },
   {
     kind: 'group', key: 'po', label: 'Sales Order', icon: FileText,
     children: [
@@ -63,13 +63,13 @@ const NAV: NavItem[] = [
   {
     kind: 'group', key: 'accounts', label: 'Accounts', icon: Receipt,
     children: [
-      { kind: 'leaf', to: '/sales-invoices',          label: 'Sales Register',    icon: FileText,     end: true, perm: 'manage_invoices' },
-      { kind: 'leaf', to: '/accounts/purchases',      label: 'Purchase Register', icon: ShoppingCart, perm: 'manage_invoices' },
-      { kind: 'leaf', to: '/accounts/bills-payable',  label: 'Bills Payable',     icon: CreditCard,   perm: 'manage_invoices' },
-      { kind: 'leaf', to: '/accounts/creditor-aging', label: 'Creditor Aging',    icon: Clock,        perm: 'manage_invoices' },
-      { kind: 'leaf', to: '/sales-invoices/aging',    label: 'Debtor Aging',      icon: Clock,        perm: 'manage_invoices' },
-      { kind: 'leaf', to: '/sales-invoices/payments', label: 'Receive Payments',  icon: Wallet,       perm: 'manage_invoices' },
-      { kind: 'leaf', to: '/sales-invoices/bills-receivable', label: 'Bills Receivable', icon: Receipt, perm: 'manage_invoices' },
+      { kind: 'leaf', to: '/sales-invoices',          label: 'Sales Register',    icon: FileText,     end: true, perm: 'view_sales_register' },
+      { kind: 'leaf', to: '/accounts/purchases',      label: 'Purchase Register', icon: ShoppingCart, perm: 'view_purchase_register' },
+      { kind: 'leaf', to: '/accounts/bills-payable',  label: 'Bills Payable',     icon: CreditCard,   perm: 'view_bills_payable' },
+      { kind: 'leaf', to: '/accounts/creditor-aging', label: 'Creditor Aging',    icon: Clock,        perm: 'view_creditor_aging' },
+      { kind: 'leaf', to: '/sales-invoices/aging',    label: 'Debtor Aging',      icon: Clock,        perm: 'view_debtor_aging' },
+      { kind: 'leaf', to: '/sales-invoices/payments', label: 'Receive Payments',  icon: Wallet,       perm: 'receive_payments' },
+      { kind: 'leaf', to: '/sales-invoices/bills-receivable', label: 'Bills Receivable', icon: Receipt, perm: 'view_bills_receivable' },
     ],
   },
   {
@@ -150,6 +150,17 @@ export const AppLayout = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [user?.id, isPlatform, useAuthStore.getState().activePermissions.join(','), useAuthStore.getState().activeRole]
   );
+
+  // If the Dashboard is hidden for this user, don't strand them on "/" — send
+  // them to their first accessible page.
+  useEffect(() => {
+    if (location.pathname !== '/' || can('view_dashboard')) return;
+    const firstLeaf = visibleNav
+      .flatMap((i) => (i.kind === 'leaf' ? [i] : i.children))
+      .find((l) => l.to !== '/');
+    if (firstLeaf) navigate(firstLeaf.to, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname, visibleNav]);
 
   const toggleGroup = (key: string) =>
     setOpenGroupKey((prev) => (prev === key ? null : key));

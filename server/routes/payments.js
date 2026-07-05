@@ -6,7 +6,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { q, qOne, txn } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
-import { requireAuth, requirePermission } from '../lib/auth.js';
+import { requireAuth, requireAnyPermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 import { round2, invoiceStatus, parseDMY, normName, allocatePaymentFifo, allocatePaymentManual } from '../lib/invoicing.js';
 import { cellPick, numOpt, rowIsBlank, errMessage } from '../lib/importHelpers.js';
@@ -61,7 +61,7 @@ const recordPayment = async (tx, { companyId, userId, customer, amount, paymentD
 };
 
 /* ---------- POST / — record a single payment ---------- */
-router.post('/', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.post('/', requireAnyPermission('receive_payments', 'manage_invoices'), asyncHandler(async (req, res) => {
   const data = createSchema.parse(req.body);
   const customer = await qOne('SELECT `id`, `name` FROM `Customer` WHERE `id` = ? AND `companyId` = ?', [data.customerId, req.tenant.companyId]);
   if (!customer) throw new AppError('Customer not found', 400, 'BAD_CUSTOMER');
@@ -70,7 +70,7 @@ router.post('/', requirePermission('manage_invoices'), asyncHandler(async (req, 
 }));
 
 /* ---------- POST /import — bulk payments from the template ---------- */
-router.post('/import', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.post('/import', requireAnyPermission('receive_payments', 'manage_invoices'), asyncHandler(async (req, res) => {
   const { rows } = z.object({ rows: z.array(z.record(z.any())).max(5000) }).parse(req.body);
 
   const customers = await q('SELECT `id`, `name`, `customerCode` FROM `Customer` WHERE `companyId` = ?', [req.tenant.companyId]);
@@ -119,7 +119,7 @@ router.post('/import', requirePermission('manage_invoices'), asyncHandler(async 
 }));
 
 /* ---------- GET /outstanding/:customerId — open invoices for the FIFO preview ---------- */
-router.get('/outstanding/:customerId', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.get('/outstanding/:customerId', requireAnyPermission('receive_payments', 'manage_invoices'), asyncHandler(async (req, res) => {
   const rows = await q(
     `SELECT * FROM \`SalesInvoice\`
        WHERE \`companyId\` = ? AND \`customerId\` = ? AND \`status\` <> 'PAID'
@@ -133,7 +133,7 @@ router.get('/outstanding/:customerId', requirePermission('manage_invoices'), asy
 }));
 
 /* ---------- GET / — payment history with allocations ---------- */
-router.get('/', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.get('/', requireAnyPermission('receive_payments', 'manage_invoices'), asyncHandler(async (req, res) => {
   const { search } = z.object({ search: z.string().trim().max(120).optional() }).parse(req.query);
   let where = 'p.`companyId` = ?';
   const params = [req.tenant.companyId];
@@ -179,7 +179,7 @@ router.get('/', requirePermission('manage_invoices'), asyncHandler(async (req, r
 }));
 
 /* ---------- DELETE /:id — reverse allocations, then remove the payment ---------- */
-router.delete('/:id', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.delete('/:id', requireAnyPermission('receive_payments', 'manage_invoices'), asyncHandler(async (req, res) => {
   const pay = await qOne('SELECT * FROM `Payment` WHERE `id` = ? AND `companyId` = ?', [req.params.id, req.tenant.companyId]);
   if (!pay) throw new AppError('Payment not found', 404, 'NOT_FOUND');
   await txn(async (tx) => {

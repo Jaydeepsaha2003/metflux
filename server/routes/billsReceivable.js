@@ -16,7 +16,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { q, qOne, txn } from '../lib/db.js';
 import { asyncHandler } from '../lib/errors.js';
-import { requireAuth, requirePermission } from '../lib/auth.js';
+import { requireAuth, requireAnyPermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 import { round2, normName, allocatePaymentFifo } from '../lib/invoicing.js';
 import { parseBalanceMatrix, classifyAdjustment } from '../lib/billsReconcile.js';
@@ -28,7 +28,7 @@ router.use(requireAuth, resolveTenant);
 const TOL = 0.01; // one-paisa tolerance, same as the rest of the accounting code
 
 /* ---------- POST /preview — match + compute, write nothing ---------- */
-router.post('/preview', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.post('/preview', requireAnyPermission('view_bills_receivable', 'manage_invoices'), asyncHandler(async (req, res) => {
   const { rows } = z.object({ rows: z.array(z.array(z.any())).max(10000) }).parse(req.body);
   const { parties, asOn } = parseBalanceMatrix(rows);
 
@@ -115,7 +115,7 @@ router.post('/preview', requirePermission('manage_invoices'), asyncHandler(async
 }));
 
 /* ---------- POST /post — record the confirmed reconciling receipts ---------- */
-router.post('/post', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.post('/post', requireAnyPermission('view_bills_receivable', 'manage_invoices'), asyncHandler(async (req, res) => {
   const { paymentDate, reference, entries } = z.object({
     paymentDate: z.coerce.date(),
     reference:   z.string().trim().max(120).optional().nullable(),

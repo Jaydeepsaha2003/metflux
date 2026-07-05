@@ -13,7 +13,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { q, txn } from '../lib/db.js';
 import { asyncHandler } from '../lib/errors.js';
-import { requireAuth, requirePermission } from '../lib/auth.js';
+import { requireAuth, requireAnyPermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 import { round2, normName } from '../lib/invoicing.js';
 import { parseBalanceMatrix, classifyAdjustment, allocateSupplierPaymentFifo } from '../lib/billsReconcile.js';
@@ -48,7 +48,7 @@ const loadOpenPayablesBySupplier = async (companyId) => {
 };
 
 /* ---------- POST /preview — match + compute, write nothing ---------- */
-router.post('/preview', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.post('/preview', requireAnyPermission('view_bills_payable', 'manage_invoices'), asyncHandler(async (req, res) => {
   const { rows } = z.object({ rows: z.array(z.array(z.any())).max(10000) }).parse(req.body);
   const { parties, asOn } = parseBalanceMatrix(rows);
 
@@ -113,7 +113,7 @@ router.post('/preview', requirePermission('manage_invoices'), asyncHandler(async
 }));
 
 /* ---------- POST /post — record the confirmed reconciling payments ---------- */
-router.post('/post', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.post('/post', requireAnyPermission('view_bills_payable', 'manage_invoices'), asyncHandler(async (req, res) => {
   const { paymentDate, reference, entries } = z.object({
     paymentDate: z.coerce.date(),
     reference:   z.string().trim().max(120).optional().nullable(),

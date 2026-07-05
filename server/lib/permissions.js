@@ -11,6 +11,9 @@
 // keys that gate nothing only confuse admins building a user.
 
 export const PERMISSION_KEYS = Object.freeze([
+  // Overview
+  'view_dashboard',
+  'view_analysis',
   // Sales (PO) orders
   'add_po',
   'view_po',
@@ -34,7 +37,14 @@ export const PERMISSION_KEYS = Object.freeze([
   'dispatch',
   // Returns
   'manage_returns',
-  // Sales invoices, debtor aging & payments
+  // Accounts — granular per page (manage_invoices kept as a legacy umbrella).
+  'view_sales_register',
+  'view_debtor_aging',
+  'receive_payments',
+  'view_bills_receivable',
+  'view_purchase_register',
+  'view_creditor_aging',
+  'view_bills_payable',
   'manage_invoices',
   // User administration (gates the User-management page)
   'manage_users',
@@ -42,6 +52,8 @@ export const PERMISSION_KEYS = Object.freeze([
 
 // Friendly labels for the UI checkbox grid.
 export const PERMISSION_LABELS = Object.freeze({
+  view_dashboard:   'View Dashboard',
+  view_analysis:    'View Analysis',
   add_po:           'Add Sales Order',
   view_po:          'View Sales Orders',
   po_summary:       'View SO Summary',
@@ -57,7 +69,14 @@ export const PERMISSION_LABELS = Object.freeze({
   add_material:     'Manage Materials',
   dispatch:         'Dispatch & Packing List',
   manage_returns:   'Manage Returns',
-  manage_invoices:  'Sales Invoices & Payments',
+  view_sales_register:   'Sales Register',
+  view_debtor_aging:     'Debtor Aging + Reminders',
+  receive_payments:      'Receive Payments',
+  view_bills_receivable: 'Bills Receivable',
+  view_purchase_register:'Purchase Register',
+  view_creditor_aging:   'Creditor Aging',
+  view_bills_payable:    'Bills Payable',
+  manage_invoices:  'Accounts (all — legacy)',
   manage_users:     'Manage Users',
 });
 

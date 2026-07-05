@@ -6,7 +6,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { q, qOne, insert, update, txn } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
-import { requireAuth, requirePermission } from '../lib/auth.js';
+import { requireAuth, requirePermission, requireAnyPermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 import { round2, parseAmount, normName, addDays, inferDateOrder, parseDateWith, isCancelledName } from '../lib/invoicing.js';
 import { createCustomerRecord } from '../lib/customers.js';
@@ -52,7 +52,7 @@ const flatten = (inv) => {
 /* ---------- POST /import — parse the vouchers sheet (sent as a raw matrix) ---------- */
 const importSchema = z.object({ rows: z.array(z.array(z.any())).max(20000) });
 
-router.post('/import', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.post('/import', requireAnyPermission('view_sales_register', 'manage_invoices'), asyncHandler(async (req, res) => {
   const { rows } = importSchema.parse(req.body);
   const matrix = rows.map((r) => (Array.isArray(r) ? r.map((c) => String(c ?? '').trim()) : []));
 
@@ -243,7 +243,7 @@ router.post('/import', requirePermission('manage_invoices'), asyncHandler(async 
 }));
 
 /* ---------- GET /summary — dashboard cards ---------- */
-router.get('/summary', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.get('/summary', requireAnyPermission('view_sales_register', 'manage_invoices'), asyncHandler(async (req, res) => {
   const row = await qOne(
     `SELECT
        COUNT(*) AS total,
@@ -265,7 +265,7 @@ router.get('/summary', requirePermission('manage_invoices'), asyncHandler(async 
 }));
 
 /* ---------- GET /aging — per-customer aging buckets (powers reminders) ---------- */
-router.get('/aging', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.get('/aging', requireAnyPermission('view_debtor_aging', 'manage_invoices'), asyncHandler(async (req, res) => {
   const rows = await q(
     `SELECT si.*, c.\`name\` AS cName, c.\`phone\` AS cPhone, c.\`customerCode\` AS cCode, c.\`dueDays\` AS cDueDays, c.\`email\` AS cEmail
        FROM \`SalesInvoice\` si
@@ -364,7 +364,7 @@ router.get('/aging', requirePermission('manage_invoices'), asyncHandler(async (r
 }));
 
 /* ---------- GET / — paginated list ---------- */
-router.get('/', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.get('/', requireAnyPermission('view_sales_register', 'manage_invoices'), asyncHandler(async (req, res) => {
   const { page, pageSize, search, status, filter, docType } = z.object({
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(10000).default(50),
@@ -403,7 +403,7 @@ router.get('/', requirePermission('manage_invoices'), asyncHandler(async (req, r
 }));
 
 /* ---------- PATCH /:id — fix a flagged invoice (assign customer / set due date) ---------- */
-router.patch('/:id', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.patch('/:id', requireAnyPermission('view_sales_register', 'manage_invoices'), asyncHandler(async (req, res) => {
   const data = z.object({
     customerId: z.string().min(1).optional().nullable(),
     dueDate: z.coerce.date().optional().nullable(),
@@ -444,7 +444,7 @@ router.patch('/:id', requirePermission('manage_invoices'), asyncHandler(async (r
    Body is either { ids: [...] } (explicit selection) or { all: true } plus the
    current list filters (delete every matching invoice across all pages). Each
    invoice's payment allocations are reversed, exactly like single delete. */
-router.post('/bulk-delete', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.post('/bulk-delete', requireAnyPermission('view_sales_register', 'manage_invoices'), asyncHandler(async (req, res) => {
   const body = z.object({
     ids: z.array(z.string().min(1)).max(50000).optional(),
     all: z.boolean().optional(),
@@ -506,7 +506,7 @@ router.post('/bulk-delete', requirePermission('manage_invoices'), asyncHandler(a
 }));
 
 /* ---------- DELETE /:id — remove an invoice, reversing any payment allocations ---------- */
-router.delete('/:id', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.delete('/:id', requireAnyPermission('view_sales_register', 'manage_invoices'), asyncHandler(async (req, res) => {
   const inv = await qOne('SELECT `id` FROM `SalesInvoice` WHERE `id` = ? AND `companyId` = ?', [req.params.id, req.tenant.companyId]);
   if (!inv) throw new AppError('Invoice not found', 404, 'NOT_FOUND');
   await txn(async (tx) => {

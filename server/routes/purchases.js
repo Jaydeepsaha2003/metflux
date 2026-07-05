@@ -6,7 +6,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { q, qOne, insert } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
-import { requireAuth, requirePermission } from '../lib/auth.js';
+import { requireAuth, requirePermission, requireAnyPermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 import { round2, parseAmount, inferDateOrder, parseDateWith, isCancelledName, normName } from '../lib/invoicing.js';
 
@@ -34,7 +34,7 @@ const flatten = (p) => {
 };
 
 /* ---------- POST /import ---------- */
-router.post('/import', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.post('/import', requireAnyPermission('view_purchase_register', 'manage_invoices'), asyncHandler(async (req, res) => {
   const { rows } = z.object({ rows: z.array(z.array(z.any())).max(20000) }).parse(req.body);
   const matrix = rows.map((r) => (Array.isArray(r) ? r.map((c) => String(c ?? '').trim()) : []));
 
@@ -141,7 +141,7 @@ router.post('/import', requirePermission('manage_invoices'), asyncHandler(async 
 }));
 
 /* ---------- GET /summary ---------- */
-router.get('/summary', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.get('/summary', requireAnyPermission('view_purchase_register', 'manage_invoices'), asyncHandler(async (req, res) => {
   const row = await qOne(
     `SELECT COUNT(*) total,
        COALESCE(SUM(\`amount\`),0) totalAmount,
@@ -163,7 +163,7 @@ router.get('/summary', requirePermission('manage_invoices'), asyncHandler(async 
 // are aged by BILL DATE (days since the invoice date). Debit notes (negative
 // balance) net the total down and sit in the current 0–30 bucket. Suppliers are
 // grouped by normalized name so name variants from the import don't split a row.
-router.get('/aging', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.get('/aging', requireAnyPermission('view_creditor_aging', 'manage_invoices'), asyncHandler(async (req, res) => {
   const rows = await q(
     `SELECT \`id\`, \`invoiceNumber\`, \`invoiceDate\`, \`supplierName\`, \`amount\`, \`paidAmount\`, \`docType\`
        FROM \`PurchaseInvoice\`
@@ -218,7 +218,7 @@ const listFilters = (query) => {
   return { where, params };
 };
 
-router.get('/', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.get('/', requireAnyPermission('view_purchase_register', 'manage_invoices'), asyncHandler(async (req, res) => {
   const { page, pageSize, search, docType } = z.object({
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(10000).default(50),
@@ -243,7 +243,7 @@ router.get('/', requirePermission('manage_invoices'), asyncHandler(async (req, r
 }));
 
 /* ---------- POST /bulk-delete ---------- */
-router.post('/bulk-delete', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.post('/bulk-delete', requireAnyPermission('view_purchase_register', 'manage_invoices'), asyncHandler(async (req, res) => {
   const body = z.object({
     ids: z.array(z.string().min(1)).max(50000).optional(),
     all: z.boolean().optional(),
@@ -275,7 +275,7 @@ router.post('/bulk-delete', requirePermission('manage_invoices'), asyncHandler(a
 }));
 
 /* ---------- DELETE /:id ---------- */
-router.delete('/:id', requirePermission('manage_invoices'), asyncHandler(async (req, res) => {
+router.delete('/:id', requireAnyPermission('view_purchase_register', 'manage_invoices'), asyncHandler(async (req, res) => {
   const row = await qOne('SELECT `id` FROM `PurchaseInvoice` WHERE `id` = ? AND `companyId` = ?', [req.params.id, req.tenant.companyId]);
   if (!row) throw new AppError('Purchase entry not found', 404, 'NOT_FOUND');
   await q('DELETE FROM `PurchaseInvoice` WHERE `id` = ?', [row.id]);
