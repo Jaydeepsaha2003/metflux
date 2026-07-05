@@ -11,6 +11,22 @@ import {
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
+import { toroidalCalc, rectangularCalc, nanoCalc, round3 } from '@/lib/calc';
+
+type Spec = {
+  coreType: string; grade: string; material: string; measure: string;
+  id1: number | null; id2: number | null; od1: number | null; od2: number | null; ht: number | null;
+  weightPerPc: number;
+};
+// Weight per pc from the item's dimensions, per its core-type formula.
+const specWeight = (s: Spec): number => {
+  const n = (v: number | null) => Number(v) || 0;
+  let w = 0;
+  if (s.coreType === 'RECTANGULAR') w = rectangularCalc({ id1: n(s.id1), id2: n(s.id2), od1: n(s.od1), od2: n(s.od2), ht: n(s.ht), pcs: 0 }).weightPerPc;
+  else if (s.coreType === 'NANO') { const c = nanoCalc({ id: n(s.id1), od: n(s.od1), ht: n(s.ht), pcs: 0 }); w = round3(c.coreWeight + c.caseWeight); }
+  else w = toroidalCalc({ id: n(s.id1), od: n(s.od1), ht: n(s.ht), pcs: 0 }).weightPerPc;
+  return w > 0 ? w : (Number(s.weightPerPc) || 0);
+};
 
 type Store = { id: string; name: string; isActive: boolean; notes: string | null };
 type StockLine = {
@@ -219,29 +235,36 @@ export const WarehousePage = () => {
   );
 };
 
-/* ── Opening-stock modal — manual IN with a user-entered spec ── */
+/* ── Opening-stock modal — pick grade/material/measure; weight auto-computed ── */
 const OpeningStockModal = ({
   stores, defaultStoreId, onClose, onDone,
 }: { stores: Store[]; defaultStoreId: string; onClose: () => void; onDone: () => void }) => {
   const [warehouseId, setWarehouseId] = useState(defaultStoreId || stores[0]?.id || '');
-  const [coreType, setCoreType] = useState<'TOROIDAL' | 'RECTANGULAR' | 'NANO'>('TOROIDAL');
   const [grade, setGrade] = useState('');
   const [material, setMaterial] = useState('');
   const [measure, setMeasure] = useState('');
-  const [weightPerPc, setWeightPerPc] = useState(0);
   const [pcs, setPcs] = useState(0);
   const [movementDate, setMovementDate] = useState(todayISO());
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
+  const { data: specData } = useQuery({ queryKey: ['warehouse-specs'], queryFn: () => api<{ items: Spec[] }>('/warehouses/specs') });
+  const specs = specData?.items ?? [];
+
+  const grades = [...new Set(specs.map((s) => s.grade))].sort();
+  const materials = [...new Set(specs.filter((s) => s.grade === grade).map((s) => s.material))].sort();
+  const measures = [...new Set(specs.filter((s) => s.grade === grade && s.material === material).map((s) => s.measure))];
+  const spec = specs.find((s) => s.grade === grade && s.material === material && s.measure === measure) ?? null;
+  const weightPerPc = spec ? specWeight(spec) : 0;
+
   const submit = useMutation({
     mutationFn: () => api('/warehouses/opening-stock', {
       method: 'POST',
       json: {
-        warehouseId, coreType, grade: grade.trim(), material: material.trim(),
-        measure: measure.trim() || null, weightPerPc, pcs,
-        movementDate, notes: notes.trim() || 'Opening stock',
+        warehouseId, coreType: spec?.coreType ?? 'TOROIDAL', grade, material, measure: measure || null,
+        id1: spec?.id1 ?? null, id2: spec?.id2 ?? null, od1: spec?.od1 ?? null, od2: spec?.od2 ?? null, ht: spec?.ht ?? null,
+        weightPerPc, pcs, movementDate, notes: notes.trim() || 'Opening stock',
       },
     }),
     onSuccess: () => { setDone(true); onDone(); },
@@ -251,10 +274,18 @@ const OpeningStockModal = ({
   const onSave = () => {
     setError(null);
     if (!warehouseId) return setError('Pick a store');
-    if (!grade.trim() || !material.trim()) return setError('Grade and material are required');
+    if (!grade || !material || !measure) return setError('Pick grade, material and measure');
     if (pcs <= 0) return setError('Pcs must be greater than 0');
     submit.mutate();
   };
+
+  const Sel = ({ label, value, onChange, options, disabled }: { label: string; value: string; onChange: (v: string) => void; options: string[]; disabled?: boolean }) => (
+    <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</span>
+      <select className="input" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+        <option value="">{disabled ? '—' : 'Select…'}</option>
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select></label>
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
@@ -268,6 +299,8 @@ const OpeningStockModal = ({
             <div className="flex items-center gap-2 text-sm font-medium text-emerald-700"><CheckCircle2 className="h-5 w-5" /> Opening stock added ({pcs} pcs).</div>
             <div className="flex justify-end"><button onClick={onClose} className="btn-primary text-sm">Done</button></div>
           </div>
+        ) : !specs.length ? (
+          <div className="px-5 py-6 text-sm text-slate-500">No item catalog yet — create a Sales Order first so grades, materials and measures are available here.</div>
         ) : (
           <div className="space-y-4 px-5 py-4">
             <div className="grid grid-cols-2 gap-3">
@@ -276,27 +309,23 @@ const OpeningStockModal = ({
                   <option value="">Select store…</option>
                   {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select></label>
-              <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Core type</span>
-                <select className="input" value={coreType} onChange={(e) => setCoreType(e.target.value as 'TOROIDAL' | 'RECTANGULAR' | 'NANO')}>
-                  <option value="TOROIDAL">Toroidal</option><option value="RECTANGULAR">Rectangular</option><option value="NANO">Nano</option>
-                </select></label>
-              <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Grade</span>
-                <input className="input" value={grade} onChange={(e) => setGrade(e.target.value.toUpperCase())} placeholder="e.g. M4" /></label>
-              <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Material</span>
-                <input className="input" value={material} onChange={(e) => setMaterial(e.target.value.toUpperCase())} placeholder="e.g. 0.23 DABBA" /></label>
-              <label className="col-span-2 block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Measure</span>
-                <input className="input" value={measure} onChange={(e) => setMeasure(e.target.value)} placeholder="e.g. 90 x 140 x 40" /></label>
-              <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Wt / pc (kg)</span>
-                <input className="input" type="number" step="any" value={weightPerPc || ''} onChange={(e) => setWeightPerPc(parseFloat(e.target.value) || 0)} placeholder="0" /></label>
+              <div />
+              <Sel label="Grade" value={grade} onChange={(v) => { setGrade(v); setMaterial(''); setMeasure(''); }} options={grades} />
+              <Sel label="Material" value={material} onChange={(v) => { setMaterial(v); setMeasure(''); }} options={materials} disabled={!grade} />
+              <Sel label="Measure" value={measure} onChange={setMeasure} options={measures} disabled={!material} />
+              <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Wt / pc (auto)</span>
+                <input className="input bg-slate-50 text-slate-600" value={weightPerPc ? `${weightPerPc.toFixed(3)} kg` : '—'} readOnly /></label>
               <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Pcs</span>
                 <input className="input" type="number" min={1} value={pcs || ''} onChange={(e) => setPcs(parseInt(e.target.value || '0', 10))} /></label>
               <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Date</span>
                 <input className="input" type="date" value={movementDate} onChange={(e) => setMovementDate(e.target.value)} /></label>
-              <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Notes</span>
+              <label className="col-span-2 block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Notes</span>
                 <input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Opening stock" /></label>
             </div>
-            {pcs > 0 && weightPerPc > 0 && (
-              <div className="text-xs text-slate-500">Total weight: <strong className="text-slate-700">{(pcs * weightPerPc).toFixed(3)} kg</strong></div>
+            {spec && (
+              <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                {coreShort(spec.coreType)} · {measure}{pcs > 0 && weightPerPc > 0 && <> · total <strong className="text-slate-800">{(pcs * weightPerPc).toFixed(3)} kg</strong></>}
+              </div>
             )}
             {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>}
             <div className="flex justify-end gap-3 border-t border-slate-200 pt-3">

@@ -109,6 +109,32 @@ router.get('/stock', requirePermission('dispatch'), asyncHandler(async (req, res
   });
 }));
 
+/* ---------- Spec catalog (for the opening-stock dropdowns) ---------- */
+// Distinct grade / material / measure combos ever ordered, with their dims — so
+// opening stock can be picked from real items and its weight auto-computed.
+router.get('/specs', requirePermission('dispatch'), asyncHandler(async (req, res) => {
+  const rows = await q(
+    `SELECT it.\`coreType\`, it.\`grade\`, it.\`material\`, it.\`measure\`,
+            it.\`id1\`, it.\`id2\`, it.\`od1\`, it.\`od2\`, it.\`ht\`, it.\`weightPerPc\`
+       FROM \`PoOrderItem\` it
+       INNER JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
+      WHERE po.\`companyId\` = ?`,
+    [req.tenant.companyId]
+  );
+  const map = new Map();
+  for (const r of rows) {
+    const key = specKeyOf(r);
+    if (!map.has(key)) {
+      map.set(key, {
+        coreType: r.coreType, grade: r.grade, material: r.material, measure: r.measure,
+        id1: r.id1, id2: r.id2, od1: r.od1, od2: r.od2, ht: r.ht,
+        weightPerPc: Number(r.weightPerPc) || 0,
+      });
+    }
+  }
+  res.json({ items: [...map.values()] });
+}));
+
 /* ---------- Candidate SO lines for a stock-out ---------- */
 // Active PO items, optionally filtered to those matching a stock spec, with how
 // much is still undispatched — the order(s) you can fulfil from stock.
