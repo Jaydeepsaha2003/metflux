@@ -1448,8 +1448,8 @@ export const NanoForm = ({
           <Stat label="Core Wt (kg)"  value={calc.coreWeight.toFixed(3)} />
           <Stat label="Case Wt (kg)"  value={calc.caseWeight.toFixed(3)} />
           <Stat label="Total Wt (kg)" value={calc.totalWeight.toFixed(3)} />
-          <Stat label="Case OD × ID"  value={geomOk ? `${calc.caseOd} × ${calc.caseId}` : '—'} />
-          <Stat label="Finished (ID×OD×HT)" value={finished ?? '—'} accent={finished ? 'primary' : undefined} />
+          <Stat label="Bare Size"     value={geomOk ? calc.measure : '—'} />
+          <Stat label="Finish Size"   value={finished ?? '—'} accent={finished ? 'primary' : undefined} />
         </div>
         <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 border-t border-violet-100 pt-2 sm:grid-cols-4">
           <Stat label="Nano+Case / Pc" value={`₹${nanoCasePc.toFixed(2)}`} />
