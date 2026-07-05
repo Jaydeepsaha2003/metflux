@@ -1,7 +1,7 @@
 // Store / Warehouse — manage named stores and the finished-goods stock that was
 // sent in from overproduction. "Stock Out" dispatches stock to a customer's
 // sales-order line, creating a normal dispatch that flows into packing & invoices.
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -42,7 +42,18 @@ type SoLine = {
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const coreShort = (ct: string) => (ct === 'TOROIDAL' ? 'Toro' : ct === 'NANO' ? 'Nano' : 'Rect');
+const coreLabel: Record<string, string> = { TOROIDAL: 'Toroidal', RECTANGULAR: 'Rectangular', NANO: 'Nano' };
+const coreBadge: Record<string, string> = { TOROIDAL: 'bg-amber-50 text-amber-700', NANO: 'bg-violet-50 text-violet-700', RECTANGULAR: 'bg-rose-50 text-rose-700' };
+const CORE_TYPES = ['TOROIDAL', 'RECTANGULAR', 'NANO'] as const;
+type CoreType = (typeof CORE_TYPES)[number];
 const specLabel = (s: StockLine) => `${coreShort(s.coreType)} · ${s.grade} · ${s.measure}`;
+// Arrangement string per core type (Rectangular carries two ID/OD pairs).
+const arrangementOf = (s: Spec) => {
+  const n = (v: number | null) => Number(v) || 0;
+  return s.coreType === 'RECTANGULAR'
+    ? `${n(s.id1)}×${n(s.id2)} · ${n(s.od1)}×${n(s.od2)} · HT ${n(s.ht)}`
+    : `${n(s.id1)} × ${n(s.od1)} × ${n(s.ht)}`;
+};
 
 export const WarehousePage = () => {
   const qc = useQueryClient();
@@ -235,11 +246,13 @@ export const WarehousePage = () => {
   );
 };
 
-/* ── Opening-stock modal — pick grade/material/measure; weight auto-computed ── */
+/* ── Opening-stock modal — core-type first, then grade/material/measure from the
+   catalog; live preview + auto weight, mirroring the New Order form. ── */
 const OpeningStockModal = ({
   stores, defaultStoreId, onClose, onDone,
 }: { stores: Store[]; defaultStoreId: string; onClose: () => void; onDone: () => void }) => {
   const [warehouseId, setWarehouseId] = useState(defaultStoreId || stores[0]?.id || '');
+  const [coreType, setCoreType] = useState<CoreType>('TOROIDAL');
   const [grade, setGrade] = useState('');
   const [material, setMaterial] = useState('');
   const [measure, setMeasure] = useState('');
@@ -252,17 +265,33 @@ const OpeningStockModal = ({
   const { data: specData } = useQuery({ queryKey: ['warehouse-specs'], queryFn: () => api<{ items: Spec[] }>('/warehouses/specs') });
   const specs = specData?.items ?? [];
 
-  const grades = [...new Set(specs.map((s) => s.grade))].sort();
-  const materials = [...new Set(specs.filter((s) => s.grade === grade).map((s) => s.material))].sort();
-  const measures = [...new Set(specs.filter((s) => s.grade === grade && s.material === material).map((s) => s.measure))];
-  const spec = specs.find((s) => s.grade === grade && s.material === material && s.measure === measure) ?? null;
+  // Only offer core types that actually have catalog items.
+  const availTypes = CORE_TYPES.filter((ct) => specs.some((s) => s.coreType === ct));
+  useEffect(() => {
+    if (availTypes.length && !availTypes.includes(coreType)) {
+      setCoreType(availTypes[0]); setGrade(''); setMaterial(''); setMeasure('');
+    }
+  }, [availTypes, coreType]);
+
+  const ofType = specs.filter((s) => s.coreType === coreType);
+  const grades = [...new Set(ofType.map((s) => s.grade))].sort();
+  const materials = [...new Set(ofType.filter((s) => s.grade === grade).map((s) => s.material))].sort();
+  const measures = [...new Set(ofType.filter((s) => s.grade === grade && s.material === material).map((s) => s.measure))];
+  const spec = ofType.find((s) => s.grade === grade && s.material === material && s.measure === measure) ?? null;
   const weightPerPc = spec ? specWeight(spec) : 0;
+
+  // Nano core/case split for the preview breakdown.
+  const nano = spec && spec.coreType === 'NANO'
+    ? nanoCalc({ id: Number(spec.id1) || 0, od: Number(spec.od1) || 0, ht: Number(spec.ht) || 0, pcs: 0 })
+    : null;
+
+  const pickType = (ct: CoreType) => { setCoreType(ct); setGrade(''); setMaterial(''); setMeasure(''); };
 
   const submit = useMutation({
     mutationFn: () => api('/warehouses/opening-stock', {
       method: 'POST',
       json: {
-        warehouseId, coreType: spec?.coreType ?? 'TOROIDAL', grade, material, measure: measure || null,
+        warehouseId, coreType, grade, material, measure: measure || null,
         id1: spec?.id1 ?? null, id2: spec?.id2 ?? null, od1: spec?.od1 ?? null, od2: spec?.od2 ?? null, ht: spec?.ht ?? null,
         weightPerPc, pcs, movementDate, notes: notes.trim() || 'Opening stock',
       },
@@ -289,7 +318,7 @@ const OpeningStockModal = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl">
+      <div className="flex max-h-[90vh] w-full max-w-xl flex-col rounded-xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900"><PackagePlus className="h-4 w-4 text-brand-600" /> Add Opening Stock</h2>
           <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
@@ -302,7 +331,21 @@ const OpeningStockModal = ({
         ) : !specs.length ? (
           <div className="px-5 py-6 text-sm text-slate-500">No item catalog yet — create a Sales Order first so grades, materials and measures are available here.</div>
         ) : (
-          <div className="space-y-4 px-5 py-4">
+          <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+            {/* Core type selector — like the New Order form */}
+            <div>
+              <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Core type</span>
+              <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+                {availTypes.map((ct) => (
+                  <button key={ct} onClick={() => pickType(ct)}
+                    className={cn('rounded-md px-3.5 py-1.5 text-sm font-medium transition',
+                      coreType === ct ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900')}>
+                    {coreLabel[ct]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Store</span>
                 <select className="input" value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
@@ -313,20 +356,43 @@ const OpeningStockModal = ({
               <Sel label="Grade" value={grade} onChange={(v) => { setGrade(v); setMaterial(''); setMeasure(''); }} options={grades} />
               <Sel label="Material" value={material} onChange={(v) => { setMaterial(v); setMeasure(''); }} options={materials} disabled={!grade} />
               <Sel label="Measure" value={measure} onChange={setMeasure} options={measures} disabled={!material} />
-              <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Wt / pc (auto)</span>
-                <input className="input bg-slate-50 text-slate-600" value={weightPerPc ? `${weightPerPc.toFixed(3)} kg` : '—'} readOnly /></label>
               <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Pcs</span>
                 <input className="input" type="number" min={1} value={pcs || ''} onChange={(e) => setPcs(parseInt(e.target.value || '0', 10))} /></label>
               <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Date</span>
                 <input className="input" type="date" value={movementDate} onChange={(e) => setMovementDate(e.target.value)} /></label>
-              <label className="col-span-2 block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Notes</span>
+              <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Notes</span>
                 <input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Opening stock" /></label>
             </div>
-            {spec && (
-              <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                {coreShort(spec.coreType)} · {measure}{pcs > 0 && weightPerPc > 0 && <> · total <strong className="text-slate-800">{(pcs * weightPerPc).toFixed(3)} kg</strong></>}
+
+            {/* Preview card — mirrors the New Order form's computed section */}
+            {spec ? (
+              <div className="overflow-hidden rounded-xl border border-slate-200">
+                <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2">
+                  <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', coreBadge[spec.coreType] ?? 'bg-slate-100 text-slate-600')}>{coreLabel[spec.coreType]}</span>
+                  <span className="text-sm font-semibold text-slate-800">{grade}</span>
+                  <span className="text-xs text-slate-500">· {material}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 px-4 py-3 text-sm sm:grid-cols-3">
+                  <Field label="Arrangement (ID × OD × HT)" value={arrangementOf(spec)} span2 />
+                  {nano ? (
+                    <>
+                      <Field label="Core wt" value={`${nano.coreWeight.toFixed(3)} kg`} />
+                      <Field label="Case wt" value={`${nano.caseWeight.toFixed(3)} kg`} />
+                      <Field label="Wt / pc (core + case)" value={`${weightPerPc.toFixed(3)} kg`} accent />
+                    </>
+                  ) : (
+                    <Field label="Wt / pc" value={weightPerPc ? `${weightPerPc.toFixed(3)} kg` : '—'} accent />
+                  )}
+                  <Field label="Pcs" value={pcs > 0 ? String(pcs) : '—'} />
+                  <Field label="Total weight" value={pcs > 0 && weightPerPc > 0 ? `${(pcs * weightPerPc).toFixed(3)} kg` : '—'} accent span2 />
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-xs text-slate-400">
+                Pick grade, material &amp; measure to preview the weight.
               </div>
             )}
+
             {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>}
             <div className="flex justify-end gap-3 border-t border-slate-200 pt-3">
               <button onClick={onClose} className="btn-ghost text-sm">Cancel</button>
@@ -340,6 +406,14 @@ const OpeningStockModal = ({
     </div>
   );
 };
+
+/* A labelled read-only value in the opening-stock preview card. */
+const Field = ({ label, value, accent, span2 }: { label: string; value: string; accent?: boolean; span2?: boolean }) => (
+  <div className={cn(span2 && 'col-span-2 sm:col-span-1')}>
+    <div className="text-[10px] uppercase tracking-wide text-slate-400">{label}</div>
+    <div className={cn('mt-0.5 font-medium tabular-nums', accent ? 'text-brand-700' : 'text-slate-800')}>{value}</div>
+  </div>
+);
 
 /* ── Stock-out modal ── */
 const StockOutModal = ({ line, onClose, onDone }: { line: StockLine; onClose: () => void; onDone: () => void }) => {
