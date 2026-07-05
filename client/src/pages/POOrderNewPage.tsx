@@ -8,12 +8,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Save, Loader2, Calendar, Hash, User2, Package, Pencil, Copy } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
-import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc } from '@/lib/calc';
+import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc, nanoCalc } from '@/lib/calc';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useConfirm } from '@/hooks/useConfirm';
 
 /* ---------- types ---------- */
-type CoreType = 'TOROIDAL' | 'RECTANGULAR';
+type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO';
 
 export type Item = {
   /** Set when the item came from the DB (edit mode). Not sent to the server — Zod strips it. */
@@ -41,6 +41,10 @@ export type Item = {
   ratePerKg?: number;
   ratePerPc?: number;
   totalAmount?: number;
+  // Nano core pricing
+  nanoPrice?: number;
+  casePrice?: number;
+  caseWeight?: number;
 };
 
 type Customer = { id: string; name: string; gstRate?: number };
@@ -65,6 +69,12 @@ const inputCls =
   'disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400';
 
 const readonlyInputCls = inputCls + ' bg-slate-50 text-slate-600';
+
+const coreBadge = (ct: CoreType) =>
+  ct === 'TOROIDAL' ? 'bg-amber-50 text-amber-700'
+  : ct === 'RECTANGULAR' ? 'bg-rose-50 text-rose-700'
+  : 'bg-violet-50 text-violet-700';
+const coreShort = (ct: CoreType) => (ct === 'TOROIDAL' ? 'Toro' : ct === 'RECTANGULAR' ? 'Rect' : 'Nano');
 
 /* ============================================================ */
 export const POOrderNewPage = () => {
@@ -466,6 +476,18 @@ export const POOrderNewPage = () => {
             >
               Rectangular
             </button>
+            <button
+              type="button"
+              onClick={() => setCoreType('NANO')}
+              className={cn(
+                'rounded-md px-3 py-1.5 font-medium transition',
+                coreType === 'NANO'
+                  ? 'bg-white text-violet-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              )}
+            >
+              Nano
+            </button>
           </div>
         </div>
 
@@ -482,6 +504,14 @@ export const POOrderNewPage = () => {
           <RectangularForm
             grades={gradesResp?.grades ?? []}
             fluxGrades={fluxRespRect?.grades ?? []}
+            onAdd={(item) => { setItems((prev) => [...prev, item]); }}
+            prefill={prefill}
+            onPrefillConsumed={() => setPrefill(null)}
+          />
+        )}
+        {coreType === 'NANO' && (
+          <NanoForm
+            grades={gradesResp?.grades ?? []}
             onAdd={(item) => { setItems((prev) => [...prev, item]); }}
             prefill={prefill}
             onPrefillConsumed={() => setPrefill(null)}
@@ -519,9 +549,9 @@ export const POOrderNewPage = () => {
                 <div className="mb-0.5 flex items-center gap-2">
                   <span className={cn(
                     'rounded-full px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
-                    it.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
+                    coreBadge(it.coreType)
                   )}>
-                    {it.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
+                    {coreShort(it.coreType)}
                   </span>
                   <span className="truncate text-xs text-slate-600">
                     {it.grade}{it.material ? ` · ${it.material}` : ''}
@@ -610,7 +640,7 @@ export const POOrderNewPage = () => {
                   <td className="px-3 py-2">
                     <span className={cn(
                       'rounded-full px-2 py-0.5 text-[11px] font-medium',
-                      it.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
+                      coreBadge(it.coreType)
                     )}>
                       {it.coreType}
                     </span>
@@ -1226,6 +1256,123 @@ export const RectangularForm = ({
       <div className="mt-3 flex justify-end">
         <button onClick={add} className="btn-primary w-full sm:w-auto" type="button">
           <Plus className="h-4 w-4" /> Add rectangular item
+        </button>
+      </div>
+      {alertDialog}
+    </div>
+  );
+};
+
+/* ---------- NANO ---------- */
+export const NanoForm = ({
+  grades, onAdd, prefill, onPrefillConsumed,
+}: {
+  grades: GradeRow[];
+  onAdd: (item: Item) => void;
+  prefill?: { coreType: CoreType; grade: string; material: string; rateBasis: 'PER_KG' | 'PER_PCS' } | null;
+  onPrefillConsumed?: () => void;
+}) => {
+  const [grade, setGrade] = useState('');
+  const [material, setMaterial] = useState('');
+  const [id, setId] = useState(0);
+  const [od, setOd] = useState(0);
+  const [ht, setHt] = useState(0);
+  const [pcs, setPcs] = useState(0);
+  const [nanoPrice, setNanoPrice] = useState(0);
+  const [casePrice, setCasePrice] = useState(0);
+
+  useEffect(() => {
+    if (!prefill || prefill.coreType !== 'NANO') return;
+    setGrade(prefill.grade);
+    setMaterial(prefill.material);
+    onPrefillConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill]);
+
+  const calc = useMemo(
+    () => nanoCalc({ id, od, ht, pcs, nanoPrice, casePrice }),
+    [id, od, ht, pcs, nanoPrice, casePrice]
+  );
+  const geomOk = id > 0 && od > 0 && ht > 0 && od > id;
+  const { alert: showAlert, confirmDialog: alertDialog } = useConfirm();
+
+  const reset = () => {
+    setGrade(''); setMaterial('');
+    setId(0); setOd(0); setHt(0); setPcs(0);
+    setNanoPrice(0); setCasePrice(0);
+  };
+
+  const add = async () => {
+    if (!geomOk) {
+      await showAlert({ title: 'Invalid input', message: 'Enter valid OD, ID and HT (OD must be greater than ID).', tone: 'warning' });
+      return;
+    }
+    if (pcs <= 0) {
+      await showAlert({ title: 'Invalid input', message: 'Enter the number of pieces.', tone: 'warning' });
+      return;
+    }
+    onAdd({
+      coreType: 'NANO',
+      grade: grade || 'NANO',
+      material: material || 'NANO',
+      measure: calc.measure,
+      id1: id, od1: od, ht, pcs,
+      weightPerPc: calc.coreWeight, totalWeight: calc.totalWeight,
+      // Nano is priced per piece = core×nanoPrice + case×casePrice.
+      rateBasis: calc.pricePerPc > 0 ? 'PER_PCS' : undefined,
+      rateValue: calc.pricePerPc > 0 ? calc.pricePerPc : undefined,
+      ratePerPc: calc.pricePerPc > 0 ? calc.pricePerPc : undefined,
+      totalAmount: calc.totalAmount > 0 ? calc.totalAmount : undefined,
+      nanoPrice: nanoPrice > 0 ? nanoPrice : undefined,
+      casePrice: casePrice > 0 ? casePrice : undefined,
+      caseWeight: calc.caseWeight > 0 ? calc.caseWeight : undefined,
+    });
+    reset();
+  };
+
+  return (
+    <div className="rounded-lg border border-violet-200 bg-violet-50/40 p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-violet-800">Nano core</span>
+      </div>
+
+      {/* Row 1 — Grade · Material · Nano price · Case price */}
+      <div className="grid grid-cols-2 gap-x-2 gap-y-2 md:grid-cols-4">
+        <GradeMaterialPicker
+          grades={grades} grade={grade} material={material}
+          onGrade={setGrade} onMaterial={setMaterial} listIdSuffix="nano"
+        />
+        <NumField label="Nano Price (₹/kg)" value={nanoPrice} onChange={setNanoPrice} />
+        <NumField label="Case Price (₹/kg)" value={casePrice} onChange={setCasePrice} />
+      </div>
+
+      {/* Row 2 — dimensions + pcs */}
+      <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-2 sm:grid-cols-4">
+        <NumField label="OD" value={od} onChange={setOd} />
+        <NumField label="ID" value={id} onChange={setId} />
+        <NumField label="HT" value={ht} onChange={setHt} />
+        <NumField label="Pcs" value={pcs} onChange={setPcs} />
+      </div>
+
+      {/* Computed values */}
+      <div className="mt-3 rounded-md border border-violet-100 bg-white/60 px-3 py-2">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-4">
+          <Stat label="Core Wt (kg)"  value={calc.coreWeight.toFixed(3)} />
+          <Stat label="Case Wt (kg)"  value={calc.caseWeight.toFixed(3)} />
+          <Stat label="Total Wt (kg)" value={calc.totalWeight.toFixed(3)} />
+          <Stat label="Case OD × ID"  value={geomOk ? `${calc.caseOd} × ${calc.caseId}` : '—'} />
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 border-t border-violet-100 pt-2 sm:grid-cols-3">
+          <Stat label="Measure"    value={calc.measure} />
+          <Stat label="Price / Pc" value={`₹${calc.pricePerPc.toFixed(2)}`} />
+          <Stat label="Line Total" value={`₹${calc.totalAmount.toFixed(2)}`} accent="primary" />
+        </div>
+      </div>
+
+      <div className="mt-3 flex justify-end">
+        <button onClick={add} className="btn-primary w-full sm:w-auto" type="button">
+          <Plus className="h-4 w-4" /> Add nano item
         </button>
       </div>
       {alertDialog}

@@ -180,7 +180,7 @@ CREATE TABLE `PoOrder` (
 CREATE TABLE `PoOrderItem` (
     `id` VARCHAR(191) NOT NULL,
     `poOrderId` VARCHAR(191) NOT NULL,
-    `coreType` ENUM('TOROIDAL', 'RECTANGULAR') NOT NULL,
+    `coreType` ENUM('TOROIDAL', 'RECTANGULAR', 'NANO') NOT NULL,
     `grade` VARCHAR(80) NOT NULL,
     `material` VARCHAR(120) NOT NULL,
     `measure` VARCHAR(160) NOT NULL,
@@ -206,6 +206,9 @@ CREATE TABLE `PoOrderItem` (
     `ratePerKg` DOUBLE NULL,
     `ratePerPc` DOUBLE NULL,
     `totalAmount` DOUBLE NULL,
+    `nanoPrice` DOUBLE NULL,
+    `casePrice` DOUBLE NULL,
+    `caseWeight` DOUBLE NULL,
     `status` ENUM('ACTIVE', 'CANCELLED') NOT NULL DEFAULT 'ACTIVE',
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 

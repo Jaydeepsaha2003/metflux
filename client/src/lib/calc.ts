@@ -14,6 +14,36 @@
 //   measure     = "{id1} x {id2} x {od1} x {od2} x {ht} x {builtup}"
 
 export const round3 = (n: number) => Math.round(n * 1000) / 1000;
+export const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+// Nano core — ported from the WEIGHT CALCULATOR sheet.
+//   coreWeight  = (OD² − ID²) × HT × 4.5559e-6           (nanocrystalline ribbon)
+//   caseOD/ID   = OD+5 / ID−5   ;  ssCircleOD/ID = OD+3 / ID−3
+//   caseWeight  = (caseOD + caseID) × HT × 3.4876e-5      (SS band around OD+ID)
+//               + (ssCircleOD² − ssCircleID²) × 7.68e-6   (SS top/bottom discs)
+//   pricePerPc  = coreWeight × nanoPrice + caseWeight × casePrice
+export const nanoCalc = ({
+  id, od, ht, pcs, nanoPrice = 0, casePrice = 0,
+}: {
+  id: number; od: number; ht: number; pcs: number;
+  nanoPrice?: number; casePrice?: number;
+}) => {
+  const valid = id > 0 && od > 0 && ht > 0 && od > id;
+  const coreWeight = valid ? (od * od - id * id) * ht * 4.5559e-6 : 0;
+  const caseOd = od + 5, caseId = id - 5;
+  const ssOd = od + 3, ssId = id - 3;
+  const bandWeight = valid ? (caseOd + caseId) * ht * 3.4876e-5 : 0;
+  const discWeight = valid ? (ssOd * ssOd - ssId * ssId) * 7.68e-6 : 0;
+  const caseWeight = valid ? bandWeight + discWeight : 0;
+  const pricePerPc = round2(coreWeight * (nanoPrice || 0) + caseWeight * (casePrice || 0));
+  const totalWeight = pcs > 0 ? round3(pcs * coreWeight) : 0;
+  const totalAmount = pcs > 0 ? round2(pricePerPc * pcs) : 0;
+  const measure = `${id || 0} x ${od || 0} x ${ht || 0}`;
+  return {
+    coreWeight: round3(coreWeight), caseWeight: round3(caseWeight),
+    pricePerPc, totalWeight, totalAmount, measure, caseOd, caseId,
+  };
+};
 
 export const toroidalCalc = ({ id, od, ht, pcs }: { id: number; od: number; ht: number; pcs: number }) => {
   const valid = id > 0 && od > 0 && ht > 0;
