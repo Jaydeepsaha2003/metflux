@@ -29,6 +29,7 @@ import shareRouter from './share.js';
 import returnsRouter from './returns.js';
 import dashboardRouter from './dashboard.js';
 import adminRouter from './admin.js';
+import appSettingsRouter from './appSettings.js';
 import publicRouter from './public.js';
 import customerPortalRouter from './customerPortal.js';
 
@@ -69,6 +70,7 @@ apiRouter.use('/share', shareRouter);
 apiRouter.use('/returns', returnsRouter);
 apiRouter.use('/dashboard', dashboardRouter);
 apiRouter.use('/admin', adminRouter);
+apiRouter.use('/app-settings', appSettingsRouter);
 
 apiRouter.get('/', (_req, res) => {
   res.json({

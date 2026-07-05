@@ -5,8 +5,10 @@ import {
   Plus, ListChecks, BarChart3, Layers, Building2, Factory, Inbox, ClipboardList,
   PanelLeftClose, Users2, Truck, PackageCheck, ShoppingCart, Activity, RotateCcw, Menu, X, ShieldAlert,
   Receipt, Clock, Wallet, TrendingUp, Calculator, CreditCard, Warehouse, MonitorSmartphone, History,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { useAuthStore, can, activeMembership } from '@/store/auth';
+import { useBranding } from '@/store/branding';
 import type { PermissionKey } from '@/lib/permissions';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
@@ -92,6 +94,7 @@ const NAV: NavItem[] = [
       { kind: 'leaf', to: '/settings/suppliers', label: 'Suppliers', icon: Truck,     perm: 'add_supplier' },
       { kind: 'leaf', to: '/settings/user-logs',   label: 'User Logs',   icon: MonitorSmartphone, adminOnly: true },
       { kind: 'leaf', to: '/settings/audit-log',   label: 'Audit Log',   icon: History, perm: 'view_audit_log' },
+      { kind: 'leaf', to: '/settings/branding',    label: 'App Branding', icon: ImageIcon, platformOnly: true },
       { kind: 'leaf', to: '/settings/data-cleanup', label: 'Data Cleanup', icon: ShieldAlert, perm: 'manage_users' },
     ],
   },
@@ -113,6 +116,7 @@ export const AppLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, clear } = useAuthStore();
+  const appLogo = useBranding((s) => s.logoUrl);
   const [hovered, setHovered] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(() =>
@@ -212,18 +216,22 @@ export const AppLayout = () => {
           isDesktop && hovered ? 'md:w-64 md:shadow-2xl md:shadow-black/40' : 'md:w-16'
         )}
       >
-        {/* Top bar — mobile close button only. On desktop the rail expands on
-            hover, so there's no manual collapse toggle. */}
-        <div className="flex items-center border-b border-white/5 px-3 py-4 min-w-0 justify-end md:justify-center">
+        {/* Top bar — global app logo + mobile close button. On desktop the rail
+            expands on hover, so there's no manual collapse toggle. */}
+        <div className="flex items-center gap-2 border-b border-white/5 px-3 py-4 min-w-0">
+          {appLogo
+            ? <img src={appLogo} alt="Logo" className="h-8 w-8 shrink-0 rounded object-contain" />
+            : <PanelLeftClose className="h-5 w-5 shrink-0 text-white/25" />}
+          {!collapsed && appLogo && (
+            <span className="truncate text-sm font-semibold text-white/90">Metflux</span>
+          )}
           <button
             onClick={() => setMobileOpen(false)}
             title="Close menu"
-            className="shrink-0 rounded p-1 text-white/40 hover:bg-white/10 hover:text-white transition-colors md:hidden"
+            className="ml-auto shrink-0 rounded p-1 text-white/40 hover:bg-white/10 hover:text-white transition-colors md:hidden"
           >
             <X className="h-4 w-4" />
           </button>
-          {/* Desktop hint that the rail is hover-expandable. */}
-          <PanelLeftClose className="hidden h-4 w-4 shrink-0 text-white/25 md:block" />
         </div>
 
         {/* overflow-hidden only when collapsed so the open dropdown isn't clipped */}

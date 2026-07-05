@@ -6,10 +6,21 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
-import { insert } from '../lib/db.js';
+import { insert, qOne } from '../lib/db.js';
 import { asyncHandler } from '../lib/errors.js';
 
 const router = Router();
+
+/* GET /api/public/app-branding — global webapp logo (data URL) for the login
+   page + favicon. Unauthenticated; tolerates the table not existing yet. */
+router.get('/app-branding', asyncHandler(async (_req, res) => {
+  let logoUrl = null;
+  try {
+    const row = await qOne("SELECT `settingValue` FROM `AppSetting` WHERE `settingKey` = 'app_logo'");
+    logoUrl = row?.settingValue ?? null;
+  } catch { /* AppSetting not migrated yet */ }
+  res.json({ logoUrl });
+}));
 
 const contactLimiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 10 minutes

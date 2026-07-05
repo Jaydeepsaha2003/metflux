@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { useBranding } from '@/store/branding';
 import { AuthPage } from '@/pages/AuthPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { CustomersPage } from '@/pages/CustomersPage';
@@ -51,10 +53,14 @@ import { CustomerPortalPage } from '@/pages/CustomerPortalPage';
 import { BusinessAnalysisPage } from '@/pages/BusinessAnalysisPage';
 import { TestingCalculatorPage } from '@/pages/TestingCalculatorPage';
 import { PurchasesPage } from '@/pages/PurchasesPage';
+import { BrandingPage } from '@/pages/BrandingPage';
 import { AppLayout } from '@/components/AppLayout';
 import { RequireAuth } from '@/components/RequireAuth';
 
-export const App = () => (
+export const App = () => {
+  const loadBranding = useBranding((s) => s.load);
+  useEffect(() => { loadBranding(); }, [loadBranding]);
+  return (
   <Routes>
     <Route path="/login"            element={<AuthPage />} />
     <Route path="/portal/:token"   element={<CustomerPortalPage />} />
@@ -143,7 +149,9 @@ export const App = () => (
       <Route path="/settings/data-cleanup"  element={<DataCleanupPage />} />
       <Route path="/settings/user-logs"     element={<UserLogsPage />} />
       <Route path="/settings/audit-log"     element={<AuditLogPage />} />
+      <Route path="/settings/branding"      element={<BrandingPage />} />
     </Route>
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes>
-);
+  );
+};
