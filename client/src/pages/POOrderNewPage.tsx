@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Save, Loader2, Calendar, Hash, User2, Package, Pencil, Copy } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
-import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc, nanoCalc } from '@/lib/calc';
+import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc, nanoCalc, nanoTestCalc } from '@/lib/calc';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useConfirm } from '@/hooks/useConfirm';
 
@@ -176,6 +176,10 @@ export const POOrderNewPage = () => {
   const { data: fluxRespRect } = useQuery({
     queryKey: ['flux-grades-grouped', 'RECTANGULAR'],
     queryFn: () => api<{ grades: FluxGroup[] }>('/flux-grades/grouped?coreType=RECTANGULAR'),
+  });
+  const { data: fluxRespNano } = useQuery({
+    queryKey: ['flux-grades-grouped', 'NANO'],
+    queryFn: () => api<{ grades: FluxGroup[] }>('/flux-grades/grouped?coreType=NANO'),
   });
 
   /* ----- edit mode: fetch existing PO header + items ----- */
@@ -520,6 +524,7 @@ export const POOrderNewPage = () => {
         {coreType === 'NANO' && (
           <NanoForm
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'NANO'))}
+            fluxGrades={fluxRespNano?.grades ?? []}
             onAdd={(item) => { setItems((prev) => [...prev, item]); }}
             prefill={prefill}
             onPrefillConsumed={() => setPrefill(null)}
@@ -1273,9 +1278,10 @@ export const RectangularForm = ({
 
 /* ---------- NANO ---------- */
 export const NanoForm = ({
-  grades, onAdd, prefill, onPrefillConsumed,
+  grades, fluxGrades, onAdd, prefill, onPrefillConsumed,
 }: {
   grades: GradeRow[];
+  fluxGrades: FluxGroup[];
   onAdd: (item: Item) => void;
   prefill?: { coreType: CoreType; grade: string; material: string; rateBasis: 'PER_KG' | 'PER_PCS' } | null;
   onPrefillConsumed?: () => void;
@@ -1290,6 +1296,12 @@ export const NanoForm = ({
   const [casePrice, setCasePrice] = useState(0);
   // Optional manual SO rate per piece. Blank → the Nano+Case price is used.
   const [soRate, setSoRate] = useState(0);
+  // Testing parameters (V + Ie max). Flux grade (SS/Epoxy AT-cm) is looked up by
+  // the selected grade name — same pattern as toroidal/rectangular.
+  const [turns, setTurns] = useState(0);
+  const [freq, setFreq] = useState(50);
+  const [sfac, setSfac] = useState(0.8);
+  const [flux, setFlux] = useState(0);
 
   useEffect(() => {
     if (!prefill || prefill.coreType !== 'NANO') return;
@@ -1298,6 +1310,14 @@ export const NanoForm = ({
     onPrefillConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill]);
+
+  // Reset flux when the grade changes — a new grade rarely has the same Bmax rows.
+  useEffect(() => { setFlux(0); }, [grade]);
+
+  const fluxPoints = fluxGrades.find((g) => g.grade === grade)?.points ?? [];
+  const ateCm = fluxPoints.find((p) => p.flux === flux)?.ateCm ?? 0;
+  const hasFluxData = fluxPoints.length > 0;
+  const test = nanoTestCalc({ id, od, ht, turns, flux, ateCm, freq, sfac });
 
   const calc = useMemo(
     () => nanoCalc({ id, od, ht, pcs, nanoPrice, casePrice }),
@@ -1322,7 +1342,7 @@ export const NanoForm = ({
     setGrade(''); setMaterial('');
     setId(0); setOd(0); setHt(0); setPcs(0);
     setNanoPrice(0); setCasePrice(0);
-    setSoRate(0);
+    setSoRate(0); setTurns(0); setFlux(0);
   };
 
   const add = async () => {
@@ -1350,6 +1370,12 @@ export const NanoForm = ({
       casePrice: casePrice > 0 ? casePrice : undefined,
       caseWeight: calc.caseWeight > 0 ? calc.caseWeight : undefined,
       nanoSoRate: soRate > 0 ? soRate : undefined,
+      // Testing parameters — only attach when the user filled them.
+      turns:       turns > 0 ? turns : undefined,
+      flux:        flux  > 0 ? flux  : undefined,
+      ateCm:       flux  > 0 && ateCm > 0 ? ateCm : undefined,
+      testVoltage: test.testVoltage > 0 ? test.testVoltage : undefined,
+      testCurrent: test.testCurrent > 0 ? test.testCurrent : undefined,
     });
     reset();
   };
@@ -1382,6 +1408,38 @@ export const NanoForm = ({
         <NumField label="OD" value={od} onChange={setOd} />
         <NumField label="HT" value={ht} onChange={setHt} />
         <NumField label="Pcs" value={pcs} onChange={setPcs} />
+      </div>
+
+      {/* Testing parameters — Turns / Frequency / Sfac / Flux (Bmax) → V + Ie max */}
+      <div className="mt-2 rounded-md border border-violet-100 bg-white/50 px-3 py-2">
+        <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-violet-800">Testing parameters</div>
+        <div className="grid grid-cols-2 gap-x-2 gap-y-2 sm:grid-cols-4">
+          <NumField label="Turns" value={turns} onChange={setTurns} />
+          <NumField label="Frequency (Hz)" value={freq} onChange={setFreq} />
+          <NumField label="Stacking factor" value={sfac} onChange={setSfac} />
+          <Field label="Flux (Bmax)">
+            <SearchableSelect
+              dense
+              value={flux > 0 ? String(flux) : ''}
+              onChange={(v) => setFlux(parseFloat(v) || 0)}
+              options={fluxPoints.map((p) => ({ value: String(p.flux), label: `${Math.round(p.flux * 10000)} G` }))}
+              placeholder={
+                !grade ? 'Pick grade first'
+                : !hasFluxData ? `No test data for "${grade}"`
+                : 'Select flux…'
+              }
+              disabled={!grade || !hasFluxData}
+            />
+          </Field>
+        </div>
+        {flux > 0 && (
+          <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-4">
+            <Stat label="Bmax" value={`${Math.round(flux * 10000)} G`} />
+            <Stat label="AT/cm" value={ateCm > 0 ? ateCm.toFixed(4) : '—'} />
+            <Stat label="V (Volts)" value={test.testVoltage > 0 ? test.testVoltage.toFixed(3) : '—'} />
+            <Stat label="Ie max (mA)" value={test.testCurrent > 0 ? test.testCurrent.toFixed(2) : (flux > 0 && ateCm === 0 ? 'Set AT/cm' : '—')} />
+          </div>
+        )}
       </div>
 
       {/* Computed values */}
