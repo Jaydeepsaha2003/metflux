@@ -34,6 +34,8 @@ export const CashbookSummaryPage = () => {
   const [groupBy, setGroupBy] = useState<'category' | 'account'>('category');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [nameFilter, setNameFilter] = useState('');
+  const [typeSel, setTypeSel] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<{ key: 'key' | 'receipts' | 'payments' | 'net' | 'count'; dir: 'asc' | 'desc' }>({ key: 'net', dir: 'desc' });
   const sortBy = (key: typeof sort.key) => setSort((s) => ({ key, dir: s.key === key && s.dir === 'desc' ? 'asc' : 'desc' }));
 
@@ -59,11 +61,22 @@ export const CashbookSummaryPage = () => {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['account-heads'] }); qc.invalidateQueries({ queryKey: ['cashbook-summary'] }); },
   });
 
-  const items = [...(data?.items ?? [])].sort((a, b) => {
-    const d = sort.dir === 'asc' ? 1 : -1;
-    if (sort.key === 'key') return a.key.localeCompare(b.key) * d;
-    return ((a[sort.key] as number) - (b[sort.key] as number)) * d;
-  });
+  const nf = nameFilter.trim().toLowerCase();
+  const items = [...(data?.items ?? [])]
+    .filter((it) => (!nf || it.key.toLowerCase().includes(nf) || it.category.toLowerCase().includes(nf))
+      && (!typeSel.size || typeSel.has(it.type)))
+    .sort((a, b) => {
+      const d = sort.dir === 'asc' ? 1 : -1;
+      if (sort.key === 'key') return a.key.localeCompare(b.key) * d;
+      return ((a[sort.key] as number) - (b[sort.key] as number)) * d;
+    });
+  // Totals reflect the active filter so the footer + cards stay consistent.
+  const filtered = nf.length > 0 || typeSel.size > 0;
+  const shownTotals = filtered
+    ? items.reduce((t, it) => ({ receipts: t.receipts + it.receipts, payments: t.payments + it.payments, net: t.net + it.net, count: t.count + it.count }), { receipts: 0, payments: 0, net: 0, count: 0 })
+    : data?.totals;
+  const TYPE_FILTERS = ['CUSTOMER', 'SUPPLIER', 'OTHER', 'UNCLASSIFIED'];
+  const toggleType = (k: string) => setTypeSel((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
   const otherHeads = (headsData?.heads ?? []).filter((h) => h.type === 'OTHER');
   const sortIcon = (k: typeof sort.key) => (sort.key === k ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : '');
 
@@ -130,35 +143,59 @@ export const CashbookSummaryPage = () => {
       )}
 
       {/* Controls */}
-      <div className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="block">
-            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">From</span>
-            <input type="date" className="input" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">To</span>
-            <input type="date" className="input" value={to} onChange={(e) => setTo(e.target.value)} />
-          </label>
+      <div className="card space-y-3 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">From</span>
+              <input type="date" className="input" value={from} onChange={(e) => setFrom(e.target.value)} />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">To</span>
+              <input type="date" className="input" value={to} onChange={(e) => setTo(e.target.value)} />
+            </label>
+            <label className="block flex-1 min-w-[180px]">
+              <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Filter {groupBy === 'account' ? 'account' : 'category'}</span>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input className="input pl-9" placeholder={groupBy === 'account' ? 'Account name…' : 'Category name…'} value={nameFilter} onChange={(e) => setNameFilter(e.target.value)} />
+                {nameFilter && <button onClick={() => setNameFilter('')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:bg-slate-100"><X className="h-3.5 w-3.5" /></button>}
+              </div>
+            </label>
+          </div>
+          <div className="inline-flex self-start rounded-lg border border-slate-200 bg-slate-50 p-0.5 sm:self-end">
+            {(['category', 'account'] as const).map((g) => (
+              <button key={g} onClick={() => setGroupBy(g)}
+                className={cn('rounded-md px-3.5 py-1.5 text-sm font-medium transition',
+                  groupBy === g ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900')}>
+                {g === 'category' ? 'Category-wise' : 'Account-wise'}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="inline-flex self-start rounded-lg border border-slate-200 bg-slate-50 p-0.5 sm:self-end">
-          {(['category', 'account'] as const).map((g) => (
-            <button key={g} onClick={() => setGroupBy(g)}
-              className={cn('rounded-md px-3.5 py-1.5 text-sm font-medium transition',
-                groupBy === g ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900')}>
-              {g === 'category' ? 'Category-wise' : 'Account-wise'}
-            </button>
-          ))}
+        {/* Type filter chips */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Type:</span>
+          {TYPE_FILTERS.map((k) => {
+            const on = typeSel.has(k);
+            return (
+              <button key={k} onClick={() => toggleType(k)}
+                className={cn('rounded-full px-2.5 py-1 text-xs font-medium ring-1 transition', on ? `${TYPE_TONE[k]} ring-transparent` : 'bg-white text-slate-500 ring-slate-200 hover:bg-slate-50')}>
+                {k.charAt(0) + k.slice(1).toLowerCase()}
+              </button>
+            );
+          })}
+          {typeSel.size > 0 && <button onClick={() => setTypeSel(new Set())} className="text-xs text-slate-400 underline">clear</button>}
         </div>
       </div>
 
-      {/* Totals */}
-      {data && (
+      {/* Totals — reflect the active filter */}
+      {shownTotals && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Stat label="Total receipts" value={inr(data.totals.receipts)} tone="emerald" />
-          <Stat label="Total payments" value={inr(data.totals.payments)} tone="brand" />
-          <Stat label="Net" value={inr(data.totals.net)} tone={data.totals.net >= 0 ? 'emerald' : 'red'} />
-          <Stat label="Entries" value={String(data.totals.count)} />
+          <Stat label={filtered ? 'Receipts (filtered)' : 'Total receipts'} value={inr(shownTotals.receipts)} tone="emerald" />
+          <Stat label={filtered ? 'Payments (filtered)' : 'Total payments'} value={inr(shownTotals.payments)} tone="brand" />
+          <Stat label="Net" value={inr(shownTotals.net)} tone={shownTotals.net >= 0 ? 'emerald' : 'red'} />
+          <Stat label={filtered ? 'Entries (filtered)' : 'Entries'} value={String(shownTotals.count)} />
         </div>
       )}
 
@@ -169,7 +206,9 @@ export const CashbookSummaryPage = () => {
         ) : error ? (
           <div className="py-12 text-center text-sm text-red-600">Could not load the summary.</div>
         ) : !items.length ? (
-          <div className="py-12 text-center text-sm text-slate-400">No cashbook data yet. Import the bank book from Receipts &amp; Payments.</div>
+          <div className="py-12 text-center text-sm text-slate-400">
+            {filtered ? 'No accounts match this filter.' : 'No cashbook data yet. Import the bank book from Receipts & Payments.'}
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm whitespace-nowrap">
@@ -202,14 +241,14 @@ export const CashbookSummaryPage = () => {
                   </tr>
                 ))}
               </tbody>
-              {data && (
+              {shownTotals && (
                 <tfoot>
                   <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold">
-                    <td className="px-4 py-2.5" colSpan={groupBy === 'account' ? 2 : 1}>Total</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-emerald-700">{inr(data.totals.receipts)}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{inr(data.totals.payments)}</td>
-                    <td className={cn('px-4 py-2.5 text-right tabular-nums', data.totals.net >= 0 ? 'text-emerald-700' : 'text-red-600')}>{inr(data.totals.net)}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-500">{data.totals.count}</td>
+                    <td className="px-4 py-2.5" colSpan={groupBy === 'account' ? 2 : 1}>{filtered ? 'Total (filtered)' : 'Total'}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-emerald-700">{inr(shownTotals.receipts)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{inr(shownTotals.payments)}</td>
+                    <td className={cn('px-4 py-2.5 text-right tabular-nums', shownTotals.net >= 0 ? 'text-emerald-700' : 'text-red-600')}>{inr(shownTotals.net)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-500">{shownTotals.count}</td>
                   </tr>
                 </tfoot>
               )}
