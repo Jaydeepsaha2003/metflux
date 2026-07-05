@@ -22,7 +22,7 @@ type DispatchDetail = {
   poNumber: string; orderDate: string;
   customerName: string; customerState: string | null;
   customerPhone: string | null;
-  coreType: 'TOROIDAL' | 'RECTANGULAR';
+  coreType: 'TOROIDAL' | 'RECTANGULAR' | 'NANO';
   grade: string; material: string; measure: string;
   pcs: number; weightPerPc: number; totalWeight: number;
   turns: number | null; flux: number | null;
@@ -100,11 +100,11 @@ type GroupForm = {
 };
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
-// Report No. format: TR-TC001 (Toroidal) / TR-RC001 (Rectangular).
+// Report No. format: TR-TC001 (Toroidal) / TR-RC001 (Rectangular) / TR-NC001 (Nano).
 // The 3-digit serial is the 1-indexed position of this group in the current
 // report batch so each PO gets a unique, readable identifier.
-const autoReportNo = (coreType: 'TOROIDAL' | 'RECTANGULAR', groupIdx: number) => {
-  const prefix = coreType === 'TOROIDAL' ? 'TC' : 'RC';
+const autoReportNo = (coreType: 'TOROIDAL' | 'RECTANGULAR' | 'NANO', groupIdx: number) => {
+  const prefix = coreType === 'TOROIDAL' ? 'TC' : coreType === 'NANO' ? 'NC' : 'RC';
   return `TR-${prefix}${String(groupIdx + 1).padStart(3, '0')}`;
 };
 const fmtDate = (iso: string | null | undefined) => {

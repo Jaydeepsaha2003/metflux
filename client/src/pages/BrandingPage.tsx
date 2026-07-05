@@ -28,11 +28,42 @@ export const BrandingPage = () => {
     onSuccess: () => set(null),
   });
 
-  const onPick = (f: File | undefined) => {
+  // Normalise to a 512×512 PNG (transparent, contained) so it's a valid PWA
+  // install icon on Android + iOS (iOS ignores SVG; Chrome wants a 512 png).
+  const toIcon = (file: File) => new Promise<File>((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const size = 512;
+      const canvas = document.createElement('canvas');
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { URL.revokeObjectURL(url); reject(new Error('Canvas not supported')); return; }
+      const scale = Math.min(size / (img.width || size), size / (img.height || size));
+      const w = (img.width || size) * scale, h = (img.height || size) * scale;
+      ctx.clearRect(0, 0, size, size);
+      ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((blob) => {
+        if (!blob) { reject(new Error('Could not process image')); return; }
+        resolve(new File([blob], 'logo.png', { type: 'image/png' }));
+      }, 'image/png');
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read the image')); };
+    img.src = url;
+  });
+
+  const onPick = async (f: File | undefined) => {
     if (!f) return;
     if (!f.type.startsWith('image/')) { setError('Please choose an image file.'); return; }
-    if (f.size > 2 * 1024 * 1024) { setError('Image must be under 2 MB.'); return; }
-    upload.mutate(f);
+    if (f.size > 4 * 1024 * 1024) { setError('Image must be under 4 MB.'); return; }
+    setError(null);
+    try {
+      const icon = await toIcon(f);
+      upload.mutate(icon);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not process the image');
+    }
   };
 
   if (!isPlatform) {
