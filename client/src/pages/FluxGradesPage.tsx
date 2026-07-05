@@ -102,6 +102,19 @@ export const FluxGradesPage = () => {
     XLSX.writeFile(wb, 'flux-grades-template.xlsx');
   };
 
+  /* ---------- Excel export — current rows ---------- */
+  const exportRows = () => {
+    const items = data?.items ?? [];
+    if (!items.length) return;
+    const aoa: (string | number)[][] = [['Grade', 'Flux', 'Core Type', 'ATe/cm', 'Notes']];
+    for (const r of items) aoa.push([r.grade, r.flux, r.coreType, r.ateCm ?? '', r.notes ?? '']);
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = [{ wch: 14 }, { wch: 8 }, { wch: 14 }, { wch: 10 }, { wch: 30 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'FluxGrades');
+    XLSX.writeFile(wb, `flux-grades-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   /* ---------- Excel upload — parse → POST /bulk ---------- */
   const fileRef = useRef<HTMLInputElement>(null);
   const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -174,6 +187,14 @@ export const FluxGradesPage = () => {
           <Activity className="h-5 w-5 text-brand-600" /> Flux-Test Grades
         </h1>
         <div className="flex flex-wrap gap-2">
+          <button
+            onClick={exportRows}
+            disabled={!data?.items.length}
+            className="btn-ghost border border-slate-300 text-emerald-700 hover:bg-emerald-50 text-sm disabled:opacity-50"
+            title="Export all flux grades to Excel"
+          >
+            <Download className="h-4 w-4" /> Export
+          </button>
           <button
             onClick={downloadTemplate}
             className="btn-ghost border border-slate-300 text-sm"
