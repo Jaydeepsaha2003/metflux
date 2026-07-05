@@ -5,6 +5,15 @@
 import 'dotenv/config';
 import { pool } from '../lib/db.js';
 
+const columnExists = async (table, column) => {
+  const [rows] = await pool.query(
+    `SELECT 1 FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1`,
+    [table, column]
+  );
+  return rows.length > 0;
+};
+
 const main = async () => {
   // Classification of a bank-book account head → CUSTOMER / SUPPLIER / OTHER.
   // Customer/Supplier heads become real records (their own tables); this table
@@ -38,12 +47,19 @@ const main = async () => {
       \`normKey\` VARCHAR(200) NOT NULL,
       \`amount\` DOUBLE NOT NULL DEFAULT 0,
       \`vch\` VARCHAR(80) NULL,
+      \`postedAt\` DATETIME(3) NULL,
       \`createdAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
       INDEX \`CashbookEntry_company_date_idx\`(\`companyId\`, \`entryDate\`),
       INDEX \`CashbookEntry_company_norm_idx\`(\`companyId\`, \`normKey\`),
       PRIMARY KEY (\`id\`)
     ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
   );
+  // postedAt flags rows already allocated to invoices, so classifying a head
+  // later only allocates its still-unposted receipts/payments.
+  if (!(await columnExists('CashbookEntry', 'postedAt'))) {
+    await pool.query('ALTER TABLE `CashbookEntry` ADD COLUMN `postedAt` DATETIME(3) NULL');
+    console.log('[migrate] added CashbookEntry.postedAt');
+  }
   console.log('[migrate] CashbookEntry table ready.');
 };
 

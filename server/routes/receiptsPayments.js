@@ -137,6 +137,18 @@ router.post('/post', requireAnyPermission(...PERM), asyncHandler(async (req, res
   let recRecv = 0, recPay = 0, allocRecv = 0, allocPay = 0;
   const errors = [];
 
+  // Names for posted customers, so we can flag their stored cashbook rows posted.
+  const custIds = [...new Set(receipts.map((r) => r.customerId))];
+  const custName = new Map();
+  if (custIds.length) {
+    const rows = await q(`SELECT \`id\`, \`name\` FROM \`Customer\` WHERE \`companyId\` = ? AND \`id\` IN (${custIds.map(() => '?').join(',')})`, [companyId, ...custIds]);
+    for (const r of rows) custName.set(r.id, r.name);
+  }
+  const markPosted = (side, normKey) => q(
+    'UPDATE `CashbookEntry` SET `postedAt` = CURRENT_TIMESTAMP(3) WHERE `companyId` = ? AND `side` = ? AND `normKey` = ? AND `postedAt` IS NULL',
+    [companyId, side, normKey]
+  ).catch(() => {});
+
   // Receipts → customer sales invoices (FIFO).
   for (const e of receipts) {
     try {
@@ -150,6 +162,8 @@ router.post('/post', requireAnyPermission(...PERM), asyncHandler(async (req, res
         if (a > 0) await tx.update('Payment', pay.id, { allocatedAmount: a });
         return a;
       });
+      const nm = custName.get(e.customerId);
+      if (nm) await markPosted('RECEIPT', normName(nm));
       recRecv++; allocRecv = round2(allocRecv + alloc);
     } catch (err) { errors.push({ side: 'RECEIPT', ref: e.customerId, message: errMessage(err) }); }
   }
@@ -172,6 +186,7 @@ router.post('/post', requireAnyPermission(...PERM), asyncHandler(async (req, res
         if (a > 0) await tx.update('SupplierPayment', pay.id, { allocatedAmount: a });
         return a;
       });
+      await markPosted('PAYMENT', e.supplierKey);
       recPay++; allocPay = round2(allocPay + alloc);
     } catch (err) { errors.push({ side: 'PAYMENT', ref: e.supplierKey, message: errMessage(err) }); }
   }

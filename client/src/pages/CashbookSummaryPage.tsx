@@ -3,13 +3,15 @@
 // receipts vs payments per group. Also manages the saved "Other" account heads.
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { BarChart3, Loader2, Trash2, Tag } from 'lucide-react';
+import { BarChart3, Loader2, Trash2, Tag, UserPlus, Truck } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { useAuthStore, activeMembership } from '@/store/auth';
 
 type SumItem = { key: string; category: string; type: string; receipts: number; payments: number; net: number; count: number };
 type Summary = { groupBy: string; items: SumItem[]; totals: { receipts: number; payments: number; net: number; count: number } };
 type Head = { id: string; name: string; type: string; category: string | null };
+type UnItem = { normKey: string; name: string; receiptTotal: number; paymentTotal: number; unpostedReceipt: number; unpostedPayment: number; count: number };
 
 const inr = (n: number | undefined) =>
   '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -90,6 +92,9 @@ export const CashbookSummaryPage = () => {
         </div>
       )}
 
+      {/* Unclassified heads → classify + auto-adjust */}
+      <UnclassifiedSection />
+
       {/* Summary table */}
       <div className="card overflow-hidden">
         {isLoading ? (
@@ -162,6 +167,102 @@ export const CashbookSummaryPage = () => {
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+/* Unclassified account heads from the stored cashbook. Tagging Customer/Supplier
+   creates the record then allocates that head's unposted receipts/payments FIFO. */
+const UnclassifiedSection = () => {
+  const qc = useQueryClient();
+  const companyId = useAuthStore(activeMembership)?.companyId ?? '';
+  const [busy, setBusy] = useState<string | null>(null);
+  const [otherFor, setOtherFor] = useState<string | null>(null);
+  const [cat, setCat] = useState('');
+  const [note, setNote] = useState<string | null>(null);
+
+  const { data } = useQuery({
+    queryKey: ['cashbook-unclassified'],
+    queryFn: () => api<{ items: UnItem[] }>('/cashbook/unclassified'),
+  });
+  const items = data?.items ?? [];
+
+  const refresh = () => {
+    ['cashbook-unclassified', 'cashbook-summary', 'account-heads', 'customers', 'suppliers'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+  };
+  const run = async (name: string, fn: () => Promise<void>) => {
+    setBusy(name); setNote(null);
+    try { await fn(); setOtherFor(null); setCat(''); refresh(); }
+    catch (e) { setNote(e instanceof Error ? e.message : 'Failed'); }
+    finally { setBusy(null); }
+  };
+  const adjust = (name: string) =>
+    api<{ type: string; allocated: number; posted: number }>('/cashbook/adjust', { method: 'POST', body: JSON.stringify({ name }) });
+  const asCustomer = (name: string) => run(name, async () => {
+    await api('/customers', { method: 'POST', body: JSON.stringify({ name }) });
+    const r = await adjust(name);
+    setNote(`${name}: created customer, allocated ₹${Math.round(r.allocated).toLocaleString('en-IN')} across ${r.posted} entr${r.posted === 1 ? 'y' : 'ies'}.`);
+  });
+  const asSupplier = (name: string) => run(name, async () => {
+    await api('/suppliers', { method: 'POST', body: JSON.stringify({ name, companyIds: [companyId] }) });
+    const r = await adjust(name);
+    setNote(`${name}: created supplier, allocated ₹${Math.round(r.allocated).toLocaleString('en-IN')} across ${r.posted} entr${r.posted === 1 ? 'y' : 'ies'}.`);
+  });
+  const asOther = (name: string) => run(name, async () => {
+    await api('/cashbook/account-heads', { method: 'POST', body: JSON.stringify({ name, category: cat.trim() }) });
+  });
+
+  if (!items.length) return null;
+
+  return (
+    <div className="card overflow-hidden">
+      <div className="flex items-center gap-2 border-b border-slate-200 bg-amber-50/60 px-4 py-2.5 text-sm font-semibold text-amber-800">
+        <Tag className="h-4 w-4" /> Unclassified heads ({items.length})
+      </div>
+      <div className="px-4 py-2 text-xs text-slate-500">
+        Tag a head to recognise it. <b>Customer</b>/<b>Supplier</b> create the record and immediately settle its unposted receipts/payments against invoices (FIFO); <b>Other</b> just categorises it.
+      </div>
+      {note && <div className="mx-4 mb-2 rounded border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-700">{note}</div>}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm whitespace-nowrap">
+          <thead><tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <th className="px-4 py-2.5 text-left">Party</th>
+            <th className="px-4 py-2.5 text-right">Receipts</th>
+            <th className="px-4 py-2.5 text-right">Payments</th>
+            <th className="px-4 py-2.5 text-right">Unposted</th>
+            <th className="px-4 py-2.5 text-left">Classify as</th>
+          </tr></thead>
+          <tbody className="divide-y divide-slate-100">
+            {items.map((u) => {
+              const isBusy = busy === u.name;
+              return (
+                <tr key={u.normKey}>
+                  <td className="px-4 py-2 font-medium">{u.name}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-slate-600">{u.receiptTotal ? inr(u.receiptTotal) : '—'}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-slate-600">{u.paymentTotal ? inr(u.paymentTotal) : '—'}</td>
+                  <td className="px-4 py-2 text-right tabular-nums font-semibold">{inr(u.unpostedReceipt + u.unpostedPayment)}</td>
+                  <td className="px-4 py-2">
+                    {otherFor === u.name ? (
+                      <div className="flex items-center gap-1.5">
+                        <input autoFocus className="input h-8 w-40" placeholder="Category e.g. Salary" value={cat} onChange={(e) => setCat(e.target.value)} />
+                        <button disabled={isBusy || !cat.trim()} onClick={() => asOther(u.name)} className="btn-primary h-8 px-2 text-xs">{isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}</button>
+                        <button onClick={() => { setOtherFor(null); setCat(''); }} className="btn-ghost h-8 px-2 text-xs text-slate-500">Cancel</button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <button disabled={isBusy} onClick={() => asCustomer(u.name)} className="btn-ghost h-8 border border-slate-300 px-2 text-xs text-emerald-700 hover:bg-emerald-50"><UserPlus className="h-3.5 w-3.5" /> Customer</button>
+                        <button disabled={isBusy} onClick={() => asSupplier(u.name)} className="btn-ghost h-8 border border-slate-300 px-2 text-xs text-brand-700 hover:bg-brand-50"><Truck className="h-3.5 w-3.5" /> Supplier</button>
+                        <button disabled={isBusy} onClick={() => { setOtherFor(u.name); setCat(''); }} className="btn-ghost h-8 border border-slate-300 px-2 text-xs text-slate-600 hover:bg-slate-50"><Tag className="h-3.5 w-3.5" /> Other</button>
+                        {isBusy && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

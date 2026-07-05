@@ -240,8 +240,9 @@ const ClassifySection = ({ rows, companyId, onChanged }: { rows: Unmatched[]; co
     catch (e) { setErr(e instanceof Error ? e.message : 'Failed'); }
     finally { setBusy(null); }
   };
-  const asCustomer = (name: string) => act(name, () => api('/customers', { method: 'POST', body: JSON.stringify({ name }) }));
-  const asSupplier = (name: string) => act(name, () => api('/suppliers', { method: 'POST', body: JSON.stringify({ name, companyIds: [companyId] }) }));
+  const adjust = (name: string) => api('/cashbook/adjust', { method: 'POST', body: JSON.stringify({ name }) }).catch(() => {});
+  const asCustomer = (name: string) => act(name, async () => { await api('/customers', { method: 'POST', body: JSON.stringify({ name }) }); await adjust(name); });
+  const asSupplier = (name: string) => act(name, async () => { await api('/suppliers', { method: 'POST', body: JSON.stringify({ name, companyIds: [companyId] }) }); await adjust(name); });
   const asOther = (name: string) => act(name, () => api('/cashbook/account-heads', { method: 'POST', body: JSON.stringify({ name, category: cat.trim() }) }));
 
   return (

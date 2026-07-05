@@ -4,16 +4,38 @@
 // re-tagging a head instantly updates the summary.
 import { Router } from 'express';
 import { z } from 'zod';
-import { q, qOne, insert, del, newId } from '../lib/db.js';
+import { q, qOne, insert, del, txn, newId } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requireAnyPermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
-import { round2, normName } from '../lib/invoicing.js';
+import { round2, normName, allocatePaymentFifo } from '../lib/invoicing.js';
+import { allocateSupplierPaymentFifo } from '../lib/billsReconcile.js';
 import { parseBankBook } from '../lib/receiptsPayments.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
 const PERM = ['receive_payments', 'manage_invoices'];
+
+/* Open purchase bills grouped by normalized supplier name (FIFO order). */
+const loadOpenPayablesBySupplier = async (companyId) => {
+  const rows = await q(
+    `SELECT \`id\`, \`supplierName\`, \`amount\`, \`paidAmount\`, \`invoiceDate\`
+       FROM \`PurchaseInvoice\`
+      WHERE \`companyId\` = ? AND \`status\` <> 'PAID'
+      ORDER BY \`invoiceDate\` ASC, \`createdAt\` ASC`,
+    [companyId]
+  );
+  const map = new Map();
+  for (const r of rows) {
+    const key = normName(r.supplierName);
+    if (!key) continue;
+    if (!map.has(key)) map.set(key, { displayName: r.supplierName, pending: 0, invoices: [] });
+    const g = map.get(key);
+    g.invoices.push(r);
+    g.pending = round2(g.pending + (Number(r.amount) - Number(r.paidAmount)));
+  }
+  return map;
+};
 
 /* Build a live classifier: normKey → { type, category }. Customers & suppliers
    win over stored AccountHead rows (they're the source of truth once created). */
@@ -164,6 +186,90 @@ router.get('/summary', requireAnyPermission(...PERM), asyncHandler(async (req, r
     items,
     totals: { receipts: totalRcpt, payments: totalPymt, net: round2(totalRcpt - totalPymt), count: rows.length },
   });
+}));
+
+/* ---------- Unclassified heads (from stored cashbook) ---------- */
+
+// Heads in the stored cashbook that don't yet resolve to a customer/supplier/
+// other. Shows totals + how much is still unposted (awaiting allocation).
+router.get('/unclassified', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
+  const companyId = req.tenant.companyId;
+  const rows = await q(
+    `SELECT \`normKey\`, \`side\`, MIN(\`account\`) AS account,
+            SUM(\`amount\`) AS amt,
+            SUM(CASE WHEN \`postedAt\` IS NULL THEN \`amount\` ELSE 0 END) AS unposted,
+            COUNT(*) AS c
+       FROM \`CashbookEntry\` WHERE \`companyId\` = ?
+      GROUP BY \`normKey\`, \`side\``,
+    [companyId]
+  );
+  const classify = await buildClassifier(companyId);
+  const map = new Map();
+  for (const r of rows) {
+    if (classify(r.account).type !== 'UNCLASSIFIED') continue;
+    const cur = map.get(r.normKey) ?? { normKey: r.normKey, name: r.account, receiptTotal: 0, paymentTotal: 0, unpostedReceipt: 0, unpostedPayment: 0, count: 0 };
+    if (r.side === 'RECEIPT') { cur.receiptTotal = round2(cur.receiptTotal + Number(r.amt)); cur.unpostedReceipt = round2(cur.unpostedReceipt + Number(r.unposted)); }
+    else { cur.paymentTotal = round2(cur.paymentTotal + Number(r.amt)); cur.unpostedPayment = round2(cur.unpostedPayment + Number(r.unposted)); }
+    cur.count += Number(r.c);
+    map.set(r.normKey, cur);
+  }
+  const items = [...map.values()].sort((a, b) => (b.receiptTotal + b.paymentTotal) - (a.receiptTotal + a.paymentTotal));
+  res.json({ items });
+}));
+
+/* ---------- Adjust: allocate a head's still-unposted cashbook rows ----------
+   Called after a head is classified as a customer/supplier so its historical
+   receipts/payments settle against invoices, FIFO, without re-uploading. */
+router.post('/adjust', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
+  const { name } = z.object({ name: z.string().trim().min(1).max(200) }).parse(req.body);
+  const companyId = req.tenant.companyId;
+  const normKey = normName(name);
+  const classify = await buildClassifier(companyId);
+  const type = classify(name).type;
+  let allocated = 0, posted = 0, amount = 0;
+
+  if (type === 'CUSTOMER') {
+    const custs = await q('SELECT `id`, `name` FROM `Customer` WHERE `companyId` = ?', [companyId]);
+    const cust = custs.find((c) => normName(c.name) === normKey);
+    const sum = await qOne("SELECT COALESCE(SUM(`amount`),0) AS amt, COUNT(*) AS c FROM `CashbookEntry` WHERE `companyId` = ? AND `side` = 'RECEIPT' AND `normKey` = ? AND `postedAt` IS NULL", [companyId, normKey]);
+    amount = round2(Number(sum?.amt ?? 0));
+    if (cust && amount > 0) {
+      allocated = await txn(async (tx) => {
+        const pay = await tx.insert('Payment', {
+          companyId, customerId: cust.id, amount, allocatedAmount: 0,
+          paymentDate: new Date(), method: 'BANK', reference: 'Cashbook adjust', notes: 'Cashbook adjust (classified later)', createdById: req.auth.userId,
+        });
+        const a = await allocatePaymentFifo(tx, { companyId, customerId: cust.id, paymentId: pay.id, amount });
+        if (a > 0) await tx.update('Payment', pay.id, { allocatedAmount: a });
+        return a;
+      });
+      const upd = await q("UPDATE `CashbookEntry` SET `postedAt` = CURRENT_TIMESTAMP(3) WHERE `companyId` = ? AND `side` = 'RECEIPT' AND `normKey` = ? AND `postedAt` IS NULL", [companyId, normKey]);
+      posted = upd?.affectedRows ?? Number(sum?.c ?? 0);
+    }
+  } else if (type === 'SUPPLIER') {
+    const bySupplier = await loadOpenPayablesBySupplier(companyId);
+    const g = bySupplier.get(normKey);
+    const sum = await qOne("SELECT COALESCE(SUM(`amount`),0) AS amt, COUNT(*) AS c FROM `CashbookEntry` WHERE `companyId` = ? AND `side` = 'PAYMENT' AND `normKey` = ? AND `postedAt` IS NULL", [companyId, normKey]);
+    amount = round2(Number(sum?.amt ?? 0));
+    if (g && amount > 0) {
+      const apply = round2(Math.min(amount, g.pending));
+      if (apply > 0.01) {
+        allocated = await txn(async (tx) => {
+          const pay = await tx.insert('SupplierPayment', {
+            companyId, supplierName: g.displayName, amount: apply, allocatedAmount: 0,
+            paymentDate: new Date(), method: 'BANK', reference: 'Cashbook adjust', notes: 'Cashbook adjust (classified later)', createdById: req.auth.userId,
+          });
+          const a = await allocateSupplierPaymentFifo(tx, { companyId, paymentId: pay.id, amount: apply, invoices: g.invoices });
+          if (a > 0) await tx.update('SupplierPayment', pay.id, { allocatedAmount: a });
+          return a;
+        });
+      }
+      const upd = await q("UPDATE `CashbookEntry` SET `postedAt` = CURRENT_TIMESTAMP(3) WHERE `companyId` = ? AND `side` = 'PAYMENT' AND `normKey` = ? AND `postedAt` IS NULL", [companyId, normKey]);
+      posted = upd?.affectedRows ?? Number(sum?.c ?? 0);
+    }
+  }
+
+  res.json({ type, allocated: round2(allocated), posted, amount });
 }));
 
 export default router;
