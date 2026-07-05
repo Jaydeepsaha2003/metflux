@@ -115,6 +115,19 @@ export const POOrderNewPage = () => {
     setPrefill({ coreType: it.coreType, grade: it.grade, material: it.material, rateBasis: it.rateBasis ?? 'PER_KG' });
   };
 
+  /* Edit a line: pull the row back into its entry form (all fields), then remove
+     it from the list — re-adding replaces it. Locked (produced) rows can't edit. */
+  const [editSeed, setEditSeed] = useState<{ item: Item; nonce: number } | null>(null);
+  const editNonce = useRef(0);
+  const editItem = (idx: number) => {
+    const it = items[idx];
+    if (!it || it._locked) return;
+    setCoreType(it.coreType);
+    editNonce.current += 1;
+    setEditSeed({ item: it, nonce: editNonce.current });
+    setItems((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   /* ----- localStorage draft: restore on mount, auto-save on change ----- */
   const [draftAvailable, setDraftAvailable] = useState(false);
   const [draftData, setDraftData] = useState<null | {
@@ -510,6 +523,8 @@ export const POOrderNewPage = () => {
             onAdd={(item) => { setItems((prev) => [...prev, item]); }}
             prefill={prefill}
             onPrefillConsumed={() => setPrefill(null)}
+            edit={editSeed?.item.coreType === 'TOROIDAL' ? editSeed : null}
+            onEditConsumed={() => setEditSeed(null)}
           />
         )}
         {coreType === 'RECTANGULAR' && (
@@ -519,6 +534,8 @@ export const POOrderNewPage = () => {
             onAdd={(item) => { setItems((prev) => [...prev, item]); }}
             prefill={prefill}
             onPrefillConsumed={() => setPrefill(null)}
+            edit={editSeed?.item.coreType === 'RECTANGULAR' ? editSeed : null}
+            onEditConsumed={() => setEditSeed(null)}
           />
         )}
         {coreType === 'NANO' && (
@@ -528,6 +545,8 @@ export const POOrderNewPage = () => {
             onAdd={(item) => { setItems((prev) => [...prev, item]); }}
             prefill={prefill}
             onPrefillConsumed={() => setPrefill(null)}
+            edit={editSeed?.item.coreType === 'NANO' ? editSeed : null}
+            onEditConsumed={() => setEditSeed(null)}
           />
         )}
         {!coreType && (
@@ -587,6 +606,17 @@ export const POOrderNewPage = () => {
                 )}
               </div>
               <div className="flex-shrink-0 flex items-center gap-0.5">
+                {!it._dbId && (
+                  <button
+                    type="button"
+                    onClick={() => editItem(idx)}
+                    title="Edit this line"
+                    aria-label="Edit line"
+                    className="rounded-md p-1.5 text-brand-600 transition hover:bg-brand-50"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => copyToForm(it)}
@@ -674,6 +704,17 @@ export const POOrderNewPage = () => {
                   </td>
                   <td className="px-3 py-2 text-right">
                     <div className="inline-flex items-center gap-0.5">
+                      {!it._dbId && (
+                        <button
+                          type="button"
+                          onClick={() => editItem(idx)}
+                          title="Edit this line"
+                          aria-label="Edit line"
+                          className="rounded-md p-1.5 text-brand-600 transition hover:bg-brand-50"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => copyToForm(it)}
@@ -867,10 +908,10 @@ const GradeMaterialPicker = ({
    "Flux ( T )", "ATe/cm", "V (Volts)", "Ie max (mA)" survive verbatim. */
 const Stat = ({ label, value, accent }: { label: string; value: string; accent?: 'primary' }) => (
   <div className="min-w-0">
-    <div className="text-[11px] font-medium tracking-wide text-slate-500">{label}</div>
+    <div className="text-[10px] font-medium tracking-wide text-slate-500">{label}</div>
     <div className={cn(
       'truncate font-mono tabular-nums leading-tight',
-      accent === 'primary' ? 'text-base font-semibold text-slate-900' : 'text-base text-slate-700'
+      accent === 'primary' ? 'text-sm font-semibold text-slate-900' : 'text-sm text-slate-700'
     )}>
       {value}
     </div>
@@ -879,13 +920,15 @@ const Stat = ({ label, value, accent }: { label: string; value: string; accent?:
 
 /* ---------- TOROIDAL ---------- */
 export const ToroidalForm = ({
-  grades, fluxGrades, onAdd, prefill, onPrefillConsumed,
+  grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed,
 }: {
   grades: GradeRow[];
   fluxGrades: FluxGroup[];
   onAdd: (item: Item) => void;
   prefill?: { coreType: CoreType; grade: string; material: string; rateBasis: 'PER_KG' | 'PER_PCS' } | null;
   onPrefillConsumed?: () => void;
+  edit?: { item: Item; nonce: number } | null;
+  onEditConsumed?: () => void;
 }) => {
   const [grade, setGrade] = useState('');
   const [material, setMaterial] = useState('');
@@ -898,6 +941,7 @@ export const ToroidalForm = ({
   // Pricing
   const [rateBasis, setRateBasis] = useState<'PER_KG' | 'PER_PCS'>('PER_KG');
   const [rateValue, setRateValue] = useState(0);
+  const pendingFlux = useRef<number | null>(null);
 
   // Fluxes available for the currently selected grade — driven entirely by
   // what's been recorded in Settings → Flux Grades for this company.
@@ -906,8 +950,11 @@ export const ToroidalForm = ({
   const gradeHasFluxData = fluxPoints.length > 0;
   const fluxOptions = fluxPoints.map((p) => ({ value: String(p.flux), label: `${p.flux.toFixed(2)} T` }));
 
-  // Reset flux whenever the grade changes — last grade's fluxes don't apply.
-  useEffect(() => { setFlux(0); }, [grade]);
+  // Reset flux when the grade changes; keep the edited flux when loading a row.
+  useEffect(() => {
+    if (pendingFlux.current != null) { setFlux(pendingFlux.current); pendingFlux.current = null; }
+    else setFlux(0);
+  }, [grade]);
 
   // Apply a one-shot "copy from row" prefill (grade / material / rate basis).
   useEffect(() => {
@@ -918,6 +965,20 @@ export const ToroidalForm = ({
     onPrefillConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill]);
+
+  // Load a full row for editing.
+  useEffect(() => {
+    if (!edit || edit.item.coreType !== 'TOROIDAL') return;
+    const it = edit.item;
+    setMaterial(it.material);
+    setId(it.id1); setOd(it.od1); setHt(it.ht); setPcs(it.pcs);
+    setTurns(it.turns ?? 0);
+    setRateBasis(it.rateBasis ?? 'PER_KG'); setRateValue(it.rateValue ?? 0);
+    pendingFlux.current = it.flux ?? 0;
+    setGrade(it.grade);
+    onEditConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [edit?.nonce]);
 
   const calc = useMemo(() => toroidalCalc({ id, od, ht, pcs }), [id, od, ht, pcs]);
   const fluxCalc = useMemo(
@@ -1067,13 +1128,15 @@ export const ToroidalForm = ({
 
 /* ---------- RECTANGULAR ---------- */
 export const RectangularForm = ({
-  grades, fluxGrades, onAdd, prefill, onPrefillConsumed,
+  grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed,
 }: {
   grades: GradeRow[];
   fluxGrades: FluxGroup[];
   onAdd: (item: Item) => void;
   prefill?: { coreType: CoreType; grade: string; material: string; rateBasis: 'PER_KG' | 'PER_PCS' } | null;
   onPrefillConsumed?: () => void;
+  edit?: { item: Item; nonce: number } | null;
+  onEditConsumed?: () => void;
 }) => {
   const [grade, setGrade] = useState('');
   const [material, setMaterial] = useState('');
@@ -1087,6 +1150,7 @@ export const RectangularForm = ({
   const [flux, setFlux] = useState(0);
   const [rateBasis, setRateBasis] = useState<'PER_KG' | 'PER_PCS'>('PER_KG');
   const [rateValue, setRateValue] = useState(0);
+  const pendingFlux = useRef<number | null>(null);
 
   // Rectangular flux table (already filtered to coreType=RECTANGULAR by the query).
   const fluxPoints = fluxGrades.find((g) => g.grade === grade)?.points ?? [];
@@ -1094,8 +1158,11 @@ export const RectangularForm = ({
   const gradeHasFluxData = fluxPoints.length > 0;
   const fluxOptions = fluxPoints.map((p) => ({ value: String(p.flux), label: `${p.flux.toFixed(2)} T` }));
 
-  // Reset flux when grade changes — a new grade rarely has the same flux row.
-  useEffect(() => { setFlux(0); }, [grade]);
+  // Reset flux when the grade changes; keep the edited flux when loading a row.
+  useEffect(() => {
+    if (pendingFlux.current != null) { setFlux(pendingFlux.current); pendingFlux.current = null; }
+    else setFlux(0);
+  }, [grade]);
 
   // Apply a one-shot "copy from row" prefill (grade / material / rate basis).
   useEffect(() => {
@@ -1106,6 +1173,20 @@ export const RectangularForm = ({
     onPrefillConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill]);
+
+  // Load a full row for editing.
+  useEffect(() => {
+    if (!edit || edit.item.coreType !== 'RECTANGULAR') return;
+    const it = edit.item;
+    setMaterial(it.material);
+    setId1(it.id1); setId2(it.id2 ?? 0); setOd1(it.od1); setOd2(it.od2 ?? 0); setHt(it.ht); setPcs(it.pcs);
+    setTurns(it.turns ?? 0);
+    setRateBasis(it.rateBasis ?? 'PER_KG'); setRateValue(it.rateValue ?? 0);
+    pendingFlux.current = it.flux ?? 0;
+    setGrade(it.grade);
+    onEditConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [edit?.nonce]);
 
   const calc = useMemo(
     () => rectangularCalc({ id1, id2, od1, od2, ht, pcs }),
@@ -1278,13 +1359,15 @@ export const RectangularForm = ({
 
 /* ---------- NANO ---------- */
 export const NanoForm = ({
-  grades, fluxGrades, onAdd, prefill, onPrefillConsumed,
+  grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed,
 }: {
   grades: GradeRow[];
   fluxGrades: FluxGroup[];
   onAdd: (item: Item) => void;
   prefill?: { coreType: CoreType; grade: string; material: string; rateBasis: 'PER_KG' | 'PER_PCS' } | null;
   onPrefillConsumed?: () => void;
+  edit?: { item: Item; nonce: number } | null;
+  onEditConsumed?: () => void;
 }) => {
   const [grade, setGrade] = useState('');
   const [material, setMaterial] = useState('');
@@ -1302,6 +1385,7 @@ export const NanoForm = ({
   const [freq, setFreq] = useState(50);
   const [sfac, setSfac] = useState(0.8);
   const [flux, setFlux] = useState(0);
+  const pendingFlux = useRef<number | null>(null);
 
   useEffect(() => {
     if (!prefill || prefill.coreType !== 'NANO') return;
@@ -1311,8 +1395,25 @@ export const NanoForm = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill]);
 
-  // Reset flux when the grade changes — a new grade rarely has the same Bmax rows.
-  useEffect(() => { setFlux(0); }, [grade]);
+  // Load a full row for editing.
+  useEffect(() => {
+    if (!edit || edit.item.coreType !== 'NANO') return;
+    const it = edit.item;
+    setMaterial(it.material);
+    setId(it.id1); setOd(it.od1); setHt(it.ht); setPcs(it.pcs);
+    setNanoPrice(it.nanoPrice ?? 0); setCasePrice(it.casePrice ?? 0);
+    setSoRate(it.nanoSoRate ?? 0); setTurns(it.turns ?? 0);
+    pendingFlux.current = it.flux ?? 0;
+    setGrade(it.grade);
+    onEditConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [edit?.nonce]);
+
+  // Reset flux when the grade changes; keep the edited flux when loading a row.
+  useEffect(() => {
+    if (pendingFlux.current != null) { setFlux(pendingFlux.current); pendingFlux.current = null; }
+    else setFlux(0);
+  }, [grade]);
 
   const fluxPoints = fluxGrades.find((g) => g.grade === grade)?.points ?? [];
   const ateCm = fluxPoints.find((p) => p.flux === flux)?.ateCm ?? 0;
@@ -1324,6 +1425,9 @@ export const NanoForm = ({
     [id, od, ht, pcs, nanoPrice, casePrice]
   );
   const geomOk = id > 0 && od > 0 && ht > 0 && od > id;
+  // Total weight = nano core + SS case, per piece × pcs.
+  const pieceWeight = Math.round((calc.coreWeight + calc.caseWeight) * 1000) / 1000;
+  const totalWt = pcs > 0 ? Math.round(pieceWeight * pcs * 1000) / 1000 : 0;
 
   // Finished output size = ordered dims + the selected grade's nano offsets.
   const selGrade = grades.find((g) => g.grade === grade);
@@ -1360,7 +1464,7 @@ export const NanoForm = ({
       material: material || 'NANO',
       measure: calc.measure,
       id1: id, od1: od, ht, pcs,
-      weightPerPc: calc.coreWeight, totalWeight: calc.totalWeight,
+      weightPerPc: pieceWeight, totalWeight: totalWt,
       // Per-piece: manual SO rate if given, else the Nano+Case price.
       rateBasis: effRate > 0 ? 'PER_PCS' : undefined,
       rateValue: effRate > 0 ? +effRate.toFixed(4) : undefined,
@@ -1433,11 +1537,13 @@ export const NanoForm = ({
           </Field>
         </div>
         {flux > 0 && (
-          <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-4">
-            <Stat label="Bmax (G)" value={`${Math.round(flux * 10000)} G`} />
+          <div className="mt-2 grid grid-cols-3 gap-x-3 gap-y-1 sm:grid-cols-6">
+            <Stat label="Bmax (G)" value={`${Math.round(flux * 10000)}`} />
             <Stat label="AT/cm" value={ateCm > 0 ? ateCm.toFixed(4) : '—'} />
+            <Stat label="V (Volts)" value={test.testVoltage > 0 ? test.testVoltage.toFixed(3) : '—'} />
             <Stat label="V (mV)" value={test.testVoltageMv > 0 ? test.testVoltageMv.toFixed(2) : '—'} />
-            <Stat label="Ie max (A)" value={test.testCurrentA > 0 ? test.testCurrentA.toFixed(5) : (flux > 0 && ateCm === 0 ? 'Set AT/cm' : '—')} />
+            <Stat label="Ie max (mA)" value={test.testCurrent > 0 ? test.testCurrent.toFixed(2) : (ateCm === 0 ? 'Set AT/cm' : '—')} />
+            <Stat label="Ie max (A)" value={test.testCurrentA > 0 ? test.testCurrentA.toFixed(5) : '—'} />
           </div>
         )}
       </div>
@@ -1447,7 +1553,7 @@ export const NanoForm = ({
         <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-5">
           <Stat label="Core Wt (kg)"  value={calc.coreWeight.toFixed(3)} />
           <Stat label="Case Wt (kg)"  value={calc.caseWeight.toFixed(3)} />
-          <Stat label="Total Wt (kg)" value={calc.totalWeight.toFixed(3)} />
+          <Stat label="Total Wt (core+case)" value={totalWt.toFixed(3)} accent="primary" />
           <Stat label="Bare Size"     value={geomOk ? calc.measure : '—'} />
           <Stat label="Finish Size"   value={finished ?? '—'} accent={finished ? 'primary' : undefined} />
         </div>
