@@ -48,7 +48,14 @@ export type Item = {
 };
 
 type Customer = { id: string; name: string; gstRate?: number };
-type GradeRow = { grade: string; materials: { id: string; material: string }[] };
+type GradeRow = {
+  grade: string;
+  materials: { id: string; material: string }[];
+  coreTypes?: CoreType[];
+  nanoIdOff?: number | null; nanoOdOff?: number | null; nanoHtOff?: number | null;
+};
+// A grade with no coreTypes (legacy) applies to all.
+const gradeAppliesTo = (g: GradeRow, ct: CoreType) => !g.coreTypes || g.coreTypes.length === 0 || g.coreTypes.includes(ct);
 type FluxPoint = { flux: number; ateCm: number };
 type FluxGroup = { grade: string; points: FluxPoint[] };
 
@@ -493,7 +500,7 @@ export const POOrderNewPage = () => {
 
         {coreType === 'TOROIDAL' && (
           <ToroidalForm
-            grades={gradesResp?.grades ?? []}
+            grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'TOROIDAL'))}
             fluxGrades={fluxResp?.grades ?? []}
             onAdd={(item) => { setItems((prev) => [...prev, item]); }}
             prefill={prefill}
@@ -502,7 +509,7 @@ export const POOrderNewPage = () => {
         )}
         {coreType === 'RECTANGULAR' && (
           <RectangularForm
-            grades={gradesResp?.grades ?? []}
+            grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'RECTANGULAR'))}
             fluxGrades={fluxRespRect?.grades ?? []}
             onAdd={(item) => { setItems((prev) => [...prev, item]); }}
             prefill={prefill}
@@ -511,7 +518,7 @@ export const POOrderNewPage = () => {
         )}
         {coreType === 'NANO' && (
           <NanoForm
-            grades={gradesResp?.grades ?? []}
+            grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'NANO'))}
             onAdd={(item) => { setItems((prev) => [...prev, item]); }}
             prefill={prefill}
             onPrefillConsumed={() => setPrefill(null)}
@@ -1299,6 +1306,13 @@ export const NanoForm = ({
   );
   const geomOk = id > 0 && od > 0 && ht > 0 && od > id;
 
+  // Finished output size = ordered dims + the selected grade's nano offsets.
+  const selGrade = grades.find((g) => g.grade === grade);
+  const hasOffsets = !!selGrade && (selGrade.nanoIdOff != null || selGrade.nanoOdOff != null || selGrade.nanoHtOff != null);
+  const finished = geomOk && hasOffsets
+    ? `${id + (selGrade!.nanoIdOff ?? 0)} × ${od + (selGrade!.nanoOdOff ?? 0)} × ${ht + (selGrade!.nanoHtOff ?? 0)}`
+    : null;
+
   // Effective selling rate — the Nano+Case price for AUTO, else the manual rate.
   const effBasis: 'PER_KG' | 'PER_PCS' = basis === 'AUTO' ? 'PER_PCS' : basis;
   const effRate = basis === 'AUTO' ? calc.pricePerPc : rate;
@@ -1384,11 +1398,12 @@ export const NanoForm = ({
 
       {/* Computed values */}
       <div className="mt-3 rounded-md border border-violet-100 bg-white/60 px-3 py-2">
-        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-5">
           <Stat label="Core Wt (kg)"  value={calc.coreWeight.toFixed(3)} />
           <Stat label="Case Wt (kg)"  value={calc.caseWeight.toFixed(3)} />
           <Stat label="Total Wt (kg)" value={calc.totalWeight.toFixed(3)} />
           <Stat label="Case OD × ID"  value={geomOk ? `${calc.caseOd} × ${calc.caseId}` : '—'} />
+          <Stat label="Finished (ID×OD×HT)" value={finished ?? '—'} accent={finished ? 'primary' : undefined} />
         </div>
         <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 border-t border-violet-100 pt-2 sm:grid-cols-4">
           <Stat label="Measure"        value={calc.measure} />

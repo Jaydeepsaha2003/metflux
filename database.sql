@@ -148,6 +148,10 @@ CREATE TABLE `MaterialGrade` (
     `id` VARCHAR(191) NOT NULL,
     `grade` VARCHAR(80) NOT NULL,
     `material` VARCHAR(120) NOT NULL,
+    `coreTypes` VARCHAR(60) NULL,
+    `nanoIdOff` DOUBLE NULL,
+    `nanoOdOff` DOUBLE NULL,
+    `nanoHtOff` DOUBLE NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `companyId` VARCHAR(191) NOT NULL,
 

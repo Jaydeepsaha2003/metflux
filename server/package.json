@@ -33,7 +33,8 @@
     "migrate:app-settings": "node scripts/migrate-app-settings.js",
     "migrate:cashbook": "node scripts/migrate-cashbook.js",
     "migrate:nano-core": "node scripts/migrate-nano-core.js",
-    "migrate": "npm run migrate:supplier-membership && npm run migrate:customer-code && npm run migrate:hide-customer-names && npm run migrate:logo-column && npm run migrate:share-token && npm run migrate:supplier-item-notes && npm run migrate:customer-portal-slug && npm run migrate:customer-due-days && npm run migrate:packing-list-wo && npm run migrate:sales-invoices && npm run migrate:sales-invoice-gst && npm run migrate:customer-portal-auth && npm run migrate:accounts && npm run migrate:bills-payable && npm run migrate:warehouse && npm run migrate:user-logs && npm run migrate:granular-perms && npm run migrate:link-invoices && npm run migrate:audit-log && npm run migrate:reminders && npm run migrate:app-settings && npm run migrate:cashbook && npm run migrate:nano-core"
+    "migrate:grade-coretypes": "node scripts/migrate-grade-coretypes.js",
+    "migrate": "npm run migrate:supplier-membership && npm run migrate:customer-code && npm run migrate:hide-customer-names && npm run migrate:logo-column && npm run migrate:share-token && npm run migrate:supplier-item-notes && npm run migrate:customer-portal-slug && npm run migrate:customer-due-days && npm run migrate:packing-list-wo && npm run migrate:sales-invoices && npm run migrate:sales-invoice-gst && npm run migrate:customer-portal-auth && npm run migrate:accounts && npm run migrate:bills-payable && npm run migrate:warehouse && npm run migrate:user-logs && npm run migrate:granular-perms && npm run migrate:link-invoices && npm run migrate:audit-log && npm run migrate:reminders && npm run migrate:app-settings && npm run migrate:cashbook && npm run migrate:nano-core && npm run migrate:grade-coretypes"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
