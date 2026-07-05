@@ -369,8 +369,9 @@ router.get('/aging', requireAnyPermission('view_debtor_aging', 'manage_invoices'
       c.invoices.push({ id: `credit:${g.customerId ?? g.customerName}`, invoiceNumber: 'Credit / Advance', invoiceDate: null, dueDate: null, balance: round2(-remaining), daysOverdue: null });
     }
     c.total = round2(c.notDue + c.d1_30 + c.d31_60 + c.d61_90 + c.d90 + c.noTerms);
-    // Drop customers who net to zero (bills fully squared off by credits).
-    if (Math.abs(c.total) <= 0.01 && c.invoices.length === 0) continue;
+    // Drop anyone who nets to zero-or-below: fully squared off by credits, or a
+    // net-payable party (advance / contra) who belongs on the Creditor report.
+    if (c.total <= 0.01) continue;
     customers.push(c);
   }
 

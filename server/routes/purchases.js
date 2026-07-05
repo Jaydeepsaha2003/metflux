@@ -241,7 +241,9 @@ router.get('/aging', requireAnyPermission('view_creditor_aging', 'manage_invoice
       s.invoices.push({ id: `credit:${g.supplierName}`, invoiceNumber: 'Credit / Advance', invoiceDate: null, balance: round2(-remaining), ageDays: 0, docType: null });
     }
     s.total = round2(s.b0_30 + s.b31_60 + s.b61_90 + s.b90);
-    if (Math.abs(s.total) <= 0.01 && s.invoices.length === 0) continue; // fully netted
+    // Drop anyone who nets to zero-or-below: fully netted, or a net-receivable
+    // party (their sales outweigh our purchases) who belongs on the Debtor report.
+    if (s.total <= 0.01) continue;
     suppliers.push(s);
   }
   suppliers.sort((a, b) => b.total - a.total);
