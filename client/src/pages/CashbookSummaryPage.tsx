@@ -3,7 +3,7 @@
 // receipts vs payments per group. Also manages the saved "Other" account heads.
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { BarChart3, Loader2, Trash2, Tag, UserPlus, Truck, Download, Copy, Pencil, Save, X } from 'lucide-react';
+import { BarChart3, Loader2, Trash2, Tag, UserPlus, Truck, Download, Copy, Pencil, Save, X, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { downloadXlsx, todayStamp } from '@/lib/excel';
@@ -29,9 +29,12 @@ const TYPE_TONE: Record<string, string> = {
 
 export const CashbookSummaryPage = () => {
   const qc = useQueryClient();
+  const [tab, setTab] = useState<'overview' | 'transactions'>('overview');
   const [groupBy, setGroupBy] = useState<'category' | 'account'>('category');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [sort, setSort] = useState<{ key: 'key' | 'receipts' | 'payments' | 'net' | 'count'; dir: 'asc' | 'desc' }>({ key: 'net', dir: 'desc' });
+  const sortBy = (key: typeof sort.key) => setSort((s) => ({ key, dir: s.key === key && s.dir === 'desc' ? 'asc' : 'desc' }));
 
   const qs = new URLSearchParams({ groupBy });
   if (from) qs.set('from', from);
@@ -55,8 +58,13 @@ export const CashbookSummaryPage = () => {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['account-heads'] }); qc.invalidateQueries({ queryKey: ['cashbook-summary'] }); },
   });
 
-  const items = data?.items ?? [];
+  const items = [...(data?.items ?? [])].sort((a, b) => {
+    const d = sort.dir === 'asc' ? 1 : -1;
+    if (sort.key === 'key') return a.key.localeCompare(b.key) * d;
+    return ((a[sort.key] as number) - (b[sort.key] as number)) * d;
+  });
   const otherHeads = (headsData?.heads ?? []).filter((h) => h.type === 'OTHER');
+  const sortIcon = (k: typeof sort.key) => (sort.key === k ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : '');
 
   const exportExcel = () => {
     if (!items.length && !overview) return;
@@ -86,11 +94,27 @@ export const CashbookSummaryPage = () => {
           </h1>
           <p className="mt-1 text-sm text-slate-500">Receipts vs payments from your imported bank/cash book, grouped by category or account.</p>
         </div>
-        <button onClick={exportExcel} className="btn-ghost border border-slate-300 text-emerald-700 hover:bg-emerald-50 text-sm shrink-0">
-          <Download className="h-4 w-4" /> Export Excel
-        </button>
+        {tab === 'overview' && (
+          <button onClick={exportExcel} className="btn-ghost border border-slate-300 text-emerald-700 hover:bg-emerald-50 text-sm shrink-0">
+            <Download className="h-4 w-4" /> Export Excel
+          </button>
+        )}
       </div>
 
+      {/* Tabs */}
+      <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+        {(['overview', 'transactions'] as const).map((t) => (
+          <button key={t} onClick={() => setTab(t)}
+            className={cn('rounded-md px-4 py-1.5 text-sm font-medium transition',
+              tab === t ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900')}>
+            {t === 'overview' ? 'Overview' : 'Transactions'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'transactions' && <TransactionsView />}
+
+      {tab === 'overview' && <>
       {/* Overview — Sales / Purchase / Receipts / Payments / notes / Net */}
       {overview && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
@@ -155,12 +179,12 @@ export const CashbookSummaryPage = () => {
           <div className="overflow-x-auto">
             <table className="w-full text-sm whitespace-nowrap">
               <thead><tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <th className="px-4 py-3 text-left">{groupBy === 'account' ? 'Account' : 'Category'}</th>
+                <th className="cursor-pointer select-none px-4 py-3 text-left hover:text-slate-700" onClick={() => sortBy('key')}>{groupBy === 'account' ? 'Account' : 'Category'}{sortIcon('key')}</th>
                 {groupBy === 'account' && <th className="px-4 py-3 text-left">Category</th>}
-                <th className="px-4 py-3 text-right">Receipts</th>
-                <th className="px-4 py-3 text-right">Payments</th>
-                <th className="px-4 py-3 text-right">Net</th>
-                <th className="px-4 py-3 text-right">Entries</th>
+                <th className="cursor-pointer select-none px-4 py-3 text-right hover:text-slate-700" onClick={() => sortBy('receipts')}>Receipts{sortIcon('receipts')}</th>
+                <th className="cursor-pointer select-none px-4 py-3 text-right hover:text-slate-700" onClick={() => sortBy('payments')}>Payments{sortIcon('payments')}</th>
+                <th className="cursor-pointer select-none px-4 py-3 text-right hover:text-slate-700" onClick={() => sortBy('net')}>Net{sortIcon('net')}</th>
+                <th className="cursor-pointer select-none px-4 py-3 text-right hover:text-slate-700" onClick={() => sortBy('count')}>Entries{sortIcon('count')}</th>
               </tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {items.map((it) => (
@@ -210,6 +234,136 @@ export const CashbookSummaryPage = () => {
           </div>
         </div>
       )}
+      </>}
+    </div>
+  );
+};
+
+/* ── Transactions — unified Sales / Purchase / notes / Receipts / Payments feed ── */
+type Txn = { date: string | null; type: string; party: string; ref: string | null; amount: number };
+const TXN_TYPES: { key: string; label: string; tone: string }[] = [
+  { key: 'SALE', label: 'Sales', tone: 'bg-emerald-50 text-emerald-700' },
+  { key: 'PURCHASE', label: 'Purchase', tone: 'bg-brand-50 text-brand-700' },
+  { key: 'CREDIT_NOTE', label: 'Credit Note', tone: 'bg-rose-50 text-rose-700' },
+  { key: 'DEBIT_NOTE', label: 'Debit Note', tone: 'bg-amber-50 text-amber-700' },
+  { key: 'RECEIPT', label: 'Receipts', tone: 'bg-emerald-50 text-emerald-700' },
+  { key: 'PAYMENT', label: 'Payments', tone: 'bg-slate-100 text-slate-600' },
+];
+const TXN_LABEL: Record<string, string> = Object.fromEntries(TXN_TYPES.map((t) => [t.key, t.label]));
+const TXN_TONE: Record<string, string> = Object.fromEntries(TXN_TYPES.map((t) => [t.key, t.tone]));
+
+const TransactionsView = () => {
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [search, setSearch] = useState('');
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [sort, setSort] = useState<{ key: 'date' | 'type' | 'party' | 'amount'; dir: 'asc' | 'desc' }>({ key: 'date', dir: 'desc' });
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
+
+  const qs = new URLSearchParams();
+  if (from) qs.set('from', from);
+  if (to) qs.set('to', to);
+  if (search.trim()) qs.set('search', search.trim());
+  if (sel.size) qs.set('types', [...sel].join(','));
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['cashbook-transactions', from, to, search, [...sel].sort().join(','), page],
+    queryFn: () => api<{ items: Txn[]; total: number; capped: boolean }>(`/cashbook/transactions?${qs.toString()}`),
+  });
+
+  const toggle = (k: string) => { setSel((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; }); setPage(1); };
+  const sortBy = (key: typeof sort.key) => { setSort((s) => ({ key, dir: s.key === key && s.dir === 'desc' ? 'asc' : 'desc' })); setPage(1); };
+  const icon = (k: typeof sort.key) => (sort.key === k ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : '');
+  const t = (v: string | null) => (v ? new Date(v).getTime() : 0);
+
+  const all = [...(data?.items ?? [])].sort((a, b) => {
+    const d = sort.dir === 'asc' ? 1 : -1;
+    if (sort.key === 'date') return (t(a.date) - t(b.date)) * d;
+    if (sort.key === 'amount') return (a.amount - b.amount) * d;
+    return String(a[sort.key] ?? '').localeCompare(String(b[sort.key] ?? '')) * d;
+  });
+  const total = all.length;
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const rows = all.slice((page - 1) * pageSize, page * pageSize);
+  const sum = all.reduce((s, r) => s + r.amount, 0);
+
+  const exportExcel = () => {
+    if (!all.length) return;
+    downloadXlsx(`cashbook-transactions-${todayStamp()}`, 'Transactions', all.map((r) => ({
+      Date: r.date ? new Date(r.date).toLocaleDateString('en-GB') : '', Type: TXN_LABEL[r.type] ?? r.type,
+      Party: r.party, Ref: r.ref ?? '', Amount: r.amount,
+    })));
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="card space-y-3 p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">From</span>
+            <input type="date" className="input" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} /></label>
+          <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">To</span>
+            <input type="date" className="input" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} /></label>
+          <label className="block flex-1 min-w-[180px]"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Search party</span>
+            <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input className="input pl-9" placeholder="Party name…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} /></div></label>
+          <button onClick={exportExcel} disabled={!all.length} className="btn-ghost h-10 border border-slate-300 text-emerald-700 hover:bg-emerald-50 text-sm disabled:opacity-50"><Download className="h-4 w-4" /> Excel</button>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Types:</span>
+          {TXN_TYPES.map((tt) => {
+            const on = sel.has(tt.key);
+            return (
+              <button key={tt.key} onClick={() => toggle(tt.key)}
+                className={cn('rounded-full px-2.5 py-1 text-xs font-medium ring-1 transition', on ? `${tt.tone} ring-transparent` : 'bg-white text-slate-500 ring-slate-200 hover:bg-slate-50')}>
+                {tt.label}
+              </button>
+            );
+          })}
+          {sel.size > 0 && <button onClick={() => { setSel(new Set()); setPage(1); }} className="text-xs text-slate-400 underline">clear</button>}
+        </div>
+      </div>
+
+      <div className="card overflow-hidden">
+        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-sm">
+          <span className="font-semibold text-slate-700">{total} transaction{total === 1 ? '' : 's'}{data?.capped ? ' (first 8000)' : ''}</span>
+          <span className="tabular-nums text-slate-500">Total: <b className="text-slate-800">{inr(sum)}</b></span>
+        </div>
+        {isLoading ? (
+          <div className="py-12 text-center text-slate-400"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></div>
+        ) : !rows.length ? (
+          <div className="py-12 text-center text-sm text-slate-400">No transactions for these filters.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm whitespace-nowrap">
+              <thead><tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="cursor-pointer select-none px-4 py-3 text-left hover:text-slate-700" onClick={() => sortBy('date')}>Date{icon('date')}</th>
+                <th className="cursor-pointer select-none px-4 py-3 text-left hover:text-slate-700" onClick={() => sortBy('type')}>Type{icon('type')}</th>
+                <th className="cursor-pointer select-none px-4 py-3 text-left hover:text-slate-700" onClick={() => sortBy('party')}>Party{icon('party')}</th>
+                <th className="px-4 py-3 text-left">Ref</th>
+                <th className="cursor-pointer select-none px-4 py-3 text-right hover:text-slate-700" onClick={() => sortBy('amount')}>Amount{icon('amount')}</th>
+              </tr></thead>
+              <tbody className="divide-y divide-slate-100">
+                {rows.map((r, i) => (
+                  <tr key={i} className="hover:bg-slate-50/60">
+                    <td className="px-4 py-2 text-slate-600">{r.date ? new Date(r.date).toLocaleDateString('en-GB') : '—'}</td>
+                    <td className="px-4 py-2"><span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', TXN_TONE[r.type] ?? 'bg-slate-100 text-slate-600')}>{TXN_LABEL[r.type] ?? r.type}</span></td>
+                    <td className="px-4 py-2 font-medium">{r.party}</td>
+                    <td className="px-4 py-2 font-mono text-xs text-slate-500">{r.ref || '—'}</td>
+                    <td className="px-4 py-2 text-right tabular-nums font-semibold">{inr(r.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-4 py-2.5 text-xs">
+          <span className="text-slate-500">Page {page} / {pages}</span>
+          <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="btn-ghost h-8 border border-slate-300 px-2 disabled:opacity-40"><ChevronLeft className="h-4 w-4" /></button>
+          <button disabled={page >= pages} onClick={() => setPage((p) => p + 1)} className="btn-ghost h-8 border border-slate-300 px-2 disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
+        </div>
+      </div>
     </div>
   );
 };

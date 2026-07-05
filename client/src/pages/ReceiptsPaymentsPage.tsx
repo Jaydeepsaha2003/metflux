@@ -9,7 +9,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeftRight, Loader2, Upload, CheckCircle2, ArrowDownToLine, ArrowUpFromLine,
-  UserPlus, Truck, Tag, BarChart3, Search, ChevronLeft, ChevronRight, ListChecks, Download,
+  UserPlus, Truck, Tag, BarChart3, Search, ChevronLeft, ChevronRight, ListChecks, Download, Trash2,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { readXlsxMatrix, downloadXlsx, todayStamp } from '@/lib/excel';
@@ -105,6 +105,24 @@ export const ReceiptsPaymentsPage = () => {
     onError: (e) => setUploadErr(e instanceof Error ? e.message : 'Import failed — nothing was saved.'),
   });
 
+  const resetAll = useMutation({
+    mutationFn: () => api<{ receipts: number; payments: number; entries: number }>('/cashbook/reset', { method: 'POST' }),
+    onSuccess: (r) => {
+      ['payments', 'sales-invoices', 'debtor-aging', 'creditor-aging', 'purchases', 'cashbook-summary', 'cashbook-entries', 'cashbook-unclassified', 'cashbook-overview', 'cashbook-duplicates', 'cashbook-transactions'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+      setPreview(null); setRows(null); setResult(null);
+      setUploadErr(`Cleared ${r.receipts} receipt(s), ${r.payments} payment(s) and ${r.entries} cashbook rows. You can re-upload now.`);
+    },
+    onError: (e) => setUploadErr(e instanceof Error ? e.message : 'Clear failed'),
+  });
+  const onClearAll = async () => {
+    const ok = await confirm({
+      title: 'Clear all imported receipts & payments?',
+      message: <>This deletes every cashbook-imported receipt &amp; payment (reversing their invoice settlements) and clears the stored cashbook, so you can re-upload cleanly. Manual Receive-Payments are kept. This can't be undone.</>,
+      confirmLabel: 'Clear all', tone: 'danger',
+    });
+    if (ok) resetAll.mutate();
+  };
+
   const selReceipts = (preview?.receipts ?? []).filter((x) => rcvOn[x.customerId] && x.willApply > 0);
   const selPayments = (preview?.payments ?? []).filter((x) => payOn[x.supplierKey] && x.willApply > 0);
   const selRcvTotal = selReceipts.reduce((s, x) => s + x.willApply, 0);
@@ -139,6 +157,9 @@ export const ReceiptsPaymentsPage = () => {
           <Link to="/accounts/cashbook-summary" className="btn-ghost border border-slate-300 text-slate-600 hover:bg-slate-50 text-sm">
             <BarChart3 className="h-4 w-4" /> Cashbook Summary
           </Link>
+          <button onClick={onClearAll} disabled={resetAll.isPending} className="btn-ghost border border-slate-300 text-red-600 hover:bg-red-50 text-sm">
+            {resetAll.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Clear all
+          </button>
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
           <button onClick={() => fileRef.current?.click()} disabled={uploading} className="btn-primary text-sm">

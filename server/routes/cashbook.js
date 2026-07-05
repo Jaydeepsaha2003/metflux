@@ -8,7 +8,7 @@ import { q, qOne, insert, del, txn, newId } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requireAnyPermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
-import { round2, normName, allocatePaymentFifo } from '../lib/invoicing.js';
+import { round2, normName, allocatePaymentFifo, invoiceStatus } from '../lib/invoicing.js';
 import { allocateSupplierPaymentFifo } from '../lib/billsReconcile.js';
 import { parseBankBook } from '../lib/receiptsPayments.js';
 
@@ -225,6 +225,85 @@ router.get('/entries', requireAnyPermission(...PERM), asyncHandler(async (req, r
   };
   const start = (page - 1) * pageSize;
   res.json({ items: all ? items : items.slice(start, start + pageSize), total, page, pageSize, totals });
+}));
+
+/* ---------- Bulk reset — delete all cashbook-sourced receipts/payments + entries ---------- */
+// Reverses invoice allocations for the receipts/payments the cashbook created
+// (identified by their import notes), then clears the stored cashbook so the
+// register can be re-imported cleanly. Manual Receive-Payments are untouched.
+const CB_NOTES = ['Receipts & Payments import', 'Cashbook adjust (classified later)'];
+router.post('/reset', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
+  const companyId = req.tenant.companyId;
+  let receipts = 0, payments = 0, entries = 0;
+  await txn(async (tx) => {
+    const pays = await tx.q('SELECT `id` FROM `Payment` WHERE `companyId` = ? AND `notes` IN (?,?)', [companyId, ...CB_NOTES]);
+    for (const p of pays) {
+      const allocs = await tx.q('SELECT * FROM `PaymentAllocation` WHERE `paymentId` = ?', [p.id]);
+      for (const a of allocs) {
+        const inv = await tx.qOne('SELECT * FROM `SalesInvoice` WHERE `id` = ?', [a.salesInvoiceId]);
+        if (inv) { const np = Math.max(0, round2(Number(inv.paidAmount) - Number(a.amount))); await tx.update('SalesInvoice', inv.id, { paidAmount: np, status: invoiceStatus(inv.amount, np) }); }
+      }
+      await tx.q('DELETE FROM `PaymentAllocation` WHERE `paymentId` = ?', [p.id]);
+      await tx.q('DELETE FROM `Payment` WHERE `id` = ?', [p.id]);
+      receipts++;
+    }
+    const spays = await tx.q('SELECT `id` FROM `SupplierPayment` WHERE `companyId` = ? AND `notes` IN (?,?)', [companyId, ...CB_NOTES]);
+    for (const p of spays) {
+      const allocs = await tx.q('SELECT * FROM `SupplierPaymentAllocation` WHERE `supplierPaymentId` = ?', [p.id]);
+      for (const a of allocs) {
+        const inv = await tx.qOne('SELECT * FROM `PurchaseInvoice` WHERE `id` = ?', [a.purchaseInvoiceId]);
+        if (inv) { const np = Math.max(0, round2(Number(inv.paidAmount) - Number(a.amount))); await tx.update('PurchaseInvoice', inv.id, { paidAmount: np, status: invoiceStatus(inv.amount, np) }); }
+      }
+      await tx.q('DELETE FROM `SupplierPaymentAllocation` WHERE `supplierPaymentId` = ?', [p.id]);
+      await tx.q('DELETE FROM `SupplierPayment` WHERE `id` = ?', [p.id]);
+      payments++;
+    }
+    const d = await tx.q('DELETE FROM `CashbookEntry` WHERE `companyId` = ?', [companyId]);
+    entries = d?.affectedRows ?? 0;
+  });
+  res.json({ receipts, payments, entries });
+}));
+
+/* ---------- Unified transactions — Sales / Purchase / notes / Receipts / Payments ---------- */
+router.get('/transactions', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
+  const { from, to, types, search } = z.object({
+    from: z.string().optional(), to: z.string().optional(),
+    types: z.string().optional(), search: z.string().trim().max(120).optional(),
+  }).parse(req.query);
+  const companyId = req.tenant.companyId;
+  const want = types ? new Set(types.split(',')) : null;
+  const on = (t) => !want || want.has(t);
+  const like = search ? `%${search}%` : null;
+  const dc = (col) => { let s = ''; const p = []; if (from) { s += ` AND ${col} >= ?`; p.push(new Date(from)); } if (to) { s += ` AND ${col} <= ?`; p.push(new Date(new Date(to).getTime() + 86400000 - 1)); } return { s, p }; };
+  const out = [];
+
+  if (on('SALE') || on('CREDIT_NOTE')) {
+    try {
+      const d = dc('`invoiceDate`');
+      const p = [companyId, ...d.p]; let sql = "SELECT `invoiceNumber` ref, `invoiceDate` dt, `customerName` party, `amount` amt, `docType` doc FROM `SalesInvoice` WHERE `companyId` = ?" + d.s;
+      if (like) { sql += ' AND `customerName` LIKE ?'; p.push(like); }
+      for (const r of await q(sql, p)) { const t = r.doc === 'CREDIT_NOTE' ? 'CREDIT_NOTE' : 'SALE'; if (on(t)) out.push({ date: r.dt, type: t, party: r.party, ref: r.ref, amount: Number(r.amt) }); }
+    } catch { /* table absent */ }
+  }
+  if (on('PURCHASE') || on('DEBIT_NOTE')) {
+    try {
+      const d = dc('`invoiceDate`');
+      const p = [companyId, ...d.p]; let sql = "SELECT `invoiceNumber` ref, `invoiceDate` dt, `supplierName` party, `amount` amt, `docType` doc FROM `PurchaseInvoice` WHERE `companyId` = ?" + d.s;
+      if (like) { sql += ' AND `supplierName` LIKE ?'; p.push(like); }
+      for (const r of await q(sql, p)) { const t = r.doc === 'DEBIT_NOTE' ? 'DEBIT_NOTE' : 'PURCHASE'; if (on(t)) out.push({ date: r.dt, type: t, party: r.party, ref: r.ref, amount: Number(r.amt) }); }
+    } catch { /* table absent */ }
+  }
+  if (on('RECEIPT') || on('PAYMENT')) {
+    try {
+      const d = dc('`entryDate`');
+      const p = [companyId, ...d.p]; let sql = "SELECT `entryDate` dt, `account` party, `side`, `amount` amt, `vch` ref FROM `CashbookEntry` WHERE `companyId` = ?" + d.s;
+      if (like) { sql += ' AND `account` LIKE ?'; p.push(like); }
+      for (const r of await q(sql, p)) { const t = r.side === 'RECEIPT' ? 'RECEIPT' : 'PAYMENT'; if (on(t)) out.push({ date: r.dt, type: t, party: r.party, ref: r.ref, amount: Number(r.amt) }); }
+    } catch { /* table absent */ }
+  }
+
+  const capped = out.length > 8000;
+  res.json({ items: capped ? out.slice(0, 8000) : out, total: out.length, capped });
 }));
 
 /* ---------- Overview totals (Sales / Purchase / Receipts / Payments / notes) ---------- */
