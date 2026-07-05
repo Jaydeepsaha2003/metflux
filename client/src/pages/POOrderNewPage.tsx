@@ -71,7 +71,7 @@ const addDays = (iso: string, days: number) => {
    small padding, small text — keeps the form dense on desktop and avoids the
    over-large default inputs that dominate the screen on mobile. */
 const inputCls =
-  'h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 ' +
+  'h-7 w-full rounded-md border border-slate-300 bg-white px-2 text-[13px] text-slate-900 ' +
   'placeholder:text-slate-400 outline-none transition ' +
   'focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 ' +
   'disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400';
