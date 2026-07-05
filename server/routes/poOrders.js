@@ -6,6 +6,7 @@ import { q, qOne, insert, update, txn, del, newId } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
+import { logAudit, snapshotEntity } from '../lib/audit.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -155,6 +156,7 @@ router.post('/', requirePermission('add_po'), asyncHandler(async (req, res) => {
     return { ...po, items, customer };
   });
 
+  await logAudit(req, { entity: 'PoOrder', entityId: result.id, action: 'CREATE', summary: `SO ${data.poNumber} · ${customer.name} · ${data.items.length} item(s)` });
   res.status(201).json(result);
 }));
 
@@ -594,6 +596,7 @@ router.patch('/:id', requirePermission('add_po'), asyncHandler(async (req, res) 
     await ensurePoNumberFree(req.tenant.companyId, data.poNumber, po.id);
   }
 
+  const before = await snapshotEntity('PoOrder', po.id);
   const patch = {};
   if (data.poNumber     !== undefined) patch.poNumber     = data.poNumber;
   if (data.customerId   !== undefined) patch.customerId   = data.customerId;
@@ -602,7 +605,10 @@ router.patch('/:id', requirePermission('add_po'), asyncHandler(async (req, res) 
   if (data.deliveryDays !== undefined) patch.deliveryDays = data.deliveryDays;
   if (data.notes        !== undefined) patch.notes        = data.notes ?? null;
 
-  if (Object.keys(patch).length > 0) await update('PoOrder', po.id, patch);
+  if (Object.keys(patch).length > 0) {
+    await update('PoOrder', po.id, patch);
+    await logAudit(req, { entity: 'PoOrder', entityId: po.id, action: 'UPDATE', summary: `SO ${patch.poNumber ?? po.poNumber} (header)`, before });
+  }
   const fresh = await qOne('SELECT * FROM `PoOrder` WHERE `id` = ?', [po.id]);
   const customer = await qOne('SELECT * FROM `Customer` WHERE `id` = ?', [fresh.customerId]);
   res.json({ ...fresh, customer });
@@ -716,10 +722,12 @@ router.delete('/:id', requirePermission('add_po'), asyncHandler(async (req, res)
     );
   }
 
+  const before = await snapshotEntity('PoOrder', po.id);
   await txn(async (tx) => {
     await tx.q('DELETE FROM `PoOrderItem` WHERE `poOrderId` = ?', [po.id]);
     await tx.q('DELETE FROM `PoOrder` WHERE `id` = ?', [po.id]);
   });
+  await logAudit(req, { entity: 'PoOrder', entityId: po.id, action: 'DELETE', summary: `SO ${po.poNumber}`, before });
   res.status(204).end();
 }));
 

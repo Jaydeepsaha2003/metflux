@@ -5,6 +5,7 @@ import { q, qOne, insert, update, del, txn } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
+import { logAudit, snapshotEntity } from '../lib/audit.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -144,6 +145,7 @@ router.post('/', requirePermission('add_supplier_po'), asyncHandler(async (req, 
     return po.id;
   });
 
+  await logAudit(req, { entity: 'SupplierOrder', entityId: poId, action: 'CREATE', summary: `Supplier PO ${data.poNumber} · ${supplier.name}` });
   res.status(201).json(await loadOne(poId, req.tenant.companyId));
 }));
 
@@ -212,6 +214,7 @@ router.put('/:id', requirePermission('add_supplier_po'), asyncHandler(async (req
   );
   if (!supplier) throw new AppError('Supplier not found', 400, 'BAD_SUPPLIER');
 
+  const before = await snapshotEntity('SupplierOrder', existing.id);
   await txn(async (tx) => {
     await tx.q('DELETE FROM `SupplierOrderItem` WHERE `supplierOrderId` = ?', [existing.id]);
     await tx.update('SupplierOrder', existing.id, {
@@ -236,6 +239,7 @@ router.put('/:id', requirePermission('add_supplier_po'), asyncHandler(async (req
     }
   });
 
+  await logAudit(req, { entity: 'SupplierOrder', entityId: existing.id, action: 'UPDATE', summary: `Supplier PO ${data.poNumber}`, before });
   res.json(await loadOne(existing.id, req.tenant.companyId));
 }));
 
@@ -269,7 +273,9 @@ router.delete('/:id', requirePermission('add_supplier_po'), asyncHandler(async (
     [req.params.id, req.tenant.companyId]
   );
   if (!po) throw new AppError('Supplier order not found', 404, 'NOT_FOUND');
+  const before = await snapshotEntity('SupplierOrder', po.id);
   await del('SupplierOrder', po.id);
+  await logAudit(req, { entity: 'SupplierOrder', entityId: po.id, action: 'DELETE', summary: before?.row ? `Supplier PO ${before.row.poNumber}` : 'Supplier PO', before });
   res.status(204).end();
 }));
 

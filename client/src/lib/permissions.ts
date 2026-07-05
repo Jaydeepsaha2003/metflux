@@ -18,6 +18,7 @@ export const PERMISSION_KEYS = [
   'view_bills_payable',
   'manage_invoices',
   'manage_users',
+  'view_audit_log',
 ] as const;
 
 export type PermissionKey = typeof PERMISSION_KEYS[number];
@@ -49,6 +50,7 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   view_bills_payable:    'Bills Payable',
   manage_invoices:  'Accounts (all — legacy)',
   manage_users:     'Manage Users',
+  view_audit_log:   'View Audit Log + Restore',
 };
 
 // Grouped for the form UI. Each group maps to a real area of the app.
@@ -64,5 +66,5 @@ export const PERMISSION_GROUPS: { label: string; keys: PermissionKey[] }[] = [
   { label: 'Returns',         keys: ['manage_returns'] },
   { label: 'Accounts', keys: ['view_sales_register', 'view_debtor_aging', 'receive_payments', 'view_bills_receivable', 'view_purchase_register', 'view_creditor_aging', 'view_bills_payable'] },
   { label: 'Master Data',     keys: ['add_customer', 'add_supplier', 'add_staff', 'add_material'] },
-  { label: 'Administration',  keys: ['manage_users'] },
+  { label: 'Administration',  keys: ['manage_users', 'view_audit_log'] },
 ];

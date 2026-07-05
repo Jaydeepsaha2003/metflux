@@ -5,6 +5,7 @@ import { q, qOne, insert, update, del } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
+import { logAudit, snapshotEntity } from '../lib/audit.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -268,6 +269,7 @@ router.post('/', requirePermission('rec_production'), asyncHandler(async (req, r
     companyId: req.tenant.companyId,
     createdById: req.auth.userId,
   });
+  await logAudit(req, { entity: 'Production', entityId: created.id, action: 'CREATE', summary: `Production ${data.pcs} pcs · ${data.labourName}` });
   res.status(201).json(created);
 }));
 
@@ -290,9 +292,11 @@ router.patch('/:id', requirePermission('modify_prod_qty'), asyncHandler(async (r
     throw new AppError('Production date cannot be before order date', 400, 'BAD_DATE');
   }
 
+  const before = await snapshotEntity('Production', row.id);
   const patch = { ...data };
   if (patch.notes !== undefined) patch.notes = patch.notes ?? null;
   const updated = await update('Production', row.id, patch);
+  await logAudit(req, { entity: 'Production', entityId: row.id, action: 'UPDATE', summary: `Production ${updated.pcs} pcs · ${updated.labourName}`, before });
   res.json(updated);
 }));
 
@@ -301,7 +305,9 @@ router.delete('/:id', requirePermission('modify_prod_qty'), asyncHandler(async (
   const row = await qOne('SELECT `id` FROM `Production` WHERE `id` = ? AND `companyId` = ?',
     [req.params.id, req.tenant.companyId]);
   if (!row) throw new AppError('Production record not found', 404, 'NOT_FOUND');
+  const before = await snapshotEntity('Production', row.id);
   await del('Production', row.id);
+  await logAudit(req, { entity: 'Production', entityId: row.id, action: 'DELETE', summary: before?.row ? `Production ${before.row.pcs} pcs · ${before.row.labourName}` : 'Production', before });
   res.status(204).end();
 }));
 

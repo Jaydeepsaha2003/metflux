@@ -48,6 +48,7 @@ export const PERMISSION_KEYS = Object.freeze([
   'manage_invoices',
   // User administration (gates the User-management page)
   'manage_users',
+  'view_audit_log',
 ]);
 
 // Friendly labels for the UI checkbox grid.
@@ -77,6 +78,7 @@ export const PERMISSION_LABELS = Object.freeze({
   view_creditor_aging:   'Creditor Aging',
   view_bills_payable:    'Bills Payable',
   manage_invoices:  'Accounts (all — legacy)',
+  view_audit_log:   'View Audit Log + Restore',
   manage_users:     'Manage Users',
 });
 

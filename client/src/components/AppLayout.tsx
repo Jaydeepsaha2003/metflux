@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, LogOut, ChevronDown, FileText, Settings as SettingsIcon,
   Plus, ListChecks, BarChart3, Layers, Building2, Factory, Inbox, ClipboardList,
   PanelLeftClose, Users2, Truck, PackageCheck, ShoppingCart, Activity, RotateCcw, Menu, X, ShieldAlert,
-  Receipt, Clock, Wallet, TrendingUp, Calculator, CreditCard, Warehouse, MonitorSmartphone,
+  Receipt, Clock, Wallet, TrendingUp, Calculator, CreditCard, Warehouse, MonitorSmartphone, History,
 } from 'lucide-react';
 import { useAuthStore, can, activeMembership } from '@/store/auth';
 import type { PermissionKey } from '@/lib/permissions';
@@ -91,6 +91,7 @@ const NAV: NavItem[] = [
       { kind: 'leaf', to: '/settings/labours',   label: 'Workers',   icon: Users2,    perm: 'add_staff' },
       { kind: 'leaf', to: '/settings/suppliers', label: 'Suppliers', icon: Truck,     perm: 'add_supplier' },
       { kind: 'leaf', to: '/settings/user-logs',   label: 'User Logs',   icon: MonitorSmartphone, adminOnly: true },
+      { kind: 'leaf', to: '/settings/audit-log',   label: 'Audit Log',   icon: History, perm: 'view_audit_log' },
       { kind: 'leaf', to: '/settings/data-cleanup', label: 'Data Cleanup', icon: ShieldAlert, perm: 'manage_users' },
     ],
   },

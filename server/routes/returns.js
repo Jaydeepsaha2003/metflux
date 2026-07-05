@@ -5,6 +5,7 @@ import { q, qOne, insert, update, del, txn } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requireAnyPermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
+import { logAudit, snapshotEntity } from '../lib/audit.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -214,6 +215,7 @@ router.post('/', requireAnyPermission('manage_returns', 'dispatch'), asyncHandle
     [retId]
   );
   const byR = await loadItemsForReturns([retId]);
+  await logAudit(req, { entity: 'Return', entityId: retId, action: 'CREATE', summary: `Return ${data.returnNumber} · ${customer.name}` });
   res.status(201).json(flattenReturn(fresh, byR.get(retId) ?? []));
 }));
 
@@ -226,6 +228,7 @@ router.patch('/:id', requireAnyPermission('manage_returns', 'dispatch'), asyncHa
   );
   if (!r) throw new AppError('Return not found', 404, 'NOT_FOUND');
 
+  const before = await snapshotEntity('Return', r.id);
   const patch = {};
   if (data.returnNumber   !== undefined) patch.returnNumber = data.returnNumber;
   if (data.returnDate     !== undefined) patch.returnDate = data.returnDate;
@@ -233,7 +236,10 @@ router.patch('/:id', requireAnyPermission('manage_returns', 'dispatch'), asyncHa
   if (data.referenceValue !== undefined) patch.referenceValue = data.referenceValue;
   if (data.reason         !== undefined) patch.reason = data.reason ?? null;
   if (data.notes          !== undefined) patch.notes = data.notes ?? null;
-  if (Object.keys(patch).length > 0) await update('Return', r.id, patch);
+  if (Object.keys(patch).length > 0) {
+    await update('Return', r.id, patch);
+    await logAudit(req, { entity: 'Return', entityId: r.id, action: 'UPDATE', summary: `Return ${patch.returnNumber ?? r.returnNumber}`, before });
+  }
 
   const fresh = await qOne(
     `SELECT r.*, c.\`name\` AS customer_name FROM \`Return\` r
@@ -295,7 +301,9 @@ router.delete('/:id', requireAnyPermission('manage_returns', 'dispatch'), asyncH
     [req.params.id, req.tenant.companyId]
   );
   if (!r) throw new AppError('Return not found', 404, 'NOT_FOUND');
+  const before = await snapshotEntity('Return', r.id);
   await del('Return', r.id);
+  await logAudit(req, { entity: 'Return', entityId: r.id, action: 'DELETE', summary: before?.row ? `Return ${before.row.returnNumber}` : 'Return', before });
   res.status(204).end();
 }));
 
