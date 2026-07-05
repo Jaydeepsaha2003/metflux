@@ -6,10 +6,10 @@
 // also stores the whole book for the Cashbook Summary.
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeftRight, Loader2, Upload, CheckCircle2, ArrowDownToLine, ArrowUpFromLine,
-  UserPlus, Truck, Tag, BarChart3,
+  UserPlus, Truck, Tag, BarChart3, Search, ChevronLeft, ChevronRight, ListChecks,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { readXlsxMatrix } from '@/lib/excel';
@@ -57,6 +57,7 @@ export const ReceiptsPaymentsPage = () => {
   const [rcvOn, setRcvOn] = useState<Record<string, boolean>>({});
   const [payOn, setPayOn] = useState<Record<string, boolean>>({});
   const [result, setResult] = useState<PostResult | null>(null);
+  const [storeResult, setStoreResult] = useState<{ stored: number; skipped: number } | null>(null);
 
   const runPreview = async (matrix: unknown[][]) => {
     const data = await api<Preview>('/receipts-payments/preview', { method: 'POST', body: JSON.stringify({ rows: matrix }) });
@@ -85,16 +86,20 @@ export const ReceiptsPaymentsPage = () => {
 
   const importMutation = useMutation({
     mutationFn: async (body: { receipts: { customerId: string; amount: number }[]; payments: { supplierKey: string; amount: number }[] }) => {
-      // Store the whole book for the Cashbook Summary, then post the allocations.
-      if (rows) await api('/cashbook/store', { method: 'POST', body: JSON.stringify({ rows }) });
-      return api<PostResult>('/receipts-payments/post', {
+      // Store the whole book for the Cashbook Summary (duplicates skipped), then
+      // post the allocations.
+      const store = rows
+        ? await api<{ stored: number; skipped: number }>('/cashbook/store', { method: 'POST', body: JSON.stringify({ rows }) })
+        : { stored: 0, skipped: 0 };
+      const post = await api<PostResult>('/receipts-payments/post', {
         method: 'POST',
         body: JSON.stringify({ paymentDate, reference: reference || null, ...body }),
       });
+      return { store, post };
     },
-    onSuccess: (r) => {
-      setResult(r);
-      ['payments', 'sales-invoices', 'debtor-aging', 'creditor-aging', 'purchases', 'cashbook-summary'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+    onSuccess: ({ store, post }) => {
+      setResult(post); setStoreResult(store);
+      ['payments', 'sales-invoices', 'debtor-aging', 'creditor-aging', 'purchases', 'cashbook-summary', 'cashbook-entries', 'cashbook-unclassified'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
       setPreview(null); setRows(null);
     },
     onError: (e) => setUploadErr(e instanceof Error ? e.message : 'Import failed — nothing was saved.'),
@@ -151,6 +156,12 @@ export const ReceiptsPaymentsPage = () => {
             <CheckCircle2 className="h-4 w-4" />
             Imported. Posted {result.receipts} receipt{result.receipts !== 1 ? 's' : ''} ({inr(result.allocatedReceipts)}) and {result.payments} payment{result.payments !== 1 ? 's' : ''} ({inr(result.allocatedPayments)}).
           </div>
+          {storeResult && (
+            <div className="mt-1 text-xs">
+              Cashbook: {storeResult.stored} new entr{storeResult.stored === 1 ? 'y' : 'ies'} stored
+              {storeResult.skipped > 0 && <> · <b>{storeResult.skipped} duplicate{storeResult.skipped === 1 ? '' : 's'} skipped</b></>}.
+            </div>
+          )}
           {result.errors.length > 0 && (
             <ul className="mt-2 list-disc pl-5 text-xs text-amber-700">
               {result.errors.map((er, i) => <li key={i}>{er.side} {er.ref}: {er.message}</li>)}
@@ -218,13 +229,132 @@ export const ReceiptsPaymentsPage = () => {
             <ClassifySection
               rows={preview.unmatched}
               companyId={companyId}
-              onChanged={() => { if (rows) runPreview(rows); qc.invalidateQueries({ queryKey: ['customers'] }); qc.invalidateQueries({ queryKey: ['suppliers'] }); }}
+              onChanged={() => { if (rows) runPreview(rows); ['customers', 'suppliers', 'cashbook-entries', 'cashbook-unclassified', 'cashbook-summary'].forEach((k) => qc.invalidateQueries({ queryKey: [k] })); }}
             />
           )}
         </>
       )}
 
+      {/* All stored cashbook entries — filterable */}
+      <EntriesSection />
+
       {confirmDialog}
+    </div>
+  );
+};
+
+/* ── All cashbook entries with multi-criteria filters ── */
+type Entry = { id: string; entryDate: string | null; side: 'RECEIPT' | 'PAYMENT'; account: string; amount: number; vch: string | null; posted: boolean; type: string; category: string };
+type EntriesResp = { items: Entry[]; total: number; page: number; pageSize: number; totals: { receipts: number; payments: number } };
+
+const TYPE_TONE: Record<string, string> = {
+  CUSTOMER: 'bg-emerald-50 text-emerald-700',
+  SUPPLIER: 'bg-brand-50 text-brand-700',
+  OTHER: 'bg-slate-100 text-slate-600',
+  UNCLASSIFIED: 'bg-amber-50 text-amber-700',
+};
+const fmtD = (iso: string | null) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+const EntriesSection = () => {
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [side, setSide] = useState('ALL');
+  const [type, setType] = useState('ALL');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
+
+  const qs = new URLSearchParams({ side, type, page: String(page), pageSize: String(pageSize) });
+  if (from) qs.set('from', from);
+  if (to) qs.set('to', to);
+  if (search.trim()) qs.set('search', search.trim());
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['cashbook-entries', side, type, from, to, search, page],
+    queryFn: () => api<EntriesResp>(`/cashbook/entries?${qs.toString()}`),
+  });
+  const reset = (fn: () => void) => { fn(); setPage(1); };
+  const items = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+
+  return (
+    <div className="card overflow-hidden">
+      <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700">
+        <ListChecks className="h-4 w-4" /> Cashbook entries <span className="font-normal text-slate-400">({total})</span>
+      </div>
+
+      {/* Filters */}
+      <div className="grid grid-cols-2 gap-2 border-b border-slate-100 p-3 sm:grid-cols-3 lg:grid-cols-6">
+        <label className="block"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">From</span>
+          <input type="date" className="input h-9" value={from} onChange={(e) => reset(() => setFrom(e.target.value))} /></label>
+        <label className="block"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">To</span>
+          <input type="date" className="input h-9" value={to} onChange={(e) => reset(() => setTo(e.target.value))} /></label>
+        <label className="block"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Side</span>
+          <select className="input h-9" value={side} onChange={(e) => reset(() => setSide(e.target.value))}>
+            <option value="ALL">All</option><option value="RECEIPT">Receipts</option><option value="PAYMENT">Payments</option>
+          </select></label>
+        <label className="block"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Type</span>
+          <select className="input h-9" value={type} onChange={(e) => reset(() => setType(e.target.value))}>
+            <option value="ALL">All</option><option value="CUSTOMER">Customer</option><option value="SUPPLIER">Supplier</option><option value="OTHER">Other</option><option value="UNCLASSIFIED">Unclassified</option>
+          </select></label>
+        <label className="col-span-2 block"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Search party</span>
+          <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input className="input h-9 pl-9" placeholder="Party name…" value={search} onChange={(e) => reset(() => setSearch(e.target.value))} /></div></label>
+      </div>
+
+      {isLoading ? (
+        <div className="py-10 text-center text-slate-400"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></div>
+      ) : !items.length ? (
+        <div className="py-10 text-center text-sm text-slate-400">No entries for these filters.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm whitespace-nowrap">
+            <thead><tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <th className="px-3 py-2.5 text-left">Date</th>
+              <th className="px-3 py-2.5 text-left">Party</th>
+              <th className="px-3 py-2.5 text-left">Side</th>
+              <th className="px-3 py-2.5 text-left">Type / Category</th>
+              <th className="px-3 py-2.5 text-right">Amount</th>
+              <th className="px-3 py-2.5 text-center">Allocated</th>
+            </tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {items.map((e) => (
+                <tr key={e.id} className="hover:bg-slate-50/60">
+                  <td className="px-3 py-2 text-slate-600">{fmtD(e.entryDate)}</td>
+                  <td className="px-3 py-2 font-medium">{e.account}</td>
+                  <td className="px-3 py-2">
+                    <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', e.side === 'RECEIPT' ? 'bg-emerald-50 text-emerald-700' : 'bg-brand-50 text-brand-700')}>{e.side === 'RECEIPT' ? 'Receipt' : 'Payment'}</span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', TYPE_TONE[e.type] ?? 'bg-slate-100 text-slate-600')}>{e.category}</span>
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums font-semibold">{inr(e.amount)}</td>
+                  <td className="px-3 py-2 text-center">
+                    {e.posted ? <CheckCircle2 className="mx-auto h-4 w-4 text-emerald-600" /> : <span className="text-[11px] text-slate-300">—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Footer: totals + pagination */}
+      <div className="flex flex-col gap-2 border-t border-slate-200 px-4 py-2.5 text-xs sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-slate-500">
+          Receipts <b className="text-emerald-700">{inr(data?.totals.receipts)}</b> · Payments <b className="text-brand-700">{inr(data?.totals.payments)}</b>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-slate-500">Page {page} / {pages}</span>
+          <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="btn-ghost h-8 border border-slate-300 px-2 disabled:opacity-40"><ChevronLeft className="h-4 w-4" /></button>
+          <button disabled={page >= pages} onClick={() => setPage((p) => p + 1)} className="btn-ghost h-8 border border-slate-300 px-2 disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
+        </div>
+      </div>
     </div>
   );
 };

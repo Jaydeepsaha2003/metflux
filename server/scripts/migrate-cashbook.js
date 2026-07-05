@@ -13,6 +13,14 @@ const columnExists = async (table, column) => {
   );
   return rows.length > 0;
 };
+const indexExists = async (table, index) => {
+  const [rows] = await pool.query(
+    `SELECT 1 FROM information_schema.STATISTICS
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1`,
+    [table, index]
+  );
+  return rows.length > 0;
+};
 
 const main = async () => {
   // Classification of a bank-book account head → CUSTOMER / SUPPLIER / OTHER.
@@ -59,6 +67,27 @@ const main = async () => {
   if (!(await columnExists('CashbookEntry', 'postedAt'))) {
     await pool.query('ALTER TABLE `CashbookEntry` ADD COLUMN `postedAt` DATETIME(3) NULL');
     console.log('[migrate] added CashbookEntry.postedAt');
+  }
+
+  // Duplicate blocking — a stored, generated fingerprint of each row
+  // (date + side + party + amount + voucher). A unique index on it (per company)
+  // makes re-importing the same rows a no-op (INSERT IGNORE skips them).
+  if (!(await columnExists('CashbookEntry', 'dedupeKey'))) {
+    await pool.query(
+      "ALTER TABLE `CashbookEntry` ADD COLUMN `dedupeKey` VARCHAR(64) " +
+      "GENERATED ALWAYS AS (SHA1(CONCAT_WS('|', CAST(`entryDate` AS CHAR), `side`, `normKey`, CAST(ROUND(`amount`,2) AS CHAR), IFNULL(`vch`,'')))) STORED"
+    );
+    console.log('[migrate] added CashbookEntry.dedupeKey (generated)');
+  }
+  // Remove any pre-existing duplicates (keep the earliest row) before the index.
+  const [del] = await pool.query(
+    'DELETE c1 FROM `CashbookEntry` c1 JOIN `CashbookEntry` c2 ' +
+    'ON c1.`companyId` = c2.`companyId` AND c1.`dedupeKey` = c2.`dedupeKey` AND c1.`id` > c2.`id`'
+  );
+  if (del.affectedRows) console.log(`[migrate] removed ${del.affectedRows} duplicate cashbook rows`);
+  if (!(await indexExists('CashbookEntry', 'CashbookEntry_dedupe_key'))) {
+    await pool.query('ALTER TABLE `CashbookEntry` ADD UNIQUE INDEX `CashbookEntry_dedupe_key` (`companyId`, `dedupeKey`)');
+    console.log('[migrate] added CashbookEntry unique dedupe index');
   }
   console.log('[migrate] CashbookEntry table ready.');
 };

@@ -120,13 +120,9 @@ router.post('/store', requireAnyPermission(...PERM), asyncHandler(async (req, re
 
   const times = entries.map((e) => e.date).filter(Boolean).map((d) => +d);
   const max = times.length ? new Date(Math.max(...times)) : new Date();
-  const min = times.length ? new Date(Math.min(...times)) : max;
-  const endOfMax = new Date(+max + 86400000 - 1);
 
-  // Wipe the covered period so a re-import doesn't double-count.
-  await q('DELETE FROM `CashbookEntry` WHERE `companyId` = ? AND `entryDate` BETWEEN ? AND ?', [companyId, min, endOfMax]);
-
-  // Bulk insert in chunks.
+  // INSERT IGNORE against the unique dedupe index — duplicate rows are skipped,
+  // so re-importing the same book (or overlapping books) never double-counts.
   let stored = 0;
   const CHUNK = 400;
   for (let i = 0; i < entries.length; i += CHUNK) {
@@ -136,13 +132,13 @@ router.post('/store', requireAnyPermission(...PERM), asyncHandler(async (req, re
     for (const e of slice) {
       params.push(newId(), companyId, e.date ?? max, e.side, e.account.slice(0, 200), normName(e.account).slice(0, 200), round2(e.amount), (e.vch || '').slice(0, 80));
     }
-    await q(
-      'INSERT INTO `CashbookEntry` (`id`,`companyId`,`entryDate`,`side`,`account`,`normKey`,`amount`,`vch`) VALUES ' + placeholders,
+    const r = await q(
+      'INSERT IGNORE INTO `CashbookEntry` (`id`,`companyId`,`entryDate`,`side`,`account`,`normKey`,`amount`,`vch`) VALUES ' + placeholders,
       params
     );
-    stored += slice.length;
+    stored += r?.affectedRows ?? 0;
   }
-  res.json({ stored, from: min, to: max });
+  res.json({ stored, skipped: entries.length - stored });
 }));
 
 /* ---------- Summary ---------- */
@@ -186,6 +182,48 @@ router.get('/summary', requireAnyPermission(...PERM), asyncHandler(async (req, r
     items,
     totals: { receipts: totalRcpt, payments: totalPymt, net: round2(totalRcpt - totalPymt), count: rows.length },
   });
+}));
+
+/* ---------- Entries list (filterable) ---------- */
+router.get('/entries', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
+  const { from, to, side, type, search, page, pageSize } = z.object({
+    from: z.string().optional(),
+    to: z.string().optional(),
+    side: z.enum(['ALL', 'RECEIPT', 'PAYMENT']).default('ALL'),
+    type: z.enum(['ALL', 'CUSTOMER', 'SUPPLIER', 'OTHER', 'UNCLASSIFIED']).default('ALL'),
+    search: z.string().trim().max(120).optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    pageSize: z.coerce.number().int().min(1).max(200).default(50),
+  }).parse(req.query);
+  const companyId = req.tenant.companyId;
+
+  const where = ['`companyId` = ?'];
+  const params = [companyId];
+  if (from) { where.push('`entryDate` >= ?'); params.push(new Date(from)); }
+  if (to) { where.push('`entryDate` <= ?'); params.push(new Date(new Date(to).getTime() + 86400000 - 1)); }
+  if (side !== 'ALL') { where.push('`side` = ?'); params.push(side); }
+  if (search) { where.push('`account` LIKE ?'); params.push(`%${search}%`); }
+
+  const rows = await q(
+    `SELECT \`id\`, \`entryDate\`, \`side\`, \`account\`, \`amount\`, \`vch\`, \`postedAt\`
+       FROM \`CashbookEntry\` WHERE ${where.join(' AND ')}
+      ORDER BY \`entryDate\` DESC, \`createdAt\` DESC`,
+    params
+  );
+  const classify = await buildClassifier(companyId);
+  let items = rows.map((r) => {
+    const c = classify(r.account);
+    return { id: r.id, entryDate: r.entryDate, side: r.side, account: r.account, amount: Number(r.amount), vch: r.vch, posted: !!r.postedAt, type: c.type, category: c.category };
+  });
+  if (type !== 'ALL') items = items.filter((i) => i.type === type);
+
+  const total = items.length;
+  const totals = {
+    receipts: round2(items.filter((i) => i.side === 'RECEIPT').reduce((s, i) => s + i.amount, 0)),
+    payments: round2(items.filter((i) => i.side === 'PAYMENT').reduce((s, i) => s + i.amount, 0)),
+  };
+  const start = (page - 1) * pageSize;
+  res.json({ items: items.slice(start, start + pageSize), total, page, pageSize, totals });
 }));
 
 /* ---------- Unclassified heads (from stored cashbook) ---------- */
