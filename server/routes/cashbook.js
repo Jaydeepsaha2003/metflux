@@ -371,6 +371,23 @@ router.delete('/entry/:id', requireAnyPermission(...PERM), asyncHandler(async (r
   res.json({ ok: true });
 }));
 
+/* ---------- Bulk delete cashbook entry rows (by id) ---------- */
+// Removes the stored ledger/summary rows only (does not touch any posted
+// Payment/SupplierPayment — use /reset for that). Scoped to the tenant.
+router.post('/entries/bulk-delete', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
+  const { ids } = z.object({ ids: z.array(z.string().min(1)).min(1).max(20000) }).parse(req.body);
+  const companyId = req.tenant.companyId;
+  let deleted = 0;
+  const CHUNK = 500;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const batch = ids.slice(i, i + CHUNK);
+    const ph = batch.map(() => '?').join(',');
+    const r = await q(`DELETE FROM \`CashbookEntry\` WHERE \`companyId\` = ? AND \`id\` IN (${ph})`, [companyId, ...batch]);
+    deleted += r?.affectedRows ?? 0;
+  }
+  res.json({ deleted });
+}));
+
 /* ---------- Account ledger — one party's whole journey ---------- */
 router.get('/account-ledger', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
   const { name } = z.object({ name: z.string().trim().min(1).max(200) }).parse(req.query);

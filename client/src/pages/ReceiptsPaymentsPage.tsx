@@ -294,12 +294,15 @@ const fmtD = (iso: string | null) => {
 };
 
 const EntriesSection = () => {
+  const qc = useQueryClient();
+  const { confirm, confirmDialog } = useConfirm();
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [side, setSide] = useState('ALL');
   const [type, setType] = useState('ALL');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [sel, setSel] = useState<Set<string>>(new Set());
   const pageSize = 50;
 
   const qs = new URLSearchParams({ side, type, page: String(page), pageSize: String(pageSize) });
@@ -311,11 +314,51 @@ const EntriesSection = () => {
     queryKey: ['cashbook-entries', side, type, from, to, search, page],
     queryFn: () => api<EntriesResp>(`/cashbook/entries?${qs.toString()}`),
   });
-  const reset = (fn: () => void) => { fn(); setPage(1); };
+  const reset = (fn: () => void) => { fn(); setPage(1); setSel(new Set()); };
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const [exporting, setExporting] = useState(false);
+
+  const toggleRow = (id: string) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const pageAllSelected = items.length > 0 && items.every((e) => sel.has(e.id));
+  const togglePage = () => setSel((s) => {
+    const n = new Set(s);
+    if (pageAllSelected) items.forEach((e) => n.delete(e.id)); else items.forEach((e) => n.add(e.id));
+    return n;
+  });
+
+  const bulkDelete = useMutation({
+    mutationFn: (ids: string[]) => api<{ deleted: number }>('/cashbook/entries/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) }),
+    onSuccess: () => {
+      setSel(new Set());
+      ['cashbook-entries', 'cashbook-summary', 'cashbook-overview', 'cashbook-duplicates', 'cashbook-transactions'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+    },
+  });
+
+  const delSelected = async () => {
+    const ids = [...sel];
+    if (!ids.length) return;
+    const ok = await confirm({
+      title: 'Delete selected entries?',
+      message: <>Delete <strong>{ids.length}</strong> cashbook entr{ids.length === 1 ? 'y' : 'ies'} from the ledger &amp; summary? This can't be undone.</>,
+      tone: 'danger', confirmLabel: `Delete ${ids.length}`,
+    });
+    if (ok) bulkDelete.mutate(ids);
+  };
+
+  const delAllMatching = async () => {
+    const ok = await confirm({
+      title: 'Delete all filtered entries?',
+      message: <>Delete <strong>all {total}</strong> entr{total === 1 ? 'y' : 'ies'} matching the current filters, from the ledger &amp; summary? This can't be undone.</>,
+      tone: 'danger', confirmLabel: `Delete ${total}`,
+    });
+    if (!ok) return;
+    const eqs = new URLSearchParams(qs); eqs.set('all', '1'); eqs.delete('page'); eqs.delete('pageSize');
+    const allRows = await api<EntriesResp>(`/cashbook/entries?${eqs.toString()}`);
+    const ids = (allRows.items ?? []).map((e) => e.id);
+    if (ids.length) bulkDelete.mutate(ids);
+  };
 
   const exportExcel = async () => {
     setExporting(true);
@@ -336,9 +379,19 @@ const EntriesSection = () => {
         <span className="flex items-center gap-2 text-sm font-semibold text-slate-700">
           <ListChecks className="h-4 w-4" /> Cashbook entries <span className="font-normal text-slate-400">({total})</span>
         </span>
-        <button onClick={exportExcel} disabled={exporting || total === 0} className="btn-ghost h-8 border border-slate-300 px-2 text-xs text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
-          {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Excel
-        </button>
+        <div className="flex items-center gap-2">
+          {sel.size > 0 && (
+            <button onClick={delSelected} disabled={bulkDelete.isPending} className="btn-ghost h-8 border border-red-300 px-2 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50">
+              {bulkDelete.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Delete {sel.size}
+            </button>
+          )}
+          <button onClick={delAllMatching} disabled={bulkDelete.isPending || total === 0} className="btn-ghost h-8 border border-slate-300 px-2 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50" title="Delete all entries matching the current filters">
+            <Trash2 className="h-3.5 w-3.5" /> Delete all
+          </button>
+          <button onClick={exportExcel} disabled={exporting || total === 0} className="btn-ghost h-8 border border-slate-300 px-2 text-xs text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
+            {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Excel
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -368,6 +421,9 @@ const EntriesSection = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-sm whitespace-nowrap">
             <thead><tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <th className="w-9 px-3 py-2.5 text-center">
+                <input type="checkbox" checked={pageAllSelected} onChange={togglePage} className="rounded border-slate-300 text-brand-600 focus:ring-brand-500" title="Select all on this page" />
+              </th>
               <th className="px-3 py-2.5 text-left">Date</th>
               <th className="px-3 py-2.5 text-left">Party</th>
               <th className="px-3 py-2.5 text-left">Side</th>
@@ -377,7 +433,10 @@ const EntriesSection = () => {
             </tr></thead>
             <tbody className="divide-y divide-slate-100">
               {items.map((e) => (
-                <tr key={e.id} className="hover:bg-slate-50/60">
+                <tr key={e.id} className={cn('hover:bg-slate-50/60', sel.has(e.id) && 'bg-brand-50/40')}>
+                  <td className="px-3 py-2 text-center">
+                    <input type="checkbox" checked={sel.has(e.id)} onChange={() => toggleRow(e.id)} className="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                  </td>
                   <td className="px-3 py-2 text-slate-600">{fmtD(e.entryDate)}</td>
                   <td className="px-3 py-2 font-medium">{e.account}</td>
                   <td className="px-3 py-2">
@@ -408,6 +467,7 @@ const EntriesSection = () => {
           <button disabled={page >= pages} onClick={() => setPage((p) => p + 1)} className="btn-ghost h-8 border border-slate-300 px-2 disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
         </div>
       </div>
+      {confirmDialog}
     </div>
   );
 };
