@@ -128,6 +128,16 @@ export const ReceiptsPaymentsPage = () => {
   const selRcvTotal = selReceipts.reduce((s, x) => s + x.willApply, 0);
   const selPayTotal = selPayments.reduce((s, x) => s + x.willApply, 0);
 
+  // File-wide totals for the cards = matched (customer/supplier) + unclassified,
+  // per side. So the cards reflect the whole bank book, not just what auto-matched.
+  const uR = (preview?.unmatched ?? []).filter((u) => u.side === 'RECEIPT');
+  const uP = (preview?.unmatched ?? []).filter((u) => u.side === 'PAYMENT');
+  const sum = preview?.summary;
+  const fileReceiptCount = (sum?.receiptCount ?? 0) + uR.length;
+  const filePaymentCount = (sum?.paymentCount ?? 0) + uP.length;
+  const fileReceiptTotal = round2((sum?.receiptTotal ?? 0) + uR.reduce((a, x) => a + x.amount, 0));
+  const filePaymentTotal = round2((sum?.paymentTotal ?? 0) + uP.reduce((a, x) => a + x.amount, 0));
+
   const handleImport = async () => {
     const ok = await confirm({
       title: 'Import cashbook?',
@@ -197,13 +207,16 @@ export const ReceiptsPaymentsPage = () => {
       {preview && (
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            <Stat label="Receipts" value={String(preview.summary.receiptCount)} tone="emerald" />
-            <Stat label="Receipt total" value={inr(preview.summary.receiptTotal)} />
-            <Stat label="Payments" value={String(preview.summary.paymentCount)} tone="brand" />
-            <Stat label="Payment total" value={inr(preview.summary.paymentTotal)} />
+            <Stat label="Receipts (in file)" value={String(fileReceiptCount)} tone="emerald" />
+            <Stat label="Receipt total" value={inr(fileReceiptTotal)} />
+            <Stat label="Payments (in file)" value={String(filePaymentCount)} tone="brand" />
+            <Stat label="Payment total" value={inr(filePaymentTotal)} />
             <Stat label="Unclassified" value={String(preview.summary.unmatchedCount)} tone={preview.summary.unmatchedCount ? 'amber' : undefined} />
             <Stat label="Unclassified ₹" value={inr(preview.summary.unmatchedTotal)} tone={preview.summary.unmatchedTotal ? 'amber' : undefined} />
           </div>
+          <p className="-mt-3 text-xs text-slate-500">
+            Totals cover the whole book. Only <b>{inr(sum?.receiptApply ?? 0)}</b> receipts + <b>{inr(sum?.paymentApply ?? 0)}</b> payments auto-settle open invoices/bills now (see “Will apply”); the rest are stored and can be tagged in the Cashbook Summary.
+          </p>
 
           <div className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-end sm:justify-between">
             <div className="grid grid-cols-2 gap-3 sm:flex sm:items-end sm:gap-4">
