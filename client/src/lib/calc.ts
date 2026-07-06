@@ -45,6 +45,60 @@ export const nanoCalc = ({
   };
 };
 
+// ── COMPOSITE core (Nano + CRGO) ──────────────────────────────────────────
+// A composite piece is built from a CRGO core and a Nano core combined. The
+// grade is "COMPOSITE"; the material picks how the two are joined, which fixes
+// how the final measure is derived:
+//   • Continuous Loop  — Nano wound concentrically around CRGO:
+//       ID = min(CRGO, Nano) · OD = max(CRGO, Nano) · HT = same
+//   • Exact Split      — two equal-height pieces stacked:
+//       ID = OD = same (both identical) · HT = CRGO + Nano
+//   • Variable Height  — two different-height pieces stacked:
+//       ID = OD = same · HT = CRGO + Nano
+// Weight/pc = Nano (core + case) + CRGO (toroidal), per the chosen dimensions.
+export type CompositeRule = 'CONTINUOUS_LOOP' | 'EXACT_SPLIT' | 'VARIABLE_HEIGHT';
+
+export const isCompositeGrade = (grade: string) => (grade || '').trim().toUpperCase() === 'COMPOSITE';
+
+// Map a material name to its join rule (robust to wording/casing).
+export const compositeRuleFromMaterial = (material: string): CompositeRule | null => {
+  const m = (material || '').toLowerCase();
+  if (m.includes('loop')) return 'CONTINUOUS_LOOP';
+  if (m.includes('exact') || m.includes('split')) return 'EXACT_SPLIT';
+  if (m.includes('variable') || m.includes('height')) return 'VARIABLE_HEIGHT';
+  return null;
+};
+
+type Tri = { id: number; od: number; ht: number };
+export const compositeCalc = ({
+  rule, crgo, nano, pcs = 0,
+}: { rule: CompositeRule; crgo: Tri; nano: Tri; pcs?: number }) => {
+  const nanoC = nanoCalc({ id: nano.id, od: nano.od, ht: nano.ht, pcs: 0 });
+  const crgoC = toroidalCalc({ id: crgo.id, od: crgo.od, ht: crgo.ht, pcs: 0 });
+  const nanoWeight = round3(nanoC.coreWeight + nanoC.caseWeight);
+  const crgoWeight = crgoC.weightPerPc;
+  const weightPerPc = round3(nanoWeight + crgoWeight);
+
+  let id = 0, od = 0, ht = 0;
+  if (rule === 'CONTINUOUS_LOOP') {
+    id = Math.min(crgo.id, nano.id);      // inner-most bore
+    od = Math.max(crgo.od, nano.od);      // outer-most edge
+    ht = Math.max(crgo.ht, nano.ht);      // concentric → same height
+  } else {
+    // EXACT_SPLIT & VARIABLE_HEIGHT — stacked: same footprint, heights add up.
+    id = Math.min(crgo.id, nano.id);
+    od = Math.max(crgo.od, nano.od);
+    ht = round3(crgo.ht + nano.ht);
+  }
+  const measure = `${id || 0} x ${od || 0} x ${ht || 0}`;
+  const totalWeight = pcs > 0 ? round3(pcs * weightPerPc) : 0;
+  return {
+    id, od, ht, measure, weightPerPc, totalWeight,
+    nanoWeight, crgoWeight,
+    coreWeight: nanoC.coreWeight, caseWeight: nanoC.caseWeight,
+  };
+};
+
 export const toroidalCalc = ({ id, od, ht, pcs }: { id: number; od: number; ht: number; pcs: number }) => {
   const valid = id > 0 && od > 0 && ht > 0;
   const weightPerPc = valid ? round3((od * od - id * id) * ht * 5.77 * 1e-6) : 0;

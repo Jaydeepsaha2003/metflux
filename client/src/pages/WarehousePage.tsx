@@ -11,7 +11,7 @@ import {
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
-import { toroidalCalc, rectangularCalc, nanoCalc, round3 } from '@/lib/calc';
+import { toroidalCalc, rectangularCalc, nanoCalc, round3, isCompositeGrade, compositeRuleFromMaterial, compositeCalc } from '@/lib/calc';
 
 type GradeRow = { grade: string; materials: { material: string }[]; coreTypes?: string[] };
 // Dimensions the user types; core-type formula turns them into weight + measure.
@@ -259,6 +259,8 @@ const OpeningStockModal = ({
   const [grade, setGrade] = useState('');
   const [material, setMaterial] = useState('');
   const [dims, setDims] = useState<Dims>(ZERO_DIMS);
+  // CRGO sub-dimensions — only used for the COMPOSITE grade (Nano + CRGO).
+  const [crgo, setCrgo] = useState({ id: 0, od: 0, ht: 0 });
   const [pcs, setPcs] = useState(0);
   const [movementDate, setMovementDate] = useState(todayISO());
   const [notes, setNotes] = useState('');
@@ -271,19 +273,31 @@ const OpeningStockModal = ({
   const materials = gradeRows.find((g) => g.grade === grade)?.materials ?? [];
 
   const isRect = coreType === 'RECTANGULAR';
-  const { weightPerPc, measure, coreWeight, caseWeight } = computeSpec(coreType, dims);
+  const composite = coreType === 'NANO' && isCompositeGrade(grade);
+  const rule = composite ? compositeRuleFromMaterial(material) : null;
+  const comp = composite && rule ? compositeCalc({ rule, crgo, nano: { id: dims.id1, od: dims.od1, ht: dims.ht }, pcs: 0 }) : null;
+  const base = computeSpec(coreType, dims);
+  // Final identity (composite → derived; else straight from the dims).
+  const weightPerPc = comp ? comp.weightPerPc : base.weightPerPc;
+  const measure = comp ? comp.measure : base.measure;
+  const coreWeight = comp ? comp.coreWeight : base.coreWeight;
+  const caseWeight = comp ? comp.caseWeight : base.caseWeight;
+  const finalId = comp ? comp.id : dims.id1;
+  const finalOd = comp ? comp.od : dims.od1;
+  const finalHt = comp ? comp.ht : dims.ht;
   const setDim = (k: keyof Dims, v: number) => setDims((d) => ({ ...d, [k]: v }));
+  const setC = (k: 'id' | 'od' | 'ht', v: number) => setCrgo((c) => ({ ...c, [k]: v }));
 
   const submit = useMutation({
     mutationFn: () => api('/warehouses/opening-stock', {
       method: 'POST',
       json: {
         warehouseId, coreType, grade, material, measure,
-        id1: dims.id1 || null,
+        id1: finalId || null,
         id2: isRect ? (dims.id2 || null) : null,
-        od1: dims.od1 || null,
+        od1: finalOd || null,
         od2: isRect ? (dims.od2 || null) : null,
-        ht: dims.ht || null,
+        ht: finalHt || null,
         weightPerPc, pcs, movementDate, notes: notes.trim() || 'Opening stock',
       },
     }),
@@ -295,9 +309,15 @@ const OpeningStockModal = ({
     setError(null);
     if (!warehouseId) return setError('Pick a store');
     if (!grade || !material) return setError('Pick grade and material');
-    if (!dims.id1 || !dims.od1 || !dims.ht) return setError('Enter ID, OD and HT');
-    if (isRect && (!dims.id2 || !dims.od2)) return setError('Enter both ID (id1, id2) and OD (od1, od2)');
-    if (dims.od1 <= dims.id1) return setError('OD must be greater than ID');
+    if (composite) {
+      if (!rule) return setError('Pick the composite type (Continuous Loop / Exact Split / Variable Height)');
+      if (!crgo.id || !crgo.od || !crgo.ht || crgo.od <= crgo.id) return setError('Enter valid CRGO ID, OD, HT (OD > ID)');
+      if (!dims.id1 || !dims.od1 || !dims.ht || dims.od1 <= dims.id1) return setError('Enter valid Nano ID, OD, HT (OD > ID)');
+    } else {
+      if (!dims.id1 || !dims.od1 || !dims.ht) return setError('Enter ID, OD and HT');
+      if (isRect && (!dims.id2 || !dims.od2)) return setError('Enter both ID (id1, id2) and OD (od1, od2)');
+      if (dims.od1 <= dims.id1) return setError('OD must be greater than ID');
+    }
     if (weightPerPc <= 0) return setError('Weight could not be computed — check the dimensions');
     if (pcs <= 0) return setError('Pcs must be greater than 0');
     submit.mutate();
@@ -350,10 +370,33 @@ const OpeningStockModal = ({
                 </select></label>
             </div>
 
-            {/* Dimension inputs — shape depends on core type */}
+            {/* Dimension inputs — shape depends on core type (+ CRGO for composite) */}
             <div>
               <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Dimensions (mm)</span>
-              {isRect ? (
+              {composite ? (
+                <>
+                  <div className="mb-3 rounded-lg border border-amber-100 bg-amber-50/40 p-2.5">
+                    <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">CRGO core</div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <NumInput label="ID" value={crgo.id} onChange={(v) => setC('id', v)} />
+                      <NumInput label="OD" value={crgo.od} onChange={(v) => setC('od', v)} />
+                      <NumInput label="HT" value={crgo.ht} onChange={(v) => setC('ht', v)} />
+                    </div>
+                  </div>
+                  <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-violet-700">Nano core</div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <NumInput label="ID" value={dims.id1} onChange={(v) => setDim('id1', v)} />
+                    <NumInput label="OD" value={dims.od1} onChange={(v) => setDim('od1', v)} />
+                    <NumInput label="HT" value={dims.ht} onChange={(v) => setDim('ht', v)} />
+                  </div>
+                  {rule && (
+                    <div className="mt-2 text-[11px] text-slate-500">
+                      {rule === 'CONTINUOUS_LOOP' ? 'Continuous loop → ID = min, OD = max, HT = same (concentric).'
+                        : 'Stacked → same ID/OD, heights added.'}
+                    </div>
+                  )}
+                </>
+              ) : isRect ? (
                 <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
                   <NumInput label="ID 1" value={dims.id1} onChange={(v) => setDim('id1', v)} />
                   <NumInput label="ID 2" value={dims.id2} onChange={(v) => setDim('id2', v)} />
@@ -387,9 +430,15 @@ const OpeningStockModal = ({
                 {material && <span className="text-xs text-slate-500">· {material}</span>}
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 px-4 py-3 text-sm sm:grid-cols-3">
-                <Field label="Arrangement (ID × OD × HT)" value={weightPerPc > 0 ? arrangementOf(coreType, dims) : '—'} span2 />
-                <Field label="Measure" value={measure && weightPerPc > 0 ? measure : '—'} />
-                {coreType === 'NANO' ? (
+                <Field label="Arrangement (ID × OD × HT)" value={weightPerPc > 0 ? (composite ? `${finalId} × ${finalOd} × ${finalHt}` : arrangementOf(coreType, dims)) : '—'} span2 />
+                <Field label={composite ? 'Composite measure' : 'Measure'} value={measure && weightPerPc > 0 ? measure : '—'} accent={composite ? true : undefined} />
+                {composite ? (
+                  <>
+                    <Field label="Nano wt (core+case)" value={weightPerPc ? `${(coreWeight + caseWeight).toFixed(3)} kg` : '—'} />
+                    <Field label="CRGO wt" value={comp?.crgoWeight ? `${comp.crgoWeight.toFixed(3)} kg` : '—'} />
+                    <Field label="Wt / pc (nano+crgo)" value={weightPerPc ? `${weightPerPc.toFixed(3)} kg` : '—'} accent />
+                  </>
+                ) : coreType === 'NANO' ? (
                   <>
                     <Field label="Core wt" value={coreWeight ? `${coreWeight.toFixed(3)} kg` : '—'} />
                     <Field label="Case wt" value={caseWeight ? `${caseWeight.toFixed(3)} kg` : '—'} />

@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Save, Loader2, Calendar, Hash, User2, Package, Pencil, Copy, ChevronDown, ChevronRight } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
-import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc, nanoCalc, nanoTestCalc } from '@/lib/calc';
+import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc, nanoCalc, nanoTestCalc, isCompositeGrade, compositeRuleFromMaterial, compositeCalc } from '@/lib/calc';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useConfirm } from '@/hooks/useConfirm';
 
@@ -1440,6 +1440,10 @@ export const NanoForm = ({
   const [id, setId] = useState(0);
   const [od, setOd] = useState(0);
   const [ht, setHt] = useState(0);
+  // CRGO sub-dimensions — only used for the COMPOSITE grade (Nano + CRGO).
+  const [crgoId, setCrgoId] = useState(0);
+  const [crgoOd, setCrgoOd] = useState(0);
+  const [crgoHt, setCrgoHt] = useState(0);
   const [pcs, setPcs] = useState(0);
   const [nanoPrice, setNanoPrice] = useState(0);
   const [casePrice, setCasePrice] = useState(0);
@@ -1466,7 +1470,11 @@ export const NanoForm = ({
     if (!edit || edit.item.coreType !== 'NANO') return;
     const it = edit.item;
     setMaterial(it.material);
-    setId(it.id1); setOd(it.od1); setHt(it.ht); setPcs(it.pcs);
+    // Composite stores the DERIVED (final) dims, not the CRGO/Nano sub-dims —
+    // so on edit we clear them and ask the user to re-enter both sets.
+    if (isCompositeGrade(it.grade)) { setId(0); setOd(0); setHt(0); setCrgoId(0); setCrgoOd(0); setCrgoHt(0); }
+    else { setId(it.id1); setOd(it.od1); setHt(it.ht); }
+    setPcs(it.pcs);
     setNanoPrice(it.nanoPrice ?? 0); setCasePrice(it.casePrice ?? 0);
     setSoRate(it.nanoSoRate ?? 0); setTurns(it.turns ?? 0);
     pendingFlux.current = it.flux ?? 0;
@@ -1490,9 +1498,22 @@ export const NanoForm = ({
     () => nanoCalc({ id, od, ht, pcs, nanoPrice, casePrice }),
     [id, od, ht, pcs, nanoPrice, casePrice]
   );
-  const geomOk = id > 0 && od > 0 && ht > 0 && od > id;
-  // Total weight = nano core + SS case, per piece × pcs.
-  const pieceWeight = Math.round((calc.coreWeight + calc.caseWeight) * 1000) / 1000;
+  // COMPOSITE grade = Nano + CRGO. The material fixes how the final measure is
+  // derived; weight = Nano (core+case) + CRGO. Non-composite = plain nano.
+  const composite = isCompositeGrade(grade);
+  const rule = composite ? compositeRuleFromMaterial(material) : null;
+  const nanoOk = id > 0 && od > 0 && ht > 0 && od > id;
+  const crgoOk = crgoId > 0 && crgoOd > 0 && crgoHt > 0 && crgoOd > crgoId;
+  const comp = composite && rule ? compositeCalc({ rule, crgo: { id: crgoId, od: crgoOd, ht: crgoHt }, nano: { id, od, ht }, pcs }) : null;
+
+  const geomOk = composite ? (nanoOk && crgoOk && !!rule) : nanoOk;
+  // Final identity dims + measure (composite → derived; else the nano dims).
+  const finalId = comp ? comp.id : id;
+  const finalOd = comp ? comp.od : od;
+  const finalHt = comp ? comp.ht : ht;
+  const finalMeasure = comp ? comp.measure : calc.measure;
+  // Total weight = nano core + SS case (+ CRGO for composite), per piece × pcs.
+  const pieceWeight = comp ? comp.weightPerPc : Math.round((calc.coreWeight + calc.caseWeight) * 1000) / 1000;
   const totalWt = pcs > 0 ? Math.round(pieceWeight * pcs * 1000) / 1000 : 0;
 
   // Finished output size = ordered dims + the selected grade's nano offsets.
@@ -1511,13 +1532,22 @@ export const NanoForm = ({
   const reset = () => {
     setGrade(''); setMaterial('');
     setId(0); setOd(0); setHt(0); setPcs(0);
+    setCrgoId(0); setCrgoOd(0); setCrgoHt(0);
     setNanoPrice(0); setCasePrice(0);
     setSoRate(0); setTurns(0); setFlux(0);
   };
 
   const add = async () => {
-    if (!geomOk) {
-      await showAlert({ title: 'Invalid input', message: 'Enter valid OD, ID and HT (OD must be greater than ID).', tone: 'warning' });
+    if (composite && !rule) {
+      await showAlert({ title: 'Pick a composite type', message: 'Choose the Material (Continuous Loop / Exact Split / Variable Height) for the COMPOSITE grade.', tone: 'warning' });
+      return;
+    }
+    if (composite && !crgoOk) {
+      await showAlert({ title: 'Invalid CRGO input', message: 'Enter valid CRGO ID, OD and HT (OD must be greater than ID).', tone: 'warning' });
+      return;
+    }
+    if (!nanoOk) {
+      await showAlert({ title: 'Invalid input', message: `Enter valid ${composite ? 'Nano ' : ''}OD, ID and HT (OD must be greater than ID).`, tone: 'warning' });
       return;
     }
     if (pcs <= 0) {
@@ -1528,8 +1558,8 @@ export const NanoForm = ({
       coreType: 'NANO',
       grade: grade || 'NANO',
       material: material || 'NANO',
-      measure: calc.measure,
-      id1: id, od1: od, ht, pcs,
+      measure: finalMeasure,
+      id1: finalId, od1: finalOd, ht: finalHt, pcs,
       weightPerPc: pieceWeight, totalWeight: totalWt,
       // Per-piece: manual SO rate if given, else the Nano+Case price.
       rateBasis: effRate > 0 ? 'PER_PCS' : undefined,
@@ -1569,9 +1599,20 @@ export const NanoForm = ({
           <NumField label="Case Price (₹/kg)" value={casePrice} onChange={setCasePrice} />
         </div>
 
-        {/* Dimensions + SO rate — one aligned line */}
+        {/* Dimensions + SO rate — one aligned line (+ CRGO for composite) */}
         <div>
           <SecLabel>Dimensions &amp; rate</SecLabel>
+          {composite && (
+            <div className="mb-3 rounded-lg border border-amber-100 bg-amber-50/40 p-2.5">
+              <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">CRGO core</div>
+              <div className="grid grid-cols-3 gap-x-3 gap-y-3">
+                <NumField label="ID" value={crgoId} onChange={setCrgoId} />
+                <NumField label="OD" value={crgoOd} onChange={setCrgoOd} />
+                <NumField label="HT" value={crgoHt} onChange={setCrgoHt} />
+              </div>
+            </div>
+          )}
+          {composite && <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-violet-700">Nano core</div>}
           <div className="grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-5">
             <NumField label="ID" value={id} onChange={setId} />
             <NumField label="OD" value={od} onChange={setOd} />
@@ -1579,6 +1620,13 @@ export const NanoForm = ({
             <NumField label="Pcs" value={pcs} onChange={setPcs} />
             <NumField label="SO Rate/Pcs" value={soRate} onChange={setSoRate} />
           </div>
+          {composite && rule && (
+            <div className="mt-2 text-[11px] text-slate-500">
+              {rule === 'CONTINUOUS_LOOP' ? 'Continuous loop → ID = min, OD = max, HT = same (concentric).'
+                : rule === 'EXACT_SPLIT' ? 'Exact split → same ID/OD, heights added (stacked).'
+                : 'Variable height → same ID/OD, heights added (stacked).'}
+            </div>
+          )}
         </div>
 
         {/* Testing parameters — one aligned line */}
@@ -1619,11 +1667,14 @@ export const NanoForm = ({
       {/* Computed summary */}
       <div className="border-t border-violet-100 bg-violet-50/40 px-4 py-3">
         <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-5">
-          <Stat label="Core Wt (kg)"  value={calc.coreWeight.toFixed(3)} />
-          <Stat label="Case Wt (kg)"  value={calc.caseWeight.toFixed(3)} />
-          <Stat label="Total Wt (core+case)" value={totalWt.toFixed(3)} accent="primary" />
-          <Stat label="Bare Size"     value={geomOk ? calc.measure : '—'} />
-          <Stat label="Finish Size"   value={finished ?? '—'} accent={finished ? 'primary' : undefined} />
+          <Stat label="Nano Core Wt" value={calc.coreWeight.toFixed(3)} />
+          <Stat label="Nano Case Wt" value={calc.caseWeight.toFixed(3)} />
+          {composite
+            ? <Stat label="CRGO Wt" value={(comp?.crgoWeight ?? 0).toFixed(3)} />
+            : null}
+          <Stat label={composite ? 'Total Wt (nano+crgo)' : 'Total Wt (core+case)'} value={totalWt.toFixed(3)} accent="primary" />
+          <Stat label={composite ? 'Composite Size' : 'Bare Size'} value={geomOk ? finalMeasure : '—'} accent={composite ? 'primary' : undefined} />
+          {!composite && <Stat label="Finish Size" value={finished ?? '—'} accent={finished ? 'primary' : undefined} />}
         </div>
         <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-violet-100 pt-3 sm:grid-cols-4">
           <Stat label="Nano+Case / Pc" value={`₹${money0(nanoCasePc)}`} />
