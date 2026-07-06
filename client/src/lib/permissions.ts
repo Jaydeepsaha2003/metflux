@@ -9,7 +9,6 @@ export const PERMISSION_KEYS = [
   'rec_production', 'modify_prod_qty',
   'view_testing',
   'add_customer', 'add_supplier', 'add_staff', 'add_material',
-  'manage_payroll',
   'dispatch',
   'manage_returns',
   // Accounts — granular per page (manage_invoices kept as a legacy umbrella
@@ -39,7 +38,6 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   add_supplier:     'Manage Suppliers',
   add_staff:        'Manage Workers (Labours)',
   add_material:     'Manage Materials',
-  manage_payroll:   'Payroll & Advances',
   dispatch:         'Dispatch & Packing List',
   manage_returns:   'Manage Returns',
   view_sales_register:   'Sales Register',
@@ -65,6 +63,5 @@ export const PERMISSION_GROUPS: { label: string; keys: PermissionKey[] }[] = [
   { label: 'Returns',         keys: ['manage_returns'] },
   { label: 'Accounts', keys: ['view_sales_register', 'view_debtor_aging', 'receive_payments', 'view_purchase_register', 'view_creditor_aging'] },
   { label: 'Master Data',     keys: ['add_customer', 'add_supplier', 'add_staff', 'add_material'] },
-  { label: 'Payroll',         keys: ['manage_payroll'] },
   { label: 'Administration',  keys: ['manage_users', 'view_audit_log'] },
 ];

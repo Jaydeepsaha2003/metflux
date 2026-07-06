@@ -83,7 +83,6 @@ const NAV: NavItem[] = [
     ],
   },
   { kind: 'leaf', to: '/customers', label: 'Customers', icon: Users, perm: 'add_customer' },
-  { kind: 'leaf', to: '/payroll', label: 'Payroll', icon: Wallet, perm: 'manage_payroll' },
   {
     kind: 'group', key: 'settings', label: 'Settings', icon: SettingsIcon,
     children: [
