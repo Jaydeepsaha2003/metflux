@@ -14,8 +14,8 @@ import { cn } from '@/lib/cn';
 import { fluxTestCalc, rectangularCalc, rectangularFluxTestCalc, nanoTestCalc } from '@/lib/calc';
 import { todayStamp } from '@/lib/excel';
 
-type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO';
-const coreLabel: Record<CoreType, string> = { TOROIDAL: 'Toroidal', RECTANGULAR: 'Rectangular', NANO: 'Nano' };
+type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE';
+const coreLabel: Record<CoreType, string> = { TOROIDAL: 'Toroidal', RECTANGULAR: 'Rectangular', NANO: 'Nano', COMPOSITE: 'Composite' };
 type FluxPoint = { flux: number; ateCm: number };
 type FluxGroup = { grade: string; points: FluxPoint[] };
 type Item = {
@@ -128,7 +128,7 @@ export const TestingCalculatorPage = () => {
   const cell = (it: Item, flux: number) => {
     if (!numOk(it) || !it.fluxes.includes(flux)) return null;
     const ateCm = ateFor(it.coreType, it.grade, flux);
-    if (it.coreType === 'NANO') {
+    if (it.coreType === 'NANO' || it.coreType === 'COMPOSITE') {
       const r = nanoTestCalc({ id: +it.id, od: +it.od, ht: +it.ht, turns: +it.turns, flux, ateCm, freq: +it.freq || 50, sfac: +it.sfac || 0.8 });
       return { volt: r.testVoltage, leMax: r.testCurrent, mv: r.testVoltageMv, ieA: r.testCurrentA };
     }
@@ -274,8 +274,8 @@ export const TestingCalculatorPage = () => {
           const pts = pointsFor(it.coreType, it.grade);
           const rowGrades = gradesFor(it.coreType);
           const g = it.coreType === 'RECTANGULAR' && numOk(it) ? rectGeom(it) : null;
-          const isNano = it.coreType === 'NANO';
-          const accent = it.coreType === 'TOROIDAL' ? 'border-l-amber-400' : isNano ? 'border-l-violet-400' : 'border-l-rose-400';
+          const isNano = it.coreType === 'NANO' || it.coreType === 'COMPOSITE';
+          const accent = it.coreType === 'TOROIDAL' ? 'border-l-amber-400' : it.coreType === 'COMPOSITE' ? 'border-l-teal-400' : it.coreType === 'NANO' ? 'border-l-violet-400' : 'border-l-rose-400';
           return (
             <div key={it.key} className={cn('card border-l-4 p-4 transition', accent)}>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -525,8 +525,8 @@ const ImportDialog = ({ onClose, onAdd }: { onClose: () => void; onAdd: (po: PoS
               </div>
               <span className="flex shrink-0 items-center gap-2">
                 <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium',
-                  i.coreType === 'TOROIDAL' ? 'bg-sky-50 text-sky-700' : 'bg-violet-50 text-violet-700')}>
-                  {i.coreType === 'TOROIDAL' ? 'Toroidal' : 'Rectangular'}
+                  i.coreType === 'TOROIDAL' ? 'bg-sky-50 text-sky-700' : i.coreType === 'COMPOSITE' ? 'bg-teal-50 text-teal-700' : i.coreType === 'RECTANGULAR' ? 'bg-rose-50 text-rose-700' : 'bg-violet-50 text-violet-700')}>
+                  {coreLabel[i.coreType]}
                 </span>
                 <Plus className="h-4 w-4 text-brand-600" />
               </span>

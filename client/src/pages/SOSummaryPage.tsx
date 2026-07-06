@@ -24,7 +24,7 @@ type SummaryItem = {
   deliveryDate: string;
   customerName: string;
   customerCode: string | null;
-  coreType: 'TOROIDAL' | 'RECTANGULAR' | 'NANO';
+  coreType: 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE';
   grade: string;
   material: string;
   measure: string;
@@ -72,9 +72,10 @@ const coreBadge: Record<SummaryItem['coreType'], string> = {
   TOROIDAL:    'bg-amber-50 text-amber-700 border border-amber-200',
   RECTANGULAR: 'bg-rose-50 text-rose-700 border border-rose-200',
   NANO:        'bg-violet-50 text-violet-700 border border-violet-200',
+  COMPOSITE:   'bg-teal-50 text-teal-700 border border-teal-200',
 };
-const coreShort: Record<SummaryItem['coreType'], string> = { TOROIDAL: 'T', RECTANGULAR: 'R', NANO: 'N' };
-const coreName: Record<SummaryItem['coreType'], string> = { TOROIDAL: 'Toro', RECTANGULAR: 'Rect', NANO: 'Nano' };
+const coreShort: Record<SummaryItem['coreType'], string> = { TOROIDAL: 'T', RECTANGULAR: 'R', NANO: 'N', COMPOSITE: 'C' };
+const coreName: Record<SummaryItem['coreType'], string> = { TOROIDAL: 'Toro', RECTANGULAR: 'Rect', NANO: 'Nano', COMPOSITE: 'Comp' };
 
 const PAGE_SIZE = 20;
 

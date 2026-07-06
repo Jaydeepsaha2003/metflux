@@ -10,7 +10,7 @@ import { importBody, cellPick, rowIsBlank, errMessage } from '../lib/importHelpe
 const router = Router();
 router.use(requireAuth, resolveTenant);
 
-const CORE_TYPES = ['TOROIDAL', 'RECTANGULAR', 'NANO'];
+const CORE_TYPES = ['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE'];
 const parseCore = (s) => {
   const a = String(s || '').split(',').map((x) => x.trim()).filter((x) => CORE_TYPES.includes(x));
   return a.length ? a : CORE_TYPES.slice(); // legacy rows → applies to all
@@ -54,7 +54,7 @@ router.get('/_flat', asyncHandler(async (req, res) => {
 const upsertSchema = z.object({
   grade: z.string().trim().min(1).max(80),
   material: z.string().trim().min(1).max(120),
-  coreTypes: z.array(z.enum(['TOROIDAL', 'RECTANGULAR', 'NANO'])).optional(),
+  coreTypes: z.array(z.enum(['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE'])).optional(),
   nanoIdOff: z.coerce.number().optional().nullable(),
   nanoOdOff: z.coerce.number().optional().nullable(),
   nanoHtOff: z.coerce.number().optional().nullable(),

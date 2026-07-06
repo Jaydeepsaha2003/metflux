@@ -11,7 +11,7 @@ import {
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
-import { toroidalCalc, rectangularCalc, nanoCalc, round3, isCompositeGrade, compositeRuleFromMaterial, compositeCalc } from '@/lib/calc';
+import { toroidalCalc, rectangularCalc, nanoCalc, round3, compositeRuleFromMaterial, compositeCalc } from '@/lib/calc';
 
 type GradeRow = { grade: string; materials: { material: string }[]; coreTypes?: string[] };
 // Dimensions the user types; core-type formula turns them into weight + measure.
@@ -45,10 +45,10 @@ type SoLine = {
 };
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
-const coreShort = (ct: string) => (ct === 'TOROIDAL' ? 'Toro' : ct === 'NANO' ? 'Nano' : 'Rect');
-const coreLabel: Record<string, string> = { TOROIDAL: 'Toroidal', RECTANGULAR: 'Rectangular', NANO: 'Nano' };
-const coreBadge: Record<string, string> = { TOROIDAL: 'bg-amber-50 text-amber-700', NANO: 'bg-violet-50 text-violet-700', RECTANGULAR: 'bg-rose-50 text-rose-700' };
-const CORE_TYPES = ['TOROIDAL', 'RECTANGULAR', 'NANO'] as const;
+const coreShort = (ct: string) => (ct === 'TOROIDAL' ? 'Toro' : ct === 'NANO' ? 'Nano' : ct === 'COMPOSITE' ? 'Comp' : 'Rect');
+const coreLabel: Record<string, string> = { TOROIDAL: 'Toroidal', RECTANGULAR: 'Rectangular', NANO: 'Nano', COMPOSITE: 'Composite' };
+const coreBadge: Record<string, string> = { TOROIDAL: 'bg-amber-50 text-amber-700', NANO: 'bg-violet-50 text-violet-700', RECTANGULAR: 'bg-rose-50 text-rose-700', COMPOSITE: 'bg-teal-50 text-teal-700' };
+const CORE_TYPES = ['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE'] as const;
 type CoreType = (typeof CORE_TYPES)[number];
 const specLabel = (s: StockLine) => `${coreShort(s.coreType)} · ${s.grade} · ${s.measure}`;
 // Arrangement string per core type (Rectangular carries two ID/OD pairs).
@@ -273,8 +273,8 @@ const OpeningStockModal = ({
   const materials = gradeRows.find((g) => g.grade === grade)?.materials ?? [];
 
   const isRect = coreType === 'RECTANGULAR';
-  const composite = coreType === 'NANO' && isCompositeGrade(grade);
-  const rule = composite ? compositeRuleFromMaterial(material) : null;
+  const composite = coreType === 'COMPOSITE';
+  const rule = composite ? (compositeRuleFromMaterial(grade) || compositeRuleFromMaterial(material)) : null;
   const comp = composite && rule ? compositeCalc({ rule, crgo, nano: { id: dims.id1, od: dims.od1, ht: dims.ht }, pcs: 0 }) : null;
   const base = computeSpec(coreType, dims);
   // Final identity (composite → derived; else straight from the dims).

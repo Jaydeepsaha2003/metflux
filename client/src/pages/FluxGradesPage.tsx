@@ -12,7 +12,7 @@ import { cn } from '@/lib/cn';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useConfirm } from '@/hooks/useConfirm';
 
-type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO';
+type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE';
 type Row = {
   id: string;
   grade: string;
@@ -28,9 +28,10 @@ const coreBadge: Record<CoreType, string> = {
   TOROIDAL:    'bg-amber-50 text-amber-700 border border-amber-200',
   RECTANGULAR: 'bg-rose-50 text-rose-700 border border-rose-200',
   NANO:        'bg-violet-50 text-violet-700 border border-violet-200',
+  COMPOSITE:   'bg-teal-50 text-teal-700 border border-teal-200',
 };
-const coreShort: Record<CoreType, string> = { TOROIDAL: 'Toro', RECTANGULAR: 'Rect', NANO: 'Nano' };
-const coreName: Record<CoreType, string> = { TOROIDAL: 'Toroidal', RECTANGULAR: 'Rectangular', NANO: 'Nano' };
+const coreShort: Record<CoreType, string> = { TOROIDAL: 'Toro', RECTANGULAR: 'Rect', NANO: 'Nano', COMPOSITE: 'Comp' };
+const coreName: Record<CoreType, string> = { TOROIDAL: 'Toroidal', RECTANGULAR: 'Rectangular', NANO: 'Nano', COMPOSITE: 'Composite' };
 
 export const FluxGradesPage = () => {
   const queryClient = useQueryClient();

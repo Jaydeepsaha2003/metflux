@@ -13,7 +13,7 @@ import { SearchableSelect } from '@/components/SearchableSelect';
 import { useConfirm } from '@/hooks/useConfirm';
 
 /* ---------- types ---------- */
-type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO';
+type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE';
 
 export type Item = {
   /** Set when the item came from the DB (edit mode). Not sent to the server — Zod strips it. */
@@ -81,8 +81,9 @@ const readonlyInputCls = inputCls + ' bg-slate-50 text-slate-600';
 const coreBadge = (ct: CoreType) =>
   ct === 'TOROIDAL' ? 'bg-amber-50 text-amber-700'
   : ct === 'RECTANGULAR' ? 'bg-rose-50 text-rose-700'
+  : ct === 'COMPOSITE' ? 'bg-teal-50 text-teal-700'
   : 'bg-violet-50 text-violet-700';
-const coreShort = (ct: CoreType) => (ct === 'TOROIDAL' ? 'Toro' : ct === 'RECTANGULAR' ? 'Rect' : 'Nano');
+const coreShort = (ct: CoreType) => (ct === 'TOROIDAL' ? 'Toro' : ct === 'RECTANGULAR' ? 'Rect' : ct === 'COMPOSITE' ? 'Comp' : 'Nano');
 // Prices are shown as whole rupees (no decimals).
 const money0 = (n: number | undefined | null) => Math.round(Number(n) || 0).toLocaleString('en-IN');
 
@@ -551,6 +552,18 @@ export const POOrderNewPage = () => {
             >
               Nano
             </button>
+            <button
+              type="button"
+              onClick={() => setCoreType('COMPOSITE')}
+              className={cn(
+                'rounded-md px-3 py-1.5 font-medium transition',
+                coreType === 'COMPOSITE'
+                  ? 'bg-white text-teal-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              )}
+            >
+              Composite
+            </button>
           </div>
         </div>
 
@@ -584,6 +597,18 @@ export const POOrderNewPage = () => {
             prefill={prefill}
             onPrefillConsumed={() => setPrefill(null)}
             edit={editSeed?.item.coreType === 'NANO' ? editSeed : null}
+            onEditConsumed={() => setEditSeed(null)}
+          />
+        )}
+        {coreType === 'COMPOSITE' && (
+          <NanoForm
+            composite
+            grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'COMPOSITE'))}
+            fluxGrades={fluxRespNano?.grades ?? []}
+            onAdd={(item) => { setItems((prev) => [...prev, item]); }}
+            prefill={prefill}
+            onPrefillConsumed={() => setPrefill(null)}
+            edit={editSeed?.item.coreType === 'COMPOSITE' ? editSeed : null}
             onEditConsumed={() => setEditSeed(null)}
           />
         )}
@@ -1425,7 +1450,7 @@ export const RectangularForm = ({
 
 /* ---------- NANO ---------- */
 export const NanoForm = ({
-  grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed,
+  grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed, composite: compositeMode = false,
 }: {
   grades: GradeRow[];
   fluxGrades: FluxGroup[];
@@ -1434,7 +1459,9 @@ export const NanoForm = ({
   onPrefillConsumed?: () => void;
   edit?: { item: Item; nonce: number } | null;
   onEditConsumed?: () => void;
+  composite?: boolean; // COMPOSITE core type — always show CRGO + Nano, rule from grade.
 }) => {
+  const selfCore: CoreType = compositeMode ? 'COMPOSITE' : 'NANO';
   const [grade, setGrade] = useState('');
   const [material, setMaterial] = useState('');
   const [id, setId] = useState(0);
@@ -1458,7 +1485,7 @@ export const NanoForm = ({
   const pendingFlux = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!prefill || prefill.coreType !== 'NANO') return;
+    if (!prefill || prefill.coreType !== selfCore) return;
     setGrade(prefill.grade);
     setMaterial(prefill.material);
     onPrefillConsumed?.();
@@ -1467,12 +1494,12 @@ export const NanoForm = ({
 
   // Load a full row for editing.
   useEffect(() => {
-    if (!edit || edit.item.coreType !== 'NANO') return;
+    if (!edit || edit.item.coreType !== selfCore) return;
     const it = edit.item;
     setMaterial(it.material);
     // Composite stores the DERIVED (final) dims, not the CRGO/Nano sub-dims —
     // so on edit we clear them and ask the user to re-enter both sets.
-    if (isCompositeGrade(it.grade)) { setId(0); setOd(0); setHt(0); setCrgoId(0); setCrgoOd(0); setCrgoHt(0); }
+    if (compositeMode || isCompositeGrade(it.grade)) { setId(0); setOd(0); setHt(0); setCrgoId(0); setCrgoOd(0); setCrgoHt(0); }
     else { setId(it.id1); setOd(it.od1); setHt(it.ht); }
     setPcs(it.pcs);
     setNanoPrice(it.nanoPrice ?? 0); setCasePrice(it.casePrice ?? 0);
@@ -1498,10 +1525,10 @@ export const NanoForm = ({
     () => nanoCalc({ id, od, ht, pcs, nanoPrice, casePrice }),
     [id, od, ht, pcs, nanoPrice, casePrice]
   );
-  // COMPOSITE grade = Nano + CRGO. The material fixes how the final measure is
-  // derived; weight = Nano (core+case) + CRGO. Non-composite = plain nano.
-  const composite = isCompositeGrade(grade);
-  const rule = composite ? compositeRuleFromMaterial(material) : null;
+  // COMPOSITE = Nano + CRGO. The grade (join type) fixes how the final measure
+  // is derived; weight = Nano (core+case) + CRGO. Non-composite = plain nano.
+  const composite = compositeMode || isCompositeGrade(grade);
+  const rule = composite ? (compositeRuleFromMaterial(grade) || compositeRuleFromMaterial(material)) : null;
   const nanoOk = id > 0 && od > 0 && ht > 0 && od > id;
   const crgoOk = crgoId > 0 && crgoOd > 0 && crgoHt > 0 && crgoOd > crgoId;
   const comp = composite && rule ? compositeCalc({ rule, crgo: { id: crgoId, od: crgoOd, ht: crgoHt }, nano: { id, od, ht }, pcs }) : null;
@@ -1555,9 +1582,9 @@ export const NanoForm = ({
       return;
     }
     onAdd({
-      coreType: 'NANO',
-      grade: grade || 'NANO',
-      material: material || 'NANO',
+      coreType: selfCore,
+      grade: grade || (composite ? 'COMPOSITE' : 'NANO'),
+      material: material || (composite ? 'COMPOSITE' : 'NANO'),
       measure: finalMeasure,
       id1: finalId, od1: finalOd, ht: finalHt, pcs,
       weightPerPc: pieceWeight, totalWeight: totalWt,
@@ -1583,9 +1610,9 @@ export const NanoForm = ({
   return (
     <div className="overflow-hidden rounded-xl border border-violet-200 bg-white shadow-sm">
       {/* Header */}
-      <div className="flex items-center gap-2 border-b border-violet-100 bg-violet-50/70 px-4 py-2.5">
-        <span className="h-2 w-2 rounded-full bg-violet-500" />
-        <span className="text-xs font-bold uppercase tracking-wider text-violet-800">Nano Core</span>
+      <div className={cn('flex items-center gap-2 border-b px-4 py-2.5', composite ? 'border-teal-100 bg-teal-50/70' : 'border-violet-100 bg-violet-50/70')}>
+        <span className={cn('h-2 w-2 rounded-full', composite ? 'bg-teal-500' : 'bg-violet-500')} />
+        <span className={cn('text-xs font-bold uppercase tracking-wider', composite ? 'text-teal-800' : 'text-violet-800')}>{composite ? 'Composite Core (Nano + CRGO)' : 'Nano Core'}</span>
       </div>
 
       <div className="space-y-4 p-4">
@@ -1685,9 +1712,9 @@ export const NanoForm = ({
       </div>
 
       {/* Action */}
-      <div className="flex justify-end border-t border-violet-100 px-4 py-3">
+      <div className={cn('flex justify-end border-t px-4 py-3', composite ? 'border-teal-100' : 'border-violet-100')}>
         <button onClick={add} className="btn-primary w-full sm:w-auto" type="button">
-          <Plus className="h-4 w-4" /> Add nano item
+          <Plus className="h-4 w-4" /> {composite ? 'Add composite item' : 'Add nano item'}
         </button>
       </div>
       {alertDialog}
