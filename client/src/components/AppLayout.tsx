@@ -413,7 +413,7 @@ const PageHeader = ({ onToggleSidebar }: { onToggleSidebar: () => void }) => {
   const firstWord = (active?.companyName ?? 'Metflux').trim().split(/\s+/)[0];
   return (
     <header
-      className="page-header flex items-center justify-between border-b border-slate-200 bg-white/70 px-3 sm:px-6 py-3 backdrop-blur print:hidden"
+      className="page-header relative z-20 flex items-center justify-between border-b border-slate-200 bg-white/70 px-3 sm:px-6 py-3 backdrop-blur print:hidden"
       style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top))' }}
     >
       <div className="flex items-center gap-2.5 min-w-0">
