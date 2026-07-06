@@ -19,13 +19,15 @@ export default defineConfig({
         display: 'standalone',
         start_url: '/s/admin/',
         scope: '/s/admin/',
-        // Point at the dynamic endpoint so the uploaded App Branding logo is
-        // used for the installed / home-screen icon (new installs). The bundled
-        // SVG stays as a guaranteed-valid fallback for installability.
+        // The dynamic endpoint carries the uploaded App Branding logo; the
+        // bundled static PNGs are guaranteed-valid fallbacks so the installed /
+        // home-screen icon is never blank (Android needs real PNGs).
         icons: [
           { src: '/api/public/app-logo', sizes: '512x512', type: 'image/png', purpose: 'any' },
-          { src: '/api/public/app-logo', sizes: '192x192', type: 'image/png', purpose: 'any' },
-          { src: '/s/admin/icons/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
+          { src: '/s/admin/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/s/admin/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/s/admin/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: '/s/admin/icons/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
         ],
         prefer_related_applications: false,
       },

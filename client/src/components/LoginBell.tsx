@@ -2,6 +2,7 @@
 // vibrate + badge when someone signs in while you're logged in. Polls the
 // active-sessions endpoint and alerts on any new (non-self) login.
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Bell, Check, X, Loader2, Send } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -63,6 +64,8 @@ export const LoginBell = () => {
   const [testMsg, setTestMsg] = useState<string | null>(null);
   const watermark = useRef<number | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const [popTop, setPopTop] = useState(64);
 
   useEffect(() => {
     if (typeof Notification === 'undefined' || !('serviceWorker' in navigator)) setPushState('unsupported');
@@ -71,10 +74,28 @@ export const LoginBell = () => {
   }, []);
 
   useEffect(() => {
-    const onDoc = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (ref.current?.contains(t) || popRef.current?.contains(t)) return;
+      setOpen(false);
+    };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
+
+  // Open below the bell, but anchored to the viewport's right edge (via a portal)
+  // so it never clips off-screen or hides behind page controls on mobile.
+  const toggleOpen = () => {
+    setOpen((v) => {
+      const next = !v;
+      if (next) {
+        const r = ref.current?.getBoundingClientRect();
+        setPopTop(r ? r.bottom + 8 : 64);
+        setUnread(0);
+      }
+      return next;
+    });
+  };
 
   const { data } = useQuery({
     queryKey: ['login-bell'],
@@ -123,7 +144,7 @@ export const LoginBell = () => {
     <div ref={ref} className="relative">
       <button
         type="button"
-        onClick={() => { setOpen((v) => !v); setUnread(0); }}
+        onClick={toggleOpen}
         className="relative grid h-9 w-9 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 transition-colors"
         title="Sign-in alerts"
         aria-label="Sign-in alerts"
@@ -136,8 +157,8 @@ export const LoginBell = () => {
         )}
       </button>
 
-      {open && (
-        <div className="absolute right-0 top-full z-40 mt-2 w-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+      {open && createPortal(
+        <div ref={popRef} style={{ top: popTop }} className="fixed right-2 z-[120] w-[min(20rem,calc(100vw-1rem))] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
             <span className="text-sm font-semibold text-slate-900">Sign-in alerts</span>
             <button onClick={() => setOpen(false)} className="rounded p-1 text-slate-400 hover:bg-slate-100"><X className="h-3.5 w-3.5" /></button>
@@ -179,7 +200,8 @@ export const LoginBell = () => {
               ))
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

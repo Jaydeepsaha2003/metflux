@@ -32,7 +32,9 @@ router.get('/app-logo', asyncHandler(async (_req, res) => {
     dataUrl = row?.settingValue ?? null;
   } catch { /* not migrated */ }
   const m = dataUrl && /^data:([^;]+);base64,(.*)$/s.exec(dataUrl);
-  if (!m) return res.redirect(302, '/s/admin/icons/icon.svg');
+  // No uploaded logo → fall back to the bundled PNG (not the SVG) so manifest
+  // consumers that require a raster icon still get a valid image.
+  if (!m) return res.redirect(302, '/s/admin/icons/icon-512.png');
   res.setHeader('Content-Type', m[1]);
   res.setHeader('Cache-Control', 'public, max-age=300');
   res.send(Buffer.from(m[2], 'base64'));
