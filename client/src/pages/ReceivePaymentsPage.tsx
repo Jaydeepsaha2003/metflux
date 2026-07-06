@@ -162,7 +162,7 @@ export const ReceivePaymentsPage = () => {
         </h1>
         <div className="flex items-center gap-2">
           <Link to="/sales-invoices/aging" className="btn-ghost border border-slate-300 text-slate-600 hover:bg-slate-50">
-            <Clock className="h-4 w-4" /> Debtor Aging
+            <Clock className="h-4 w-4" /> Amount Receivable
           </Link>
           <button onClick={downloadTemplate} className="btn-ghost text-slate-600 hover:bg-slate-100" title="Download the bulk-payment template">
             <FileSpreadsheet className="h-4 w-4" /> Template

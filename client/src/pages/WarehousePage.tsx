@@ -1,7 +1,7 @@
 // Store / Warehouse — manage named stores and the finished-goods stock that was
 // sent in from overproduction. "Stock Out" dispatches stock to a customer's
 // sales-order line, creating a normal dispatch that flows into packing & invoices.
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -13,19 +13,23 @@ import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
 import { toroidalCalc, rectangularCalc, nanoCalc, round3 } from '@/lib/calc';
 
-type Spec = {
-  coreType: string; grade: string; material: string; measure: string;
-  id1: number | null; id2: number | null; od1: number | null; od2: number | null; ht: number | null;
-  weightPerPc: number;
-};
-// Weight per pc from the item's dimensions, per its core-type formula.
-const specWeight = (s: Spec): number => {
-  const n = (v: number | null) => Number(v) || 0;
-  let w = 0;
-  if (s.coreType === 'RECTANGULAR') w = rectangularCalc({ id1: n(s.id1), id2: n(s.id2), od1: n(s.od1), od2: n(s.od2), ht: n(s.ht), pcs: 0 }).weightPerPc;
-  else if (s.coreType === 'NANO') { const c = nanoCalc({ id: n(s.id1), od: n(s.od1), ht: n(s.ht), pcs: 0 }); w = round3(c.coreWeight + c.caseWeight); }
-  else w = toroidalCalc({ id: n(s.id1), od: n(s.od1), ht: n(s.ht), pcs: 0 }).weightPerPc;
-  return w > 0 ? w : (Number(s.weightPerPc) || 0);
+type GradeRow = { grade: string; materials: { material: string }[]; coreTypes?: string[] };
+// Dimensions the user types; core-type formula turns them into weight + measure.
+type Dims = { id1: number; id2: number; od1: number; od2: number; ht: number };
+type Computed = { weightPerPc: number; measure: string; coreWeight: number; caseWeight: number };
+// Compute weight/measure per core type from free-typed dimensions (same math as
+// the New Sales Order form, so the resulting spec matches order lines exactly).
+const computeSpec = (coreType: CoreType, d: Dims): Computed => {
+  if (coreType === 'RECTANGULAR') {
+    const c = rectangularCalc({ id1: d.id1, id2: d.id2, od1: d.od1, od2: d.od2, ht: d.ht, pcs: 0 });
+    return { weightPerPc: c.weightPerPc, measure: c.measure, coreWeight: 0, caseWeight: 0 };
+  }
+  if (coreType === 'NANO') {
+    const c = nanoCalc({ id: d.id1, od: d.od1, ht: d.ht, pcs: 0 });
+    return { weightPerPc: round3(c.coreWeight + c.caseWeight), measure: c.measure, coreWeight: c.coreWeight, caseWeight: c.caseWeight };
+  }
+  const c = toroidalCalc({ id: d.id1, od: d.od1, ht: d.ht, pcs: 0 });
+  return { weightPerPc: c.weightPerPc, measure: c.measure, coreWeight: 0, caseWeight: 0 };
 };
 
 type Store = { id: string; name: string; isActive: boolean; notes: string | null };
@@ -48,12 +52,10 @@ const CORE_TYPES = ['TOROIDAL', 'RECTANGULAR', 'NANO'] as const;
 type CoreType = (typeof CORE_TYPES)[number];
 const specLabel = (s: StockLine) => `${coreShort(s.coreType)} · ${s.grade} · ${s.measure}`;
 // Arrangement string per core type (Rectangular carries two ID/OD pairs).
-const arrangementOf = (s: Spec) => {
-  const n = (v: number | null) => Number(v) || 0;
-  return s.coreType === 'RECTANGULAR'
-    ? `${n(s.id1)}×${n(s.id2)} · ${n(s.od1)}×${n(s.od2)} · HT ${n(s.ht)}`
-    : `${n(s.id1)} × ${n(s.od1)} × ${n(s.ht)}`;
-};
+const arrangementOf = (coreType: CoreType, d: Dims) =>
+  coreType === 'RECTANGULAR'
+    ? `${d.id1}×${d.id2} · ${d.od1}×${d.od2} · HT ${d.ht}`
+    : `${d.id1} × ${d.od1} × ${d.ht}`;
 
 export const WarehousePage = () => {
   const qc = useQueryClient();
@@ -246,8 +248,9 @@ export const WarehousePage = () => {
   );
 };
 
-/* ── Opening-stock modal — core-type first, then grade/material/measure from the
-   catalog; live preview + auto weight, mirroring the New Order form. ── */
+/* ── Opening-stock modal — pick core type + grade/material, freely type the
+   dimensions; weight auto-computes. Mirrors the New Sales Order form. ── */
+const ZERO_DIMS: Dims = { id1: 0, id2: 0, od1: 0, od2: 0, ht: 0 };
 const OpeningStockModal = ({
   stores, defaultStoreId, onClose, onDone,
 }: { stores: Store[]; defaultStoreId: string; onClose: () => void; onDone: () => void }) => {
@@ -255,44 +258,32 @@ const OpeningStockModal = ({
   const [coreType, setCoreType] = useState<CoreType>('TOROIDAL');
   const [grade, setGrade] = useState('');
   const [material, setMaterial] = useState('');
-  const [measure, setMeasure] = useState('');
+  const [dims, setDims] = useState<Dims>(ZERO_DIMS);
   const [pcs, setPcs] = useState(0);
   const [movementDate, setMovementDate] = useState(todayISO());
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
-  const { data: specData } = useQuery({ queryKey: ['warehouse-specs'], queryFn: () => api<{ items: Spec[] }>('/warehouses/specs') });
-  const specs = specData?.items ?? [];
+  const { data: gradeData } = useQuery({ queryKey: ['material-grades'], queryFn: () => api<{ grades: GradeRow[] }>('/material-grades') });
+  // Grades that apply to the chosen core type (a grade with no coreTypes = all).
+  const gradeRows = (gradeData?.grades ?? []).filter((g) => !g.coreTypes || g.coreTypes.length === 0 || g.coreTypes.includes(coreType));
+  const materials = gradeRows.find((g) => g.grade === grade)?.materials ?? [];
 
-  // Only offer core types that actually have catalog items.
-  const availTypes = CORE_TYPES.filter((ct) => specs.some((s) => s.coreType === ct));
-  useEffect(() => {
-    if (availTypes.length && !availTypes.includes(coreType)) {
-      setCoreType(availTypes[0]); setGrade(''); setMaterial(''); setMeasure('');
-    }
-  }, [availTypes, coreType]);
-
-  const ofType = specs.filter((s) => s.coreType === coreType);
-  const grades = [...new Set(ofType.map((s) => s.grade))].sort();
-  const materials = [...new Set(ofType.filter((s) => s.grade === grade).map((s) => s.material))].sort();
-  const measures = [...new Set(ofType.filter((s) => s.grade === grade && s.material === material).map((s) => s.measure))];
-  const spec = ofType.find((s) => s.grade === grade && s.material === material && s.measure === measure) ?? null;
-  const weightPerPc = spec ? specWeight(spec) : 0;
-
-  // Nano core/case split for the preview breakdown.
-  const nano = spec && spec.coreType === 'NANO'
-    ? nanoCalc({ id: Number(spec.id1) || 0, od: Number(spec.od1) || 0, ht: Number(spec.ht) || 0, pcs: 0 })
-    : null;
-
-  const pickType = (ct: CoreType) => { setCoreType(ct); setGrade(''); setMaterial(''); setMeasure(''); };
+  const isRect = coreType === 'RECTANGULAR';
+  const { weightPerPc, measure, coreWeight, caseWeight } = computeSpec(coreType, dims);
+  const setDim = (k: keyof Dims, v: number) => setDims((d) => ({ ...d, [k]: v }));
 
   const submit = useMutation({
     mutationFn: () => api('/warehouses/opening-stock', {
       method: 'POST',
       json: {
-        warehouseId, coreType, grade, material, measure: measure || null,
-        id1: spec?.id1 ?? null, id2: spec?.id2 ?? null, od1: spec?.od1 ?? null, od2: spec?.od2 ?? null, ht: spec?.ht ?? null,
+        warehouseId, coreType, grade, material, measure,
+        id1: dims.id1 || null,
+        id2: isRect ? (dims.id2 || null) : null,
+        od1: dims.od1 || null,
+        od2: isRect ? (dims.od2 || null) : null,
+        ht: dims.ht || null,
         weightPerPc, pcs, movementDate, notes: notes.trim() || 'Opening stock',
       },
     }),
@@ -303,18 +294,14 @@ const OpeningStockModal = ({
   const onSave = () => {
     setError(null);
     if (!warehouseId) return setError('Pick a store');
-    if (!grade || !material || !measure) return setError('Pick grade, material and measure');
+    if (!grade || !material) return setError('Pick grade and material');
+    if (!dims.id1 || !dims.od1 || !dims.ht) return setError('Enter ID, OD and HT');
+    if (isRect && (!dims.id2 || !dims.od2)) return setError('Enter both ID (id1, id2) and OD (od1, od2)');
+    if (dims.od1 <= dims.id1) return setError('OD must be greater than ID');
+    if (weightPerPc <= 0) return setError('Weight could not be computed — check the dimensions');
     if (pcs <= 0) return setError('Pcs must be greater than 0');
     submit.mutate();
   };
-
-  const Sel = ({ label, value, onChange, options, disabled }: { label: string; value: string; onChange: (v: string) => void; options: string[]; disabled?: boolean }) => (
-    <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</span>
-      <select className="input" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
-        <option value="">{disabled ? '—' : 'Select…'}</option>
-        {options.map((o) => <option key={o} value={o}>{o}</option>)}
-      </select></label>
-  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
@@ -328,16 +315,14 @@ const OpeningStockModal = ({
             <div className="flex items-center gap-2 text-sm font-medium text-emerald-700"><CheckCircle2 className="h-5 w-5" /> Opening stock added ({pcs} pcs).</div>
             <div className="flex justify-end"><button onClick={onClose} className="btn-primary text-sm">Done</button></div>
           </div>
-        ) : !specs.length ? (
-          <div className="px-5 py-6 text-sm text-slate-500">No item catalog yet — create a Sales Order first so grades, materials and measures are available here.</div>
         ) : (
           <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
-            {/* Core type selector — like the New Order form */}
+            {/* Core type selector — all three, like the New Order form */}
             <div>
               <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Core type</span>
               <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-                {availTypes.map((ct) => (
-                  <button key={ct} onClick={() => pickType(ct)}
+                {CORE_TYPES.map((ct) => (
+                  <button key={ct} onClick={() => { setCoreType(ct); setGrade(''); setMaterial(''); }}
                     className={cn('rounded-md px-3.5 py-1.5 text-sm font-medium transition',
                       coreType === ct ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900')}>
                     {coreLabel[ct]}
@@ -353,9 +338,39 @@ const OpeningStockModal = ({
                   {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select></label>
               <div />
-              <Sel label="Grade" value={grade} onChange={(v) => { setGrade(v); setMaterial(''); setMeasure(''); }} options={grades} />
-              <Sel label="Material" value={material} onChange={(v) => { setMaterial(v); setMeasure(''); }} options={materials} disabled={!grade} />
-              <Sel label="Measure" value={measure} onChange={setMeasure} options={measures} disabled={!material} />
+              <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Grade</span>
+                <select className="input" value={grade} onChange={(e) => { setGrade(e.target.value); setMaterial(gradeRows.find((g) => g.grade === e.target.value)?.materials[0]?.material ?? ''); }}>
+                  <option value="">Select grade…</option>
+                  {gradeRows.map((g) => <option key={g.grade} value={g.grade}>{g.grade}</option>)}
+                </select></label>
+              <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Material</span>
+                <select className="input" value={material} disabled={!grade} onChange={(e) => setMaterial(e.target.value)}>
+                  <option value="">{grade ? 'Select material…' : 'Pick grade first'}</option>
+                  {materials.map((m) => <option key={m.material} value={m.material}>{m.material}</option>)}
+                </select></label>
+            </div>
+
+            {/* Dimension inputs — shape depends on core type */}
+            <div>
+              <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Dimensions (mm)</span>
+              {isRect ? (
+                <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
+                  <NumInput label="ID 1" value={dims.id1} onChange={(v) => setDim('id1', v)} />
+                  <NumInput label="ID 2" value={dims.id2} onChange={(v) => setDim('id2', v)} />
+                  <NumInput label="OD 1" value={dims.od1} onChange={(v) => setDim('od1', v)} />
+                  <NumInput label="OD 2" value={dims.od2} onChange={(v) => setDim('od2', v)} />
+                  <NumInput label="HT" value={dims.ht} onChange={(v) => setDim('ht', v)} />
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-3">
+                  <NumInput label="ID" value={dims.id1} onChange={(v) => setDim('id1', v)} />
+                  <NumInput label="OD" value={dims.od1} onChange={(v) => setDim('od1', v)} />
+                  <NumInput label="HT" value={dims.ht} onChange={(v) => setDim('ht', v)} />
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
               <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Pcs</span>
                 <input className="input" type="number" min={1} value={pcs || ''} onChange={(e) => setPcs(parseInt(e.target.value || '0', 10))} /></label>
               <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Date</span>
@@ -364,34 +379,28 @@ const OpeningStockModal = ({
                 <input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Opening stock" /></label>
             </div>
 
-            {/* Preview card — mirrors the New Order form's computed section */}
-            {spec ? (
-              <div className="overflow-hidden rounded-xl border border-slate-200">
-                <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2">
-                  <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', coreBadge[spec.coreType] ?? 'bg-slate-100 text-slate-600')}>{coreLabel[spec.coreType]}</span>
-                  <span className="text-sm font-semibold text-slate-800">{grade}</span>
-                  <span className="text-xs text-slate-500">· {material}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 px-4 py-3 text-sm sm:grid-cols-3">
-                  <Field label="Arrangement (ID × OD × HT)" value={arrangementOf(spec)} span2 />
-                  {nano ? (
-                    <>
-                      <Field label="Core wt" value={`${nano.coreWeight.toFixed(3)} kg`} />
-                      <Field label="Case wt" value={`${nano.caseWeight.toFixed(3)} kg`} />
-                      <Field label="Wt / pc (core + case)" value={`${weightPerPc.toFixed(3)} kg`} accent />
-                    </>
-                  ) : (
-                    <Field label="Wt / pc" value={weightPerPc ? `${weightPerPc.toFixed(3)} kg` : '—'} accent />
-                  )}
-                  <Field label="Pcs" value={pcs > 0 ? String(pcs) : '—'} />
-                  <Field label="Total weight" value={pcs > 0 && weightPerPc > 0 ? `${(pcs * weightPerPc).toFixed(3)} kg` : '—'} accent span2 />
-                </div>
+            {/* Live preview card — mirrors the New Order form's computed section */}
+            <div className="overflow-hidden rounded-xl border border-slate-200">
+              <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2">
+                <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', coreBadge[coreType])}>{coreLabel[coreType]}</span>
+                <span className="text-sm font-semibold text-slate-800">{grade || '—'}</span>
+                {material && <span className="text-xs text-slate-500">· {material}</span>}
               </div>
-            ) : (
-              <div className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-xs text-slate-400">
-                Pick grade, material &amp; measure to preview the weight.
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 px-4 py-3 text-sm sm:grid-cols-3">
+                <Field label="Arrangement (ID × OD × HT)" value={weightPerPc > 0 ? arrangementOf(coreType, dims) : '—'} span2 />
+                <Field label="Measure" value={measure && weightPerPc > 0 ? measure : '—'} />
+                {coreType === 'NANO' ? (
+                  <>
+                    <Field label="Core wt" value={coreWeight ? `${coreWeight.toFixed(3)} kg` : '—'} />
+                    <Field label="Case wt" value={caseWeight ? `${caseWeight.toFixed(3)} kg` : '—'} />
+                    <Field label="Wt / pc (core + case)" value={weightPerPc ? `${weightPerPc.toFixed(3)} kg` : '—'} accent />
+                  </>
+                ) : (
+                  <Field label="Wt / pc" value={weightPerPc ? `${weightPerPc.toFixed(3)} kg` : '—'} accent />
+                )}
+                <Field label="Total weight" value={pcs > 0 && weightPerPc > 0 ? `${(pcs * weightPerPc).toFixed(3)} kg` : '—'} accent span2 />
               </div>
-            )}
+            </div>
 
             {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>}
             <div className="flex justify-end gap-3 border-t border-slate-200 pt-3">
@@ -406,6 +415,12 @@ const OpeningStockModal = ({
     </div>
   );
 };
+
+/* A numeric dimension input (module-level so it keeps focus while typing). */
+const NumInput = ({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) => (
+  <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</span>
+    <input className="input" type="number" min={0} step="any" value={value || ''} onChange={(e) => onChange(parseFloat(e.target.value) || 0)} /></label>
+);
 
 /* A labelled read-only value in the opening-stock preview card. */
 const Field = ({ label, value, accent, span2 }: { label: string; value: string; accent?: boolean; span2?: boolean }) => (

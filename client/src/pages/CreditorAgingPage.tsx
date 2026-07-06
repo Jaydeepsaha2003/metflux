@@ -90,7 +90,7 @@ export const CreditorAgingPage = () => {
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <Clock className="h-5 w-5 text-brand-600" /> Creditor Aging
+          <Clock className="h-5 w-5 text-brand-600" /> Amount Payable
         </h1>
         <div className="flex items-center gap-2">
           <div className="w-full sm:w-72">
