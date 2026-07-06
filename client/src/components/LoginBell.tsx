@@ -13,13 +13,37 @@ import { cn } from '@/lib/cn';
 type Session = { jti: string; userId: string; username: string; name: string; device: string | null; location: string | null; loginAt: string | null };
 type Evt = { id: string; name: string; device: string | null; at: string | null };
 
+// iOS/Safari only allow Web Audio after a user gesture, and the sign-in chime
+// fires from a background poll (not a tap). So we keep ONE shared AudioContext
+// and "unlock" it on the first tap (unlockAudio); the chime then reuses that
+// same context, letting the sound play on mobile while the app is open.
+let sharedCtx: AudioContext | null = null;
+const getCtx = (): AudioContext | null => {
+  if (typeof window === 'undefined') return null;
+  const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  if (!Ctx) return null;
+  if (!sharedCtx) { try { sharedCtx = new Ctx(); } catch { return null; } }
+  return sharedCtx;
+};
+export const unlockAudio = () => {
+  const ctx = getCtx();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  // A 1-sample silent buffer satisfies iOS's "played during a gesture" rule.
+  try {
+    const b = ctx.createBuffer(1, 1, 22050);
+    const s = ctx.createBufferSource();
+    s.buffer = b; s.connect(ctx.destination); s.start(0);
+  } catch { /* ignore */ }
+};
+
 // A loud, pleasant three-note rising chime (G5 → C6 → E6) with a smooth
-// attack/decay so it's noticeable but not harsh.
+// attack/decay so it's noticeable but not harsh. Reuses the unlocked context.
 const beep = () => {
   try {
-    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    const ctx = new Ctx();
-    ctx.resume?.().catch(() => {});
+    const ctx = getCtx();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     const master = ctx.createGain();
     master.gain.value = 0.9;
     master.connect(ctx.destination);
@@ -40,8 +64,7 @@ const beep = () => {
       o.start(s);
       o.stop(s + 0.42);
     }
-    // Free the audio context once the chime has finished.
-    setTimeout(() => { try { ctx.close(); } catch { /* ignore */ } }, 1400);
+    // Keep the shared context alive for the next chime — don't close it.
   } catch { /* ignore */ }
 };
 const buzz = () => { try { navigator.vibrate?.([200, 100, 200]); } catch { /* ignore */ } };
@@ -71,6 +94,22 @@ export const LoginBell = () => {
     if (typeof Notification === 'undefined' || !('serviceWorker' in navigator)) setPushState('unsupported');
     else if (Notification.permission === 'granted') setPushState('on');
     else if (Notification.permission === 'denied') setPushState('denied');
+  }, []);
+
+  // Unlock Web Audio on the first user gesture so the sign-in chime can play
+  // later on iOS/mobile (which otherwise blocks audio outside a gesture).
+  useEffect(() => {
+    const unlock = () => {
+      unlockAudio();
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('touchend', unlock);
+    };
+    window.addEventListener('pointerdown', unlock, { once: true });
+    window.addEventListener('touchend', unlock, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('touchend', unlock);
+    };
   }, []);
 
   useEffect(() => {
