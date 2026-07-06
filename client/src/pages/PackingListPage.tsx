@@ -6,7 +6,6 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueries } from '@tanstack/react-query';
 import { ArrowLeft, Download, Package, Loader2, MessageCircle, ClipboardCheck, Check, RotateCcw, Save } from 'lucide-react';
 import { api } from '@/lib/api';
-import { useHideCustomerNames } from '@/store/auth';
 import { shareViaWhatsApp, type ShareTarget } from '@/lib/share';
 import { readDraft, useFormDraft, fmtDraftTime } from '@/hooks/useFormDraft';
 import html2pdf from 'html2pdf.js';
@@ -107,7 +106,6 @@ const sameIds = (a: string[], b: string[]) =>
 export const PackingListPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const hideNames = useHideCustomerNames();
   const state = (location.state ?? {}) as { dispatchIds?: string[]; plId?: string };
   const { dispatchIds: stateIds, plId } = state;
 
@@ -239,10 +237,11 @@ export const PackingListPage = () => {
     .filter((cg) => cg.grades.length > 0);
 
   /* Display helpers */
-  // Show the customer NAME on the packing list. When the "hide customer names"
-  // setting is on, show the customer CODE instead (falls back to a dash).
+  // The packing list is a shipping document — ALWAYS print the full customer
+  // name, for every user (employee or admin), regardless of the hide-names
+  // setting. Falls back to the code only if a name is somehow missing.
   const custLabel = (d: { customerName: string; customerCode: string | null }) =>
-    hideNames ? (d.customerCode || '—') : (d.customerName || d.customerCode || '—');
+    d.customerName || d.customerCode || '—';
   const uniqueCustomers = [...new Set(dispatches.map(custLabel))];
   const uniqueStates = [...new Set(dispatches.map((d) => d.customerState).filter(Boolean))];
   const customerLabel = uniqueCustomers.join(', ');
@@ -577,7 +576,7 @@ export const PackingListPage = () => {
 
           {/* Info rows */}
           <div className="grid grid-cols-2 border-b border-slate-300 text-sm">
-            <InfoRow label={hideNames ? 'Customer Code' : 'Customer'} value={customerLabel} border="border-r border-b" />
+            <InfoRow label="Customer" value={customerLabel} border="border-r border-b" />
             <InfoRow label="State" value={stateLabel} border="border-b" />
             <InfoRow label="WO No." value={woNo || '—'} border="border-r border-b" />
             <InfoRow label="WO Date" value={woDate ? fmtDate(woDate) : '—'} border="border-b" />
