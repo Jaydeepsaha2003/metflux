@@ -33,6 +33,8 @@ export const PERMISSION_KEYS = Object.freeze([
   'add_supplier',
   'add_staff',
   'add_material',
+  // Payroll — worker salary + advances ledger
+  'manage_payroll',
   // Dispatch
   'dispatch',
   // Returns
@@ -66,6 +68,7 @@ export const PERMISSION_LABELS = Object.freeze({
   add_supplier:     'Manage Suppliers',
   add_staff:        'Manage Workers (Labours)',
   add_material:     'Manage Materials',
+  manage_payroll:   'Payroll & Advances',
   dispatch:         'Dispatch & Packing List',
   manage_returns:   'Manage Returns',
   view_sales_register:   'Sales Register',

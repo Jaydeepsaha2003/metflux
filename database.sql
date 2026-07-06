@@ -300,11 +300,31 @@ CREATE TABLE `Labour` (
     `id` VARCHAR(191) NOT NULL,
     `name` VARCHAR(120) NOT NULL,
     `phone` VARCHAR(40) NULL,
+    `monthlySalary` DOUBLE NULL,
     `isActive` BOOLEAN NOT NULL DEFAULT true,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
     INDEX `Labour_name_idx`(`name`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable — advances paid to a worker, tagged to a payroll month (YYYY-MM).
+-- Monthly payroll = Labour.monthlySalary − Σ advances for the month = net.
+CREATE TABLE `EmployeeAdvance` (
+    `id` VARCHAR(191) NOT NULL,
+    `companyId` VARCHAR(191) NOT NULL,
+    `labourId` VARCHAR(191) NOT NULL,
+    `labourName` VARCHAR(120) NULL,
+    `amount` DOUBLE NOT NULL,
+    `advanceDate` DATETIME(3) NOT NULL,
+    `periodMonth` VARCHAR(7) NOT NULL,
+    `notes` VARCHAR(400) NULL,
+    `createdById` VARCHAR(191) NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    INDEX `EmployeeAdvance_companyId_periodMonth_idx`(`companyId`, `periodMonth`),
+    INDEX `EmployeeAdvance_companyId_labourId_idx`(`companyId`, `labourId`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 

@@ -35,6 +35,7 @@ import { WarehousePage } from '@/pages/WarehousePage';
 import { PackingListPage } from '@/pages/PackingListPage';
 import { LaboursPage } from '@/pages/LaboursPage';
 import { LabourFormPage } from '@/pages/LabourFormPage';
+import { PayrollPage } from '@/pages/PayrollPage';
 import { WorkAllotmentPage } from '@/pages/WorkAllotmentPage';
 import { WorkAllotmentBuildPage } from '@/pages/WorkAllotmentBuildPage';
 import { ReturnsListPage } from '@/pages/ReturnsListPage';
@@ -137,6 +138,7 @@ export const App = () => {
       <Route path="/settings/users/:id"  element={<UserFormPage />} />
       <Route path="/settings/materials"     element={<MaterialsPage />} />
       <Route path="/settings/flux-grades"   element={<FluxGradesPage />} />
+      <Route path="/payroll"                 element={<PayrollPage />} />
       <Route path="/settings/labours"        element={<LaboursPage />} />
       <Route path="/settings/labours/new"    element={<LabourFormPage />} />
       <Route path="/settings/labours/:id"    element={<LabourFormPage />} />
