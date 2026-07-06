@@ -12,14 +12,35 @@ import { cn } from '@/lib/cn';
 type Session = { jti: string; userId: string; username: string; name: string; device: string | null; location: string | null; loginAt: string | null };
 type Evt = { id: string; name: string; device: string | null; at: string | null };
 
+// A loud, pleasant three-note rising chime (G5 → C6 → E6) with a smooth
+// attack/decay so it's noticeable but not harsh.
 const beep = () => {
   try {
     const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    const a = new Ctx();
-    const o = a.createOscillator(); const g = a.createGain();
-    o.connect(g); g.connect(a.destination);
-    o.type = 'sine'; o.frequency.value = 880; g.gain.value = 0.06;
-    o.start(); o.stop(a.currentTime + 0.28);
+    const ctx = new Ctx();
+    ctx.resume?.().catch(() => {});
+    const master = ctx.createGain();
+    master.gain.value = 0.9;
+    master.connect(ctx.destination);
+    const notes: { f: number; t: number }[] = [
+      { f: 784, t: 0 }, { f: 1047, t: 0.13 }, { f: 1319, t: 0.26 },
+    ];
+    const now = ctx.currentTime;
+    for (const n of notes) {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'triangle';
+      o.frequency.value = n.f;
+      o.connect(g); g.connect(master);
+      const s = now + n.t;
+      g.gain.setValueAtTime(0.0001, s);
+      g.gain.exponentialRampToValueAtTime(0.5, s + 0.02);   // loud attack
+      g.gain.exponentialRampToValueAtTime(0.0001, s + 0.38); // smooth decay
+      o.start(s);
+      o.stop(s + 0.42);
+    }
+    // Free the audio context once the chime has finished.
+    setTimeout(() => { try { ctx.close(); } catch { /* ignore */ } }, 1400);
   } catch { /* ignore */ }
 };
 const buzz = () => { try { navigator.vibrate?.([200, 100, 200]); } catch { /* ignore */ } };
