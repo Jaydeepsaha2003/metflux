@@ -12,8 +12,24 @@
 // their sales invoices); each row with a Payment amount is money paid to that
 // party (knock off their purchase bills). Rows for expenses / salaries simply
 // won't match any party and are reported as unmatched.
-import { parseAmount, parseDateWith, inferDateOrder, isCancelledName } from './invoicing.js';
+import { parseAmount, parseDateWith, isCancelledName } from './invoicing.js';
 import { AppError } from './errors.js';
+
+// Cash/Bank books here are exported in D/M/Y (Tally / Indian format). Default to
+// DMY and only switch to MDY when the data itself proves it — a month-first
+// value >12 with a valid day. (The generic inferDateOrder defaults ambiguous
+// slash-dates to MDY, which flips 3/7/26 to 7-Mar; this keeps it 3-Jul.)
+const bankBookDateOrder = (strings) => {
+  let dayFirst = 0, monthFirst = 0;
+  for (const s of strings) {
+    const m = /^(\d{1,2})[/\-.](\d{1,2})[/\-.]\d{2,4}$/.exec(String(s ?? '').trim());
+    if (!m) continue;
+    const a = +m[1], b = +m[2];
+    if (a > 12 && b <= 12) dayFirst++;
+    else if (b > 12 && a <= 12) monthFirst++;
+  }
+  return monthFirst > dayFirst ? 'MDY' : 'DMY';
+};
 
 export const parseBankBook = (matrix) => {
   const M = matrix.map((r) => (Array.isArray(r) ? r.map((c) => String(c ?? '').trim()) : []));
@@ -59,7 +75,7 @@ export const parseBankBook = (matrix) => {
     raw.push({ dateStr: (r[cDate] ?? '').trim(), side, account, amount: side === 'RECEIPT' ? receipt : payment, vch: (r[cVch] ?? '').trim() });
   }
 
-  const order = inferDateOrder(dateStrs);
+  const order = bankBookDateOrder(dateStrs);
   const entries = raw.map((e) => ({ ...e, date: parseDateWith(e.dateStr, order) }));
   return { entries, asOn };
 };
