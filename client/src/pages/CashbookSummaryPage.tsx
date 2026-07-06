@@ -36,6 +36,8 @@ export const CashbookSummaryPage = () => {
   const [to, setTo] = useState('');
   const [nameFilter, setNameFilter] = useState('');
   const [typeSel, setTypeSel] = useState<Set<string>>(new Set());
+  const [mgSearch, setMgSearch] = useState('');
+  const [mgCat, setMgCat] = useState('');
   const [sort, setSort] = useState<{ key: 'key' | 'receipts' | 'payments' | 'net' | 'count'; dir: 'asc' | 'desc' }>({ key: 'net', dir: 'desc' });
   const sortBy = (key: typeof sort.key) => setSort((s) => ({ key, dir: s.key === key && s.dir === 'desc' ? 'asc' : 'desc' }));
 
@@ -78,6 +80,12 @@ export const CashbookSummaryPage = () => {
   const TYPE_FILTERS = ['CUSTOMER', 'SUPPLIER', 'OTHER', 'UNCLASSIFIED'];
   const toggleType = (k: string) => setTypeSel((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; });
   const otherHeads = (headsData?.heads ?? []).filter((h) => h.type === 'OTHER');
+  // Manage-tab filters for the saved account heads.
+  const headCats = [...new Set(otherHeads.map((h) => h.category).filter(Boolean))].sort() as string[];
+  const mf = mgSearch.trim().toLowerCase();
+  const filteredHeads = otherHeads.filter((h) =>
+    (!mf || h.name.toLowerCase().includes(mf) || (h.category ?? '').toLowerCase().includes(mf))
+    && (!mgCat || h.category === mgCat));
   const sortIcon = (k: typeof sort.key) => (sort.key === k ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : '');
 
   const exportExcel = () => {
@@ -265,14 +273,32 @@ export const CashbookSummaryPage = () => {
         {/* Saved "Other" account heads */}
         {otherHeads.length > 0 && (
           <div className="card overflow-hidden">
-            <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700">
-              <Tag className="h-4 w-4" /> Saved account heads (Other) <span className="font-normal text-slate-400">({otherHeads.length})</span>
+            <div className="flex flex-col gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <Tag className="h-4 w-4" /> Saved account heads (Other)
+                <span className="font-normal text-slate-400">({filteredHeads.length}{filteredHeads.length !== otherHeads.length ? ` / ${otherHeads.length}` : ''})</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                  <input className="input h-8 w-44 pl-8 text-sm" placeholder="Search account…" value={mgSearch} onChange={(e) => setMgSearch(e.target.value)} />
+                  {mgSearch && <button onClick={() => setMgSearch('')} className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:bg-slate-100"><X className="h-3 w-3" /></button>}
+                </div>
+                <select className="input h-8 w-36 text-sm" value={mgCat} onChange={(e) => setMgCat(e.target.value)}>
+                  <option value="">All categories</option>
+                  {headCats.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
             </div>
-            <div className="divide-y divide-slate-100">
-              {otherHeads.map((h) => (
-                <HeadRow key={h.id} head={h} onDelete={() => delHead.mutate(h.id)} deleting={delHead.isPending} />
-              ))}
-            </div>
+            {filteredHeads.length === 0 ? (
+              <div className="py-8 text-center text-sm text-slate-400">No account heads match this filter.</div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {filteredHeads.map((h) => (
+                  <HeadRow key={h.id} head={h} onDelete={() => delHead.mutate(h.id)} deleting={delHead.isPending} />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </>}

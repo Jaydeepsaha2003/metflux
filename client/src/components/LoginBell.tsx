@@ -3,7 +3,7 @@
 // active-sessions endpoint and alerts on any new (non-self) login.
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, Check, X, Loader2 } from 'lucide-react';
+import { Bell, Check, X, Loader2, Send } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { enablePush } from '@/lib/push';
@@ -38,6 +38,8 @@ export const LoginBell = () => {
   const [unread, setUnread] = useState(0);
   const [events, setEvents] = useState<Evt[]>([]);
   const [pushState, setPushState] = useState<'idle' | 'on' | 'denied' | 'unsupported' | 'working'>('idle');
+  const [testing, setTesting] = useState(false);
+  const [testMsg, setTestMsg] = useState<string | null>(null);
   const watermark = useRef<number | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -84,6 +86,18 @@ export const LoginBell = () => {
     setPushState(r.ok ? 'on' : (r.reason.includes('denied') ? 'denied' : 'idle'));
   };
 
+  const onTest = async () => {
+    setTesting(true); setTestMsg(null);
+    try {
+      const r = await api<{ sent: number; admins: number }>('/push/test', { method: 'POST' });
+      setTestMsg(r.sent > 0
+        ? `Test sent to ${r.sent} device${r.sent === 1 ? '' : 's'}.`
+        : 'Sent — but no device received it. Enable notifications on a device first (and the server needs VAPID keys).');
+    } catch {
+      setTestMsg('Could not send the test notification.');
+    } finally { setTesting(false); }
+  };
+
   return (
     <div ref={ref} className="relative">
       <button
@@ -121,6 +135,15 @@ export const LoginBell = () => {
                 Enable notifications on this device
               </button>
             )}
+          </div>
+
+          {/* Manual test — sends a push to the company admins (and you). */}
+          <div className="border-b border-slate-100 px-4 py-2.5 text-xs">
+            <button onClick={onTest} disabled={testing} className="inline-flex items-center gap-1.5 font-medium text-slate-700 hover:underline disabled:opacity-50">
+              {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              Send test notification to admins
+            </button>
+            {testMsg && <div className="mt-1 text-[11px] text-slate-500">{testMsg}</div>}
           </div>
 
           <div className="max-h-72 overflow-y-auto">

@@ -6,7 +6,7 @@ import { env } from '../lib/env.js';
 import { asyncHandler } from '../lib/errors.js';
 import { requireAuth, requireRole } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
-import { saveSubscription, removeSubscription, broadcastToCompany } from '../lib/push.js';
+import { saveSubscription, removeSubscription, broadcastToCompany, notifyCompanyAdmins, sendToUser } from '../lib/push.js';
 
 const router = Router();
 
@@ -36,6 +36,19 @@ router.post('/unsubscribe', asyncHandler(async (req, res) => {
   const { endpoint } = z.object({ endpoint: z.string().url() }).parse(req.body);
   await removeSubscription({ userId: req.auth.userId, endpoint });
   res.status(204).end();
+}));
+
+// Admin-only — send a test notification to the company admins (and the tester,
+// so the person clicking always sees it). Manual button in the notifications bell.
+router.post('/test', requireRole('COMPANY_ADMIN'), asyncHandler(async (req, res) => {
+  const payload = {
+    title: 'Metflux — test notification',
+    body: 'This is a manual test. If you can see this, push notifications are working. ✅',
+    url: '/',
+  };
+  const admins = await notifyCompanyAdmins(req.tenant.companyId, payload);
+  const self = await sendToUser(req.auth.userId, payload);
+  res.json({ sent: admins.sent + self.sent, admins: admins.admins });
 }));
 
 // Admin-only — send a notification to every subscription in the active company.
