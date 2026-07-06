@@ -1474,8 +1474,9 @@ export const NanoForm = ({
   const [pcs, setPcs] = useState(0);
   const [nanoPrice, setNanoPrice] = useState(0);
   const [casePrice, setCasePrice] = useState(0);
-  // Composite: a separate ₹/kg rate for the CRGO part (Nano part uses nanoPrice).
+  // Composite: the CRGO part is rated separately, either per-kg or per-pc.
   const [crgoRate, setCrgoRate] = useState(0);
+  const [crgoBasis, setCrgoBasis] = useState<'PER_KG' | 'PER_PCS'>('PER_KG');
   // Optional manual SO rate per piece. Blank → the Nano+Case price is used.
   const [soRate, setSoRate] = useState(0);
   // Testing parameters (V + Ie max). Flux grade (SS/Epoxy AT-cm) is looked up by
@@ -1552,11 +1553,11 @@ export const NanoForm = ({
     ? `${id + (selGrade!.nanoIdOff ?? 0)} × ${od + (selGrade!.nanoOdOff ?? 0)} × ${ht + (selGrade!.nanoHtOff ?? 0)}`
     : null;
 
-  // Per-piece pricing. Nano: core×nanoPrice + case×casePrice. Composite: the
-  // Nano part (core+case) × nanoPrice + the CRGO part × crgoRate — the user sets
-  // each rate separately and we combine them.
-  const nanoAmtPc = comp ? +(comp.nanoWeight * nanoPrice).toFixed(2) : 0;
-  const crgoAmtPc = comp ? +(comp.crgoWeight * crgoRate).toFixed(2) : 0;
+  // Per-piece pricing. Nano part = core×nanoPrice + case×casePrice (nanoCalc's
+  // pricePerPc). CRGO part = weight×rate (per-kg) or a flat per-pc rate. The two
+  // combine into the composite per-piece price.
+  const nanoAmtPc = comp ? calc.pricePerPc : 0;
+  const crgoAmtPc = comp ? (crgoBasis === 'PER_KG' ? +(comp.crgoWeight * crgoRate).toFixed(2) : +Number(crgoRate).toFixed(2)) : 0;
   const nanoCasePc = composite ? +(nanoAmtPc + crgoAmtPc).toFixed(2) : calc.pricePerPc;
   const effRate = soRate > 0 ? soRate : nanoCasePc;
   const lineTotal = effRate > 0 && pcs > 0 ? +(effRate * pcs).toFixed(2) : 0;
@@ -1565,7 +1566,7 @@ export const NanoForm = ({
   const reset = () => {
     setGrade(''); setMaterial('');
     setId(0); setOd(0); setHt(0); setPcs(0);
-    setCrgoId(0); setCrgoOd(0); setCrgoHt(0); setCrgoRate(0);
+    setCrgoId(0); setCrgoOd(0); setCrgoHt(0); setCrgoRate(0); setCrgoBasis('PER_KG');
     setNanoPrice(0); setCasePrice(0);
     setSoRate(0); setTurns(0); setFlux(0);
   };
@@ -1643,10 +1644,17 @@ export const NanoForm = ({
                   <NumField label="OD" value={crgoOd} onChange={setCrgoOd} />
                   <NumField label="HT" value={crgoHt} onChange={setCrgoHt} />
                 </div>
-                <div className="mt-2.5 grid grid-cols-2 gap-2.5">
-                  <NumField label="CRGO Rate (₹/kg)" value={crgoRate} onChange={setCrgoRate} />
+                <div className="mt-2.5 grid grid-cols-3 gap-2.5">
+                  <Field label="Rate basis">
+                    <select className={inputCls} value={crgoBasis} onChange={(e) => setCrgoBasis(e.target.value as 'PER_KG' | 'PER_PCS')}>
+                      <option value="PER_KG">Per Kg</option>
+                      <option value="PER_PCS">Per Pcs</option>
+                    </select>
+                  </Field>
+                  <NumField label={crgoBasis === 'PER_KG' ? 'CRGO Rate (₹/kg)' : 'CRGO Rate (₹/pc)'} value={crgoRate} onChange={setCrgoRate} />
                   <Stat label="CRGO Wt (kg)" value={(comp?.crgoWeight ?? 0).toFixed(3)} />
                 </div>
+                <div className="mt-1.5 text-[10px] text-slate-500">CRGO amount / pc: <span className="font-semibold text-slate-700">₹{money0(crgoAmtPc)}</span></div>
               </div>
               <div className="rounded-lg border border-violet-200 bg-violet-50/30 p-3">
                 <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-violet-700">
@@ -1657,9 +1665,13 @@ export const NanoForm = ({
                   <NumField label="OD" value={od} onChange={setOd} />
                   <NumField label="HT" value={ht} onChange={setHt} />
                 </div>
-                <div className="mt-2.5 grid grid-cols-2 gap-2.5">
-                  <NumField label="Nano Rate (₹/kg)" value={nanoPrice} onChange={setNanoPrice} />
+                <div className="mt-2.5 grid grid-cols-3 gap-2.5">
+                  <NumField label="Nano Price (₹/kg)" value={nanoPrice} onChange={setNanoPrice} />
+                  <NumField label="Case Price (₹/kg)" value={casePrice} onChange={setCasePrice} />
                   <Stat label="Nano Wt (kg)" value={(comp?.nanoWeight ?? 0).toFixed(3)} />
+                </div>
+                <div className="mt-1.5 text-[10px] text-slate-500">
+                  Core {(comp?.coreWeight ?? 0).toFixed(3)} + Case {(comp?.caseWeight ?? 0).toFixed(3)} kg · Nano amount / pc: <span className="font-semibold text-slate-700">₹{money0(nanoAmtPc)}</span>
                 </div>
               </div>
             </div>
