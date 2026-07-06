@@ -1479,6 +1479,8 @@ export const NanoForm = ({
   // Composite: the CRGO part is rated separately, either per-kg or per-pc.
   const [crgoRate, setCrgoRate] = useState(0);
   const [crgoBasis, setCrgoBasis] = useState<'PER_KG' | 'PER_PCS'>('PER_KG');
+  // Composite join type (Continuous Loop / Exact Split / Variable Height).
+  const [compType, setCompType] = useState('');
   // Optional manual SO rate per piece. Blank → the Nano+Case price is used.
   const [soRate, setSoRate] = useState(0);
   // Testing parameters (V + Ie max). Flux grade (SS/Epoxy AT-cm) is looked up by
@@ -1533,7 +1535,8 @@ export const NanoForm = ({
   // COMPOSITE = Nano + CRGO. The grade (join type) fixes how the final measure
   // is derived; weight = Nano (core+case) + CRGO. Non-composite = plain nano.
   const composite = compositeMode || isCompositeGrade(grade);
-  const rule = composite ? (compositeRuleFromMaterial(grade) || compositeRuleFromMaterial(material)) : null;
+  // Rule comes from the Type selector for composite (falls back to grade/material).
+  const rule = composite ? (compositeRuleFromMaterial(compType) || compositeRuleFromMaterial(grade) || compositeRuleFromMaterial(material)) : null;
   const nanoOk = id > 0 && od > 0 && ht > 0 && od > id;
   const crgoOk = crgoId > 0 && crgoOd > 0 && crgoHt > 0 && crgoOd > crgoId;
   const comp = composite && rule ? compositeCalc({ rule, crgo: { id: crgoId, od: crgoOd, ht: crgoHt }, nano: { id, od, ht }, pcs }) : null;
@@ -1576,14 +1579,14 @@ export const NanoForm = ({
   const reset = () => {
     setGrade(''); setMaterial('');
     setId(0); setOd(0); setHt(0); setPcs(0);
-    setCrgoId(0); setCrgoOd(0); setCrgoHt(0); setCrgoRate(0); setCrgoBasis('PER_KG');
+    setCrgoId(0); setCrgoOd(0); setCrgoHt(0); setCrgoRate(0); setCrgoBasis('PER_KG'); setCompType('');
     setNanoPrice(0); setCasePrice(0);
     setSoRate(0); setTurns(0); setFlux(0);
   };
 
   const add = async () => {
     if (composite && !rule) {
-      await showAlert({ title: 'Pick a composite type', message: 'Choose the Material (Continuous Loop / Exact Split / Variable Height) for the COMPOSITE grade.', tone: 'warning' });
+      await showAlert({ title: 'Pick a composite type', message: 'Choose the Type (Continuous Loop / Exact Split / Variable Height) for the composite.', tone: 'warning' });
       return;
     }
     if (composite && !crgoOk) {
@@ -1635,18 +1638,15 @@ export const NanoForm = ({
       <div className="space-y-4 p-4">
         {composite ? (
           <>
-            {/* Grade (nano grades) + Type (composite join) — compact, capped width */}
-            <div className="grid grid-cols-1 gap-x-3 gap-y-3 sm:grid-cols-2 lg:max-w-xl">
-              <Field label="Grade">
-                <SearchableSelect
-                  dense value={grade} onChange={setGrade}
-                  options={grades.map((g) => ({ value: g.grade, label: g.grade }))}
-                  placeholder="Select nano grade…"
-                />
-              </Field>
+            {/* Grade + Material (nano grades) + Type (composite join) — compact */}
+            <div className="grid grid-cols-1 gap-x-3 gap-y-3 sm:grid-cols-3 lg:max-w-3xl">
+              <GradeMaterialPicker
+                grades={grades} grade={grade} material={material}
+                onGrade={setGrade} onMaterial={setMaterial} listIdSuffix="composite"
+              />
               <Field label="Type">
                 <SearchableSelect
-                  dense value={material} onChange={setMaterial}
+                  dense value={compType} onChange={setCompType}
                   options={typeGrades.map((g) => ({ value: g.grade, label: g.grade }))}
                   placeholder="Continuous Loop / Exact Split…"
                 />
