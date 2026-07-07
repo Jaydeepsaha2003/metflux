@@ -688,7 +688,7 @@ const AccountLedgerModal = ({ name, onClose }: { name: string; onClose: () => vo
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[88vh] w-full max-w-3xl flex-col rounded-xl bg-white shadow-2xl">
+      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
           <h2 className="truncate pr-3 text-sm font-semibold text-slate-900">{name} — Ledger</h2>
           <div className="flex items-center gap-1">
@@ -710,7 +710,7 @@ const AccountLedgerModal = ({ name, onClose }: { name: string; onClose: () => vo
             <span className={cn('text-base font-bold tabular-nums', t.closingType === 'Dr' ? 'text-emerald-700' : 'text-rose-700')}>{inr(t.closing)} {t.closing > 0.01 ? t.closingType : ''}</span>
           </div>
         )}
-        <div className="flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-auto">
           {isLoading ? (
             <div className="py-12 text-center text-slate-400"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></div>
           ) : !items.length ? (
