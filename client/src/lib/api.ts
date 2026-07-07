@@ -18,7 +18,11 @@ class ApiError extends Error {
 
 let refreshing: Promise<string | null> | null = null;
 
-const tryRefresh = async (): Promise<string | null> => {
+// Single shared in-flight refresh. ALL refreshes (bootstrap, proactive, and the
+// 401-retry) funnel through this so concurrent callers reuse ONE /auth/refresh
+// instead of racing on the single-use refresh cookie (one call rotates/revokes
+// the cookie the other is about to use → a cascade of 401s → stuck loading).
+export const tryRefresh = async (): Promise<string | null> => {
   refreshing ??= (async () => {
     try {
       const res = await fetch(`${BASE}/auth/refresh`, {
@@ -43,7 +47,15 @@ export const api = async <T = unknown>(
   init: RequestInit & { json?: unknown } = {}
 ): Promise<T> => {
   const { json, headers, ...rest } = init;
-  const token = useAuthStore.getState().accessToken;
+  const isAuthPath = path === '/auth/refresh' || path === '/auth/login';
+  let token = useAuthStore.getState().accessToken;
+
+  // No access token in memory but a session is known (e.g. right after a page
+  // reload, before bootstrap finished) → get one FIRST rather than firing an
+  // unauthenticated protected request that 401s and leaves the UI hanging.
+  if (!token && !isAuthPath && useAuthStore.getState().user) {
+    token = await tryRefresh();
+  }
 
   const isFormData = rest.body instanceof FormData;
   const exec = (auth: string | null) =>
@@ -61,7 +73,7 @@ export const api = async <T = unknown>(
 
   let res = await exec(token);
 
-  if (res.status === 401 && path !== '/auth/refresh' && path !== '/auth/login') {
+  if (res.status === 401 && !isAuthPath) {
     const fresh = await tryRefresh();
     if (fresh) res = await exec(fresh);
     else useAuthStore.getState().clear();

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuthStore, type LoginPayload } from '@/store/auth';
-import { api } from '@/lib/api';
+import { useAuthStore } from '@/store/auth';
+import { tryRefresh } from '@/lib/api';
 import { applyDomainCompany } from '@/lib/domainCompany';
 
 export const RequireAuth = ({ children }: { children: React.ReactNode }) => {
@@ -14,15 +14,22 @@ export const RequireAuth = ({ children }: { children: React.ReactNode }) => {
     let cancelled = false;
     (async () => {
       try {
-        const data = await api<LoginPayload>('/auth/refresh', { method: 'POST' });
-        if (!cancelled && data?.user && data.accessToken) {
-          // Store the fresh token FIRST so the domain-company switch below is
-          // authenticated on its first try (otherwise switch-company 401s and
-          // forces a second refresh round-trip — a slow, noisy page load).
-          setSession(data);
-          // Honour this domain's preferred company so it stays selected on refresh.
-          const applied = await applyDomainCompany(data);
-          if (!cancelled && applied !== data) setSession(applied);
+        // Go through the SHARED refresh so a data request that fires during
+        // bootstrap reuses this same call instead of racing on the refresh
+        // cookie. tryRefresh sets the session (token) as soon as it resolves.
+        const token = await tryRefresh();
+        if (!cancelled && token) {
+          const s = useAuthStore.getState();
+          if (s.user) {
+            // Honour this domain's pinned company (if any), now authenticated.
+            const applied = await applyDomainCompany({
+              user: s.user, memberships: s.memberships, activeCompanyId: s.activeCompanyId,
+              activeRole: s.activeRole, activePermissions: s.activePermissions, accessToken: token,
+            });
+            if (!cancelled && applied.activeCompanyId !== s.activeCompanyId) setSession(applied);
+          }
+        } else if (!cancelled) {
+          clear();
         }
       } catch {
         if (!cancelled) clear();
