@@ -664,6 +664,11 @@ const AccountLedgerModal = ({ name, onClose }: { name: string; onClose: () => vo
     if (ok) delEntry.mutate(r.id);
   };
   const cards: [string, string][] = [['Sales', 'sale'], ['Purchase', 'purchase'], ['Credit Note', 'creditNote'], ['Debit Note', 'debitNote'], ['Receipts', 'receipt'], ['Payments', 'payment']];
+  // Signed running balance. Positive → the party owes us; negative → we owe them.
+  //   +Sales +DebitNote +Payments(we paid them)  −Purchase −CreditNote −Receipts(they paid us)
+  const num = (k: string) => Number(t[k] || 0);
+  const net = (num('sale') + num('debitNote') + num('payment')) - (num('purchase') + num('creditNote') + num('receipt'));
+  const netRounded = Math.round(net * 100) / 100;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
@@ -676,6 +681,13 @@ const AccountLedgerModal = ({ name, onClose }: { name: string; onClose: () => vo
           {cards.map(([lbl, k]) => (
             <div key={k}><div className="text-[10px] uppercase tracking-wide text-slate-400">{lbl}</div><div className="text-sm font-semibold tabular-nums text-slate-800">{inr(t[k])}</div></div>
           ))}
+        </div>
+        {/* Net balance — receipts AND payments both netted against the invoices. */}
+        <div className={cn('flex items-center justify-between border-b border-slate-200 px-5 py-2.5', netRounded >= 0 ? 'bg-emerald-50' : 'bg-rose-50')}>
+          <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+            Net balance {Math.abs(netRounded) <= 0.01 ? '(settled)' : netRounded > 0 ? '(they owe us)' : '(we owe them)'}
+          </span>
+          <span className={cn('text-base font-bold tabular-nums', netRounded >= 0 ? 'text-emerald-700' : 'text-rose-700')}>{inr(Math.abs(netRounded))}</span>
         </div>
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
