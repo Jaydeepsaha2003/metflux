@@ -80,6 +80,7 @@ export const CustomerFormPage = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customers'] });
       queryClient.invalidateQueries({ queryKey: ['customer', id] });
+      queryClient.invalidateQueries({ queryKey: ['debtor-aging'] });
       navigate('/customers');
     },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Save failed'),

@@ -16,6 +16,7 @@ type Supplier = {
   gstNumber: string | null;
   state: string | null;
   gstRate: number;
+  dueDays: number | null;
   notes: string | null;
   companies: { company: Company }[];
 };
@@ -28,11 +29,12 @@ type Form = {
   gstNumber: string;
   state: string;
   gstRate: number;
+  dueDays: string;
   notes: string;
 };
 
 const empty: Form = {
-  name: '', email: '', phone: '', address: '', gstNumber: '', state: '', gstRate: 0, notes: '',
+  name: '', email: '', phone: '', address: '', gstNumber: '', state: '', gstRate: 0, dueDays: '', notes: '',
 };
 
 export const SupplierFormPage = () => {
@@ -66,6 +68,7 @@ export const SupplierFormPage = () => {
         gstNumber: existing.gstNumber ?? '',
         state: existing.state ?? '',
         gstRate: existing.gstRate ?? 0,
+        dueDays: existing.dueDays != null ? String(existing.dueDays) : '',
         notes: existing.notes ?? '',
       });
       setSelectedCompanies(existing.companies.map((c) => c.company.id));
@@ -83,6 +86,7 @@ export const SupplierFormPage = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
       queryClient.invalidateQueries({ queryKey: ['supplier', id] });
+      queryClient.invalidateQueries({ queryKey: ['creditor-aging'] });
       navigate('/settings/suppliers');
     },
     onError: (e) => {
@@ -118,7 +122,7 @@ export const SupplierFormPage = () => {
       setError({ message: 'Please fix the form', details: missing });
       return;
     }
-    save.mutate({ ...form, companyIds: selectedCompanies });
+    save.mutate({ ...form, dueDays: form.dueDays === '' ? null : Number(form.dueDays), companyIds: selectedCompanies });
   };
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) =>
@@ -168,6 +172,17 @@ export const SupplierFormPage = () => {
               onChange={(e) => set('gstRate', parseFloat(e.target.value) || 0)}
               placeholder="18"
             />
+          </Field>
+          <Field label="Credit Terms (Due Days)">
+            <input
+              className="input" type="number" min={0} max={3650} step="1" inputMode="numeric"
+              value={form.dueDays}
+              onChange={(e) => set('dueDays', e.target.value)}
+              placeholder="e.g. 30"
+            />
+            <span className="mt-1 block text-[10px] text-slate-400">
+              Days allowed to pay after the bill date. Amount Payable uses this to age bills; leave blank to age by bill date.
+            </span>
           </Field>
           <Field label="Address" full>
             <textarea

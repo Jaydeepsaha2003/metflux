@@ -192,11 +192,29 @@ router.get('/aging', requireAnyPermission('view_creditor_aging', 'manage_invoice
     receivableByName.set(nk, round2((receivableByName.get(nk) || 0) + bal));
   }
 
+  // Supplier credit terms (dueDays) per normalized name — drives due-based
+  // aging. Read live from the Supplier record so changing terms re-syncs the
+  // buckets immediately (no stored due date on the bill).
+  const dueDaysByName = new Map();
+  const supRows = await q(
+    `SELECT s.\`name\`, s.\`dueDays\`
+       FROM \`Supplier\` s
+       INNER JOIN \`SupplierMembership\` sm ON sm.\`supplierId\` = s.\`id\`
+      WHERE sm.\`companyId\` = ?`,
+    [req.tenant.companyId]
+  );
+  for (const s of supRows) {
+    const k = normName(s.name);
+    if (k && s.dueDays != null) dueDaysByName.set(k, Number(s.dueDays));
+  }
+
   const now = new Date();
   const todayMid = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const DAY = 86400000;
 
   // Pass 1 — split each supplier's rows into open bills (positive) and a running
-  // credit total (debit notes, negative). Bills aged by bill date.
+  // credit total (debit notes, negative). Bills are aged from their DUE date
+  // (bill date + supplier credit terms) when terms are set, else by bill date.
   const groups = new Map();
   for (const p of rows) {
     const balance = round2(Number(p.amount) - Number(p.paidAmount));
@@ -206,7 +224,9 @@ router.get('/aging', requireAnyPermission('view_creditor_aging', 'manage_invoice
     const g = groups.get(key);
     const bill = new Date(p.invoiceDate);
     const billMid = Date.UTC(bill.getUTCFullYear(), bill.getUTCMonth(), bill.getUTCDate());
-    const ageDays = Math.max(0, Math.floor((todayMid - billMid) / 86400000));
+    const dd = dueDaysByName.get(normName(p.supplierName));
+    const anchorMid = dd != null ? billMid + dd * DAY : billMid; // due date if terms set
+    const ageDays = Math.max(0, Math.floor((todayMid - anchorMid) / DAY));
     if (balance < 0) g.credit = round2(g.credit - balance); // debit note magnitude
     else g.bills.push({ id: p.id, invoiceNumber: p.invoiceNumber, invoiceDate: p.invoiceDate, balance, ageDays, docType: p.docType });
   }

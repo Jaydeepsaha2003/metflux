@@ -28,6 +28,8 @@ const supplierFieldsBase = z.object({
   gstNumber: z.string().trim().max(40).optional().nullable(),
   state:     z.string().trim().max(80).optional().nullable(),
   gstRate:   z.coerce.number().min(0).max(100).default(0),
+  // Credit terms — days allowed to pay after the bill date. Drives Amount Payable aging.
+  dueDays:   z.coerce.number().int().min(0).max(3650).optional().nullable(),
   notes:     z.string().trim().max(2000).optional().nullable(),
 });
 

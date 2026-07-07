@@ -362,6 +362,7 @@ CREATE TABLE `Supplier` (
     `gstNumber` VARCHAR(40) NULL,
     `state` VARCHAR(80) NULL,
     `gstRate` DOUBLE NOT NULL DEFAULT 0,
+    `dueDays` INTEGER NULL,
     `notes` TEXT NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,

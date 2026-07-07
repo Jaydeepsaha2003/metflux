@@ -318,8 +318,13 @@ router.get('/aging', requireAnyPermission('view_debtor_aging', 'manage_invoices'
       });
     }
     const g = groups.get(key);
+    // Effective due date from the customer's CURRENT credit terms, so changing
+    // dueDays re-syncs aging immediately (falls back to the stored dueDate).
+    const effDue = inv.cDueDays != null && inv.invoiceDate
+      ? addDays(new Date(inv.invoiceDate), Number(inv.cDueDays))
+      : inv.dueDate;
     if (balance < 0) g.credit = round2(g.credit - balance); // accumulate magnitude
-    else g.bills.push({ id: inv.id, invoiceNumber: inv.invoiceNumber, invoiceDate: inv.invoiceDate, dueDate: inv.dueDate, balance });
+    else g.bills.push({ id: inv.id, invoiceNumber: inv.invoiceNumber, invoiceDate: inv.invoiceDate, dueDate: effDue, balance });
   }
 
   // Pass 2 — knock each customer's credit off their OLDEST open bills (FIFO), then
