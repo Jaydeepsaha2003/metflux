@@ -170,7 +170,7 @@ const issueTokens = async ({ user, companyId, role, permissions, meta = {} }) =>
     permissions: effectivePermissions(role, permissions),
     isPlatformAdmin: user.isPlatformAdmin,
   });
-  const refreshToken = signRefreshToken({ userId: user.id, jti });
+  const refreshToken = signRefreshToken({ userId: user.id, jti, companyId: companyId ?? null });
   const now = new Date();
   // RefreshToken uses jti as PK, not id — bypass the insert() helper.
   await q(
@@ -254,7 +254,15 @@ router.post('/refresh', authLimiter, asyncHandler(async (req, res) => {
   if (!user || !user.isActive) throw new AppError('User no longer active', 401, 'UNAUTHENTICATED');
 
   const memberships = await loadMemberships(user.id);
-  const active = memberships[0] ?? null;
+  // Restore the company the token was issued for (set on login / switch), so a
+  // reload keeps the selected company instead of reverting to the primary one.
+  let active = payload.cid ? memberships.find((m) => m.companyId === payload.cid) : null;
+  if (!active && payload.cid && user.isPlatformAdmin) {
+    // Platform admin who had stepped into a non-member company — restore it.
+    const company = await qOne('SELECT * FROM `Company` WHERE `id` = ?', [payload.cid]);
+    if (company) active = { companyId: company.id, role: 'COMPANY_ADMIN', company, permissions: [] };
+  }
+  if (!active) active = memberships[0] ?? null;
 
   await q(
     'UPDATE `RefreshToken` SET `revokedAt` = ? WHERE `jti` = ?',
