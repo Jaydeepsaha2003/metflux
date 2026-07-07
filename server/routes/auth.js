@@ -82,7 +82,10 @@ const publicMembership = (m) => ({
   companyId: m.companyId,
   companyName: m.company?.name,
   companySlug: m.company?.slug,
-  companyLogoUrl: m.company?.logoUrl ?? null,
+  // Send a URL pointer, NOT the base64 data URL — embedding logos here bloated
+  // every auth response (login/refresh/switch) to hundreds of KB. The browser
+  // fetches + caches the image once via this endpoint instead.
+  companyLogoUrl: m.company?.logoUrl ? `/api/public/company-logo/${m.companyId}` : null,
   role: m.role,
   isPrimary: !!m.isPrimary,
   hideCustomerNames: !!m.hideCustomerNames,

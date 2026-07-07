@@ -40,6 +40,21 @@ router.get('/app-logo', asyncHandler(async (_req, res) => {
   res.send(Buffer.from(m[2], 'base64'));
 }));
 
+/* GET /api/public/company-logo/:id — a company's logo as a real image file, so
+   the auth payload can carry a small URL instead of a huge base64 data URL. */
+router.get('/company-logo/:id', asyncHandler(async (req, res) => {
+  let dataUrl = null;
+  try {
+    const row = await qOne('SELECT `logoUrl` FROM `Company` WHERE `id` = ?', [req.params.id]);
+    dataUrl = row?.logoUrl ?? null;
+  } catch { /* absent */ }
+  const m = dataUrl && /^data:([^;]+);base64,(.*)$/s.exec(dataUrl);
+  if (!m) return res.status(404).end();
+  res.setHeader('Content-Type', m[1]);
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.send(Buffer.from(m[2], 'base64'));
+}));
+
 const contactLimiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 10 minutes
   max: 5,                    // 5 submissions per IP per 10 min
