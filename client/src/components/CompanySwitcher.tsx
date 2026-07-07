@@ -78,6 +78,9 @@ export const CompanySwitcher = () => {
         json: { companyId },
       });
       setSession(data);
+      // Remember this choice for this domain so a page refresh keeps the same
+      // company selected instead of falling back to the primary one.
+      setDomainCompany(companyId);
       // Force every cached query to refetch with the new tenant context.
       queryClient.invalidateQueries();
       setOpen(false);
