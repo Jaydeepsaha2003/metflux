@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, Suspense } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, LogOut, ChevronDown, FileText, Settings as SettingsIcon,
@@ -299,7 +299,10 @@ export const AppLayout = () => {
       <main className="flex flex-1 flex-col min-w-0 print:block">
         <PageHeader onToggleSidebar={() => setMobileOpen((v) => !v)} />
         <div className="flex-1 p-4 sm:p-6 print:p-0">
-          <Outlet />
+          {/* Inner boundary so lazy page chunks load without hiding the sidebar. */}
+          <Suspense fallback={<div className="py-16 text-center text-sm text-slate-400">Loading…</div>}>
+            <Outlet />
+          </Suspense>
         </div>
       </main>
     </div>

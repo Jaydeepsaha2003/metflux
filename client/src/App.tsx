@@ -1,66 +1,78 @@
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense, type ComponentType } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useBranding } from '@/store/branding';
-import { AuthPage } from '@/pages/AuthPage';
-import { DashboardPage } from '@/pages/DashboardPage';
-import { CustomersPage } from '@/pages/CustomersPage';
-import { CustomerFormPage } from '@/pages/CustomerFormPage';
-import { UsersListPage } from '@/pages/UsersListPage';
-import { UserFormPage } from '@/pages/UserFormPage';
-import { MaterialsPage } from '@/pages/MaterialsPage';
-import { FluxGradesPage } from '@/pages/FluxGradesPage';
-import { CompaniesListPage } from '@/pages/CompaniesListPage';
-import { CompanyFormPage } from '@/pages/CompanyFormPage';
-import { POOrderNewPage } from '@/pages/POOrderNewPage';
-import { POManagePage } from '@/pages/POManagePage';
-import { POEditPage } from '@/pages/POEditPage';
-import { POOrderEditPage } from '@/pages/POOrderEditPage';
-import { SOSummaryPage } from '@/pages/SOSummaryPage';
-import { SuppliersPage } from '@/pages/SuppliersPage';
-import { SupplierFormPage } from '@/pages/SupplierFormPage';
-import { SupplierOrderNewPage } from '@/pages/SupplierOrderNewPage';
-import { SupplierOrderManagePage } from '@/pages/SupplierOrderManagePage';
-import { SupplierOrderEditPage } from '@/pages/SupplierOrderEditPage';
-import { SupplierOrderTrackPage } from '@/pages/SupplierOrderTrackPage';
-import { SupplierPOPrintPage } from '@/pages/SupplierPOPrintPage';
-import { ProductionListPage } from '@/pages/ProductionListPage';
-import { ProductionSummaryPage } from '@/pages/ProductionSummaryPage';
-import { ProductionNewPage } from '@/pages/ProductionNewPage';
-import { ProductionEditPage } from '@/pages/ProductionEditPage';
-import { DispatchListPage } from '@/pages/DispatchListPage';
-import { DispatchNewPage } from '@/pages/DispatchNewPage';
-import { DispatchEditPage } from '@/pages/DispatchEditPage';
-import { PackingPage } from '@/pages/PackingPage';
-import { WarehousePage } from '@/pages/WarehousePage';
-import { PackingListPage } from '@/pages/PackingListPage';
-import { LaboursPage } from '@/pages/LaboursPage';
-import { LabourFormPage } from '@/pages/LabourFormPage';
-import { WorkAllotmentPage } from '@/pages/WorkAllotmentPage';
-import { WorkAllotmentBuildPage } from '@/pages/WorkAllotmentBuildPage';
-import { ReturnsListPage } from '@/pages/ReturnsListPage';
-import { ReturnFormPage } from '@/pages/ReturnFormPage';
-import { TestingReportPage } from '@/pages/TestingReportPage';
-import { SalesInvoicesPage } from '@/pages/SalesInvoicesPage';
-import { DebtorAgingPage } from '@/pages/DebtorAgingPage';
-import { ReceivePaymentsPage } from '@/pages/ReceivePaymentsPage';
-import { ReceiptsPaymentsPage } from '@/pages/ReceiptsPaymentsPage';
-import { CashbookSummaryPage } from '@/pages/CashbookSummaryPage';
-import { CreditorAgingPage } from '@/pages/CreditorAgingPage';
-import { DataCleanupPage } from '@/pages/DataCleanupPage';
-import { UserLogsPage } from '@/pages/UserLogsPage';
-import { AuditLogPage } from '@/pages/AuditLogPage';
-import { CustomerPortalPage } from '@/pages/CustomerPortalPage';
-import { BusinessAnalysisPage } from '@/pages/BusinessAnalysisPage';
-import { TestingCalculatorPage } from '@/pages/TestingCalculatorPage';
-import { PurchasesPage } from '@/pages/PurchasesPage';
-import { BrandingPage } from '@/pages/BrandingPage';
 import { AppLayout } from '@/components/AppLayout';
 import { RequireAuth } from '@/components/RequireAuth';
+
+// Route-level code splitting: each page is its own chunk, loaded on demand, so
+// the initial download is just the app shell (not every screen + html2pdf +
+// xlsx). Massively smaller first load, especially on a hard refresh.
+const page = (loader: () => Promise<Record<string, unknown>>, key: string) =>
+  lazy(async () => ({ default: (await loader())[key] as ComponentType }));
+
+const AuthPage            = page(() => import('@/pages/AuthPage'), 'AuthPage');
+const DashboardPage       = page(() => import('@/pages/DashboardPage'), 'DashboardPage');
+const CustomersPage       = page(() => import('@/pages/CustomersPage'), 'CustomersPage');
+const CustomerFormPage    = page(() => import('@/pages/CustomerFormPage'), 'CustomerFormPage');
+const UsersListPage       = page(() => import('@/pages/UsersListPage'), 'UsersListPage');
+const UserFormPage        = page(() => import('@/pages/UserFormPage'), 'UserFormPage');
+const MaterialsPage       = page(() => import('@/pages/MaterialsPage'), 'MaterialsPage');
+const FluxGradesPage      = page(() => import('@/pages/FluxGradesPage'), 'FluxGradesPage');
+const CompaniesListPage   = page(() => import('@/pages/CompaniesListPage'), 'CompaniesListPage');
+const CompanyFormPage     = page(() => import('@/pages/CompanyFormPage'), 'CompanyFormPage');
+const POOrderNewPage      = page(() => import('@/pages/POOrderNewPage'), 'POOrderNewPage');
+const POManagePage        = page(() => import('@/pages/POManagePage'), 'POManagePage');
+const POEditPage          = page(() => import('@/pages/POEditPage'), 'POEditPage');
+const POOrderEditPage     = page(() => import('@/pages/POOrderEditPage'), 'POOrderEditPage');
+const SOSummaryPage       = page(() => import('@/pages/SOSummaryPage'), 'SOSummaryPage');
+const SuppliersPage       = page(() => import('@/pages/SuppliersPage'), 'SuppliersPage');
+const SupplierFormPage    = page(() => import('@/pages/SupplierFormPage'), 'SupplierFormPage');
+const SupplierOrderNewPage    = page(() => import('@/pages/SupplierOrderNewPage'), 'SupplierOrderNewPage');
+const SupplierOrderManagePage = page(() => import('@/pages/SupplierOrderManagePage'), 'SupplierOrderManagePage');
+const SupplierOrderEditPage   = page(() => import('@/pages/SupplierOrderEditPage'), 'SupplierOrderEditPage');
+const SupplierOrderTrackPage  = page(() => import('@/pages/SupplierOrderTrackPage'), 'SupplierOrderTrackPage');
+const SupplierPOPrintPage     = page(() => import('@/pages/SupplierPOPrintPage'), 'SupplierPOPrintPage');
+const ProductionListPage    = page(() => import('@/pages/ProductionListPage'), 'ProductionListPage');
+const ProductionSummaryPage = page(() => import('@/pages/ProductionSummaryPage'), 'ProductionSummaryPage');
+const ProductionNewPage     = page(() => import('@/pages/ProductionNewPage'), 'ProductionNewPage');
+const ProductionEditPage    = page(() => import('@/pages/ProductionEditPage'), 'ProductionEditPage');
+const DispatchListPage    = page(() => import('@/pages/DispatchListPage'), 'DispatchListPage');
+const DispatchNewPage     = page(() => import('@/pages/DispatchNewPage'), 'DispatchNewPage');
+const DispatchEditPage    = page(() => import('@/pages/DispatchEditPage'), 'DispatchEditPage');
+const PackingPage         = page(() => import('@/pages/PackingPage'), 'PackingPage');
+const WarehousePage       = page(() => import('@/pages/WarehousePage'), 'WarehousePage');
+const PackingListPage     = page(() => import('@/pages/PackingListPage'), 'PackingListPage');
+const LaboursPage         = page(() => import('@/pages/LaboursPage'), 'LaboursPage');
+const LabourFormPage      = page(() => import('@/pages/LabourFormPage'), 'LabourFormPage');
+const WorkAllotmentPage      = page(() => import('@/pages/WorkAllotmentPage'), 'WorkAllotmentPage');
+const WorkAllotmentBuildPage = page(() => import('@/pages/WorkAllotmentBuildPage'), 'WorkAllotmentBuildPage');
+const ReturnsListPage     = page(() => import('@/pages/ReturnsListPage'), 'ReturnsListPage');
+const ReturnFormPage      = page(() => import('@/pages/ReturnFormPage'), 'ReturnFormPage');
+const TestingReportPage   = page(() => import('@/pages/TestingReportPage'), 'TestingReportPage');
+const SalesInvoicesPage   = page(() => import('@/pages/SalesInvoicesPage'), 'SalesInvoicesPage');
+const DebtorAgingPage     = page(() => import('@/pages/DebtorAgingPage'), 'DebtorAgingPage');
+const ReceivePaymentsPage = page(() => import('@/pages/ReceivePaymentsPage'), 'ReceivePaymentsPage');
+const ReceiptsPaymentsPage = page(() => import('@/pages/ReceiptsPaymentsPage'), 'ReceiptsPaymentsPage');
+const CashbookSummaryPage = page(() => import('@/pages/CashbookSummaryPage'), 'CashbookSummaryPage');
+const CreditorAgingPage   = page(() => import('@/pages/CreditorAgingPage'), 'CreditorAgingPage');
+const DataCleanupPage     = page(() => import('@/pages/DataCleanupPage'), 'DataCleanupPage');
+const UserLogsPage        = page(() => import('@/pages/UserLogsPage'), 'UserLogsPage');
+const AuditLogPage        = page(() => import('@/pages/AuditLogPage'), 'AuditLogPage');
+const CustomerPortalPage  = page(() => import('@/pages/CustomerPortalPage'), 'CustomerPortalPage');
+const BusinessAnalysisPage = page(() => import('@/pages/BusinessAnalysisPage'), 'BusinessAnalysisPage');
+const TestingCalculatorPage = page(() => import('@/pages/TestingCalculatorPage'), 'TestingCalculatorPage');
+const PurchasesPage       = page(() => import('@/pages/PurchasesPage'), 'PurchasesPage');
+const BrandingPage        = page(() => import('@/pages/BrandingPage'), 'BrandingPage');
+
+const Loading = () => (
+  <div className="flex h-screen items-center justify-center text-slate-400">Loading…</div>
+);
 
 export const App = () => {
   const loadBranding = useBranding((s) => s.load);
   useEffect(() => { loadBranding(); }, [loadBranding]);
   return (
+  <Suspense fallback={<Loading />}>
   <Routes>
     <Route path="/login"            element={<AuthPage />} />
     <Route path="/portal/:token"   element={<CustomerPortalPage />} />
@@ -153,5 +165,6 @@ export const App = () => {
     </Route>
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes>
+  </Suspense>
   );
 };
