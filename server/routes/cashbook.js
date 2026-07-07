@@ -397,19 +397,41 @@ router.get('/account-ledger', requireAnyPermission(...PERM), asyncHandler(async 
   const tot = { sale: 0, purchase: 0, creditNote: 0, debitNote: 0, receipt: 0, payment: 0 };
   try {
     const rows = await q('SELECT `invoiceNumber` ref, `invoiceDate` dt, `customerName` party, `amount` amt, `docType` doc FROM `SalesInvoice` WHERE `companyId` = ?', [companyId]);
-    for (const r of rows) if (normName(r.party) === key) { const t = r.doc === 'CREDIT_NOTE' ? 'CREDIT_NOTE' : 'SALE'; items.push({ date: r.dt, type: t, ref: r.ref, amount: Number(r.amt) }); if (t === 'SALE') tot.sale += Number(r.amt); else tot.creditNote += Number(r.amt); }
+    for (const r of rows) if (normName(r.party) === key) { const t = r.doc === 'CREDIT_NOTE' ? 'CREDIT_NOTE' : 'SALE'; const a = Math.abs(Number(r.amt)); items.push({ date: r.dt, type: t, ref: r.ref, amount: a }); if (t === 'SALE') tot.sale += a; else tot.creditNote += a; }
   } catch { /* absent */ }
   try {
     const rows = await q('SELECT `invoiceNumber` ref, `invoiceDate` dt, `supplierName` party, `amount` amt, `docType` doc FROM `PurchaseInvoice` WHERE `companyId` = ?', [companyId]);
-    for (const r of rows) if (normName(r.party) === key) { const t = r.doc === 'DEBIT_NOTE' ? 'DEBIT_NOTE' : 'PURCHASE'; items.push({ date: r.dt, type: t, ref: r.ref, amount: Number(r.amt) }); if (t === 'PURCHASE') tot.purchase += Number(r.amt); else tot.debitNote += Number(r.amt); }
+    for (const r of rows) if (normName(r.party) === key) { const t = r.doc === 'DEBIT_NOTE' ? 'DEBIT_NOTE' : 'PURCHASE'; const a = Math.abs(Number(r.amt)); items.push({ date: r.dt, type: t, ref: r.ref, amount: a }); if (t === 'PURCHASE') tot.purchase += a; else tot.debitNote += a; }
   } catch { /* absent */ }
   try {
     const rows = await q('SELECT `id`, `entryDate` dt, `account` party, `side`, `amount` amt, `vch` ref FROM `CashbookEntry` WHERE `companyId` = ?', [companyId]);
-    for (const r of rows) if (normName(r.party) === key) { const t = r.side === 'RECEIPT' ? 'RECEIPT' : 'PAYMENT'; items.push({ id: r.id, date: r.dt, type: t, ref: r.ref, amount: Number(r.amt) }); if (t === 'RECEIPT') tot.receipt += Number(r.amt); else tot.payment += Number(r.amt); }
+    for (const r of rows) if (normName(r.party) === key) { const t = r.side === 'RECEIPT' ? 'RECEIPT' : 'PAYMENT'; const a = Math.abs(Number(r.amt)); items.push({ id: r.id, date: r.dt, type: t, ref: r.ref, amount: a }); if (t === 'RECEIPT') tot.receipt += a; else tot.payment += a; }
   } catch { /* absent */ }
   items.sort((a, b) => (a.date ? new Date(a.date).getTime() : 0) - (b.date ? new Date(b.date).getTime() : 0));
   const round = (n) => Math.round(n * 100) / 100;
-  res.json({ name, items, totals: Object.fromEntries(Object.entries(tot).map(([k, v]) => [k, round(v)])) });
+
+  // Tally/Busy-style double-entry: for a party ledger, Debit = increases what
+  // they owe us (Sales, Debit Note, money we Paid them), Credit = reduces it
+  // (Purchase, Credit Note, Receipts from them). Running balance carries Dr/Cr.
+  const DEBIT = new Set(['SALE', 'DEBIT_NOTE', 'PAYMENT']);
+  let bal = 0, totalDebit = 0, totalCredit = 0;
+  for (const it of items) {
+    const isDebit = DEBIT.has(it.type);
+    it.debit = isDebit ? it.amount : 0;
+    it.credit = isDebit ? 0 : it.amount;
+    totalDebit = round(totalDebit + it.debit);
+    totalCredit = round(totalCredit + it.credit);
+    bal = round(bal + it.debit - it.credit);
+    it.balance = Math.abs(bal);
+    it.balanceType = bal >= 0 ? 'Dr' : 'Cr';
+  }
+  const closing = round(bal);
+  const totals = Object.fromEntries(Object.entries(tot).map(([k, v]) => [k, round(v)]));
+  totals.totalDebit = totalDebit;
+  totals.totalCredit = totalCredit;
+  totals.closing = Math.abs(closing);
+  totals.closingType = closing >= 0 ? 'Dr' : 'Cr';
+  res.json({ name, items, totals });
 }));
 
 /* ---------- Unclassified heads (from stored cashbook) ---------- */

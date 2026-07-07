@@ -643,52 +643,73 @@ const DuplicatesSection = () => {
   );
 };
 
-/* ── One party's whole journey: Sales / Purchase / notes / Receipts / Payments ── */
-type LedgerItem = { id?: string; date: string | null; type: string; ref: string | null; amount: number };
+/* ── Party ledger (Tally/Busy-style running Dr/Cr balance) ── */
+type LedgerItem = { id?: string; date: string | null; type: string; ref: string | null; amount: number; debit: number; credit: number; balance: number; balanceType: 'Dr' | 'Cr' };
+type LedgerTotals = {
+  sale: number; purchase: number; creditNote: number; debitNote: number; receipt: number; payment: number;
+  totalDebit: number; totalCredit: number; closing: number; closingType: 'Dr' | 'Cr';
+};
+const dmy = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-GB') : '—');
 const AccountLedgerModal = ({ name, onClose }: { name: string; onClose: () => void }) => {
   const qc = useQueryClient();
   const { confirm, confirmDialog } = useConfirm();
   const { data, isLoading } = useQuery({
     queryKey: ['cashbook-ledger', name],
-    queryFn: () => api<{ name: string; items: LedgerItem[]; totals: Record<string, number> }>(`/cashbook/account-ledger?name=${encodeURIComponent(name)}`),
+    queryFn: () => api<{ name: string; items: LedgerItem[]; totals: LedgerTotals }>(`/cashbook/account-ledger?name=${encodeURIComponent(name)}`),
   });
   const delEntry = useMutation({
     mutationFn: (id: string) => api(`/cashbook/entry/${id}`, { method: 'DELETE' }),
     onSuccess: () => ['cashbook-ledger', 'cashbook-summary', 'cashbook-transactions', 'cashbook-overview', 'cashbook-entries', 'cashbook-duplicates'].forEach((k) => qc.invalidateQueries({ queryKey: [k] })),
   });
   const items = data?.items ?? [];
-  const t = data?.totals ?? {};
+  const t = data?.totals;
   const onDel = async (r: LedgerItem) => {
     if (!r.id) return;
     const ok = await confirm({ title: 'Delete this row?', message: <>Remove this {TXN_LABEL[r.type] ?? r.type} of {inr(r.amount)} from the cashbook?</>, tone: 'danger', confirmLabel: 'Delete' });
     if (ok) delEntry.mutate(r.id);
   };
   const cards: [string, string][] = [['Sales', 'sale'], ['Purchase', 'purchase'], ['Credit Note', 'creditNote'], ['Debit Note', 'debitNote'], ['Receipts', 'receipt'], ['Payments', 'payment']];
-  // Signed running balance. Positive → the party owes us; negative → we owe them.
-  //   +Sales +DebitNote +Payments(we paid them)  −Purchase −CreditNote −Receipts(they paid us)
-  const num = (k: string) => Number(t[k] || 0);
-  const net = (num('sale') + num('debitNote') + num('payment')) - (num('purchase') + num('creditNote') + num('receipt'));
-  const netRounded = Math.round(net * 100) / 100;
+
+  const exportExcel = () => {
+    if (!items.length) return;
+    const rows: Record<string, string | number>[] = [
+      { Date: '', Particulars: 'Opening Balance', Vch: '', Debit: '', Credit: '', Balance: '0.00 Dr' },
+      ...items.map((r) => ({
+        Date: dmy(r.date), Particulars: TXN_LABEL[r.type] ?? r.type, Vch: r.ref ?? '',
+        Debit: r.debit || '', Credit: r.credit || '', Balance: `${r.balance.toFixed(2)} ${r.balanceType}`,
+      })),
+    ];
+    if (t) rows.push(
+      { Date: '', Particulars: 'Total', Vch: '', Debit: t.totalDebit, Credit: t.totalCredit, Balance: '' },
+      { Date: '', Particulars: 'Closing Balance', Vch: '', Debit: '', Credit: '', Balance: `${t.closing.toFixed(2)} ${t.closingType}` },
+    );
+    downloadXlsx(`ledger-${name}-${todayStamp()}`.replace(/[^\w-]+/g, '_'), 'Ledger', rows);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-xl bg-white shadow-2xl">
+      <div className="flex max-h-[88vh] w-full max-w-3xl flex-col rounded-xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
-          <h2 className="truncate pr-3 text-sm font-semibold text-slate-900">{name} — Account journey</h2>
-          <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
+          <h2 className="truncate pr-3 text-sm font-semibold text-slate-900">{name} — Ledger</h2>
+          <div className="flex items-center gap-1">
+            <button onClick={exportExcel} disabled={!items.length} className="btn-ghost h-8 border border-slate-300 px-2 text-xs text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"><Download className="h-3.5 w-3.5" /> Excel</button>
+            <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
+          </div>
         </div>
         <div className="grid grid-cols-3 gap-2 border-b border-slate-200 bg-slate-50 px-5 py-3 text-center sm:grid-cols-6">
           {cards.map(([lbl, k]) => (
-            <div key={k}><div className="text-[10px] uppercase tracking-wide text-slate-400">{lbl}</div><div className="text-sm font-semibold tabular-nums text-slate-800">{inr(t[k])}</div></div>
+            <div key={k}><div className="text-[10px] uppercase tracking-wide text-slate-400">{lbl}</div><div className="text-sm font-semibold tabular-nums text-slate-800">{inr(t?.[k as keyof LedgerTotals] as number)}</div></div>
           ))}
         </div>
-        {/* Net balance — receipts AND payments both netted against the invoices. */}
-        <div className={cn('flex items-center justify-between border-b border-slate-200 px-5 py-2.5', netRounded >= 0 ? 'bg-emerald-50' : 'bg-rose-50')}>
-          <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
-            Net balance {Math.abs(netRounded) <= 0.01 ? '(settled)' : netRounded > 0 ? '(they owe us)' : '(we owe them)'}
-          </span>
-          <span className={cn('text-base font-bold tabular-nums', netRounded >= 0 ? 'text-emerald-700' : 'text-rose-700')}>{inr(Math.abs(netRounded))}</span>
-        </div>
+        {/* Closing (net) balance — the running Dr/Cr balance of the ledger. */}
+        {t && (
+          <div className={cn('flex items-center justify-between border-b border-slate-200 px-5 py-2.5', t.closingType === 'Dr' ? 'bg-emerald-50' : 'bg-rose-50')}>
+            <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+              Closing balance {t.closing <= 0.01 ? '(settled)' : t.closingType === 'Dr' ? '(they owe us · Dr)' : '(we owe them · Cr)'}
+            </span>
+            <span className={cn('text-base font-bold tabular-nums', t.closingType === 'Dr' ? 'text-emerald-700' : 'text-rose-700')}>{inr(t.closing)} {t.closing > 0.01 ? t.closingType : ''}</span>
+          </div>
+        )}
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
             <div className="py-12 text-center text-slate-400"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></div>
@@ -696,23 +717,39 @@ const AccountLedgerModal = ({ name, onClose }: { name: string; onClose: () => vo
             <div className="py-12 text-center text-sm text-slate-400">No transactions for this account.</div>
           ) : (
             <table className="w-full text-sm whitespace-nowrap">
-              <thead className="sticky top-0 bg-white"><tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <th className="px-4 py-2.5 text-left">Date</th><th className="px-4 py-2.5 text-left">Type</th>
-                <th className="px-4 py-2.5 text-left">Ref</th><th className="px-4 py-2.5 text-right">Amount</th><th className="w-10 px-2 py-2.5" />
+              <thead className="sticky top-0"><tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-3 py-2.5 text-left">Date</th><th className="px-3 py-2.5 text-left">Particulars</th>
+                <th className="px-3 py-2.5 text-left">Vch</th>
+                <th className="px-3 py-2.5 text-right">Debit</th><th className="px-3 py-2.5 text-right">Credit</th>
+                <th className="px-3 py-2.5 text-right">Balance</th><th className="w-8 px-2 py-2.5" />
               </tr></thead>
               <tbody className="divide-y divide-slate-100">
+                <tr className="bg-slate-50/40 text-slate-500"><td className="px-3 py-1.5" colSpan={5}>Opening Balance</td><td className="px-3 py-1.5 text-right tabular-nums">0.00 Dr</td><td /></tr>
                 {items.map((r, i) => (
                   <tr key={i} className="hover:bg-slate-50/60">
-                    <td className="px-4 py-2 text-slate-600">{r.date ? new Date(r.date).toLocaleDateString('en-GB') : '—'}</td>
-                    <td className="px-4 py-2"><span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', TXN_TONE[r.type] ?? 'bg-slate-100 text-slate-600')}>{TXN_LABEL[r.type] ?? r.type}</span></td>
-                    <td className="px-4 py-2 font-mono text-xs text-slate-500">{r.ref || '—'}</td>
-                    <td className="px-4 py-2 text-right tabular-nums font-semibold">{inr(r.amount)}</td>
+                    <td className="px-3 py-2 text-slate-600">{dmy(r.date)}</td>
+                    <td className="px-3 py-2"><span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', TXN_TONE[r.type] ?? 'bg-slate-100 text-slate-600')}>{TXN_LABEL[r.type] ?? r.type}</span></td>
+                    <td className="px-3 py-2 font-mono text-xs text-slate-500">{r.ref || '—'}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-700">{r.debit ? inr(r.debit) : ''}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-700">{r.credit ? inr(r.credit) : ''}</td>
+                    <td className="px-3 py-2 text-right tabular-nums font-semibold">{inr(r.balance)} <span className="text-[10px] text-slate-400">{r.balanceType}</span></td>
                     <td className="px-2 py-2 text-center">
                       {r.id && <button onClick={() => onDel(r)} disabled={delEntry.isPending} title="Delete cashbook row" className="rounded p-1 text-red-500 hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" /></button>}
                     </td>
                   </tr>
                 ))}
               </tbody>
+              {t && (
+                <tfoot className="sticky bottom-0">
+                  <tr className="border-t-2 border-slate-300 bg-slate-50 font-semibold">
+                    <td className="px-3 py-2" colSpan={3}>Total</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-800">{inr(t.totalDebit)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-800">{inr(t.totalCredit)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{inr(t.closing)} <span className="text-[10px] text-slate-400">{t.closing > 0.01 ? t.closingType : ''}</span></td>
+                    <td />
+                  </tr>
+                </tfoot>
+              )}
             </table>
           )}
         </div>
