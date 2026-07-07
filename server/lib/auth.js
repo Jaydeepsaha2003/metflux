@@ -26,10 +26,8 @@ export const signAccessToken = ({ userId, companyId, role, permissions, isPlatfo
     { expiresIn: env.JWT_ACCESS_TTL }
   );
 
-export const signRefreshToken = ({ userId, jti, companyId }) =>
-  // `cid` remembers the active company so a refresh (page reload) restores the
-  // same company instead of snapping back to the primary one.
-  jwt.sign({ sub: userId, jti, cid: companyId ?? null }, env.JWT_REFRESH_SECRET, {
+export const signRefreshToken = ({ userId, jti }) =>
+  jwt.sign({ sub: userId, jti }, env.JWT_REFRESH_SECRET, {
     expiresIn: env.JWT_REFRESH_TTL,
   });
 
