@@ -75,8 +75,16 @@ export const api = async <T = unknown>(
 
   if (res.status === 401 && !isAuthPath) {
     const fresh = await tryRefresh();
-    if (fresh) res = await exec(fresh);
-    else useAuthStore.getState().clear();
+    if (fresh) {
+      res = await exec(fresh);
+      // Circuit breaker: a freshly-refreshed token that STILL gets 401'd means
+      // the session is genuinely unusable (not a transient race). Don't keep
+      // refresh-retrying forever — clear the session so the app routes to login
+      // instead of hammering the server in an infinite loop.
+      if (res.status === 401) useAuthStore.getState().clear();
+    } else {
+      useAuthStore.getState().clear();
+    }
   }
 
   if (res.status === 204) return undefined as T;
