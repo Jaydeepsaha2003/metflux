@@ -191,27 +191,33 @@ router.get('/:id', requirePermission('assign_work'), asyncHandler(async (req, re
 router.post('/', requirePermission('assign_work'), asyncHandler(async (req, res) => {
   const data = createSchema.parse(req.body);
 
-  const itemIds = data.items.map((i) => i.poOrderItemId);
-  const placeholders = itemIds.map(() => '?').join(',');
+  // A single item may be split into multiple rows (different workers), so the
+  // same poOrderItemId can appear more than once — dedupe for the lookup.
+  const uniqueIds = [...new Set(data.items.map((i) => i.poOrderItemId))];
+  const placeholders = uniqueIds.map(() => '?').join(',');
   const poItems = await q(
     `SELECT it.*,
             (SELECT COALESCE(SUM(pp.\`pcs\`),0) FROM \`Production\` pp WHERE pp.\`poOrderItemId\` = it.\`id\`) AS produced
        FROM \`PoOrderItem\` it
        INNER JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
        WHERE it.\`id\` IN (${placeholders}) AND po.\`companyId\` = ?`,
-    [...itemIds, req.tenant.companyId]
+    [...uniqueIds, req.tenant.companyId]
   );
-  if (poItems.length !== itemIds.length) {
+  if (poItems.length !== uniqueIds.length) {
     throw new AppError('One or more PO items not found', 404, 'NOT_FOUND');
   }
 
-  for (const inputItem of data.items) {
-    const po = poItems.find((p) => p.id === inputItem.poOrderItemId);
+  // Validate the TOTAL allotted pcs per item (summed across its splits) against
+  // that item's remaining-to-produce.
+  const allottedByItem = new Map();
+  for (const i of data.items) allottedByItem.set(i.poOrderItemId, (allottedByItem.get(i.poOrderItemId) ?? 0) + i.pcs);
+  for (const po of poItems) {
     if (po.status === 'CANCELLED') throw new AppError('PO item is cancelled', 400, 'ITEM_CANCELLED');
     const remaining = Math.max(po.pcs - Number(po.produced ?? 0), 0);
-    if (inputItem.pcs > remaining) {
+    const allotted = allottedByItem.get(po.id) ?? 0;
+    if (allotted > remaining) {
       throw new AppError(
-        `Allotted pcs (${inputItem.pcs}) exceeds remaining (${remaining}) for one of the items.`,
+        `Allotted pcs (${allotted}) exceeds remaining (${remaining}) for one of the items.`,
         400, 'PCS_EXCEEDS'
       );
     }

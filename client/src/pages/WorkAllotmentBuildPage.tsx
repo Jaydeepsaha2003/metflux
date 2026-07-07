@@ -5,7 +5,7 @@
 import { useRef, useState, useEffect, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Download, ClipboardList, Loader2, MessageCircle, Check, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Download, ClipboardList, Loader2, MessageCircle, Check, RotateCcw, Scissors, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { shareViaWhatsApp, type ShareTarget } from '@/lib/share';
 import { readDraft, useFormDraft, fmtDraftTime } from '@/hooks/useFormDraft';
@@ -61,7 +61,11 @@ type CompanyDetail = {
 };
 type LabourOption = { id: string; name: string };
 
+let RID = 0;
+const rid = () => `row-${++RID}`;
+
 type RowState = {
+  rowId: string;      // unique per row — one PO item can have several (split) rows
   poOrderItemId: string;
   customerCode: string;
   orderDate: string;
@@ -205,6 +209,7 @@ export const WorkAllotmentBuildPage = () => {
       // View mode — populate from existing WA items.
       if (!existingWa) return;
       setRows(existingWa.items.map((it) => ({
+        rowId:         rid(),
         poOrderItemId: it.poOrderItemId,
         customerCode:  it.customerCode ?? '',
         orderDate:     it.orderDate ?? '',
@@ -224,8 +229,9 @@ export const WorkAllotmentBuildPage = () => {
     } else {
       // Build mode — pull the selected ids out of the cached pending list.
       if (!pendingList || !effectiveIds.length) return;
-      const wanted = pendingList.items.filter((p) => effectiveIds.includes(p.id));
-      let built: RowState[] = wanted.map((p) => ({
+      const meta = new Map(pendingList.items.map((p) => [p.id, p]));
+      const mkRow = (p: PendingItem, pcs: string, labourId = ''): RowState => ({
+        rowId:         rid(),
         poOrderItemId: p.id,
         customerCode:  p.customerCode,
         orderDate:     p.orderDate,
@@ -236,19 +242,20 @@ export const WorkAllotmentBuildPage = () => {
         turns:         p.turns != null ? String(p.turns) : '',
         voltage:       numStr(p.testVoltage, 2),
         iemax:         numStr(p.testCurrent, 2),
-        pcs:           String(p.remainingPcs),
+        pcs,
         maxPcs:        p.remainingPcs,
         weightPerPc:   p.weightPerPc ?? 0,
-        labourId:      '',
-      }));
-      // Overlay a saved draft, but only onto the exact same selection it came
-      // from — restores the typed pcs / workers / number / signatures.
+        labourId,
+      });
+      let built: RowState[] = effectiveIds
+        .map((id) => meta.get(id))
+        .filter((p): p is PendingItem => !!p)
+        .map((p) => mkRow(p, String(p.remainingPcs)));
+      // Overlay a saved draft (same selection) — restores typed pcs / workers /
+      // number / signatures, INCLUDING any splits (multiple rows per item).
       if (draft && sameIds(draft.data.poItemIds, effectiveIds)) {
-        const edits = new Map(draft.data.rows.map((r) => [r.poOrderItemId, r]));
-        built = built.map((r) => {
-          const e = edits.get(r.poOrderItemId);
-          return e ? { ...r, pcs: e.pcs, labourId: e.labourId } : r;
-        });
+        const dRows = draft.data.rows.filter((dr) => meta.has(dr.poOrderItemId));
+        if (dRows.length) built = dRows.map((dr) => mkRow(meta.get(dr.poOrderItemId)!, dr.pcs, dr.labourId));
         setWaNumber(draft.data.waNumber);
         setRemarks(draft.data.remarks);
         setIssuedBy(draft.data.issuedBy);
@@ -261,8 +268,22 @@ export const WorkAllotmentBuildPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waId, existingWa, pendingList, effectiveIds.join(',')]);
 
-  const updateRow = (id: string, field: keyof RowState, val: string) =>
-    setRows((prev) => prev.map((r) => (r.poOrderItemId === id ? { ...r, [field]: val } : r)));
+  const updateRow = (rowId: string, field: keyof RowState, val: string) =>
+    setRows((prev) => prev.map((r) => (r.rowId === rowId ? { ...r, [field]: val } : r)));
+
+  // Split a PO item into another worker row. New row's default pcs = whatever is
+  // left of that item's remaining after the existing rows.
+  const addSplit = (row: RowState) => setRows((prev) => {
+    const used = prev.filter((r) => r.poOrderItemId === row.poOrderItemId).reduce((s, r) => s + (parseInt(r.pcs) || 0), 0);
+    const leftover = Math.max(row.maxPcs - used, 0);
+    const idx = prev.map((r) => r.poOrderItemId).lastIndexOf(row.poOrderItemId);
+    const copy = [...prev];
+    copy.splice(idx + 1, 0, { ...row, rowId: rid(), pcs: String(leftover), labourId: '' });
+    return copy;
+  });
+  const removeRow = (rowId: string) => setRows((prev) => (prev.length > 1 ? prev.filter((r) => r.rowId !== rowId) : prev));
+  // How many rows this item is split across (for showing the split/remove UI).
+  const itemRowCount = (poOrderItemId: string) => rows.filter((r) => r.poOrderItemId === poOrderItemId).length;
 
   const totalPcs = rows.reduce((s, r) => s + (parseInt(r.pcs) || 0), 0);
 
@@ -289,7 +310,16 @@ export const WorkAllotmentBuildPage = () => {
     for (const r of rows) {
       const p = parseInt(r.pcs);
       if (!Number.isFinite(p) || p <= 0) return `Pcs must be > 0 for ${r.measure || r.grade}.`;
-      if (p > r.maxPcs) return `Pcs (${p}) for ${r.measure || r.grade} exceeds remaining (${r.maxPcs}).`;
+    }
+    // A split item's total (across all its worker rows) can't exceed its remaining.
+    const byItem = new Map<string, { sum: number; max: number; label: string }>();
+    for (const r of rows) {
+      const cur = byItem.get(r.poOrderItemId) ?? { sum: 0, max: r.maxPcs, label: r.measure || r.grade };
+      cur.sum += parseInt(r.pcs) || 0;
+      byItem.set(r.poOrderItemId, cur);
+    }
+    for (const { sum, max, label } of byItem.values()) {
+      if (sum > max) return `Total pcs (${sum}) for ${label} exceeds remaining (${max}).`;
     }
     return null;
   })();
@@ -587,7 +617,7 @@ export const WorkAllotmentBuildPage = () => {
     </thead>
   );
   const renderRow = (r: RowState, idx: number) => (
-    <tr key={r.poOrderItemId} className="h-9 border-b border-slate-200">
+    <tr key={r.rowId} className="h-9 border-b border-slate-200">
       <td className="px-1 border-r border-slate-200 text-center font-medium text-slate-500 text-[12px] align-middle">{idx + 1}</td>
       <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={r.customerCode} align="left" /></td>
       <td className="px-0.5 border-r border-slate-200 align-middle"><Display value={fmtDate(r.orderDate)} /></td>
@@ -701,12 +731,15 @@ export const WorkAllotmentBuildPage = () => {
                   <th className="px-3 py-2 text-right">Pcs <span className="text-[10px] text-slate-400 font-normal">(max)</span></th>
                   <th className="px-3 py-2 text-right">WT (KG.)</th>
                   <th className="px-3 py-2 text-left">Worker</th>
+                  <th className="px-3 py-2 text-center">Split</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {rows.map((r) => (
-                  <tr key={r.poOrderItemId} className="hover:bg-slate-50">
-                    <td className="px-3 py-2 font-medium">{r.customerCode}</td>
+                {rows.map((r) => {
+                  const split = itemRowCount(r.poOrderItemId) > 1;
+                  return (
+                  <tr key={r.rowId} className="hover:bg-slate-50">
+                    <td className="px-3 py-2 font-medium">{r.customerCode}{split && <span className="ml-1.5 rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-medium text-brand-700">split</span>}</td>
                     <td className="px-3 py-2 text-slate-600">{fmtDate(r.orderDate)}</td>
                     <td className="px-3 py-2 text-slate-600">{r.measure}</td>
                     <td className="px-3 py-2 text-slate-600">{r.grade}</td>
@@ -719,7 +752,7 @@ export const WorkAllotmentBuildPage = () => {
                           type="number" min={1} max={r.maxPcs}
                           className="input w-20 text-right tabular-nums"
                           value={r.pcs}
-                          onChange={(e) => updateRow(r.poOrderItemId, 'pcs', e.target.value)}
+                          onChange={(e) => updateRow(r.rowId, 'pcs', e.target.value)}
                         />
                         <span className="text-[10px] text-slate-400">/{r.maxPcs}</span>
                       </div>
@@ -729,7 +762,7 @@ export const WorkAllotmentBuildPage = () => {
                       <select
                         className="input w-44"
                         value={r.labourId}
-                        onChange={(e) => updateRow(r.poOrderItemId, 'labourId', e.target.value)}
+                        onChange={(e) => updateRow(r.rowId, 'labourId', e.target.value)}
                       >
                         <option value="">— select worker —</option>
                         {labours.map((l) => (
@@ -737,8 +770,19 @@ export const WorkAllotmentBuildPage = () => {
                         ))}
                       </select>
                     </td>
+                    <td className="px-3 py-2 text-center">
+                      <div className="inline-flex items-center gap-1">
+                        <button type="button" onClick={() => addSplit(r)} title="Split — assign part of this item to another worker"
+                          className="rounded p-1 text-brand-600 hover:bg-brand-50"><Scissors className="h-4 w-4" /></button>
+                        {split && (
+                          <button type="button" onClick={() => removeRow(r.rowId)} title="Remove this split row"
+                            className="rounded p-1 text-red-500 hover:bg-red-50"><X className="h-4 w-4" /></button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -746,14 +790,21 @@ export const WorkAllotmentBuildPage = () => {
           {/* Mobile — one card per row, structured for easy editing */}
           <div className="md:hidden divide-y divide-slate-100">
             {rows.map((r, idx) => (
-              <div key={r.poOrderItemId} className="px-4 py-3 space-y-2.5">
+              <div key={r.rowId} className="px-4 py-3 space-y-2.5">
                 {/* Header — index + customer */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="text-[10px] uppercase tracking-wide text-slate-400 font-medium">
                       Item {idx + 1} · {fmtDate(r.orderDate)}
+                      {itemRowCount(r.poOrderItemId) > 1 && <span className="ml-1.5 rounded bg-brand-50 px-1.5 py-0.5 text-[9px] font-medium text-brand-700">split</span>}
                     </div>
                     <div className="font-semibold text-sm text-slate-900 truncate">{r.customerCode}</div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button type="button" onClick={() => addSplit(r)} title="Split to another worker" className="rounded p-1 text-brand-600 hover:bg-brand-50"><Scissors className="h-4 w-4" /></button>
+                    {itemRowCount(r.poOrderItemId) > 1 && (
+                      <button type="button" onClick={() => removeRow(r.rowId)} title="Remove this split" className="rounded p-1 text-red-500 hover:bg-red-50"><X className="h-4 w-4" /></button>
+                    )}
                   </div>
                 </div>
 
@@ -784,7 +835,7 @@ export const WorkAllotmentBuildPage = () => {
                       type="number" min={1} max={r.maxPcs} inputMode="numeric"
                       className="input w-full text-right tabular-nums"
                       value={r.pcs}
-                      onChange={(e) => updateRow(r.poOrderItemId, 'pcs', e.target.value)}
+                      onChange={(e) => updateRow(r.rowId, 'pcs', e.target.value)}
                     />
                     <span className="mt-1 block text-right text-[10px] text-slate-400 tabular-nums">
                       WT ≈ {fmtWt(rowWt(r))} kg
@@ -797,7 +848,7 @@ export const WorkAllotmentBuildPage = () => {
                     <select
                       className="input w-full"
                       value={r.labourId}
-                      onChange={(e) => updateRow(r.poOrderItemId, 'labourId', e.target.value)}
+                      onChange={(e) => updateRow(r.rowId, 'labourId', e.target.value)}
                     >
                       <option value="">— select —</option>
                       {labours.map((l) => (
