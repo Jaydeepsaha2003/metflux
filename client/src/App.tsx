@@ -8,7 +8,25 @@ import { RequireAuth } from '@/components/RequireAuth';
 // the initial download is just the app shell (not every screen + html2pdf +
 // xlsx). Massively smaller first load, especially on a hard refresh.
 const page = (loader: () => Promise<Record<string, unknown>>, key: string) =>
-  lazy(async () => ({ default: (await loader())[key] as ComponentType }));
+  lazy(async () => {
+    try {
+      const mod = await loader();
+      // A chunk loaded fine — clear any prior stale-chunk reload guard.
+      try { sessionStorage.removeItem('chunkReload'); } catch { /* ignore */ }
+      return { default: mod[key] as ComponentType };
+    } catch (err) {
+      // A new deploy invalidates old chunk URLs a cached shell still points at.
+      // Reload ONCE (guarded, so a genuinely-missing chunk can't loop) to pick
+      // up the fresh shell + chunk hashes.
+      try {
+        if (!sessionStorage.getItem('chunkReload')) {
+          sessionStorage.setItem('chunkReload', '1');
+          window.location.reload();
+        }
+      } catch { /* ignore */ }
+      throw err;
+    }
+  });
 
 const AuthPage            = page(() => import('@/pages/AuthPage'), 'AuthPage');
 const DashboardPage       = page(() => import('@/pages/DashboardPage'), 'DashboardPage');

@@ -80,6 +80,13 @@ export const hostRouter = ({ adminDir, publicDir }) => {
     }
     if (await tryStatic(adminStatic, adminDir, req, res)) return;
     if (req.method !== 'GET') return next();
+    // Don't SPA-fallback to index.html for asset requests (*.js, *.css, images,
+    // fonts…). A stale cached shell can ask for a chunk a newer deploy removed;
+    // returning HTML there makes the dynamic import fail confusingly. A 404 lets
+    // the client detect the stale chunk and reload cleanly.
+    if (/\.[a-z0-9]+$/i.test(req.path) && !req.path.endsWith('.html')) {
+      return res.status(404).end();
+    }
     res.sendFile(path.join(adminDir, 'index.html'));
   });
 
@@ -114,7 +121,13 @@ function staticOpts() {
     extensions: ['html'],
     setHeaders: (res, filePath) => {
       const isHashed = /[\\/](_next[\\/]static|assets|static)[\\/]/i.test(filePath);
-      if (filePath.endsWith('.html')) {
+      const base = filePath.replace(/\\/g, '/').split('/').pop() || '';
+      // The service worker + its registrar + the web manifest must NEVER be
+      // cached — a stale sw.js keeps a precache manifest that points at asset
+      // files a later deploy has replaced, which leaves the app serving a
+      // broken shell (stuck "Loading…") on reload.
+      const isSwFile = base === 'sw.js' || base === 'registerSW.js' || base.endsWith('.webmanifest');
+      if (filePath.endsWith('.html') || isSwFile) {
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       } else if (isHashed) {
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
