@@ -5,11 +5,12 @@
 import { Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Clock, Loader2, ChevronDown, ChevronRight, CreditCard, ImageDown } from 'lucide-react';
+import { Clock, Loader2, ChevronDown, ChevronRight, CreditCard, ImageDown, Download } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { makeStatementImageBlob, shareOrDownloadImage, type StatementBill } from '@/lib/agingImage';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { downloadXlsx, todayStamp } from '@/lib/excel';
 
 type AgingBill = { id: string; invoiceNumber: string; invoiceDate: string | null; balance: number; ageDays: number; docType: 'INVOICE' | 'DEBIT_NOTE' | null };
 type AgingSupplier = {
@@ -48,6 +49,30 @@ export const CreditorAgingPage = () => {
   const allSuppliers = data?.suppliers ?? [];
   const supOptions = allSuppliers.map((s) => ({ value: s.supplierName, label: s.supplierName }));
   const shownSuppliers = filterKey ? allSuppliers.filter((s) => s.supplierName === filterKey) : allSuppliers;
+
+  // Excel export — the on-screen summary (one row per supplier, honouring the
+  // active filter) plus a per-bill detail sheet and a totals row.
+  const exportExcel = () => {
+    if (!shownSuppliers.length) return;
+    const summary = shownSuppliers.map((s) => ({
+      Supplier: s.supplierName,
+      '0–30': s.b0_30, '31–60': s.b31_60, '61–90': s.b61_90, '90+': s.b90,
+      'Amount Payable': s.total, 'Oldest (days)': s.oldestDays,
+    }));
+    const tot = shownSuppliers.reduce((a, s) => ({
+      b0_30: a.b0_30 + s.b0_30, b31_60: a.b31_60 + s.b31_60, b61_90: a.b61_90 + s.b61_90, b90: a.b90 + s.b90, total: a.total + s.total,
+    }), { b0_30: 0, b31_60: 0, b61_90: 0, b90: 0, total: 0 });
+    summary.push({ Supplier: 'TOTAL', '0–30': tot.b0_30, '31–60': tot.b31_60, '61–90': tot.b61_90, '90+': tot.b90, 'Amount Payable': tot.total, 'Oldest (days)': '' as unknown as number });
+    const detail = shownSuppliers.flatMap((s) => s.invoices.map((i) => ({
+      Supplier: s.supplierName,
+      'Bill #': i.invoiceNumber,
+      Date: fmtDate(i.invoiceDate),
+      Type: i.docType === 'DEBIT_NOTE' ? 'Debit note' : i.docType === null ? 'Net credit / advance' : 'Bill',
+      Balance: i.balance,
+      'Age (days)': i.ageDays,
+    })));
+    downloadXlsx(`amount-payable-${todayStamp()}`, 'Amount Payable', summary, [{ name: 'Bills', rows: detail }]);
+  };
 
   const shareImage = async (s: AgingSupplier) => {
     setImaging(s.supplierName);
@@ -96,6 +121,14 @@ export const CreditorAgingPage = () => {
           <div className="w-full sm:w-72">
             <SearchableSelect value={filterKey} onChange={setFilterKey} options={supOptions} placeholder="Search supplier…" />
           </div>
+          <button
+            onClick={exportExcel}
+            disabled={!shownSuppliers.length}
+            className="btn-ghost border border-slate-300 text-emerald-700 hover:bg-emerald-50 shrink-0 disabled:opacity-50"
+            title="Download Amount Payable as Excel"
+          >
+            <Download className="h-4 w-4" /> <span className="hidden sm:inline">Excel</span>
+          </button>
           <Link to="/accounts/receipts-payments" className="btn-ghost border border-slate-300 text-emerald-700 hover:bg-emerald-50 shrink-0">
             <CreditCard className="h-4 w-4" /> <span className="hidden sm:inline">Receipts &amp; Payments</span>
           </Link>

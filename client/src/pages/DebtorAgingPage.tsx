@@ -5,7 +5,7 @@ import { Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Clock, Loader2, MessageCircle, ChevronDown, ChevronRight, AlertTriangle, Wallet, ImageDown, Mail, X, CheckCircle2,
+  Clock, Loader2, MessageCircle, ChevronDown, ChevronRight, AlertTriangle, Wallet, ImageDown, Mail, X, CheckCircle2, Download,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
@@ -14,6 +14,7 @@ import { makeStatementImageBlob, makeStatementPdfBlob, shareOrDownloadImage, typ
 import { buildStatementXlsxBlob, buildStatementHtml, blobToBase64 } from '@/lib/statement';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useHideCustomerNames } from '@/store/auth';
+import { downloadXlsx, todayStamp } from '@/lib/excel';
 
 type AgingInvoice = { id: string; invoiceNumber: string; invoiceDate: string; dueDate: string | null; balance: number; daysOverdue: number | null };
 type AgingCustomer = {
@@ -147,6 +148,32 @@ export const DebtorAgingPage = () => {
   }));
   const shownCustomers = filterKey ? allCustomers.filter((c) => keyOf(c) === filterKey) : allCustomers;
 
+  // Excel export — the on-screen summary (one row per customer, honouring the
+  // active filter and hide-names setting) plus a per-invoice detail sheet.
+  const exportExcel = () => {
+    if (!shownCustomers.length) return;
+    const nameOf = (c: AgingCustomer) => (hideNames ? (c.customerCode ?? 'Customer') : c.customerName);
+    const summary: Record<string, string | number>[] = shownCustomers.map((c) => ({
+      Customer: nameOf(c), ...(hideNames ? {} : { Code: c.customerCode ?? '' }),
+      'Not Due': c.notDue, '1–30': c.d1_30, '31–60': c.d31_60, '61–90': c.d61_90, '90+': c.d90,
+      'No Terms': c.noTerms, 'Amount Receivable': c.total,
+    }));
+    const tot = shownCustomers.reduce((a, c) => ({
+      notDue: a.notDue + c.notDue, d1_30: a.d1_30 + c.d1_30, d31_60: a.d31_60 + c.d31_60,
+      d61_90: a.d61_90 + c.d61_90, d90: a.d90 + c.d90, noTerms: a.noTerms + c.noTerms, total: a.total + c.total,
+    }), { notDue: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90: 0, noTerms: 0, total: 0 });
+    summary.push({ Customer: 'TOTAL', ...(hideNames ? {} : { Code: '' }), 'Not Due': tot.notDue, '1–30': tot.d1_30, '31–60': tot.d31_60, '61–90': tot.d61_90, '90+': tot.d90, 'No Terms': tot.noTerms, 'Amount Receivable': tot.total });
+    const detail = shownCustomers.flatMap((c) => c.invoices.map((i) => ({
+      Customer: nameOf(c),
+      'Invoice #': i.invoiceNumber,
+      Date: fmtDate(i.invoiceDate),
+      Due: fmtDate(i.dueDate),
+      Balance: i.balance,
+      Overdue: i.daysOverdue == null ? 'No terms' : i.daysOverdue > 0 ? `${i.daysOverdue}d` : 'Not due',
+    })));
+    downloadXlsx(`amount-receivable-${todayStamp()}`, 'Amount Receivable', summary, [{ name: 'Invoices', rows: detail }]);
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -162,6 +189,14 @@ export const DebtorAgingPage = () => {
               placeholder="Search customer…"
             />
           </div>
+          <button
+            onClick={exportExcel}
+            disabled={!shownCustomers.length}
+            className="btn-ghost border border-slate-300 text-emerald-700 hover:bg-emerald-50 shrink-0 disabled:opacity-50"
+            title="Download Amount Receivable as Excel"
+          >
+            <Download className="h-4 w-4" /> <span className="hidden sm:inline">Excel</span>
+          </button>
           <Link to="/sales-invoices/payments" className="btn-ghost border border-slate-300 text-emerald-700 hover:bg-emerald-50 shrink-0">
             <Wallet className="h-4 w-4" /> <span className="hidden sm:inline">Receive Payments</span>
           </Link>

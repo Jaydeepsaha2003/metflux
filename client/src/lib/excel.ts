@@ -2,14 +2,20 @@
 // Each row is an object whose keys become the header row.
 import * as XLSX from 'xlsx';
 
+type SheetRows = Record<string, string | number | null | undefined>[];
+
 export const downloadXlsx = (
   filename: string,
   sheetName: string,
-  rows: Record<string, string | number | null | undefined>[],
+  rows: SheetRows,
+  extraSheets: { name: string; rows: SheetRows }[] = [],
 ) => {
-  const ws = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31)); // Excel sheet name max 31 chars
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), sheetName.slice(0, 31)); // Excel sheet name max 31 chars
+  for (const s of extraSheets) {
+    if (!s.rows.length) continue;
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(s.rows), s.name.slice(0, 31));
+  }
   XLSX.writeFile(wb, filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`);
 };
 
