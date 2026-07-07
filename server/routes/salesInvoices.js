@@ -306,6 +306,39 @@ router.get('/aging', requireAnyPermission('view_debtor_aging', 'manage_invoices'
     for (const r of refRows) if (r.k) refundsByName.set(r.k, round2(Number(r.amt)));
   } catch { /* cashbook table absent on minimal installs */ }
 
+  // Unapplied advances — the ledger counts these but invoice balances can't
+  // (the excess lives on the payment record as amount − allocatedAmount). Fold
+  // them in so Amount Receivable reconciles with the account ledger:
+  //   • supplier advance (money we prepaid them, unapplied payments) → they owe
+  //     us → ADDS to receivable.
+  //   • customer advance (money we hold for them, unapplied receipts) → we owe
+  //     it back → REDUCES receivable (behaves like a credit note).
+  const supAdvByName = new Map(); // nk -> { name, adv }
+  const custAdvByName = new Map(); // nk -> adv
+  try {
+    const advRows = await q(
+      `SELECT \`supplierName\` nm, COALESCE(SUM(\`amount\` - \`allocatedAmount\`), 0) adv
+         FROM \`SupplierPayment\` WHERE \`companyId\` = ? GROUP BY \`supplierName\``,
+      [req.tenant.companyId]
+    );
+    for (const r of advRows) {
+      const nk = normName(r.nm); const v = round2(Number(r.adv));
+      if (nk && v > 0.01) supAdvByName.set(nk, { name: r.nm, adv: round2((supAdvByName.get(nk)?.adv || 0) + v) });
+    }
+  } catch { /* SupplierPayment table absent on minimal installs */ }
+  try {
+    const advRows = await q(
+      `SELECT c.\`name\` nm, COALESCE(SUM(p.\`amount\` - p.\`allocatedAmount\`), 0) adv
+         FROM \`Payment\` p INNER JOIN \`Customer\` c ON c.\`id\` = p.\`customerId\`
+        WHERE p.\`companyId\` = ? GROUP BY c.\`name\``,
+      [req.tenant.companyId]
+    );
+    for (const r of advRows) {
+      const nk = normName(r.nm); const v = round2(Number(r.adv));
+      if (nk && v > 0.01) custAdvByName.set(nk, round2((custAdvByName.get(nk) || 0) + v));
+    }
+  } catch { /* Payment table absent on minimal installs */ }
+
   const now = new Date();
   const todayMid = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   const daysOverdue = (dueIso) => {
@@ -347,6 +380,7 @@ router.get('/aging', requireAnyPermission('view_debtor_aging', 'manage_invoices'
   // oldest pending invoice instead of showing as its own line; only leftover
   // credit (customer in net credit) surfaces as a single "Credit / Advance" row.
   const customers = [];
+  const handled = new Set();
   for (const g of groups.values()) {
     g.bills.sort((a, b) => {
       const ad = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
@@ -355,9 +389,13 @@ router.get('/aging', requireAnyPermission('view_debtor_aging', 'manage_invoices'
       return new Date(a.invoiceDate).getTime() - new Date(b.invoiceDate).getTime();
     });
     // Fold in the contra (their purchase payable) as additional credit so a
-    // party who is both customer & supplier nets to a single position.
-    const contra = Math.max(0, payableByName.get(normName(g.customerName)) || 0);
-    let remaining = round2(g.credit + contra);
+    // party who is both customer & supplier nets to a single position. A
+    // customer advance we're holding (unapplied receipt) is likewise credit.
+    const nk = normName(g.customerName);
+    handled.add(nk);
+    const contra = Math.max(0, payableByName.get(nk) || 0);
+    const custAdv = custAdvByName.get(nk) || 0; // we hold their money → reduces receivable
+    let remaining = round2(g.credit + contra + custAdv);
     for (const bill of g.bills) {
       if (remaining <= 0.01) break;
       const applied = Math.min(remaining, bill.balance);
@@ -394,11 +432,30 @@ router.get('/aging', requireAnyPermission('view_debtor_aging', 'manage_invoices'
       c.notDue = round2(c.notDue + refund);
       c.invoices.push({ id: `refund:${g.customerId ?? g.customerName}`, invoiceNumber: 'Paid back / Refund', invoiceDate: null, dueDate: null, balance: round2(refund), daysOverdue: null });
     }
+    // Money we PREPAID this same party as a supplier (unapplied) — they owe us.
+    const supAdv = supAdvByName.get(nk)?.adv || 0;
+    if (supAdv > 0.01) {
+      c.notDue = round2(c.notDue + supAdv);
+      c.invoices.push({ id: `prepaid:${g.customerId ?? g.customerName}`, invoiceNumber: 'Advance paid', invoiceDate: null, dueDate: null, balance: round2(supAdv), daysOverdue: null });
+    }
     c.total = round2(c.notDue + c.d1_30 + c.d31_60 + c.d61_90 + c.d90 + c.noTerms);
     // Drop anyone who nets to zero-or-below: fully squared off by credits, or a
     // net-payable party (advance / contra) who belongs on the Creditor report.
     if (c.total <= 0.01) continue;
     customers.push(c);
+  }
+
+  // Parties we prepaid as a supplier (unapplied) but who have no open sales
+  // bills — still net debtors (they owe us the advance), so surface them here.
+  for (const [nk, { name, adv }] of supAdvByName) {
+    if (handled.has(nk) || adv <= 0.01) continue;
+    const net = round2(adv - Math.max(0, payableByName.get(nk) || 0) - (custAdvByName.get(nk) || 0));
+    if (net <= 0.01) continue;
+    customers.push({
+      customerId: null, customerName: name, customerCode: null, phone: null, dueDays: null, email: null, contra: 0,
+      notDue: net, d1_30: 0, d31_60: 0, d61_90: 0, d90: 0, noTerms: 0, total: net, maxDaysOverdue: 0,
+      invoices: [{ id: `prepaid:${name}`, invoiceNumber: 'Advance paid', invoiceDate: null, dueDate: null, balance: net, daysOverdue: null }],
+    });
   }
 
   customers.sort((a, b) => b.total - a.total);

@@ -192,6 +192,40 @@ router.get('/aging', requireAnyPermission('view_creditor_aging', 'manage_invoice
     receivableByName.set(nk, round2((receivableByName.get(nk) || 0) + bal));
   }
 
+  // Unapplied advances — the ledger counts these but invoice balances can't
+  // (an over-receipt never drives a bill below zero; the excess lives on the
+  // Payment record as amount − allocatedAmount). Fold them in so Amount Payable
+  // reconciles with the account ledger:
+  //   • customer advance (money we hold for them, unapplied receipts) → we owe
+  //     it back → ADDS to payable.
+  //   • supplier advance (money we prepaid them, unapplied payments) → they owe
+  //     us → REDUCES payable (behaves like a credit note).
+  const custAdvByName = new Map(); // nk -> { name, adv }
+  const supAdvByName = new Map();  // nk -> adv
+  try {
+    const advRows = await q(
+      `SELECT c.\`name\` nm, COALESCE(SUM(p.\`amount\` - p.\`allocatedAmount\`), 0) adv
+         FROM \`Payment\` p INNER JOIN \`Customer\` c ON c.\`id\` = p.\`customerId\`
+        WHERE p.\`companyId\` = ? GROUP BY c.\`name\``,
+      [req.tenant.companyId]
+    );
+    for (const r of advRows) {
+      const nk = normName(r.nm); const v = round2(Number(r.adv));
+      if (nk && v > 0.01) custAdvByName.set(nk, { name: r.nm, adv: round2((custAdvByName.get(nk)?.adv || 0) + v) });
+    }
+  } catch { /* Payment table absent on minimal installs */ }
+  try {
+    const advRows = await q(
+      `SELECT \`supplierName\` nm, COALESCE(SUM(\`amount\` - \`allocatedAmount\`), 0) adv
+         FROM \`SupplierPayment\` WHERE \`companyId\` = ? GROUP BY \`supplierName\``,
+      [req.tenant.companyId]
+    );
+    for (const r of advRows) {
+      const nk = normName(r.nm); const v = round2(Number(r.adv));
+      if (nk && v > 0.01) supAdvByName.set(nk, round2((supAdvByName.get(nk) || 0) + v));
+    }
+  } catch { /* SupplierPayment table absent on minimal installs */ }
+
   // Supplier credit terms (dueDays) per normalized name — drives due-based
   // aging. Read live from the Supplier record so changing terms re-syncs the
   // buckets immediately (no stored due date on the bill).
@@ -234,10 +268,15 @@ router.get('/aging', requireAnyPermission('view_creditor_aging', 'manage_invoice
   // Pass 2 — knock each supplier's credit (debit notes + contra receivable) off
   // their OLDEST open bills FIFO, then bucket the remaining balances.
   const suppliers = [];
+  const handled = new Set();
   for (const g of groups.values()) {
+    const nk = normName(g.supplierName);
+    handled.add(nk);
     g.bills.sort((a, b) => new Date(a.invoiceDate) - new Date(b.invoiceDate));
-    const contra = Math.max(0, receivableByName.get(normName(g.supplierName)) || 0);
-    let remaining = round2(g.credit + contra);
+    const contra = Math.max(0, receivableByName.get(nk) || 0);
+    const supAdv = supAdvByName.get(nk) || 0;   // we prepaid them → reduces payable
+    const custAdv = custAdvByName.get(nk)?.adv || 0; // we hold their money → adds to payable
+    let remaining = round2(g.credit + contra + supAdv);
     for (const bill of g.bills) {
       if (remaining <= 0.01) break;
       const applied = Math.min(remaining, bill.balance);
@@ -260,11 +299,28 @@ router.get('/aging', requireAnyPermission('view_creditor_aging', 'manage_invoice
       s.b0_30 = round2(s.b0_30 - remaining);
       s.invoices.push({ id: `credit:${g.supplierName}`, invoiceNumber: 'Credit / Advance', invoiceDate: null, balance: round2(-remaining), ageDays: 0, docType: null });
     }
+    if (custAdv > 0.01) {
+      // Customer advance we're holding for this same party — we owe it back.
+      s.b0_30 = round2(s.b0_30 + custAdv);
+      s.invoices.push({ id: `advance:${g.supplierName}`, invoiceNumber: 'Advance received', invoiceDate: null, balance: round2(custAdv), ageDays: 0, docType: null });
+    }
     s.total = round2(s.b0_30 + s.b31_60 + s.b61_90 + s.b90);
     // Drop anyone who nets to zero-or-below: fully netted, or a net-receivable
     // party (their sales outweigh our purchases) who belongs on the Debtor report.
     if (s.total <= 0.01) continue;
     suppliers.push(s);
+  }
+
+  // Parties we hold a customer advance for but who have no open purchase bills —
+  // still net creditors (we owe them the advance), so surface them here too.
+  for (const [nk, { name, adv }] of custAdvByName) {
+    if (handled.has(nk) || adv <= 0.01) continue;
+    const net = round2(adv - Math.max(0, receivableByName.get(nk) || 0) - (supAdvByName.get(nk) || 0));
+    if (net <= 0.01) continue;
+    suppliers.push({
+      supplierName: name, contra: 0, b0_30: net, b31_60: 0, b61_90: 0, b90: 0, total: net, oldestDays: 0,
+      invoices: [{ id: `advance:${name}`, invoiceNumber: 'Advance received', invoiceDate: null, balance: net, ageDays: 0, docType: null }],
+    });
   }
   suppliers.sort((a, b) => b.total - a.total);
   const totals = suppliers.reduce((t, g) => ({
