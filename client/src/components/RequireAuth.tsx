@@ -16,9 +16,13 @@ export const RequireAuth = ({ children }: { children: React.ReactNode }) => {
       try {
         const data = await api<LoginPayload>('/auth/refresh', { method: 'POST' });
         if (!cancelled && data?.user && data.accessToken) {
+          // Store the fresh token FIRST so the domain-company switch below is
+          // authenticated on its first try (otherwise switch-company 401s and
+          // forces a second refresh round-trip — a slow, noisy page load).
+          setSession(data);
           // Honour this domain's preferred company so it stays selected on refresh.
           const applied = await applyDomainCompany(data);
-          if (!cancelled) setSession(applied);
+          if (!cancelled && applied !== data) setSession(applied);
         }
       } catch {
         if (!cancelled) clear();
