@@ -291,6 +291,21 @@ router.get('/aging', requireAnyPermission('view_debtor_aging', 'manage_invoices'
     payableByName.set(nk, round2((payableByName.get(nk) || 0) + bal));
   }
 
+  // Refunds / money paid back to a customer — UNPOSTED cashbook payments (not
+  // allocated to any supplier bill, so no double-count for combined parties)
+  // raise that customer's receivable.
+  const refundsByName = new Map();
+  try {
+    const refRows = await q(
+      `SELECT \`normKey\` AS k, COALESCE(SUM(\`amount\`), 0) AS amt
+         FROM \`CashbookEntry\`
+        WHERE \`companyId\` = ? AND \`side\` = 'PAYMENT' AND \`postedAt\` IS NULL
+        GROUP BY \`normKey\``,
+      [req.tenant.companyId]
+    );
+    for (const r of refRows) if (r.k) refundsByName.set(r.k, round2(Number(r.amt)));
+  } catch { /* cashbook table absent on minimal installs */ }
+
   const now = new Date();
   const todayMid = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   const daysOverdue = (dueIso) => {
@@ -372,6 +387,12 @@ router.get('/aging', requireAnyPermission('view_debtor_aging', 'manage_invoices'
       // Customer is in net credit — show the unadjusted balance as one line.
       c.notDue = round2(c.notDue - remaining);
       c.invoices.push({ id: `credit:${g.customerId ?? g.customerName}`, invoiceNumber: 'Credit / Advance', invoiceDate: null, dueDate: null, balance: round2(-remaining), daysOverdue: null });
+    }
+    // Money paid BACK to the customer (refunds / returns) raises what they owe.
+    const refund = refundsByName.get(normName(g.customerName)) || 0;
+    if (refund > 0.01) {
+      c.notDue = round2(c.notDue + refund);
+      c.invoices.push({ id: `refund:${g.customerId ?? g.customerName}`, invoiceNumber: 'Paid back / Refund', invoiceDate: null, dueDate: null, balance: round2(refund), daysOverdue: null });
     }
     c.total = round2(c.notDue + c.d1_30 + c.d31_60 + c.d61_90 + c.d90 + c.noTerms);
     // Drop anyone who nets to zero-or-below: fully squared off by credits, or a
