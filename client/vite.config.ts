@@ -23,10 +23,12 @@ export default defineConfig({
         // bundled static PNGs are guaranteed-valid fallbacks so the installed /
         // home-screen icon is never blank (Android needs real PNGs).
         icons: [
-          { src: '/api/public/app-logo', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          // Brand mark (square, padded) is authoritative for the installed icon;
+          // the runtime app-logo stays as a lower-priority option for rebranding.
           { src: '/s/admin/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
           { src: '/s/admin/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
           { src: '/s/admin/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: '/api/public/app-logo', sizes: '512x512', type: 'image/png', purpose: 'any' },
           { src: '/s/admin/icons/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
         ],
         prefer_related_applications: false,
