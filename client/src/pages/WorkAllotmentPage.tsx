@@ -87,13 +87,20 @@ export const WorkAllotmentPage = () => {
   const toggleRow = (id: string) =>
     setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
+  // Toggle only the CURRENTLY SHOWN rows, keeping any selections that are
+  // filtered out — so searching + selecting across searches accumulates.
   const toggleAll = () => {
     const ids = pending?.items.map((d) => d.id) ?? [];
-    setSelected(selected.size === ids.length && ids.length > 0 ? new Set() : new Set(ids));
+    setSelected((prev) => {
+      const allShown = ids.length > 0 && ids.every((id) => prev.has(id));
+      const next = new Set(prev);
+      ids.forEach((id) => (allShown ? next.delete(id) : next.add(id)));
+      return next;
+    });
   };
 
   const pendingIds = pending?.items.map((d) => d.id) ?? [];
-  const allChecked = pendingIds.length > 0 && selected.size === pendingIds.length;
+  const allChecked = pendingIds.length > 0 && pendingIds.every((id) => selected.has(id));
   const someChecked = selected.size > 0;
 
   return (
@@ -108,7 +115,7 @@ export const WorkAllotmentPage = () => {
             className="input pl-9"
             placeholder="Search customer, PO no., measure, grade, worker…"
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setSelected(new Set()); }}
+            onChange={(e) => setSearch(e.target.value)}
           />
         </div>
       </div>
