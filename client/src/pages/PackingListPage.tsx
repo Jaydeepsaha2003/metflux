@@ -30,6 +30,7 @@ type DispatchDetail = {
   totalWeight: number;            // calculated (pcs × weightPerPc)
   actualWeight: number | null;    // weighbridge reading; falls back to totalWeight when null
   vehicleNo: string | null;
+  ratePerPc: number | null;       // SO rate per piece (from the order item)
 };
 type PlDetail = {
   id: string; plNumber: string; plDate: string;
@@ -48,7 +49,7 @@ type RowState = {
   coreType: CoreType;
   grade: string;
   poNo: string; poDate: string; description: string;
-  qty: string; weight: string; remarks: string;
+  qty: string; rate: string; weight: string; remarks: string;
 };
 
 const fmtDate = (iso: string | null | undefined) => {
@@ -210,6 +211,7 @@ export const PackingListPage = () => {
         poDate: d.orderDate ? fmtDate(d.orderDate) : '',
         description: `${CORE_PREFIX[d.coreType] ?? 'RC'}-${d.measure ?? ''} / ${d.grade ?? ''}`,
         qty: String(d.pcs),
+        rate: d.ratePerPc != null ? d.ratePerPc.toFixed(2) : '',
         weight: displayWeight != null ? displayWeight.toFixed(3) : '',
         remarks: '',
       };
@@ -258,6 +260,10 @@ export const PackingListPage = () => {
   const stateLabel = uniqueStates.join(', ') || '—';
   const grandTotalPcs = rows.reduce((s, r) => s + (parseInt(r.qty) || 0), 0);
   const grandTotalWeight = rows.reduce((s, r) => s + (parseFloat(r.weight) || 0), 0);
+  // Amount = per-pc rate × pcs, summed. Only meaningful when rates are present.
+  const grandTotalAmount = rows.reduce((s, r) => s + (parseFloat(r.rate) || 0) * (parseInt(r.qty) || 0), 0);
+  const hasRates = rows.some((r) => (parseFloat(r.rate) || 0) > 0);
+  const inrAmt = (n: number) => '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   // Auto-save an in-progress draft (build mode only) so a refresh or accidental
   // navigation never loses the invoice details, tested/approved-by, or remarks.
@@ -401,7 +407,7 @@ export const PackingListPage = () => {
         customerLabel ? `Customer: ${customerLabel}` : null,
         invoiceNo ? `Invoice: ${invoiceNo}` : null,
         `Date: ${woDate ? fmtDate(woDate) : ''}`,
-        `Total: ${grandTotalPcs} pcs · ${grandTotalWeight.toFixed(3)} kg`,
+        `Total: ${grandTotalPcs} pcs · ${grandTotalWeight.toFixed(3)} kg${hasRates ? ` · ${inrAmt(grandTotalAmount)}` : ''}`,
       ].filter(Boolean).join('\n');
       await shareViaWhatsApp({
         message,
@@ -615,9 +621,10 @@ export const PackingListPage = () => {
                     <col style={{ width: '14%' }} />    {/* PO NO  — 14% of 820px ≈ 115px */}
                     <col style={{ width: '12%' }} />    {/* PO DATE — 12% of 820px ≈ 98px, fits dd/mm/yyyy */}
                     <col />                              {/* ITEM DESCRIPTION — auto */}
-                    <col style={{ width: '8%' }} />     {/* QTY */}
-                    <col style={{ width: '13%' }} />    {/* TOTAL WEIGHT */}
-                    <col style={{ width: '13%' }} />    {/* REMARKS */}
+                    <col style={{ width: '7%' }} />     {/* QTY */}
+                    <col style={{ width: '10%' }} />    {/* RATE */}
+                    <col style={{ width: '12%' }} />    {/* TOTAL WEIGHT */}
+                    <col style={{ width: '12%' }} />    {/* REMARKS */}
                   </colgroup>
                   <thead>
                     <tr className="bg-slate-100 border-b-2 border-slate-400 text-center font-bold uppercase tracking-wide text-[10px]">
@@ -626,6 +633,7 @@ export const PackingListPage = () => {
                       <th className="px-1 py-1.5 border-r border-slate-300 align-middle">PO DATE</th>
                       <th className="px-1 py-1.5 border-r border-slate-300 text-left align-middle">ITEM DESCRIPTION</th>
                       <th className="px-1 py-1.5 border-r border-slate-300 align-middle">QTY (PCS)</th>
+                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">RATE (₹/PC)</th>
                       <th className="px-1 py-1.5 border-r border-slate-300 align-middle">TOTAL WT (KG)</th>
                       <th className="px-1 py-1.5 align-middle">REMARKS</th>
                     </tr>
@@ -639,7 +647,7 @@ export const PackingListPage = () => {
                           {/* Grade sub-header */}
                           {multiGrade && (
                             <tr className="bg-slate-50 border-y border-slate-300">
-                              <td colSpan={7} className="px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 align-middle">
+                              <td colSpan={8} className="px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 align-middle">
                                 Grade: {grade}
                               </td>
                             </tr>
@@ -664,6 +672,9 @@ export const PackingListPage = () => {
                                 <Display value={row.qty} />
                               </td>
                               <td className="px-0.5 border-r border-slate-200 align-middle">
+                                <Display value={row.rate} />
+                              </td>
+                              <td className="px-0.5 border-r border-slate-200 align-middle">
                                 <Display value={row.weight} />
                               </td>
                               <td className="px-0.5 align-middle">
@@ -681,6 +692,7 @@ export const PackingListPage = () => {
                               <td className="px-1 border-r border-slate-300 text-center text-[11px] font-bold text-slate-700 align-middle">
                                 {gradePcs}
                               </td>
+                              <td className="px-1 border-r border-slate-300 align-middle" />
                               <td className="px-1 border-r border-slate-300 text-center text-[11px] font-bold font-mono text-slate-700 align-middle">
                                 {gradeWeight.toFixed(3)}
                               </td>
@@ -699,6 +711,7 @@ export const PackingListPage = () => {
                       <td className="px-1 border-r border-slate-400 text-center text-xs font-black text-slate-800 align-middle">
                         {cgPcs}
                       </td>
+                      <td className="px-1 border-r border-slate-400 align-middle" />
                       <td className="px-1 border-r border-slate-400 text-center text-xs font-black font-mono text-slate-800 align-middle">
                         {cgWeight.toFixed(3)}
                       </td>
@@ -715,6 +728,7 @@ export const PackingListPage = () => {
             <span className="uppercase tracking-widest text-slate-300 text-sm self-center">Grand Total</span>
             <span className="text-[22px]">{grandTotalPcs} <span className="text-sm font-medium text-slate-300">pcs</span></span>
             <span className="text-[22px]">{grandTotalWeight.toFixed(3)} <span className="text-sm font-medium text-slate-300">kg</span></span>
+            {hasRates && <span className="text-[22px]">{inrAmt(grandTotalAmount)} <span className="text-sm font-medium text-slate-300">amount</span></span>}
           </div>
 
           {/* Signature footer */}

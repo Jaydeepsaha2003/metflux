@@ -82,6 +82,7 @@ const flattenDispatch = (d) => ({
   flux:          d.item_flux        ?? null,
   testVoltage:   d.item_testVoltage ?? null,
   testCurrent:   d.item_testCurrent ?? null,
+  ratePerPc:     d.item_ratePerPc   ?? null,
 });
 
 // Load all dispatches that belong to the given packing-list ids, with
@@ -102,6 +103,7 @@ const loadDispatchesForPls = async (plIds) => {
             it.\`ht\` AS item_ht, it.\`pcs\` AS item_pcs,
             it.\`turns\` AS item_turns, it.\`flux\` AS item_flux,
             it.\`testVoltage\` AS item_testVoltage, it.\`testCurrent\` AS item_testCurrent,
+            it.\`ratePerPc\` AS item_ratePerPc,
             po.\`poNumber\` AS po_number, po.\`orderDate\` AS po_orderDate,
             c.\`name\` AS customer_name, c.\`customerCode\` AS customer_code,
             c.\`state\` AS customer_state, c.\`phone\` AS customer_phone
