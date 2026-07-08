@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeftRight, Loader2, Upload, CheckCircle2, ArrowDownToLine, ArrowUpFromLine,
   UserPlus, Truck, Tag, BarChart3, Search, ChevronLeft, ChevronRight, ListChecks, Download, Trash2,
+  NotebookPen, Plus,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { readXlsxMatrix, downloadXlsx, todayStamp } from '@/lib/excel';
@@ -269,9 +270,126 @@ export const ReceiptsPaymentsPage = () => {
         </>
       )}
 
+      {/* Manual journal vouchers — adjust any account's ledger + aging */}
+      <JournalVoucherSection />
+
       {/* All stored cashbook entries — filterable */}
       <EntriesSection />
 
+      {confirmDialog}
+    </div>
+  );
+};
+
+/* ── Journal vouchers — manual single-legged ledger adjustments ── */
+type Jv = { id: string; voucherNo: string; entryDate: string | null; account: string; side: 'DEBIT' | 'CREDIT'; amount: number; narration: string | null };
+
+const JournalVoucherSection = () => {
+  const qc = useQueryClient();
+  const { confirm, confirmDialog } = useConfirm();
+  const [account, setAccount] = useState('');
+  const [side, setSide] = useState<'DEBIT' | 'CREDIT'>('DEBIT');
+  const [amount, setAmount] = useState('');
+  const [date, setDate] = useState(todayISO());
+  const [narration, setNarration] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+
+  const { data: accts } = useQuery({ queryKey: ['cashbook-accounts'], queryFn: () => api<{ items: { name: string; type: string }[] }>('/cashbook/accounts') });
+  const { data, isLoading } = useQuery({ queryKey: ['journal-vouchers'], queryFn: () => api<{ items: Jv[] }>('/cashbook/journal') });
+
+  // A voucher shifts a party's ledger + receivable/payable, so refresh those.
+  const invalidate = () => ['journal-vouchers', 'debtor-aging', 'creditor-aging', 'cashbook-ledger'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+
+  const create = useMutation({
+    mutationFn: () => api('/cashbook/journal', { method: 'POST', body: JSON.stringify({ account: account.trim(), side, amount: round2(Number(amount)), entryDate: date, narration: narration.trim() || null }) }),
+    onSuccess: () => { setAccount(''); setAmount(''); setNarration(''); setErr(null); invalidate(); },
+    onError: (e) => setErr(e instanceof Error ? e.message : 'Could not save the voucher'),
+  });
+  const del = useMutation({
+    mutationFn: (id: string) => api(`/cashbook/journal/${id}`, { method: 'DELETE' }),
+    onSuccess: invalidate,
+  });
+
+  const canSave = !!account.trim() && Number(amount) > 0;
+  const submit = () => { if (!canSave) { setErr('Enter an account and a positive amount.'); return; } create.mutate(); };
+  const onDelete = async (v: Jv) => {
+    const ok = await confirm({
+      title: 'Delete this voucher?',
+      message: <>Delete <b>{v.voucherNo}</b> ({v.side === 'DEBIT' ? 'Dr' : 'Cr'} {inr(v.amount)} · {v.account})? This reverses its effect on the ledger &amp; aging.</>,
+      tone: 'danger', confirmLabel: 'Delete',
+    });
+    if (ok) del.mutate(v.id);
+  };
+
+  const items = data?.items ?? [];
+
+  return (
+    <div className="card overflow-hidden">
+      <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700">
+        <NotebookPen className="h-4 w-4" /> Journal Voucher <span className="font-normal text-slate-400">({items.length})</span>
+      </div>
+      <div className="px-4 py-2 text-xs text-slate-500">
+        Post a manual adjustment against any account. <b>Debit</b> increases what the party owes you; <b>Credit</b> increases what you owe them. It flows into the account ledger and Amount Receivable / Payable — not the cash summary.
+      </div>
+      {err && <div className="mx-4 mb-2 rounded border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700">{err}</div>}
+
+      <div className="grid grid-cols-2 gap-2 border-b border-slate-100 p-3 sm:grid-cols-7 sm:items-end">
+        <label className="block"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Date</span>
+          <input type="date" className="input h-9" value={date} onChange={(e) => setDate(e.target.value)} /></label>
+        <label className="col-span-2 block sm:col-span-2"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Account</span>
+          <input className="input h-9" list="jv-accounts" placeholder="Type or pick any account…" value={account} onChange={(e) => setAccount(e.target.value)} />
+          <datalist id="jv-accounts">{(accts?.items ?? []).map((a) => <option key={a.name} value={a.name} />)}</datalist></label>
+        <label className="block"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Side</span>
+          <select className="input h-9" value={side} onChange={(e) => setSide(e.target.value as 'DEBIT' | 'CREDIT')}>
+            <option value="DEBIT">Debit (Dr)</option><option value="CREDIT">Credit (Cr)</option>
+          </select></label>
+        <label className="block"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Amount</span>
+          <input type="number" min="0" step="0.01" className="input h-9 text-right tabular-nums" placeholder="0.00" value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && canSave && !create.isPending) { e.preventDefault(); submit(); } }} /></label>
+        <button onClick={submit} disabled={create.isPending || !canSave} className="btn-primary h-9 text-sm disabled:opacity-50">
+          {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add
+        </button>
+        <label className="col-span-2 block sm:col-span-7"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Narration (optional)</span>
+          <input className="input h-9" placeholder="e.g. Rate difference / rounding off / opening balance" value={narration} onChange={(e) => setNarration(e.target.value)} /></label>
+      </div>
+
+      {isLoading ? (
+        <div className="py-8 text-center text-slate-400"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></div>
+      ) : !items.length ? (
+        <div className="py-8 text-center text-sm text-slate-400">No journal vouchers yet.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm whitespace-nowrap">
+            <thead><tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <th className="px-3 py-2.5 text-left">Voucher</th>
+              <th className="px-3 py-2.5 text-left">Date</th>
+              <th className="px-3 py-2.5 text-left">Account</th>
+              <th className="px-3 py-2.5 text-right">Debit</th>
+              <th className="px-3 py-2.5 text-right">Credit</th>
+              <th className="px-3 py-2.5 text-left">Narration</th>
+              <th className="w-9 px-2 py-2.5" />
+            </tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {items.map((v) => (
+                <tr key={v.id} className="hover:bg-slate-50/60">
+                  <td className="px-3 py-2 font-mono text-xs font-semibold text-brand-700">{v.voucherNo}</td>
+                  <td className="px-3 py-2 text-slate-600">{fmtD(v.entryDate)}</td>
+                  <td className="px-3 py-2 font-medium">{v.account}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-slate-700">{v.side === 'DEBIT' ? inr(v.amount) : ''}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-slate-700">{v.side === 'CREDIT' ? inr(v.amount) : ''}</td>
+                  <td className="px-3 py-2 text-slate-500">{v.narration || '—'}</td>
+                  <td className="px-2 py-2 text-center">
+                    <button onClick={() => onDelete(v)} disabled={del.isPending} className="rounded p-1 text-red-500 hover:bg-red-50" title="Delete voucher">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       {confirmDialog}
     </div>
   );

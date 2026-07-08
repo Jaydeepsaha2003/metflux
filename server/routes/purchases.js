@@ -184,6 +184,7 @@ router.get('/aging', requireAnyPermission('view_creditor_aging', 'manage_invoice
   const piSumByName = new Map(); // nk -> Σ PurchaseInvoice.amount (signed)
   const rcptByName = new Map();  // nk -> Σ cash-book receipts
   const payByName = new Map();   // nk -> Σ cash-book payments
+  const jvByName = new Map();    // nk -> Σ journal (Debit − Credit), a receivable delta
   const nameByNk = new Map();    // nk -> display name
   const addName = (nk, nm) => { if (nk && nm && !nameByNk.has(nk)) nameByNk.set(nk, nm); };
   {
@@ -195,10 +196,16 @@ router.get('/aging', requireAnyPermission('view_creditor_aging', 'manage_invoice
       const cbRows = await q("SELECT `normKey` k, `side`, COALESCE(SUM(`amount`),0) s FROM `CashbookEntry` WHERE `companyId` = ? GROUP BY `normKey`, `side`", [req.tenant.companyId]);
       for (const r of cbRows) { const nk = r.k; if (!nk) continue; if (r.side === 'RECEIPT') rcptByName.set(nk, round2((rcptByName.get(nk) || 0) + Number(r.s))); else payByName.set(nk, round2((payByName.get(nk) || 0) + Number(r.s))); }
     } catch { /* cashbook table absent on minimal installs */ }
+    try {
+      const jvRows = await q("SELECT `normKey` k, `account` nm, `side`, COALESCE(SUM(`amount`),0) s FROM `JournalVoucher` WHERE `companyId` = ? GROUP BY `normKey`, `account`, `side`", [req.tenant.companyId]);
+      for (const r of jvRows) { const nk = r.k; if (!nk) continue; addName(nk, r.nm); const d = r.side === 'DEBIT' ? Number(r.s) : -Number(r.s); jvByName.set(nk, round2((jvByName.get(nk) || 0) + d)); }
+    } catch { /* JournalVoucher table absent on minimal installs */ }
   }
-  const lRecvOf = (nk) => round2((siSumByName.get(nk) || 0) - (rcptByName.get(nk) || 0));
+  // Journal Debit increases what they owe us (like a sale), Credit reduces it —
+  // so it folds into the receivable side of the net, same as the ledger.
+  const lRecvOf = (nk) => round2((siSumByName.get(nk) || 0) - (rcptByName.get(nk) || 0) + (jvByName.get(nk) || 0));
   const netPayableByName = new Map(); // nk -> we owe them (positive), ledger basis
-  for (const nk of new Set([...siSumByName.keys(), ...piSumByName.keys(), ...rcptByName.keys(), ...payByName.keys()])) {
+  for (const nk of new Set([...siSumByName.keys(), ...piSumByName.keys(), ...rcptByName.keys(), ...payByName.keys(), ...jvByName.keys()])) {
     const lPay = round2((piSumByName.get(nk) || 0) - (payByName.get(nk) || 0));
     netPayableByName.set(nk, round2(lPay - lRecvOf(nk)));
   }

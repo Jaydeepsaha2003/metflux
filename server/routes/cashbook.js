@@ -108,6 +108,83 @@ router.delete('/account-heads/:id', requireAnyPermission(...PERM), asyncHandler(
   res.status(204).end();
 }));
 
+/* ---------- Selectable accounts (for the journal-voucher picker) ---------- */
+// Every named account the user might post a journal against: customers,
+// suppliers, defined OTHER heads, plus any party already seen in the cashbook.
+router.get('/accounts', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
+  const companyId = req.tenant.companyId;
+  const [customers, suppliers, heads, cbNames] = await Promise.all([
+    q('SELECT `name` FROM `Customer` WHERE `companyId` = ?', [companyId]),
+    q(`SELECT s.\`name\` FROM \`Supplier\` s
+         INNER JOIN \`SupplierMembership\` sm ON sm.\`supplierId\` = s.\`id\`
+        WHERE sm.\`companyId\` = ?`, [companyId]),
+    q("SELECT `name` FROM `AccountHead` WHERE `companyId` = ? AND `type` = 'OTHER'", [companyId]),
+    q('SELECT DISTINCT `account` FROM `CashbookEntry` WHERE `companyId` = ?', [companyId]).catch(() => []),
+  ]);
+  const seen = new Set();
+  const items = [];
+  const add = (name, type) => {
+    const k = normName(name);
+    if (!k || seen.has(k)) return;
+    seen.add(k); items.push({ name, type });
+  };
+  customers.forEach((c) => add(c.name, 'CUSTOMER'));
+  suppliers.forEach((s) => add(s.name, 'SUPPLIER'));
+  heads.forEach((h) => add(h.name, 'OTHER'));
+  cbNames.forEach((r) => add(r.account, 'OTHER'));
+  items.sort((a, b) => a.name.localeCompare(b.name));
+  res.json({ items });
+}));
+
+/* ---------- Journal vouchers — manual single-legged ledger adjustments ----------
+   A voucher posts a Debit or Credit against ONE account. It flows into the party
+   ledger and the Amount Receivable / Payable aging (Debit = they owe us more,
+   Credit = we owe them more) but NOT into the Cashbook Summary (no cash moved). */
+const nextJvNumber = async (companyId, db = { q }) => {
+  const rows = await db.q('SELECT `voucherNo` FROM `JournalVoucher` WHERE `companyId` = ?', [companyId]);
+  let max = 0;
+  for (const r of rows) { const m = /(\d+)\s*$/.exec(r.voucherNo || ''); if (m) max = Math.max(max, parseInt(m[1], 10)); }
+  return `JV/${String(max + 1).padStart(4, '0')}`;
+};
+
+router.get('/journal', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
+  const rows = await q(
+    'SELECT `id`, `voucherNo`, `entryDate`, `account`, `side`, `amount`, `narration`, `createdAt` FROM `JournalVoucher` WHERE `companyId` = ? ORDER BY `entryDate` DESC, `createdAt` DESC LIMIT 500',
+    [req.tenant.companyId]
+  );
+  res.json({ items: rows });
+}));
+
+router.post('/journal', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
+  const { account, side, amount, entryDate, narration } = z.object({
+    account: z.string().trim().min(1).max(200),
+    side: z.enum(['DEBIT', 'CREDIT']),
+    amount: z.coerce.number().positive().max(1e12),
+    entryDate: z.coerce.date().optional(),
+    narration: z.string().trim().max(400).optional().nullable(),
+  }).parse(req.body);
+  const companyId = req.tenant.companyId;
+  const normKey = normName(account);
+  if (!normKey) throw new AppError('Invalid account name', 400, 'BAD_NAME');
+
+  const row = await txn(async (tx) => {
+    const voucherNo = await nextJvNumber(companyId, tx);
+    return tx.insert('JournalVoucher', {
+      companyId, voucherNo, entryDate: entryDate ?? new Date(),
+      account, normKey, side, amount: round2(amount),
+      narration: narration || null, createdById: req.auth.userId,
+    });
+  });
+  res.status(201).json({ id: row.id });
+}));
+
+router.delete('/journal/:id', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
+  const row = await qOne('SELECT `id` FROM `JournalVoucher` WHERE `id` = ? AND `companyId` = ?', [req.params.id, req.tenant.companyId]);
+  if (!row) throw new AppError('Not found', 404, 'NOT_FOUND');
+  await del('JournalVoucher', row.id);
+  res.status(204).end();
+}));
+
 /* ---------- Store the uploaded cashbook (for the summary) ---------- */
 
 // Replaces any existing entries whose date falls inside the uploaded file's
@@ -407,13 +484,19 @@ router.get('/account-ledger', requireAnyPermission(...PERM), asyncHandler(async 
     const rows = await q('SELECT `id`, `entryDate` dt, `account` party, `side`, `amount` amt, `vch` ref FROM `CashbookEntry` WHERE `companyId` = ?', [companyId]);
     for (const r of rows) if (normName(r.party) === key) { const t = r.side === 'RECEIPT' ? 'RECEIPT' : 'PAYMENT'; const a = Math.abs(Number(r.amt)); items.push({ id: r.id, date: r.dt, type: t, ref: r.ref, amount: a }); if (t === 'RECEIPT') tot.receipt += a; else tot.payment += a; }
   } catch { /* absent */ }
+  tot.journalDebit = 0; tot.journalCredit = 0;
+  try {
+    const rows = await q('SELECT `id`, `entryDate` dt, `account` party, `side`, `amount` amt, `voucherNo` ref, `narration` FROM `JournalVoucher` WHERE `companyId` = ?', [companyId]);
+    for (const r of rows) if (normName(r.party) === key) { const t = r.side === 'DEBIT' ? 'JOURNAL_DR' : 'JOURNAL_CR'; const a = Math.abs(Number(r.amt)); items.push({ id: r.id, date: r.dt, type: t, ref: r.ref, note: r.narration, amount: a }); if (t === 'JOURNAL_DR') tot.journalDebit += a; else tot.journalCredit += a; }
+  } catch { /* JournalVoucher table absent on minimal installs */ }
   items.sort((a, b) => (a.date ? new Date(a.date).getTime() : 0) - (b.date ? new Date(b.date).getTime() : 0));
   const round = (n) => Math.round(n * 100) / 100;
 
   // Tally/Busy-style double-entry: for a party ledger, Debit = increases what
-  // they owe us (Sales, Debit Note, money we Paid them), Credit = reduces it
-  // (Purchase, Credit Note, Receipts from them). Running balance carries Dr/Cr.
-  const DEBIT = new Set(['SALE', 'DEBIT_NOTE', 'PAYMENT']);
+  // they owe us (Sales, Debit Note, money we Paid them, a journal Debit), Credit
+  // = reduces it (Purchase, Credit Note, Receipts, a journal Credit). Running
+  // balance carries Dr/Cr.
+  const DEBIT = new Set(['SALE', 'DEBIT_NOTE', 'PAYMENT', 'JOURNAL_DR']);
   let bal = 0, totalDebit = 0, totalCredit = 0;
   for (const it of items) {
     const isDebit = DEBIT.has(it.type);

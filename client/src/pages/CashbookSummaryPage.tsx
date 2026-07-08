@@ -317,6 +317,8 @@ const TXN_TYPES: { key: string; label: string; tone: string }[] = [
   { key: 'DEBIT_NOTE', label: 'Debit Note', tone: 'bg-amber-50 text-amber-700' },
   { key: 'RECEIPT', label: 'Receipts', tone: 'bg-emerald-50 text-emerald-700' },
   { key: 'PAYMENT', label: 'Payments', tone: 'bg-slate-100 text-slate-600' },
+  { key: 'JOURNAL_DR', label: 'Journal (Dr)', tone: 'bg-violet-50 text-violet-700' },
+  { key: 'JOURNAL_CR', label: 'Journal (Cr)', tone: 'bg-violet-50 text-violet-700' },
 ];
 const TXN_LABEL: Record<string, string> = Object.fromEntries(TXN_TYPES.map((t) => [t.key, t.label]));
 const TXN_TONE: Record<string, string> = Object.fromEntries(TXN_TYPES.map((t) => [t.key, t.tone]));
@@ -658,15 +660,17 @@ const AccountLedgerModal = ({ name, onClose }: { name: string; onClose: () => vo
     queryFn: () => api<{ name: string; items: LedgerItem[]; totals: LedgerTotals }>(`/cashbook/account-ledger?name=${encodeURIComponent(name)}`),
   });
   const delEntry = useMutation({
-    mutationFn: (id: string) => api(`/cashbook/entry/${id}`, { method: 'DELETE' }),
-    onSuccess: () => ['cashbook-ledger', 'cashbook-summary', 'cashbook-transactions', 'cashbook-overview', 'cashbook-entries', 'cashbook-duplicates'].forEach((k) => qc.invalidateQueries({ queryKey: [k] })),
+    // Journal vouchers and cashbook rows live in different tables → route by type.
+    mutationFn: (r: LedgerItem) => api(r.type === 'JOURNAL_DR' || r.type === 'JOURNAL_CR' ? `/cashbook/journal/${r.id}` : `/cashbook/entry/${r.id}`, { method: 'DELETE' }),
+    onSuccess: () => ['cashbook-ledger', 'cashbook-summary', 'cashbook-transactions', 'cashbook-overview', 'cashbook-entries', 'cashbook-duplicates', 'journal-vouchers', 'debtor-aging', 'creditor-aging'].forEach((k) => qc.invalidateQueries({ queryKey: [k] })),
   });
   const items = data?.items ?? [];
   const t = data?.totals;
   const onDel = async (r: LedgerItem) => {
     if (!r.id) return;
-    const ok = await confirm({ title: 'Delete this row?', message: <>Remove this {TXN_LABEL[r.type] ?? r.type} of {inr(r.amount)} from the cashbook?</>, tone: 'danger', confirmLabel: 'Delete' });
-    if (ok) delEntry.mutate(r.id);
+    const isJv = r.type === 'JOURNAL_DR' || r.type === 'JOURNAL_CR';
+    const ok = await confirm({ title: 'Delete this row?', message: <>Remove this {TXN_LABEL[r.type] ?? r.type} of {inr(r.amount)} from the {isJv ? 'ledger' : 'cashbook'}?</>, tone: 'danger', confirmLabel: 'Delete' });
+    if (ok) delEntry.mutate(r);
   };
   const cards: [string, string][] = [['Sales', 'sale'], ['Purchase', 'purchase'], ['Credit Note', 'creditNote'], ['Debit Note', 'debitNote'], ['Receipts', 'receipt'], ['Payments', 'payment']];
 
