@@ -210,7 +210,7 @@ export const TestingCalculatorPage = () => {
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff', windowWidth: 1040 },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-        pagebreak: { mode: ['css', 'legacy'], avoid: ['tr'] },
+        pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.tc-size'] },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any).from(el).save();
     } finally {
@@ -412,7 +412,7 @@ export const TestingCalculatorPage = () => {
             const measure = measureOf(it);
             const n = it.fluxes.length;
             return (
-              <div key={it.key} style={idx > 0 ? { pageBreakBefore: 'always' } : undefined}>
+              <div key={it.key} className="tc-size" style={{ pageBreakInside: 'avoid', ...(idx > 0 ? { pageBreakBefore: 'always' } : {}) }}>
                 {/* Company header */}
                 <div className="flex items-center gap-4 border-b-2 border-black px-2 pb-3 pt-2">
                   {company?.logoUrl
@@ -443,11 +443,11 @@ export const TestingCalculatorPage = () => {
 
                 {/* Per-size table */}
                 <div className="px-2 pb-4">
-                  <table className="w-full border-collapse text-[15px]">
+                  <table className="w-full border-collapse text-[13px]">
                     <thead>
                       <tr className="bg-slate-100">
                         {['Core', 'Measure', 'Turns', 'Grade', 'Flux (T)', 'Volt (V)', 'V (mV)', 'Ie max (A)', 'Ie max (mA)'].map((h) => (
-                          <th key={h} className="border border-slate-500 px-3 py-2.5 text-center text-[12px] font-bold uppercase tracking-wide">{h}</th>
+                          <th key={h} className="border border-slate-500 px-2 py-1.5 text-center text-[12px] font-bold uppercase tracking-wide">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -457,16 +457,16 @@ export const TestingCalculatorPage = () => {
                         return (
                           <tr key={f}>
                             {fi === 0 && <>
-                              <td rowSpan={n} className="border border-slate-500 px-3 py-2.5 text-center align-middle font-medium">{core}</td>
-                              <td rowSpan={n} className="border border-slate-500 px-3 py-2.5 text-center align-middle font-semibold">{measure}</td>
-                              <td rowSpan={n} className="border border-slate-500 px-3 py-2.5 text-center align-middle tabular-nums">{it.turns}</td>
-                              <td rowSpan={n} className="border border-slate-500 px-3 py-2.5 text-center align-middle font-medium">{it.grade}</td>
+                              <td rowSpan={n} className="border border-slate-500 px-2 py-1.5 text-center align-middle font-medium">{core}</td>
+                              <td rowSpan={n} className="border border-slate-500 px-2 py-1.5 text-center align-middle font-semibold">{measure}</td>
+                              <td rowSpan={n} className="border border-slate-500 px-2 py-1.5 text-center align-middle tabular-nums">{it.turns}</td>
+                              <td rowSpan={n} className="border border-slate-500 px-2 py-1.5 text-center align-middle font-medium">{it.grade}</td>
                             </>}
-                            <td className="border border-slate-500 px-3 py-2.5 text-center tabular-nums">{f.toFixed(2)}</td>
-                            <td className="border border-slate-500 px-3 py-2.5 text-right tabular-nums">{c ? c.volt.toFixed(3) : '—'}</td>
-                            <td className="border border-slate-500 px-3 py-2.5 text-right tabular-nums">{c ? c.mv.toFixed(2) : '—'}</td>
-                            <td className="border border-slate-500 px-3 py-2.5 text-right tabular-nums">{c && c.ieA > 0 ? c.ieA.toFixed(5) : '—'}</td>
-                            <td className="border border-slate-500 px-3 py-2.5 text-right tabular-nums">{c && c.leMax > 0 ? c.leMax.toFixed(2) : '—'}</td>
+                            <td className="border border-slate-500 px-2 py-1.5 text-center tabular-nums">{f.toFixed(2)}</td>
+                            <td className="border border-slate-500 px-2 py-1.5 text-right tabular-nums">{c ? c.volt.toFixed(3) : '—'}</td>
+                            <td className="border border-slate-500 px-2 py-1.5 text-right tabular-nums">{c ? c.mv.toFixed(2) : '—'}</td>
+                            <td className="border border-slate-500 px-2 py-1.5 text-right tabular-nums">{c && c.ieA > 0 ? c.ieA.toFixed(5) : '—'}</td>
+                            <td className="border border-slate-500 px-2 py-1.5 text-right tabular-nums">{c && c.leMax > 0 ? c.leMax.toFixed(2) : '—'}</td>
                           </tr>
                         );
                       })}
