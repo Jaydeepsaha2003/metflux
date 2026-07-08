@@ -201,11 +201,22 @@ router.get('/aging', requireAnyPermission('view_creditor_aging', 'manage_invoice
       for (const r of jvRows) { const nk = r.k; if (!nk) continue; addName(nk, r.nm); const d = r.side === 'DEBIT' ? Number(r.s) : -Number(r.s); jvByName.set(nk, round2((jvByName.get(nk) || 0) + d)); }
     } catch { /* JournalVoucher table absent on minimal installs */ }
   }
+  // Only real trading parties belong on the aging. A cash-book head classified
+  // as Other/Expense (e.g. Salary, Rent) has payments but is NOT a supplier —
+  // its payment must not read as a receivable/payable. Restrict to customers +
+  // suppliers so expense/unclassified heads never leak onto the report.
+  const partySet = new Set();
+  for (const r of await q('SELECT `name` FROM `Customer` WHERE `companyId` = ?', [req.tenant.companyId])) { const nk = normName(r.name); if (nk) partySet.add(nk); }
+  for (const r of await q('SELECT s.`name` FROM `Supplier` s INNER JOIN `SupplierMembership` sm ON sm.`supplierId` = s.`id` WHERE sm.`companyId` = ?', [req.tenant.companyId])) { const nk = normName(r.name); if (nk) partySet.add(nk); }
+
   // Journal Debit increases what they owe us (like a sale), Credit reduces it —
   // so it folds into the receivable side of the net, same as the ledger.
   const lRecvOf = (nk) => round2((siSumByName.get(nk) || 0) - (rcptByName.get(nk) || 0) + (jvByName.get(nk) || 0));
   const netPayableByName = new Map(); // nk -> we owe them (positive), ledger basis
   for (const nk of new Set([...siSumByName.keys(), ...piSumByName.keys(), ...rcptByName.keys(), ...payByName.keys(), ...jvByName.keys()])) {
+    // Include anyone with real sales/purchase invoices, plus registered
+    // customers/suppliers. Skip pure cash-book heads (expense/other/unclassified).
+    if (!(partySet.has(nk) || siSumByName.has(nk) || piSumByName.has(nk))) continue;
     const lPay = round2((piSumByName.get(nk) || 0) - (payByName.get(nk) || 0));
     netPayableByName.set(nk, round2(lPay - lRecvOf(nk)));
   }
