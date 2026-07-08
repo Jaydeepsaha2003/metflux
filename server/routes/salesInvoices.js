@@ -316,9 +316,11 @@ router.get('/aging', requireAnyPermission('view_debtor_aging', 'manage_invoices'
   const lPayOf = (nk) => round2((piSumByName.get(nk) || 0) - (payByName.get(nk) || 0));
   const netReceivableByName = new Map(); // nk -> they owe us (positive), ledger basis
   for (const nk of new Set([...siSumByName.keys(), ...piSumByName.keys(), ...rcptByName.keys(), ...payByName.keys(), ...jvByName.keys()])) {
-    // Include anyone with real sales/purchase invoices, plus registered
-    // customers/suppliers. Skip pure cash-book heads (expense/other/unclassified).
-    if (!(partySet.has(nk) || siSumByName.has(nk) || piSumByName.has(nk))) continue;
+    // CUSTOMERS ONLY. A registered customer, or anyone we've raised a sales
+    // invoice to. Supplier-only parties (e.g. one we've prepaid) and cash-book
+    // heads (expense/other/unclassified) never belong on Amount Receivable —
+    // their position lives on Amount Payable / the ledger, not here.
+    if (!(custByName.has(nk) || siSumByName.has(nk))) continue;
     // Journal Debit adds to receivable (like a sale), Credit subtracts — same as
     // the ledger, so aging stays reconciled with it.
     const lRecv = round2((siSumByName.get(nk) || 0) - (rcptByName.get(nk) || 0) + (jvByName.get(nk) || 0));
