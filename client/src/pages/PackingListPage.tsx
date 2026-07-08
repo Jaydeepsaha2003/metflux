@@ -11,11 +11,19 @@ import { readDraft, useFormDraft, fmtDraftTime } from '@/hooks/useFormDraft';
 import html2pdf from 'html2pdf.js';
 
 /* ── Types ────────────────────────────────────────────────────── */
+type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE';
+// Short prefix for the description column + section labels for the outer groups.
+const CORE_PREFIX: Record<CoreType, string> = { TOROIDAL: 'TC', RECTANGULAR: 'RC', NANO: 'NC', COMPOSITE: 'CC' };
+const CORE_LABEL: Record<CoreType, string> = {
+  TOROIDAL: 'Toroidal Cores', RECTANGULAR: 'Rectangular Cores', NANO: 'Nano Cores', COMPOSITE: 'Composite Cores',
+};
+const CORE_ORDER: CoreType[] = ['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE'];
+
 type DispatchDetail = {
   id: string; poNumber: string; orderDate: string;
   customerName: string; customerCode: string | null; customerState: string | null;
   customerPhone: string | null;
-  coreType: 'TOROIDAL' | 'RECTANGULAR';
+  coreType: CoreType;
   grade: string; material: string; measure: string;
   id1: number; id2: number | null; od1: number; od2: number | null; ht: number;
   dispatchDate: string; pcs: number; weightPerPc: number;
@@ -37,7 +45,7 @@ type CompanyDetail = {
 };
 type RowState = {
   dispatchId: string;
-  coreType: 'TOROIDAL' | 'RECTANGULAR';
+  coreType: CoreType;
   grade: string;
   poNo: string; poDate: string; description: string;
   qty: string; weight: string; remarks: string;
@@ -200,7 +208,7 @@ export const PackingListPage = () => {
         grade: d.grade ?? '',
         poNo: d.poNumber ?? '',
         poDate: d.orderDate ? fmtDate(d.orderDate) : '',
-        description: `${d.coreType === 'TOROIDAL' ? 'TC' : 'RC'}-${d.measure ?? ''} / ${d.grade ?? ''}`,
+        description: `${CORE_PREFIX[d.coreType] ?? 'RC'}-${d.measure ?? ''} / ${d.grade ?? ''}`,
         qty: String(d.pcs),
         weight: displayWeight != null ? displayWeight.toFixed(3) : '',
         remarks: '',
@@ -225,14 +233,16 @@ export const PackingListPage = () => {
   const updateRow = (id: string, field: keyof RowState, val: string) =>
     setRows((prev) => prev.map((r) => (r.dispatchId === id ? { ...r, [field]: val } : r)));
 
-  /* Group: TOROIDAL → RECTANGULAR, then inside each by GRADE */
-  const coreGroups = (['TOROIDAL', 'RECTANGULAR'] as const)
+  /* Group: TOROIDAL → RECTANGULAR → NANO → COMPOSITE, then inside each by GRADE.
+     Any core type present in the dispatch set gets a section (a hardcoded pair
+     used to silently drop Nano/Composite rows → empty packing list). */
+  const coreGroups = CORE_ORDER
     .map((ct) => {
       const ctRows = rows.filter((r) => r.coreType === ct);
       const gradeMap = ctRows.reduce<Record<string, RowState[]>>((acc, r) => {
         (acc[r.grade] ??= []).push(r); return acc;
       }, {});
-      return { coreType: ct, label: ct === 'TOROIDAL' ? 'Toroidal Cores' : 'Rectangular Cores', grades: Object.entries(gradeMap) };
+      return { coreType: ct, label: CORE_LABEL[ct], grades: Object.entries(gradeMap) };
     })
     .filter((cg) => cg.grades.length > 0);
 
