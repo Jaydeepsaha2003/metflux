@@ -82,7 +82,7 @@ export const LoginBell = () => {
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const [events, setEvents] = useState<Evt[]>([]);
-  const [pushState, setPushState] = useState<'idle' | 'on' | 'denied' | 'unsupported' | 'working'>('idle');
+  const [pushState, setPushState] = useState<'idle' | 'on' | 'denied' | 'unsupported' | 'working' | 'ios-install'>('idle');
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState<string | null>(null);
   const watermark = useRef<number | null>(null);
@@ -91,9 +91,23 @@ export const LoginBell = () => {
   const [popTop, setPopTop] = useState(64);
 
   useEffect(() => {
-    if (typeof Notification === 'undefined' || !('serviceWorker' in navigator)) setPushState('unsupported');
-    else if (Notification.permission === 'granted') setPushState('on');
-    else if (Notification.permission === 'denied') setPushState('denied');
+    const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent || '');
+    // iOS 16.4+ only exposes Web Push inside an installed (Home-Screen) PWA.
+    const standalone = window.matchMedia?.('(display-mode: standalone)').matches
+      || (navigator as unknown as { standalone?: boolean }).standalone === true;
+    const supported = typeof Notification !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window;
+    if (!supported) { setPushState(iOS && !standalone ? 'ios-install' : 'unsupported'); return; }
+    if (Notification.permission === 'denied') { setPushState('denied'); return; }
+    if (Notification.permission !== 'granted') { setPushState(iOS && !standalone ? 'ios-install' : 'idle'); return; }
+    // Permission granted — confirm a live push subscription still exists on this
+    // device (it can be lost after clearing data or a VAPID-key change), else
+    // prompt to re-enable rather than falsely showing "enabled".
+    (async () => {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        setPushState((await reg.pushManager.getSubscription()) ? 'on' : 'idle');
+      } catch { setPushState('idle'); }
+    })();
   }, []);
 
   // Unlock Web Audio on the first user gesture so the sign-in chime can play
@@ -208,6 +222,8 @@ export const LoginBell = () => {
               <span className="inline-flex items-center gap-1.5 text-emerald-600"><Check className="h-3.5 w-3.5" /> Notifications enabled on this device</span>
             ) : pushState === 'denied' ? (
               <span className="text-amber-600">Notifications blocked — enable them in your browser site settings.</span>
+            ) : pushState === 'ios-install' ? (
+              <span className="text-slate-600">On iPhone/iPad: tap <b>Share</b> → <b>Add to Home Screen</b>, then open Metflux from that icon and enable notifications here.</span>
             ) : pushState === 'unsupported' ? (
               <span className="text-slate-400">Notifications not supported on this browser.</span>
             ) : (
