@@ -19,7 +19,7 @@ import { downloadXlsx, todayStamp } from '@/lib/excel';
 type AgingInvoice = { id: string; invoiceNumber: string; invoiceDate: string; dueDate: string | null; balance: number; daysOverdue: number | null };
 type AgingCustomer = {
   customerId: string | null; customerName: string; customerCode: string | null; phone: string | null;
-  dueDays: number | null; email: string | null; contra?: number;
+  dueDays: number | null; email: string | null; contra?: number; unmatched?: boolean;
   notDue: number; d1_30: number; d31_60: number; d61_90: number; d90: number; noTerms: number;
   total: number; maxDaysOverdue: number; invoices: AgingInvoice[];
 };
@@ -248,12 +248,12 @@ export const DebtorAgingPage = () => {
                         <td className="px-3 py-2.5">
                           <div className="flex items-center gap-2">
                             <span className={cn('h-2 w-2 rounded-full shrink-0', SEV_DOT[sev])} title={c.maxDaysOverdue > 0 ? `${c.maxDaysOverdue}d overdue` : 'not overdue'} />
-                            {c.customerId ? (
-                              <span className="font-medium text-slate-900">{hideNames ? (c.customerCode ?? '••••') : c.customerName}</span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-red-600" title="Unmatched customer — fix on the Invoices page">
+                            {c.unmatched ? (
+                              <span className="inline-flex items-center gap-1 text-red-600" title="Unmatched customer — these sales invoices aren't linked to a customer record. Fix on the Invoices page.">
                                 <AlertTriangle className="h-3.5 w-3.5" /> {hideNames ? '••••' : c.customerName}
                               </span>
+                            ) : (
+                              <span className="font-medium text-slate-900">{hideNames && c.customerId ? (c.customerCode ?? '••••') : c.customerName}</span>
                             )}
                             {c.noTerms > 0 && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700" title="Has invoices with no due date">no-terms {inr(c.noTerms)}</span>}
                             {!!c.contra && c.contra > 0 && <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] text-violet-700" title="Also a supplier — receivable shown net of their purchase payable">net of {inr(c.contra)} purch.</span>}

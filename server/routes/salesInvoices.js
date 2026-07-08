@@ -306,7 +306,11 @@ router.get('/aging', requireAnyPermission('view_debtor_aging', 'manage_invoices'
   // its payment must not read as a receivable. Restrict to customers + suppliers
   // so expense/unclassified heads never leak onto the report.
   const partySet = new Set();
-  for (const r of await q('SELECT `name` FROM `Customer` WHERE `companyId` = ?', [req.tenant.companyId])) { const nk = normName(r.name); if (nk) partySet.add(nk); }
+  const custByName = new Map(); // nk -> customer record, to resolve net-only parties
+  for (const r of await q('SELECT `id`, `name`, `customerCode`, `phone`, `dueDays`, `email` FROM `Customer` WHERE `companyId` = ?', [req.tenant.companyId])) {
+    const nk = normName(r.name); if (!nk) continue; partySet.add(nk);
+    if (!custByName.has(nk)) custByName.set(nk, r);
+  }
   for (const r of await q('SELECT s.`name` FROM `Supplier` s INNER JOIN `SupplierMembership` sm ON sm.`supplierId` = s.`id` WHERE sm.`companyId` = ?', [req.tenant.companyId])) { const nk = normName(r.name); if (nk) partySet.add(nk); }
 
   const lPayOf = (nk) => round2((piSumByName.get(nk) || 0) - (payByName.get(nk) || 0));
@@ -375,9 +379,16 @@ router.get('/aging', requireAnyPermission('view_debtor_aging', 'manage_invoices'
     handled.add(nk);
     const contra = Math.max(0, lPayOf(nk)); // for the "net of purchases" info badge
 
+    // If the sales invoices weren't linked to a customer record, try to resolve
+    // one by normalized name; only truly unresolved names stay flagged.
+    const resolved = g.customerId ? null : custByName.get(nk);
     const c = {
-      customerId: g.customerId, customerName: g.customerName, customerCode: g.customerCode,
-      phone: g.phone, dueDays: g.dueDays, email: g.email, contra,
+      customerId: g.customerId ?? resolved?.id ?? null,
+      customerName: g.customerName, customerCode: g.customerCode ?? resolved?.customerCode ?? null,
+      phone: g.phone ?? resolved?.phone ?? null, dueDays: g.dueDays ?? resolved?.dueDays ?? null,
+      email: g.email ?? resolved?.email ?? null, contra,
+      // Unmatched = real sales invoices with no customer link (fix on Invoices).
+      unmatched: !g.customerId && !resolved,
       notDue: 0, d1_30: 0, d31_60: 0, d61_90: 0, d90: 0, noTerms: 0, total: 0,
       maxDaysOverdue: 0, invoices: [],
     };
@@ -418,9 +429,13 @@ router.get('/aging', requireAnyPermission('view_debtor_aging', 'manage_invoices'
   // after full contra) — still debtors, surfaced from the ledger net.
   for (const [nk, net] of netReceivableByName) {
     if (handled.has(nk) || net <= 0.01) continue;
-    const name = nameByNk.get(nk) || nk;
+    const cust = custByName.get(nk); // resolve a real customer if the name matches
+    const name = cust?.name || nameByNk.get(nk) || nk;
     customers.push({
-      customerId: null, customerName: name, customerCode: null, phone: null, dueDays: null, email: null, contra: 0,
+      customerId: cust?.id ?? null, customerName: name, customerCode: cust?.customerCode ?? null,
+      phone: cust?.phone ?? null, dueDays: cust?.dueDays ?? null, email: cust?.email ?? null, contra: 0,
+      // A net/advance line is a real position, not an unlinked invoice — never flag it red.
+      unmatched: false,
       notDue: net, d1_30: 0, d31_60: 0, d61_90: 0, d90: 0, noTerms: 0, total: net, maxDaysOverdue: 0,
       invoices: [{ id: `onacct:${name}`, invoiceNumber: 'Advance / On account', invoiceDate: null, dueDate: null, balance: net, daysOverdue: null }],
     });
