@@ -324,6 +324,10 @@ const SuspenseEntrySection = () => {
 
   const items = data?.items ?? [];
   const acctOptions = (accts?.items ?? []).map((a) => ({ value: a.name, label: a.name }));
+  // Match the SearchableSelect's dense trigger exactly (h-8, px-2, rounded-md,
+  // text-sm) so every field in the row lines up pixel-for-pixel — the default
+  // `.input` has heavy py-2.5 that crops text inside an h-8 box.
+  const fieldCls = 'h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20';
 
   return (
     <div className="card overflow-hidden text-[13px]">
@@ -337,22 +341,23 @@ const SuspenseEntrySection = () => {
 
       <div className="grid grid-cols-2 items-end gap-2 border-b border-slate-100 p-3 sm:grid-cols-6">
         <label className="block"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Date</span>
-          <input type="date" className="input h-8 text-xs" value={date} onChange={(e) => setDate(e.target.value)} /></label>
+          <input type="date" className={fieldCls} value={date} onChange={(e) => setDate(e.target.value)} /></label>
         <div className="col-span-2 block sm:col-span-2"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Account</span>
           <SearchableSelect dense value={account} onChange={setAccount} options={acctOptions} placeholder="Select account…" /></div>
         <label className="block"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Side</span>
-          <select className="input h-8 text-xs" value={side} onChange={(e) => setSide(e.target.value as 'DEBIT' | 'CREDIT')}>
+          <select className={fieldCls} value={side} onChange={(e) => setSide(e.target.value as 'DEBIT' | 'CREDIT')}>
             <option value="DEBIT">Debit (Dr)</option><option value="CREDIT">Credit (Cr)</option>
           </select></label>
         <label className="block"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Amount</span>
-          <input type="number" min="0" step="0.01" className="input h-8 text-right text-xs tabular-nums" placeholder="0.00" value={amount}
+          <input type="number" min="0" step="0.01" className={cn(fieldCls, 'text-right tabular-nums')} placeholder="0.00" value={amount}
             onChange={(e) => setAmount(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && canSave && !create.isPending) { e.preventDefault(); submit(); } }} /></label>
-        <button onClick={submit} disabled={create.isPending || !canSave} className="btn-primary h-8 text-xs disabled:opacity-50">
+        <button onClick={submit} disabled={create.isPending || !canSave}
+          className="inline-flex h-8 items-center justify-center gap-1 rounded-md bg-brand-600 px-3 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50">
           {create.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Add
         </button>
         <label className="col-span-2 block sm:col-span-6"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Narration (optional)</span>
-          <input className="input h-8 text-xs" placeholder="e.g. Rate difference / rounding off / opening balance" value={narration} onChange={(e) => setNarration(e.target.value)} /></label>
+          <input className={fieldCls} placeholder="e.g. Rate difference / rounding off / opening balance" value={narration} onChange={(e) => setNarration(e.target.value)} /></label>
       </div>
 
       {isLoading ? (
