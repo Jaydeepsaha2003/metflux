@@ -317,8 +317,8 @@ const TXN_TYPES: { key: string; label: string; tone: string }[] = [
   { key: 'DEBIT_NOTE', label: 'Debit Note', tone: 'bg-amber-50 text-amber-700' },
   { key: 'RECEIPT', label: 'Receipts', tone: 'bg-emerald-50 text-emerald-700' },
   { key: 'PAYMENT', label: 'Payments', tone: 'bg-slate-100 text-slate-600' },
-  { key: 'JOURNAL_DR', label: 'Journal (Dr)', tone: 'bg-violet-50 text-violet-700' },
-  { key: 'JOURNAL_CR', label: 'Journal (Cr)', tone: 'bg-violet-50 text-violet-700' },
+  { key: 'JOURNAL_DR', label: 'Suspense (Dr)', tone: 'bg-violet-50 text-violet-700' },
+  { key: 'JOURNAL_CR', label: 'Suspense (Cr)', tone: 'bg-violet-50 text-violet-700' },
 ];
 const TXN_LABEL: Record<string, string> = Object.fromEntries(TXN_TYPES.map((t) => [t.key, t.label]));
 const TXN_TONE: Record<string, string> = Object.fromEntries(TXN_TYPES.map((t) => [t.key, t.tone]));

@@ -144,7 +144,7 @@ const nextJvNumber = async (companyId, db = { q }) => {
   const rows = await db.q('SELECT `voucherNo` FROM `JournalVoucher` WHERE `companyId` = ?', [companyId]);
   let max = 0;
   for (const r of rows) { const m = /(\d+)\s*$/.exec(r.voucherNo || ''); if (m) max = Math.max(max, parseInt(m[1], 10)); }
-  return `JV/${String(max + 1).padStart(4, '0')}`;
+  return `SE/${String(max + 1).padStart(4, '0')}`;
 };
 
 router.get('/journal', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {

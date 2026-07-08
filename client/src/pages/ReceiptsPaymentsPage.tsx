@@ -17,6 +17,7 @@ import { readXlsxMatrix, downloadXlsx, todayStamp } from '@/lib/excel';
 import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
 import { useAuthStore, activeMembership } from '@/store/auth';
+import { SearchableSelect } from '@/components/SearchableSelect';
 
 type ReceiptItem = { customerId: string; name: string; code?: string; amount: number; systemPending: number; willApply: number };
 type PaymentItem = { supplierKey: string; name: string; amount: number; systemPending: number; willApply: number };
@@ -154,13 +155,13 @@ export const ReceiptsPaymentsPage = () => {
   };
 
   return (
-    <div className="space-y-6 max-w-full">
+    <div className="max-w-full space-y-4 text-[13px]">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight">
+          <h1 className="flex items-center gap-2 text-lg font-bold tracking-tight">
             <ArrowLeftRight className="h-5 w-5 text-brand-600" /> Receipts &amp; Payments
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-0.5 text-xs text-slate-500">
             Upload the bank/cash book once — receipts settle customer invoices, payments settle supplier bills (FIFO). Tag other heads for the summary.
           </p>
         </div>
@@ -270,8 +271,8 @@ export const ReceiptsPaymentsPage = () => {
         </>
       )}
 
-      {/* Manual journal vouchers — adjust any account's ledger + aging */}
-      <JournalVoucherSection />
+      {/* Manual suspense entries — adjust any account's ledger + aging */}
+      <SuspenseEntrySection />
 
       {/* All stored cashbook entries — filterable */}
       <EntriesSection />
@@ -281,10 +282,10 @@ export const ReceiptsPaymentsPage = () => {
   );
 };
 
-/* ── Journal vouchers — manual single-legged ledger adjustments ── */
-type Jv = { id: string; voucherNo: string; entryDate: string | null; account: string; side: 'DEBIT' | 'CREDIT'; amount: number; narration: string | null };
+/* ── Suspense entries — manual single-legged ledger adjustments ── */
+type Suspense = { id: string; voucherNo: string; entryDate: string | null; account: string; side: 'DEBIT' | 'CREDIT'; amount: number; narration: string | null };
 
-const JournalVoucherSection = () => {
+const SuspenseEntrySection = () => {
   const qc = useQueryClient();
   const { confirm, confirmDialog } = useConfirm();
   const [account, setAccount] = useState('');
@@ -295,15 +296,15 @@ const JournalVoucherSection = () => {
   const [err, setErr] = useState<string | null>(null);
 
   const { data: accts } = useQuery({ queryKey: ['cashbook-accounts'], queryFn: () => api<{ items: { name: string; type: string }[] }>('/cashbook/accounts') });
-  const { data, isLoading } = useQuery({ queryKey: ['journal-vouchers'], queryFn: () => api<{ items: Jv[] }>('/cashbook/journal') });
+  const { data, isLoading } = useQuery({ queryKey: ['journal-vouchers'], queryFn: () => api<{ items: Suspense[] }>('/cashbook/journal') });
 
-  // A voucher shifts a party's ledger + receivable/payable, so refresh those.
+  // An entry shifts a party's ledger + receivable/payable, so refresh those.
   const invalidate = () => ['journal-vouchers', 'debtor-aging', 'creditor-aging', 'cashbook-ledger'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
 
   const create = useMutation({
     mutationFn: () => api('/cashbook/journal', { method: 'POST', body: JSON.stringify({ account: account.trim(), side, amount: round2(Number(amount)), entryDate: date, narration: narration.trim() || null }) }),
     onSuccess: () => { setAccount(''); setAmount(''); setNarration(''); setErr(null); invalidate(); },
-    onError: (e) => setErr(e instanceof Error ? e.message : 'Could not save the voucher'),
+    onError: (e) => setErr(e instanceof Error ? e.message : 'Could not save the entry'),
   });
   const del = useMutation({
     mutationFn: (id: string) => api(`/cashbook/journal/${id}`, { method: 'DELETE' }),
@@ -311,10 +312,10 @@ const JournalVoucherSection = () => {
   });
 
   const canSave = !!account.trim() && Number(amount) > 0;
-  const submit = () => { if (!canSave) { setErr('Enter an account and a positive amount.'); return; } create.mutate(); };
-  const onDelete = async (v: Jv) => {
+  const submit = () => { if (!canSave) { setErr('Pick an account and enter a positive amount.'); return; } create.mutate(); };
+  const onDelete = async (v: Suspense) => {
     const ok = await confirm({
-      title: 'Delete this voucher?',
+      title: 'Delete this entry?',
       message: <>Delete <b>{v.voucherNo}</b> ({v.side === 'DEBIT' ? 'Dr' : 'Cr'} {inr(v.amount)} · {v.account})? This reverses its effect on the ledger &amp; aging.</>,
       tone: 'danger', confirmLabel: 'Delete',
     });
@@ -322,65 +323,65 @@ const JournalVoucherSection = () => {
   };
 
   const items = data?.items ?? [];
+  const acctOptions = (accts?.items ?? []).map((a) => ({ value: a.name, label: a.name }));
 
   return (
-    <div className="card overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700">
-        <NotebookPen className="h-4 w-4" /> Journal Voucher <span className="font-normal text-slate-400">({items.length})</span>
+    <div className="card overflow-hidden text-[13px]">
+      <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-1.5 text-xs font-semibold text-slate-700">
+        <NotebookPen className="h-3.5 w-3.5" /> Suspense Entry <span className="font-normal text-slate-400">({items.length})</span>
       </div>
-      <div className="px-4 py-2 text-xs text-slate-500">
+      <div className="px-4 py-1.5 text-[11px] leading-relaxed text-slate-500">
         Post a manual adjustment against any account. <b>Debit</b> increases what the party owes you; <b>Credit</b> increases what you owe them. It flows into the account ledger and Amount Receivable / Payable — not the cash summary.
       </div>
-      {err && <div className="mx-4 mb-2 rounded border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700">{err}</div>}
+      {err && <div className="mx-4 mb-2 rounded border border-red-200 bg-red-50 px-3 py-1.5 text-[11px] text-red-700">{err}</div>}
 
-      <div className="grid grid-cols-2 gap-2 border-b border-slate-100 p-3 sm:grid-cols-7 sm:items-end">
+      <div className="grid grid-cols-2 items-end gap-2 border-b border-slate-100 p-3 sm:grid-cols-6">
         <label className="block"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Date</span>
-          <input type="date" className="input h-9" value={date} onChange={(e) => setDate(e.target.value)} /></label>
-        <label className="col-span-2 block sm:col-span-2"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Account</span>
-          <input className="input h-9" list="jv-accounts" placeholder="Type or pick any account…" value={account} onChange={(e) => setAccount(e.target.value)} />
-          <datalist id="jv-accounts">{(accts?.items ?? []).map((a) => <option key={a.name} value={a.name} />)}</datalist></label>
+          <input type="date" className="input h-8 text-xs" value={date} onChange={(e) => setDate(e.target.value)} /></label>
+        <div className="col-span-2 block sm:col-span-2"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Account</span>
+          <SearchableSelect dense value={account} onChange={setAccount} options={acctOptions} placeholder="Select account…" /></div>
         <label className="block"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Side</span>
-          <select className="input h-9" value={side} onChange={(e) => setSide(e.target.value as 'DEBIT' | 'CREDIT')}>
+          <select className="input h-8 text-xs" value={side} onChange={(e) => setSide(e.target.value as 'DEBIT' | 'CREDIT')}>
             <option value="DEBIT">Debit (Dr)</option><option value="CREDIT">Credit (Cr)</option>
           </select></label>
         <label className="block"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Amount</span>
-          <input type="number" min="0" step="0.01" className="input h-9 text-right tabular-nums" placeholder="0.00" value={amount}
+          <input type="number" min="0" step="0.01" className="input h-8 text-right text-xs tabular-nums" placeholder="0.00" value={amount}
             onChange={(e) => setAmount(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && canSave && !create.isPending) { e.preventDefault(); submit(); } }} /></label>
-        <button onClick={submit} disabled={create.isPending || !canSave} className="btn-primary h-9 text-sm disabled:opacity-50">
-          {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add
+        <button onClick={submit} disabled={create.isPending || !canSave} className="btn-primary h-8 text-xs disabled:opacity-50">
+          {create.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Add
         </button>
-        <label className="col-span-2 block sm:col-span-7"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Narration (optional)</span>
-          <input className="input h-9" placeholder="e.g. Rate difference / rounding off / opening balance" value={narration} onChange={(e) => setNarration(e.target.value)} /></label>
+        <label className="col-span-2 block sm:col-span-6"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Narration (optional)</span>
+          <input className="input h-8 text-xs" placeholder="e.g. Rate difference / rounding off / opening balance" value={narration} onChange={(e) => setNarration(e.target.value)} /></label>
       </div>
 
       {isLoading ? (
-        <div className="py-8 text-center text-slate-400"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></div>
+        <div className="py-6 text-center text-slate-400"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></div>
       ) : !items.length ? (
-        <div className="py-8 text-center text-sm text-slate-400">No journal vouchers yet.</div>
+        <div className="py-6 text-center text-xs text-slate-400">No suspense entries yet.</div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm whitespace-nowrap">
-            <thead><tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <th className="px-3 py-2.5 text-left">Voucher</th>
-              <th className="px-3 py-2.5 text-left">Date</th>
-              <th className="px-3 py-2.5 text-left">Account</th>
-              <th className="px-3 py-2.5 text-right">Debit</th>
-              <th className="px-3 py-2.5 text-right">Credit</th>
-              <th className="px-3 py-2.5 text-left">Narration</th>
-              <th className="w-9 px-2 py-2.5" />
+          <table className="w-full text-xs whitespace-nowrap">
+            <thead><tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+              <th className="px-3 py-1.5 text-left">Voucher</th>
+              <th className="px-3 py-1.5 text-left">Date</th>
+              <th className="px-3 py-1.5 text-left">Account</th>
+              <th className="px-3 py-1.5 text-right">Debit</th>
+              <th className="px-3 py-1.5 text-right">Credit</th>
+              <th className="px-3 py-1.5 text-left">Narration</th>
+              <th className="w-8 px-2 py-1.5" />
             </tr></thead>
             <tbody className="divide-y divide-slate-100">
               {items.map((v) => (
                 <tr key={v.id} className="hover:bg-slate-50/60">
-                  <td className="px-3 py-2 font-mono text-xs font-semibold text-brand-700">{v.voucherNo}</td>
-                  <td className="px-3 py-2 text-slate-600">{fmtD(v.entryDate)}</td>
-                  <td className="px-3 py-2 font-medium">{v.account}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-700">{v.side === 'DEBIT' ? inr(v.amount) : ''}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-slate-700">{v.side === 'CREDIT' ? inr(v.amount) : ''}</td>
-                  <td className="px-3 py-2 text-slate-500">{v.narration || '—'}</td>
-                  <td className="px-2 py-2 text-center">
-                    <button onClick={() => onDelete(v)} disabled={del.isPending} className="rounded p-1 text-red-500 hover:bg-red-50" title="Delete voucher">
+                  <td className="px-3 py-1 font-mono text-[11px] font-semibold text-brand-700">{v.voucherNo}</td>
+                  <td className="px-3 py-1 text-slate-600">{fmtD(v.entryDate)}</td>
+                  <td className="px-3 py-1 font-medium">{v.account}</td>
+                  <td className="px-3 py-1 text-right tabular-nums text-slate-700">{v.side === 'DEBIT' ? inr(v.amount) : ''}</td>
+                  <td className="px-3 py-1 text-right tabular-nums text-slate-700">{v.side === 'CREDIT' ? inr(v.amount) : ''}</td>
+                  <td className="px-3 py-1 text-slate-500">{v.narration || '—'}</td>
+                  <td className="px-2 py-1 text-center">
+                    <button onClick={() => onDelete(v)} disabled={del.isPending} className="rounded p-1 text-red-500 hover:bg-red-50" title="Delete entry">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </td>
@@ -493,8 +494,8 @@ const EntriesSection = () => {
 
   return (
     <div className="card overflow-hidden">
-      <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2.5">
-        <span className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+      <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-4 py-1.5">
+        <span className="flex items-center gap-2 text-xs font-semibold text-slate-700">
           <ListChecks className="h-4 w-4" /> Cashbook entries <span className="font-normal text-slate-400">({total})</span>
         </span>
         <div className="flex items-center gap-2">
@@ -537,34 +538,34 @@ const EntriesSection = () => {
         <div className="py-10 text-center text-sm text-slate-400">No entries for these filters.</div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm whitespace-nowrap">
+          <table className="w-full text-xs whitespace-nowrap">
             <thead><tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <th className="w-9 px-3 py-2.5 text-center">
+              <th className="w-9 px-3 py-1.5 text-center">
                 <input type="checkbox" checked={pageAllSelected} onChange={togglePage} className="rounded border-slate-300 text-brand-600 focus:ring-brand-500" title="Select all on this page" />
               </th>
-              <th className="px-3 py-2.5 text-left">Date</th>
-              <th className="px-3 py-2.5 text-left">Party</th>
-              <th className="px-3 py-2.5 text-left">Side</th>
-              <th className="px-3 py-2.5 text-left">Type / Category</th>
-              <th className="px-3 py-2.5 text-right">Amount</th>
-              <th className="px-3 py-2.5 text-center">Allocated</th>
+              <th className="px-3 py-1.5 text-left">Date</th>
+              <th className="px-3 py-1.5 text-left">Party</th>
+              <th className="px-3 py-1.5 text-left">Side</th>
+              <th className="px-3 py-1.5 text-left">Type / Category</th>
+              <th className="px-3 py-1.5 text-right">Amount</th>
+              <th className="px-3 py-1.5 text-center">Allocated</th>
             </tr></thead>
             <tbody className="divide-y divide-slate-100">
               {items.map((e) => (
                 <tr key={e.id} className={cn('hover:bg-slate-50/60', sel.has(e.id) && 'bg-brand-50/40')}>
-                  <td className="px-3 py-2 text-center">
+                  <td className="px-3 py-1.5 text-center">
                     <input type="checkbox" checked={sel.has(e.id)} onChange={() => toggleRow(e.id)} className="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
                   </td>
-                  <td className="px-3 py-2 text-slate-600">{fmtD(e.entryDate)}</td>
-                  <td className="px-3 py-2 font-medium">{e.account}</td>
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-1.5 text-slate-600">{fmtD(e.entryDate)}</td>
+                  <td className="px-3 py-1.5 font-medium">{e.account}</td>
+                  <td className="px-3 py-1.5">
                     <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', e.side === 'RECEIPT' ? 'bg-emerald-50 text-emerald-700' : 'bg-brand-50 text-brand-700')}>{e.side === 'RECEIPT' ? 'Receipt' : 'Payment'}</span>
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-1.5">
                     <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', TYPE_TONE[e.type] ?? 'bg-slate-100 text-slate-600')}>{e.category}</span>
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums font-semibold">{inr(e.amount)}</td>
-                  <td className="px-3 py-2 text-center">
+                  <td className="px-3 py-1.5 text-right tabular-nums font-semibold">{inr(e.amount)}</td>
+                  <td className="px-3 py-1.5 text-center">
                     {e.posted ? <CheckCircle2 className="mx-auto h-4 w-4 text-emerald-600" /> : <span className="text-[11px] text-slate-300">—</span>}
                   </td>
                 </tr>
@@ -575,7 +576,7 @@ const EntriesSection = () => {
       )}
 
       {/* Footer: totals + pagination */}
-      <div className="flex flex-col gap-2 border-t border-slate-200 px-4 py-2.5 text-xs sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-2 border-t border-slate-200 px-4 py-1.5 text-xs sm:flex-row sm:items-center sm:justify-between">
         <div className="text-slate-500">
           Receipts <b className="text-emerald-700">{inr(data?.totals.receipts)}</b> · Payments <b className="text-brand-700">{inr(data?.totals.payments)}</b>
         </div>
@@ -610,28 +611,28 @@ const ClassifySection = ({ rows, companyId, onChanged }: { rows: Unmatched[]; co
 
   return (
     <div className="card overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-slate-200 bg-amber-50/60 px-4 py-2.5 text-sm font-semibold text-amber-800">
+      <div className="flex items-center gap-2 border-b border-slate-200 bg-amber-50/60 px-4 py-1.5 text-xs font-semibold text-amber-800">
         <Tag className="h-4 w-4" /> Unclassified account heads ({rows.length})
       </div>
-      <div className="px-4 py-2 text-xs text-slate-500">
+      <div className="px-4 py-1.5 text-xs text-slate-500">
         Tag each head so it's recognised next time. <b>Customer</b>/<b>Supplier</b> create a real record (and appear in those lists); <b>Other</b> is saved with a category for the summary.
       </div>
       {err && <div className="mx-4 mb-2 rounded border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700">{err}</div>}
       <div className="overflow-x-auto">
-        <table className="w-full text-sm whitespace-nowrap">
+        <table className="w-full text-xs whitespace-nowrap">
           <thead><tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            <th className="px-4 py-2.5 text-left">Party</th><th className="px-4 py-2.5 text-left">Side</th>
-            <th className="px-4 py-2.5 text-right">Amount</th><th className="px-4 py-2.5 text-left">Classify as</th>
+            <th className="px-4 py-1.5 text-left">Party</th><th className="px-4 py-1.5 text-left">Side</th>
+            <th className="px-4 py-1.5 text-right">Amount</th><th className="px-4 py-1.5 text-left">Classify as</th>
           </tr></thead>
           <tbody className="divide-y divide-slate-100">
             {rows.map((u, i) => {
               const isBusy = busy === u.name;
               return (
                 <tr key={i}>
-                  <td className="px-4 py-2 font-medium">{u.name}</td>
-                  <td className="px-4 py-2 text-slate-500">{u.side === 'RECEIPT' ? 'Receipt' : 'Payment'}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{inr(u.amount)}</td>
-                  <td className="px-4 py-2">
+                  <td className="px-4 py-1.5 font-medium">{u.name}</td>
+                  <td className="px-4 py-1.5 text-slate-500">{u.side === 'RECEIPT' ? 'Receipt' : 'Payment'}</td>
+                  <td className="px-4 py-1.5 text-right tabular-nums">{inr(u.amount)}</td>
+                  <td className="px-4 py-1.5">
                     {otherFor === u.name ? (
                       <div className="flex items-center gap-1.5">
                         <input autoFocus className="input h-8 w-40" placeholder="Category e.g. Salary" value={cat}
@@ -670,34 +671,34 @@ const ClassifySection = ({ rows, companyId, onChanged }: { rows: Unmatched[]; co
 type Row = { id: string; name: string; sub?: string; amount: number; pending: number; willApply: number; on: boolean; toggle: () => void };
 const SideTable = ({ title, icon, rows, pendingLabel }: { title: string; icon: React.ReactNode; rows: Row[]; pendingLabel: string }) => (
   <div className="card overflow-hidden">
-    <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700">
+    <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-1.5 text-xs font-semibold text-slate-700">
       {icon} {title} <span className="font-normal text-slate-400">({rows.length})</span>
     </div>
     {rows.length === 0 ? (
       <div className="px-4 py-6 text-center text-sm text-slate-400">None found in the file.</div>
     ) : (
       <div className="overflow-x-auto">
-        <table className="w-full text-sm whitespace-nowrap">
+        <table className="w-full text-xs whitespace-nowrap">
           <thead><tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            <th className="px-3 py-2.5 w-10"></th>
-            <th className="px-4 py-2.5 text-left">Party</th>
-            <th className="px-4 py-2.5 text-right">In file</th>
-            <th className="px-4 py-2.5 text-right">{pendingLabel}</th>
-            <th className="px-4 py-2.5 text-right">Will apply</th>
+            <th className="px-3 py-1.5 w-10"></th>
+            <th className="px-4 py-1.5 text-left">Party</th>
+            <th className="px-4 py-1.5 text-right">In file</th>
+            <th className="px-4 py-1.5 text-right">{pendingLabel}</th>
+            <th className="px-4 py-1.5 text-right">Will apply</th>
           </tr></thead>
           <tbody className="divide-y divide-slate-100">
             {rows.map((r) => (
               <tr key={r.id} className={cn(r.willApply <= 0 && 'opacity-60')}>
-                <td className="px-3 py-2.5 text-center">
+                <td className="px-3 py-1.5 text-center">
                   <input type="checkbox" checked={r.on} disabled={r.willApply <= 0} onChange={r.toggle}
                     className="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
                 </td>
-                <td className="px-4 py-2.5 font-medium">
+                <td className="px-4 py-1.5 font-medium">
                   {r.sub && <span className="mr-1.5 font-mono text-xs font-semibold text-brand-700">{r.sub}</span>}{r.name}
                 </td>
-                <td className="px-4 py-2.5 text-right tabular-nums text-slate-600">{inr(r.amount)}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums text-slate-600">{inr(r.pending)}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{inr(r.willApply)}</td>
+                <td className="px-4 py-1.5 text-right tabular-nums text-slate-600">{inr(r.amount)}</td>
+                <td className="px-4 py-1.5 text-right tabular-nums text-slate-600">{inr(r.pending)}</td>
+                <td className="px-4 py-1.5 text-right tabular-nums font-semibold">{inr(r.willApply)}</td>
               </tr>
             ))}
           </tbody>
@@ -710,7 +711,7 @@ const SideTable = ({ title, icon, rows, pendingLabel }: { title: string; icon: R
 const Stat = ({ label, value, tone }: { label: string; value: string; tone?: 'emerald' | 'amber' | 'red' | 'brand' }) => (
   <div className="card p-3">
     <div className="text-[11px] uppercase tracking-wide text-slate-500">{label}</div>
-    <div className={cn('mt-0.5 text-xl font-bold tabular-nums',
+    <div className={cn('mt-0.5 text-lg font-bold tabular-nums',
       tone === 'emerald' && 'text-emerald-600',
       tone === 'amber' && 'text-amber-600',
       tone === 'red' && 'text-red-600',
