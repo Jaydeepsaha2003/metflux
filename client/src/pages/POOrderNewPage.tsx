@@ -1709,6 +1709,41 @@ export const NanoForm = ({
                   : 'Variable height → same ID/OD, heights added (stacked).'}
               </div>
             )}
+
+            {/* Testing parameters — computed on the Nano core dims. Optional, but
+                filling them lets a composite order produce a Testing Report. */}
+            <div>
+              <SecLabel>Testing parameters (Nano core)</SecLabel>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-4">
+                <NumField label="Turns" value={turns} onChange={setTurns} />
+                <NumField label="Frequency (Hz)" value={freq} onChange={setFreq} />
+                <NumField label="Stacking factor" value={sfac} onChange={setSfac} />
+                <Field label="Flux (Bmax)">
+                  <SearchableSelect
+                    dense
+                    value={flux > 0 ? String(flux) : ''}
+                    onChange={(v) => setFlux(parseFloat(v) || 0)}
+                    options={fluxPoints.map((p) => ({ value: String(p.flux), label: `${p.flux} T (${Math.round(p.flux * 10000)} G)` }))}
+                    placeholder={
+                      !grade ? 'Pick grade first'
+                      : !hasFluxData ? `No test data for "${grade}"`
+                      : 'Select flux…'
+                    }
+                    disabled={!grade || !hasFluxData}
+                  />
+                </Field>
+              </div>
+              {flux > 0 && (
+                <div className="mt-3 grid grid-cols-3 gap-x-3 gap-y-2 rounded-lg bg-violet-50/60 px-3 py-2.5 sm:grid-cols-6">
+                  <Stat label="Bmax (G)" value={`${Math.round(flux * 10000)}`} />
+                  <Stat label="AT/cm" value={ateCm > 0 ? ateCm.toFixed(4) : '—'} />
+                  <Stat label="V (Volts)" value={test.testVoltage > 0 ? test.testVoltage.toFixed(3) : '—'} />
+                  <Stat label="V (mV)" value={test.testVoltageMv > 0 ? test.testVoltageMv.toFixed(2) : '—'} />
+                  <Stat label="Ie max (A)" value={test.testCurrentA > 0 ? test.testCurrentA.toFixed(5) : (ateCm === 0 ? 'Set AT/cm' : '—')} />
+                  <Stat label="Ie max (mA)" value={test.testCurrent > 0 ? test.testCurrent.toFixed(2) : '—'} />
+                </div>
+              )}
+            </div>
           </>
         ) : (
           <>
