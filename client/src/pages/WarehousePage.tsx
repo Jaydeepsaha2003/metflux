@@ -1,12 +1,12 @@
 // Store / Warehouse — manage named stores and the finished-goods stock that was
 // sent in from overproduction. "Stock Out" dispatches stock to a customer's
 // sales-order line, creating a normal dispatch that flows into packing & invoices.
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Warehouse, Plus, Loader2, PackageOpen, Truck, X, FileText, CheckCircle2,
-  Pencil, Trash2, PackagePlus, Check,
+  Pencil, Trash2, PackagePlus, Check, ChevronRight, ChevronDown,
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
@@ -45,6 +45,7 @@ type SoLine = {
 };
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
+const fmtDate = (iso: string | null) => { if (!iso) return '—'; const d = new Date(iso); return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); };
 const coreShort = (ct: string) => (ct === 'TOROIDAL' ? 'Toro' : ct === 'NANO' ? 'Nano' : ct === 'COMPOSITE' ? 'Comp' : 'Rect');
 const coreLabel: Record<string, string> = { TOROIDAL: 'Toroidal', RECTANGULAR: 'Rectangular', NANO: 'Nano', COMPOSITE: 'Composite' };
 const coreBadge: Record<string, string> = { TOROIDAL: 'bg-amber-50 text-amber-700', NANO: 'bg-violet-50 text-violet-700', RECTANGULAR: 'bg-rose-50 text-rose-700', COMPOSITE: 'bg-teal-50 text-teal-700' };
@@ -68,6 +69,8 @@ export const WarehousePage = () => {
   const [renameVal, setRenameVal] = useState('');
   const [openingOpen, setOpeningOpen] = useState(false);
   const [storeErr, setStoreErr] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleExpand = (key: string) => setExpanded((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
   const { data: stores } = useQuery({ queryKey: ['warehouses'], queryFn: () => api<{ items: Store[] }>('/warehouses') });
   const { data: stock, isLoading } = useQuery({
@@ -187,6 +190,7 @@ export const WarehousePage = () => {
             <table className="w-full text-sm whitespace-nowrap">
               <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>
+                  <th className="w-8 px-2 py-2.5" />
                   <th className="px-3 py-2.5">Store</th>
                   <th className="px-3 py-2.5">Type</th>
                   <th className="px-3 py-2.5">Grade</th>
@@ -199,27 +203,42 @@ export const WarehousePage = () => {
                 </tr>
               </thead>
               <tbody>
-                {stock.items.map((s) => (
-                  <tr key={`${s.warehouseId}:${s.specKey}`} className="border-t border-slate-100 hover:bg-slate-50/60">
-                    <td className="px-3 py-2.5 text-slate-600">{s.warehouseName}</td>
-                    <td className="px-3 py-2.5">
-                      <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', s.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : s.coreType === 'NANO' ? 'bg-violet-50 text-violet-700' : 'bg-rose-50 text-rose-700')}>
-                        {coreShort(s.coreType)}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5">{s.grade}</td>
-                    <td className="px-3 py-2.5 text-slate-600">{s.material}</td>
-                    <td className="px-3 py-2.5 font-mono text-xs">{s.measure}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-slate-500">{s.weightPerPc.toFixed(3)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-slate-900">{s.onHand}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums font-mono text-slate-600">{s.onHandWeight.toFixed(3)}</td>
-                    <td className="px-3 py-2.5 text-center">
-                      <button onClick={() => setStockOut(s)} className="inline-flex items-center gap-1 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700">
-                        <Truck className="h-3.5 w-3.5" /> Stock Out
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {stock.items.map((s) => {
+                  const key = `${s.warehouseId}:${s.specKey}`;
+                  const open = expanded.has(key);
+                  return (
+                    <Fragment key={key}>
+                      <tr className="border-t border-slate-100 hover:bg-slate-50/60 cursor-pointer" onClick={() => toggleExpand(key)}>
+                        <td className="px-2 py-2.5 text-center text-slate-400">{open ? <ChevronDown className="inline h-4 w-4" /> : <ChevronRight className="inline h-4 w-4" />}</td>
+                        <td className="px-3 py-2.5 text-slate-600">{s.warehouseName}</td>
+                        <td className="px-3 py-2.5">
+                          <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', s.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : s.coreType === 'NANO' ? 'bg-violet-50 text-violet-700' : 'bg-rose-50 text-rose-700')}>
+                            {coreShort(s.coreType)}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5">{s.grade}</td>
+                        <td className="px-3 py-2.5 text-slate-600">{s.material}</td>
+                        <td className="px-3 py-2.5 font-mono text-xs">{s.measure}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-slate-500">{s.weightPerPc.toFixed(3)}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-slate-900">{s.onHand}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums font-mono text-slate-600">{s.onHandWeight.toFixed(3)}</td>
+                        <td className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                          <button onClick={() => setStockOut(s)} className="inline-flex items-center gap-1 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700">
+                            <Truck className="h-3.5 w-3.5" /> Stock Out
+                          </button>
+                        </td>
+                      </tr>
+                      {open && (
+                        <tr className="bg-slate-50/60">
+                          <td />
+                          <td colSpan={9} className="px-3 py-2">
+                            <MovementsPanel warehouseId={s.warehouseId} specKey={s.specKey} />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -244,6 +263,52 @@ export const WarehousePage = () => {
       )}
 
       {confirmDialog}
+    </div>
+  );
+};
+
+/* ── Stock movements drill-down — the individual IN/OUT rows behind an on-hand
+   line, so the notes entered on stock-in / opening stock are visible here. ── */
+type Movement = {
+  id: string; direction: 'IN' | 'OUT'; pcs: number; totalWeight: number; notes: string | null;
+  movementDate: string | null; vehicleNo: string | null; poNumber: string | null; customerName: string | null;
+};
+const MovementsPanel = ({ warehouseId, specKey }: { warehouseId: string; specKey: string }) => {
+  const { data, isLoading } = useQuery({
+    queryKey: ['warehouse-movements', warehouseId, specKey],
+    queryFn: () => api<{ items: Movement[] }>(`/warehouses/movements?warehouseId=${encodeURIComponent(warehouseId)}&specKey=${encodeURIComponent(specKey)}`),
+  });
+  const items = data?.items ?? [];
+  if (isLoading) return <div className="py-3 text-center text-slate-400"><Loader2 className="mx-auto h-4 w-4 animate-spin" /></div>;
+  if (!items.length) return <div className="py-3 text-center text-xs text-slate-400">No movements.</div>;
+  return (
+    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <table className="w-full text-xs">
+        <thead className="bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
+          <tr>
+            <th className="px-2 py-1.5">Date</th>
+            <th className="px-2 py-1.5">Movement</th>
+            <th className="px-2 py-1.5 text-right">Pcs</th>
+            <th className="px-2 py-1.5">Note</th>
+            <th className="px-2 py-1.5">Reference</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {items.map((m) => (
+            <tr key={m.id}>
+              <td className="px-2 py-1 text-slate-600">{fmtDate(m.movementDate)}</td>
+              <td className="px-2 py-1">
+                <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', m.direction === 'IN' ? 'bg-emerald-50 text-emerald-700' : 'bg-brand-50 text-brand-700')}>
+                  {m.direction === 'IN' ? 'Stock In' : 'Stock Out'}
+                </span>
+              </td>
+              <td className="px-2 py-1 text-right font-semibold tabular-nums">{m.direction === 'IN' ? '+' : '−'}{m.pcs}</td>
+              <td className="px-2 py-1 text-slate-700">{m.notes || '—'}</td>
+              <td className="px-2 py-1 text-slate-500">{[m.customerName, m.poNumber, m.vehicleNo].filter(Boolean).join(' · ') || '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 };

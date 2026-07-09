@@ -111,6 +111,31 @@ router.get('/stock', requirePermission('dispatch'), asyncHandler(async (req, res
   });
 }));
 
+/* ---------- Movements for one store + spec (drill-down, shows notes) ---------- */
+router.get('/movements', requirePermission('dispatch'), asyncHandler(async (req, res) => {
+  const { warehouseId, specKey } = z.object({
+    warehouseId: z.string().min(1),
+    specKey: z.string().min(1),
+  }).parse(req.query);
+  const rows = await q(
+    `SELECT sm.\`id\`, sm.\`direction\`, sm.\`pcs\`, sm.\`totalWeight\`, sm.\`notes\`,
+            sm.\`movementDate\`, sm.\`vehicleNo\`,
+            po.\`poNumber\` AS poNumber, c.\`name\` AS customerName
+       FROM \`StockMovement\` sm
+       LEFT JOIN \`PoOrderItem\` it ON it.\`id\` = sm.\`poOrderItemId\`
+       LEFT JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
+       LEFT JOIN \`Customer\` c ON c.\`id\` = po.\`customerId\`
+      WHERE sm.\`companyId\` = ? AND sm.\`warehouseId\` = ? AND sm.\`specKey\` = ? AND sm.\`isRejection\` = 0
+      ORDER BY sm.\`movementDate\` DESC, sm.\`createdAt\` DESC`,
+    [req.tenant.companyId, warehouseId, specKey]
+  );
+  res.json({ items: rows.map((r) => ({
+    id: r.id, direction: r.direction, pcs: Number(r.pcs) || 0, totalWeight: Number(r.totalWeight) || 0,
+    notes: r.notes, movementDate: r.movementDate, vehicleNo: r.vehicleNo,
+    poNumber: r.poNumber ?? null, customerName: r.customerName ?? null,
+  })) });
+}));
+
 /* ---------- Spec catalog (for the opening-stock dropdowns) ---------- */
 // Distinct grade / material / measure combos ever ordered, with their dims — so
 // opening stock can be picked from real items and its weight auto-computed.
