@@ -76,6 +76,17 @@ const main = async () => {
   );
   console.log('[migrate] StockMovement table ready.');
 
+  // ── StockMovement.isRejection — an IN that is a REJECTED transfer to store.
+  //    Rejected stock is set aside: it's removed from the production floor (so it
+  //    won't show as ready-to-dispatch) but is NOT sellable store stock, so it
+  //    never appears in stock-out. Overproduction store-ins stay isRejection=0.
+  if (!(await columnExists('StockMovement', 'isRejection'))) {
+    await pool.query('ALTER TABLE `StockMovement` ADD COLUMN `isRejection` TINYINT(1) NOT NULL DEFAULT 0');
+    console.log('[migrate] added StockMovement.isRejection');
+  } else {
+    console.log('[migrate] StockMovement.isRejection already exists — skipping');
+  }
+
   // ── Dispatch.sourceType + warehouseId ──
   if (!(await columnExists('Dispatch', 'sourceType'))) {
     await pool.query("ALTER TABLE `Dispatch` ADD COLUMN `sourceType` ENUM('PRODUCTION','WAREHOUSE') NOT NULL DEFAULT 'PRODUCTION'");

@@ -54,6 +54,7 @@ const ProductionListPage    = page(() => import('@/pages/ProductionListPage'), '
 const ProductionSummaryPage = page(() => import('@/pages/ProductionSummaryPage'), 'ProductionSummaryPage');
 const ProductionNewPage     = page(() => import('@/pages/ProductionNewPage'), 'ProductionNewPage');
 const ProductionEditPage    = page(() => import('@/pages/ProductionEditPage'), 'ProductionEditPage');
+const RejectionPage         = page(() => import('@/pages/RejectionPage'), 'RejectionPage');
 const DispatchListPage    = page(() => import('@/pages/DispatchListPage'), 'DispatchListPage');
 const DispatchNewPage     = page(() => import('@/pages/DispatchNewPage'), 'DispatchNewPage');
 const DispatchEditPage    = page(() => import('@/pages/DispatchEditPage'), 'DispatchEditPage');
@@ -116,6 +117,7 @@ export const App = () => {
       <Route path="/production"          element={<ProductionListPage />} />
       <Route path="/production/summary"  element={<ProductionSummaryPage />} />
       <Route path="/production/new"  element={<ProductionNewPage />} />
+      <Route path="/production/rejection" element={<RejectionPage />} />
       <Route path="/production/:id"  element={<ProductionEditPage />} />
 
       {/* Dispatch */}

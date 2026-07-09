@@ -5,7 +5,7 @@ import {
   Plus, ListChecks, BarChart3, Layers, Building2, Factory, Inbox, ClipboardList,
   PanelLeftClose, Users2, Truck, PackageCheck, ShoppingCart, Activity, RotateCcw, Menu, X, ShieldAlert,
   Receipt, Clock, Wallet, TrendingUp, Calculator, Warehouse, MonitorSmartphone, History,
-  Image as ImageIcon, ArrowLeftRight,
+  Image as ImageIcon, ArrowLeftRight, Ban,
 } from 'lucide-react';
 import { useAuthStore, can, activeMembership } from '@/store/auth';
 import { useBranding } from '@/store/branding';
@@ -47,6 +47,7 @@ const NAV: NavItem[] = [
     children: [
       { kind: 'leaf', to: '/work-allotment',  label: 'Work Allotment', icon: ClipboardList, perm: 'assign_work' },
       { kind: 'leaf', to: '/production/new',  label: 'Receive',        icon: Inbox,         perm: 'rec_production' },
+      { kind: 'leaf', to: '/production/rejection', label: 'Rejection',  icon: Ban,           perm: 'rec_production' },
       { kind: 'leaf', to: '/production',      label: 'Modify',         icon: ClipboardList, perm: 'view_po' },
       { kind: 'leaf', to: '/production/summary', label: 'Summary',     icon: BarChart3,     perm: 'view_po' },
     ],
