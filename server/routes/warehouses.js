@@ -455,6 +455,44 @@ router.get('/rejections', requireAnyPermission(...REJ_PERM), asyncHandler(async 
   })) });
 }));
 
+// Modify a rejection — change pcs, store, note or date.
+router.patch('/rejections/:id', requireAnyPermission(...REJ_PERM), asyncHandler(async (req, res) => {
+  const data = z.object({
+    warehouseId:  z.string().min(1).optional(),
+    pcs:          z.coerce.number().int().positive().optional(),
+    movementDate: z.coerce.date().optional(),
+    notes:        z.string().trim().max(400).optional().nullable(),
+  }).parse(req.body);
+  const row = await qOne("SELECT * FROM `StockMovement` WHERE `id` = ? AND `companyId` = ? AND `isRejection` = 1", [req.params.id, req.tenant.companyId]);
+  if (!row) throw new AppError('Rejection not found', 404, 'NOT_FOUND');
+
+  const patch = {};
+  if (data.warehouseId && data.warehouseId !== row.warehouseId) {
+    const wh = await qOne('SELECT `id` FROM `Warehouse` WHERE `id` = ? AND `companyId` = ? AND `isActive` = 1', [data.warehouseId, req.tenant.companyId]);
+    if (!wh) throw new AppError('Store not found or inactive', 404, 'NOT_FOUND');
+    patch.warehouseId = data.warehouseId;
+  }
+  if (data.pcs !== undefined && data.pcs !== row.pcs) {
+    if (row.poOrderItemId) {
+      // Available EXCLUDING this rejection's own pcs (they're being re-set).
+      const item = await qOne(
+        `SELECT (SELECT COALESCE(SUM(pp.\`pcs\`),0) FROM \`Production\` pp WHERE pp.\`poOrderItemId\` = ?) AS produced,
+                (SELECT COALESCE(SUM(dd.\`pcs\`),0) FROM \`Dispatch\` dd WHERE dd.\`poOrderItemId\` = ?) AS dispatched,
+                (SELECT COALESCE(SUM(sm.\`pcs\`),0) FROM \`StockMovement\` sm WHERE sm.\`poOrderItemId\` = ? AND sm.\`direction\` = 'IN' AND sm.\`id\` <> ?) AS otherIn`,
+        [row.poOrderItemId, row.poOrderItemId, row.poOrderItemId, row.id]
+      );
+      const available = Math.max(Number(item?.produced || 0) - Number(item?.dispatched || 0) - Number(item?.otherIn || 0), 0);
+      if (data.pcs > available) throw new AppError(`Pcs (${data.pcs}) exceeds available produced pcs (${available}).`, 400, 'PCS_EXCEEDS');
+    }
+    patch.pcs = data.pcs;
+    patch.totalWeight = w3(data.pcs * (Number(row.weightPerPc) || 0));
+  }
+  if (data.movementDate !== undefined) patch.movementDate = data.movementDate;
+  if (data.notes !== undefined) patch.notes = (data.notes && data.notes.trim()) ? data.notes.trim() : 'Rejection';
+  if (Object.keys(patch).length) await update('StockMovement', row.id, patch);
+  res.json({ ok: true });
+}));
+
 // Undo a rejection — returns those pcs to the production floor.
 router.delete('/rejections/:id', requireAnyPermission(...REJ_PERM), asyncHandler(async (req, res) => {
   const row = await qOne("SELECT `id` FROM `StockMovement` WHERE `id` = ? AND `companyId` = ? AND `isRejection` = 1", [req.params.id, req.tenant.companyId]);
