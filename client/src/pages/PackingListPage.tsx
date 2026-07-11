@@ -260,10 +260,6 @@ export const PackingListPage = () => {
   const stateLabel = uniqueStates.join(', ') || '—';
   const grandTotalPcs = rows.reduce((s, r) => s + (parseInt(r.qty) || 0), 0);
   const grandTotalWeight = rows.reduce((s, r) => s + (parseFloat(r.weight) || 0), 0);
-  // Amount = per-pc rate × pcs, summed. Only meaningful when rates are present.
-  const grandTotalAmount = rows.reduce((s, r) => s + (parseFloat(r.rate) || 0) * (parseInt(r.qty) || 0), 0);
-  const hasRates = rows.some((r) => (parseFloat(r.rate) || 0) > 0);
-  const inrAmt = (n: number) => '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   // Auto-save an in-progress draft (build mode only) so a refresh or accidental
   // navigation never loses the invoice details, tested/approved-by, or remarks.
@@ -407,7 +403,7 @@ export const PackingListPage = () => {
         customerLabel ? `Customer: ${customerLabel}` : null,
         invoiceNo ? `Invoice: ${invoiceNo}` : null,
         `Date: ${woDate ? fmtDate(woDate) : ''}`,
-        `Total: ${grandTotalPcs} pcs · ${grandTotalWeight.toFixed(3)} kg${hasRates ? ` · ${inrAmt(grandTotalAmount)}` : ''}`,
+        `Total: ${grandTotalPcs} pcs · ${grandTotalWeight.toFixed(3)} kg`,
       ].filter(Boolean).join('\n');
       await shareViaWhatsApp({
         message,
@@ -728,7 +724,6 @@ export const PackingListPage = () => {
             <span className="uppercase tracking-widest text-slate-300 text-sm self-center">Grand Total</span>
             <span className="text-[22px]">{grandTotalPcs} <span className="text-sm font-medium text-slate-300">pcs</span></span>
             <span className="text-[22px]">{grandTotalWeight.toFixed(3)} <span className="text-sm font-medium text-slate-300">kg</span></span>
-            {hasRates && <span className="text-[22px]">{inrAmt(grandTotalAmount)} <span className="text-sm font-medium text-slate-300">amount</span></span>}
           </div>
 
           {/* Signature footer */}
