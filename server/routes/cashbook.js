@@ -141,7 +141,7 @@ router.get('/accounts', requireAnyPermission(...PERM), asyncHandler(async (req, 
    ledger and the Amount Receivable / Payable aging (Debit = they owe us more,
    Credit = we owe them more) but NOT into the Cashbook Summary (no cash moved). */
 const nextJvNumber = async (companyId, db = { q }) => {
-  const rows = await db.q('SELECT `voucherNo` FROM `JournalVoucher` WHERE `companyId` = ?', [companyId]);
+  const rows = await db.q("SELECT `voucherNo` FROM `JournalVoucher` WHERE `companyId` = ? AND `source` = 'SUSPENSE'", [companyId]);
   let max = 0;
   for (const r of rows) { const m = /(\d+)\s*$/.exec(r.voucherNo || ''); if (m) max = Math.max(max, parseInt(m[1], 10)); }
   return `SE/${String(max + 1).padStart(4, '0')}`;
@@ -149,7 +149,7 @@ const nextJvNumber = async (companyId, db = { q }) => {
 
 router.get('/journal', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
   const rows = await q(
-    'SELECT `id`, `voucherNo`, `entryDate`, `account`, `side`, `amount`, `narration`, `createdAt` FROM `JournalVoucher` WHERE `companyId` = ? ORDER BY `entryDate` DESC, `createdAt` DESC LIMIT 500',
+    "SELECT `id`, `voucherNo`, `entryDate`, `account`, `side`, `amount`, `narration`, `createdAt` FROM `JournalVoucher` WHERE `companyId` = ? AND `source` = 'SUSPENSE' ORDER BY `entryDate` DESC, `createdAt` DESC LIMIT 500",
     [req.tenant.companyId]
   );
   res.json({ items: rows });
@@ -179,7 +179,7 @@ router.post('/journal', requireAnyPermission(...PERM), asyncHandler(async (req, 
 }));
 
 router.delete('/journal/:id', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
-  const row = await qOne('SELECT `id` FROM `JournalVoucher` WHERE `id` = ? AND `companyId` = ?', [req.params.id, req.tenant.companyId]);
+  const row = await qOne("SELECT `id` FROM `JournalVoucher` WHERE `id` = ? AND `companyId` = ? AND `source` = 'SUSPENSE'", [req.params.id, req.tenant.companyId]);
   if (!row) throw new AppError('Not found', 404, 'NOT_FOUND');
   await del('JournalVoucher', row.id);
   res.status(204).end();
@@ -486,8 +486,11 @@ router.get('/account-ledger', requireAnyPermission(...PERM), asyncHandler(async 
   } catch { /* absent */ }
   tot.journalDebit = 0; tot.journalCredit = 0;
   try {
-    const rows = await q('SELECT `id`, `entryDate` dt, `account` party, `side`, `amount` amt, `voucherNo` ref, `narration` FROM `JournalVoucher` WHERE `companyId` = ?', [companyId]);
-    for (const r of rows) if (normName(r.party) === key) { const t = r.side === 'DEBIT' ? 'JOURNAL_DR' : 'JOURNAL_CR'; const a = Math.abs(Number(r.amt)); items.push({ id: r.id, date: r.dt, type: t, ref: r.ref, note: r.narration, amount: a }); if (t === 'JOURNAL_DR') tot.journalDebit += a; else tot.journalCredit += a; }
+    const rows = await q('SELECT `id`, `entryDate` dt, `account` party, `side`, `amount` amt, `voucherNo` ref, `narration`, `source` FROM `JournalVoucher` WHERE `companyId` = ?', [companyId]);
+    // Only single-legged Suspense entries carry an `id` here (deletable from the
+    // ledger modal); imported multi-line journal lines are read-only there —
+    // deleting one line would unbalance its voucher.
+    for (const r of rows) if (normName(r.party) === key) { const t = r.side === 'DEBIT' ? 'JOURNAL_DR' : 'JOURNAL_CR'; const a = Math.abs(Number(r.amt)); items.push({ id: r.source === 'SUSPENSE' ? r.id : undefined, date: r.dt, type: t, ref: r.ref, note: r.narration, amount: a }); if (t === 'JOURNAL_DR') tot.journalDebit += a; else tot.journalCredit += a; }
   } catch { /* JournalVoucher table absent on minimal installs */ }
   items.sort((a, b) => (a.date ? new Date(a.date).getTime() : 0) - (b.date ? new Date(b.date).getTime() : 0));
   const round = (n) => Math.round(n * 100) / 100;

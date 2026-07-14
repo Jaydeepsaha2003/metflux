@@ -55,6 +55,7 @@ const ProductionSummaryPage = page(() => import('@/pages/ProductionSummaryPage')
 const ProductionNewPage     = page(() => import('@/pages/ProductionNewPage'), 'ProductionNewPage');
 const ProductionEditPage    = page(() => import('@/pages/ProductionEditPage'), 'ProductionEditPage');
 const RejectionPage         = page(() => import('@/pages/RejectionPage'), 'RejectionPage');
+const JournalRegisterPage   = page(() => import('@/pages/JournalRegisterPage'), 'JournalRegisterPage');
 const DispatchListPage    = page(() => import('@/pages/DispatchListPage'), 'DispatchListPage');
 const DispatchNewPage     = page(() => import('@/pages/DispatchNewPage'), 'DispatchNewPage');
 const DispatchEditPage    = page(() => import('@/pages/DispatchEditPage'), 'DispatchEditPage');
@@ -149,6 +150,7 @@ export const App = () => {
       <Route path="/sales-invoices/payments" element={<ReceivePaymentsPage />} />
       <Route path="/accounts/receipts-payments" element={<ReceiptsPaymentsPage />} />
       <Route path="/accounts/cashbook-summary" element={<CashbookSummaryPage />} />
+      <Route path="/accounts/journal" element={<JournalRegisterPage />} />
       <Route path="/accounts/purchases"      element={<PurchasesPage />} />
       <Route path="/accounts/creditor-aging" element={<CreditorAgingPage />} />
 

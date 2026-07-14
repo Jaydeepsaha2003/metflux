@@ -5,7 +5,7 @@ import {
   Plus, ListChecks, BarChart3, Layers, Building2, Factory, Inbox, ClipboardList,
   PanelLeftClose, Users2, Truck, PackageCheck, ShoppingCart, Activity, RotateCcw, Menu, X, ShieldAlert,
   Receipt, Clock, Wallet, TrendingUp, Calculator, Warehouse, MonitorSmartphone, History,
-  Image as ImageIcon, ArrowLeftRight, Ban,
+  Image as ImageIcon, ArrowLeftRight, Ban, BookText,
 } from 'lucide-react';
 import { useAuthStore, can, activeMembership } from '@/store/auth';
 import { useBranding } from '@/store/branding';
@@ -70,6 +70,7 @@ const NAV: NavItem[] = [
       { kind: 'leaf', to: '/accounts/purchases',      label: 'Purchase Register', icon: ShoppingCart, perm: 'view_purchase_register' },
       { kind: 'leaf', to: '/accounts/receipts-payments', label: 'Receipts & Payments', icon: ArrowLeftRight, perm: 'receive_payments' },
       { kind: 'leaf', to: '/accounts/cashbook-summary', label: 'Cashbook Summary', icon: BarChart3, perm: 'receive_payments' },
+      { kind: 'leaf', to: '/accounts/journal', label: 'Journal', icon: BookText, perm: 'receive_payments' },
       { kind: 'leaf', to: '/accounts/creditor-aging', label: 'Amount Payable',    icon: Clock,        perm: 'view_creditor_aging' },
       { kind: 'leaf', to: '/sales-invoices/aging',    label: 'Amount Receivable', icon: Clock,        perm: 'view_debtor_aging' },
       { kind: 'leaf', to: '/sales-invoices/payments', label: 'Receive Payments',  icon: Wallet,       perm: 'receive_payments' },
