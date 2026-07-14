@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Save, Trash2, Loader2, Truck } from 'lucide-react';
+import { ArrowLeft, Save, Trash2, Loader2, Truck, ArrowLeftRight } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { useConfirm } from '@/hooks/useConfirm';
 import { useAuthStore } from '@/store/auth';
@@ -45,6 +45,7 @@ export const SupplierFormPage = () => {
   const [form, setForm] = useState<Form>(empty);
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
   const [error, setError] = useState<{ message: string; details?: string[] } | null>(null);
+  const [convertError, setConvertError] = useState<string | null>(null);
   const { confirm, confirmDialog } = useConfirm();
 
   // Pull company list from the auth store — no extra API call needed.
@@ -111,6 +112,24 @@ export const SupplierFormPage = () => {
       navigate('/settings/suppliers');
     },
   });
+
+  const convert = useMutation({
+    mutationFn: () => api<{ customerId: string }>(`/suppliers/${id}/convert-to-customer`, { method: 'POST' }),
+    onSuccess: () => {
+      ['suppliers', 'customers', 'creditor-aging', 'debtor-aging'].forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
+      navigate('/customers');
+    },
+    onError: (e) => setConvertError(e instanceof ApiError ? e.message : 'Convert failed'),
+  });
+  const onConvert = async () => {
+    setConvertError(null);
+    const ok = await confirm({
+      title: 'Convert to customer?',
+      message: <>Reclassify <strong>{existing?.name ?? 'this supplier'}</strong> as a customer? All details carry over and a customer code is assigned. Only allowed when the supplier has no purchase orders, bills or payments.</>,
+      confirmLabel: 'Convert',
+    });
+    if (ok) convert.mutate();
+  };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -265,6 +284,24 @@ export const SupplierFormPage = () => {
           </div>
         </div>
       </form>
+
+      {isEdit && (
+        <div className="card p-5">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <ArrowLeftRight className="h-4 w-4 text-brand-600" /> Convert to customer
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Created in the wrong list? Move this party to <strong>Customers</strong> with every detail intact (a customer code is assigned). Allowed only when it has no purchase orders, bills or payments — a purchase can’t become a sale.
+          </p>
+          {convertError && (
+            <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{convertError}</div>
+          )}
+          <button type="button" onClick={onConvert} disabled={convert.isPending}
+            className="btn-ghost mt-3 border border-slate-300 text-slate-700 hover:bg-slate-50">
+            {convert.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowLeftRight className="h-4 w-4" />} Convert to customer
+          </button>
+        </div>
+      )}
       {confirmDialog}
     </div>
   );

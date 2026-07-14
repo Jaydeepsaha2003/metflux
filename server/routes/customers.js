@@ -1,7 +1,7 @@
 // Customers CRUD — scoped to the active company.
 import { Router } from 'express';
 import { z } from 'zod';
-import { q, qOne, insert, update, del } from '../lib/db.js';
+import { q, qOne, insert, update, del, txn } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requireRole, hashPassword } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
@@ -430,6 +430,54 @@ router.delete('/:id', requireRole('MANAGER'), asyncHandler(async (req, res) => {
   await findOwned(req, id);
   await del('Customer', id);
   res.status(204).end();
+}));
+
+/* POST /:id/convert-to-supplier — reclassify a mistakenly-created customer as a
+   supplier. Carries over all details; BLOCKS if the customer has any sales
+   transactions so nothing financial is ever silently reinterpreted. */
+router.post('/:id/convert-to-supplier', requireRole('COMPANY_ADMIN'), asyncHandler(async (req, res) => {
+  const { id } = idParam.parse(req.params);
+  const companyId = req.tenant.companyId;
+  const cust = await qOne('SELECT * FROM `Customer` WHERE `id` = ? AND `companyId` = ?', [id, companyId]);
+  if (!cust) throw new AppError('Customer not found', 404, 'NOT_FOUND');
+  const nk = normName(cust.name);
+
+  // Block on any customer-side transaction (matched by id or normalized name).
+  const [poN, retN, siRows, payRows] = await Promise.all([
+    qOne('SELECT COUNT(*) n FROM `PoOrder` WHERE `customerId` = ? AND `companyId` = ?', [id, companyId]),
+    qOne('SELECT COUNT(*) n FROM `Return` WHERE `customerId` = ? AND `companyId` = ?', [id, companyId]).catch(() => ({ n: 0 })),
+    q('SELECT `customerId`, `customerName` FROM `SalesInvoice` WHERE `companyId` = ?', [companyId]).catch(() => []),
+    q('SELECT `customerId`, `customerName` FROM `Payment` WHERE `companyId` = ?', [companyId]).catch(() => []),
+  ]);
+  const siN = siRows.filter((r) => r.customerId === id || normName(r.customerName) === nk).length;
+  const payN = payRows.filter((r) => r.customerId === id || normName(r.customerName) === nk).length;
+  const blockers = [];
+  if (Number(poN?.n) > 0) blockers.push(`${poN.n} sales order(s)`);
+  if (siN > 0) blockers.push(`${siN} sales invoice(s)`);
+  if (payN > 0) blockers.push(`${payN} receipt(s)`);
+  if (Number(retN?.n) > 0) blockers.push(`${retN.n} return(s)`);
+  if (blockers.length) {
+    throw new AppError(`Can't convert — this customer has ${blockers.join(', ')}. A sale can't become a purchase, so clear or reassign these first.`, 400, 'HAS_TRANSACTIONS');
+  }
+
+  // Don't create a duplicate of an existing supplier in this company.
+  const dupe = await qOne(
+    `SELECT s.\`id\` FROM \`Supplier\` s INNER JOIN \`SupplierMembership\` sm ON sm.\`supplierId\` = s.\`id\`
+      WHERE sm.\`companyId\` = ? AND s.\`name\` = ?`, [companyId, cust.name]);
+  if (dupe) throw new AppError('A supplier with this exact name already exists in this company.', 409, 'DUPLICATE');
+
+  const supplier = await txn(async (tx) => {
+    const created = await tx.insert('Supplier', {
+      name: cust.name, email: cust.email ?? null, phone: cust.phone ?? null, address: cust.address ?? null,
+      gstNumber: cust.gstNumber ?? null, gstRate: cust.gstRate ?? 0, state: cust.state ?? null,
+      dueDays: cust.dueDays ?? null, notes: cust.notes ?? null,
+      companyId, createdById: req.auth.userId,
+    });
+    await tx.insert('SupplierMembership', { supplierId: created.id, companyId });
+    await tx.q('DELETE FROM `Customer` WHERE `id` = ?', [id]);
+    return created;
+  });
+  res.json({ ok: true, supplierId: supplier.id, name: cust.name });
 }));
 
 export default router;

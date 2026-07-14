@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Save, Trash2, Loader2, Building2 } from 'lucide-react';
+import { ArrowLeft, Save, Trash2, Loader2, Building2, ArrowLeftRight } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { useConfirm } from '@/hooks/useConfirm';
 
@@ -38,6 +38,7 @@ export const CustomerFormPage = () => {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<Form>(empty);
   const [error, setError] = useState<string | null>(null);
+  const [convertError, setConvertError] = useState<string | null>(null);
   const { confirm, confirmDialog } = useConfirm();
 
   const { data: existing } = useQuery({
@@ -93,6 +94,24 @@ export const CustomerFormPage = () => {
       navigate('/customers');
     },
   });
+
+  const convert = useMutation({
+    mutationFn: () => api<{ supplierId: string }>(`/customers/${id}/convert-to-supplier`, { method: 'POST' }),
+    onSuccess: () => {
+      ['customers', 'suppliers', 'debtor-aging', 'creditor-aging'].forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
+      navigate('/settings/suppliers');
+    },
+    onError: (e) => setConvertError(e instanceof ApiError ? e.message : 'Convert failed'),
+  });
+  const onConvert = async () => {
+    setConvertError(null);
+    const ok = await confirm({
+      title: 'Convert to supplier?',
+      message: <>Reclassify <strong>{existing?.name ?? 'this customer'}</strong> as a supplier? All details carry over. Only allowed when the customer has no sales orders, invoices or receipts.</>,
+      confirmLabel: 'Convert',
+    });
+    if (ok) convert.mutate();
+  };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -237,6 +256,24 @@ export const CustomerFormPage = () => {
           </div>
         </div>
       </form>
+
+      {isEdit && (
+        <div className="card p-5">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <ArrowLeftRight className="h-4 w-4 text-brand-600" /> Convert to supplier
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Created in the wrong list? Move this party to <strong>Suppliers</strong> with every detail intact. Allowed only when it has no sales orders, invoices or receipts — a sale can’t become a purchase.
+          </p>
+          {convertError && (
+            <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{convertError}</div>
+          )}
+          <button type="button" onClick={onConvert} disabled={convert.isPending}
+            className="btn-ghost mt-3 border border-slate-300 text-slate-700 hover:bg-slate-50">
+            {convert.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowLeftRight className="h-4 w-4" />} Convert to supplier
+          </button>
+        </div>
+      )}
       {confirmDialog}
     </div>
   );

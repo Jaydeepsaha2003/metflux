@@ -5,12 +5,23 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { q, qOne, txn, update } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
-import { requireAuth, requirePermission } from '../lib/auth.js';
+import { requireAuth, requirePermission, requireRole } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 import { importBody, cellPick, numOpt, rowIsBlank, errMessage } from '../lib/importHelpers.js';
+import { normName } from '../lib/invoicing.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
+
+/** First 3 alpha chars of a name, padded — mirrors the Customers module. */
+const prefixFromName = (name) => (String(name ?? '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) + 'XXX').slice(0, 3);
+/** Next free "XYZ-NNN" customer code for a prefix in this company. */
+const nextCustomerCode = async (companyId, prefix) => {
+  const rows = await q('SELECT `customerCode` FROM `Customer` WHERE `companyId` = ? AND `customerCode` LIKE ?', [companyId, `${prefix}-%`]);
+  let max = 0;
+  for (const r of rows) { const m = /-(\d+)$/.exec(r.customerCode ?? ''); if (m) max = Math.max(max, parseInt(m[1], 10)); }
+  return `${prefix}-${String(max + 1).padStart(3, '0')}`;
+};
 
 const idParam = z.object({ id: z.string().min(1) });
 const paginationQuery = z.object({
@@ -238,6 +249,58 @@ router.delete('/:id', requirePermission('add_supplier'), asyncHandler(async (req
     await tx.q('DELETE FROM `Supplier` WHERE `id` = ?', [id]);
   });
   res.status(204).end();
+}));
+
+/* POST /:id/convert-to-customer — reclassify a mistakenly-created supplier as a
+   customer. Carries over all details + assigns a customer code; BLOCKS if the
+   supplier has any purchase transactions, or is shared with other companies. */
+router.post('/:id/convert-to-customer', requireRole('COMPANY_ADMIN'), asyncHandler(async (req, res) => {
+  const { id } = idParam.parse(req.params);
+  const companyId = req.tenant.companyId;
+  const sup = await qOne('SELECT * FROM `Supplier` WHERE `id` = ?', [id]);
+  const inTenant = await isSupplierInTenant(id, companyId);
+  if (!sup || !inTenant) throw new AppError('Supplier not found', 404, 'NOT_FOUND');
+  const nk = normName(sup.name);
+
+  // A Supplier record is shared across companies — only convert one that lives
+  // in this company alone, so other companies aren't affected by the delete.
+  const memberships = await q('SELECT `companyId` FROM `SupplierMembership` WHERE `supplierId` = ?', [id]);
+  if (memberships.length > 1) {
+    throw new AppError("Can't convert — this supplier is shared with other companies. Remove it from those companies first.", 400, 'SHARED');
+  }
+
+  // Block on any purchase-side transaction (name-based, plus PO by id).
+  const [poN, piRows, spRows] = await Promise.all([
+    qOne('SELECT COUNT(*) n FROM `SupplierOrder` WHERE `supplierId` = ? AND `companyId` = ?', [id, companyId]).catch(() => ({ n: 0 })),
+    q('SELECT `supplierName` FROM `PurchaseInvoice` WHERE `companyId` = ?', [companyId]).catch(() => []),
+    q('SELECT `supplierName` FROM `SupplierPayment` WHERE `companyId` = ?', [companyId]).catch(() => []),
+  ]);
+  const piN = piRows.filter((r) => normName(r.supplierName) === nk).length;
+  const spN = spRows.filter((r) => normName(r.supplierName) === nk).length;
+  const blockers = [];
+  if (Number(poN?.n) > 0) blockers.push(`${poN.n} purchase order(s)`);
+  if (piN > 0) blockers.push(`${piN} purchase bill(s)`);
+  if (spN > 0) blockers.push(`${spN} payment(s)`);
+  if (blockers.length) {
+    throw new AppError(`Can't convert — this supplier has ${blockers.join(', ')}. A purchase can't become a sale, so clear or reassign these first.`, 400, 'HAS_TRANSACTIONS');
+  }
+
+  const dupe = await qOne('SELECT `id` FROM `Customer` WHERE `companyId` = ? AND `name` = ?', [companyId, sup.name]);
+  if (dupe) throw new AppError('A customer with this exact name already exists in this company.', 409, 'DUPLICATE');
+
+  const customer = await txn(async (tx) => {
+    const created = await tx.insert('Customer', {
+      customerCode: await nextCustomerCode(companyId, prefixFromName(sup.name)),
+      name: sup.name, email: sup.email ?? null, phone: sup.phone ?? null, address: sup.address ?? null,
+      gstNumber: sup.gstNumber ?? null, gstRate: sup.gstRate ?? 0, state: sup.state ?? null,
+      dueDays: sup.dueDays ?? null, notes: sup.notes ?? null,
+      companyId, createdById: req.auth.userId,
+    });
+    await tx.q('DELETE FROM `SupplierMembership` WHERE `supplierId` = ?', [id]);
+    await tx.q('DELETE FROM `Supplier` WHERE `id` = ?', [id]);
+    return created;
+  });
+  res.json({ ok: true, customerId: customer.id, name: sup.name });
 }));
 
 export default router;
