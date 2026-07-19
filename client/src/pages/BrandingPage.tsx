@@ -2,16 +2,40 @@
 // login screen + sidebar, and used as the browser favicon).
 import { useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Image as ImageIcon, Upload, Trash2, Loader2, Info } from 'lucide-react';
+import { Image as ImageIcon, Upload, Trash2, Loader2, Info, Palette, RotateCcw, Check } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { useBranding } from '@/store/branding';
 
+const DEFAULT_BRAND = '#22c55e';
+const PRESETS = [
+  { name: 'Green (Metflux)', hex: '#22c55e' },
+  { name: 'Blue', hex: '#2563eb' },
+  { name: 'Indigo', hex: '#4f46e5' },
+  { name: 'Teal', hex: '#0d9488' },
+  { name: 'Amber', hex: '#d97706' },
+  { name: 'Red', hex: '#dc2626' },
+];
+
 export const BrandingPage = () => {
   const isPlatform = !!useAuthStore((s) => s.user?.isPlatformAdmin);
-  const { logoUrl, set } = useBranding();
+  const { logoUrl, brandColor, set, setColor } = useBranding();
   const fileRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [color, setLocalColor] = useState(brandColor || DEFAULT_BRAND);
+
+  // Live-preview the whole UI as the colour changes; persist only on Save.
+  const preview = (hex: string) => { setLocalColor(hex); setColor(hex); };
+
+  const saveColor = useMutation({
+    mutationFn: (hex: string) => api<{ brandColor: string | null }>('/app-settings/color', { method: 'PUT', json: { brandColor: hex } }),
+    onSuccess: (r) => { setColor(r.brandColor); setError(null); },
+    onError: (e) => setError(e instanceof Error ? e.message : 'Could not save colour'),
+  });
+  const resetColor = useMutation({
+    mutationFn: () => api<{ brandColor: null }>('/app-settings/color', { method: 'PUT', json: { brandColor: null } }),
+    onSuccess: () => { setColor(null); setLocalColor(DEFAULT_BRAND); setError(null); },
+  });
 
   const upload = useMutation({
     mutationFn: (file: File) => {
@@ -126,6 +150,60 @@ export const BrandingPage = () => {
         <div className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           The logo is stored in the database, so it survives deployments. The favicon updates immediately; other users see it on their next page load.
+        </div>
+      </div>
+
+      {/* ── Brand colour ── */}
+      <div className="card p-5 space-y-4">
+        <div>
+          <h2 className="flex items-center gap-2 text-base font-semibold text-slate-900">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-brand-50 text-brand-600"><Palette className="h-4 w-4" /></span>
+            Brand colour
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Sets the accent colour across the whole app <span className="text-slate-400">and</span> the Packing List / Testing Report PDFs.
+            Each domain has its own — set this per website (e.g. green for Metflux, its logo colour for Toroflux).
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="relative h-12 w-12 cursor-pointer overflow-hidden rounded-xl border border-slate-200 shadow-sm">
+            <span className="absolute inset-0" style={{ backgroundColor: color }} />
+            <input type="color" value={color} onChange={(e) => preview(e.target.value)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+          </label>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500">Hex</span>
+            <input
+              value={color}
+              onChange={(e) => { const v = e.target.value; setLocalColor(v); if (/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v)) setColor(v); }}
+              className="input h-9 w-28 font-mono text-sm"
+              placeholder="#22c55e"
+            />
+          </div>
+          <div className="ml-auto flex gap-2">
+            <button onClick={() => resetColor.mutate()} disabled={resetColor.isPending} className="btn-ghost border border-slate-300 text-slate-600 hover:bg-slate-50">
+              {resetColor.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Reset to green
+            </button>
+            <button onClick={() => saveColor.mutate(color)} disabled={saveColor.isPending || !/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(color)} className="btn-primary">
+              {saveColor.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Save colour
+            </button>
+          </div>
+        </div>
+
+        {/* Presets */}
+        <div className="flex flex-wrap gap-2">
+          {PRESETS.map((p) => (
+            <button key={p.hex} type="button" onClick={() => preview(p.hex)} title={p.name}
+              className="flex items-center gap-1.5 rounded-full border border-slate-200 py-1 pl-1 pr-2.5 text-xs text-slate-600 hover:bg-slate-50">
+              <span className="h-4 w-4 rounded-full" style={{ backgroundColor: p.hex }} />
+              {p.name}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          Changing the swatch previews the theme live. Click <span className="font-medium">Save colour</span> to store it for this deployment — every user picks it up on their next load. {brandColor ? `Current saved colour: ${brandColor}.` : 'No custom colour saved yet (using default green).'}
         </div>
       </div>
     </div>

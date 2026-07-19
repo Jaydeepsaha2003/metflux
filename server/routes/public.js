@@ -15,11 +15,14 @@ const router = Router();
    page + favicon. Unauthenticated; tolerates the table not existing yet. */
 router.get('/app-branding', asyncHandler(async (_req, res) => {
   let logoUrl = null;
+  let brandColor = null;
   try {
-    const row = await qOne("SELECT `settingValue` FROM `AppSetting` WHERE `settingKey` = 'app_logo'");
-    logoUrl = row?.settingValue ?? null;
+    const logoRow  = await qOne("SELECT `settingValue` FROM `AppSetting` WHERE `settingKey` = 'app_logo'");
+    const colorRow = await qOne("SELECT `settingValue` FROM `AppSetting` WHERE `settingKey` = 'brand_color'");
+    logoUrl    = logoRow?.settingValue  ?? null;
+    brandColor = colorRow?.settingValue ?? null;
   } catch { /* AppSetting not migrated yet */ }
-  res.json({ logoUrl });
+  res.json({ logoUrl, brandColor });
 }));
 
 /* GET /api/public/app-logo — the global logo as a real image file (not a data

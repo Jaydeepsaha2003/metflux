@@ -14,7 +14,8 @@ import { useQuery, useQueries } from '@tanstack/react-query';
 import { ArrowLeft, Download, ClipboardCheck, Loader2, MessageCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { shareViaWhatsApp, type ShareTarget } from '@/lib/share';
-import html2pdf from 'html2pdf.js';
+import { useBranding } from '@/store/branding';
+import { downloadTestingReportPdf, testingReportPdfBlob, type TestingReportPdf } from '@/lib/reportPdf';
 
 /* ── Types ────────────────────────────────────────────────────── */
 type DispatchDetail = {
@@ -218,98 +219,64 @@ export const TestingReportPage = () => {
      after the first so html2pdf renders one PO per page. */
   const printRef = useRef<HTMLDivElement>(null);
   const [generating, setGenerating] = useState(false);
+  const brandColor = useBranding((s) => s.brandColor);
 
-  // Build the print-ready clone (inputs → spans, offscreen container) and
-  // return an html2pdf builder plus a teardown.
-  const buildPdfJob = () => {
-    const el = printRef.current;
-    if (!el || !dispatches.length) return null;
-
-    const A4_USABLE_PX = 734;
-    const clone = el.cloneNode(true) as HTMLElement;
-
-    // Replace inputs with spans so html2canvas captures values reliably.
-    const liveInputs = Array.from(el.querySelectorAll<HTMLInputElement>('input'));
-    const cloneInputs = Array.from(clone.querySelectorAll<HTMLInputElement>('input'));
-    cloneInputs.forEach((ci, i) => {
-      const v = liveInputs[i]?.value ?? '';
-      const span = document.createElement('span');
-      span.className = ci.className;
-      // Mimic the input's vertical centering so editable header values line up
-      // with the plain cells beside them in the PDF (html2canvas renders them at
-      // different heights otherwise, making the header look misaligned).
-      span.style.display = 'flex';
-      span.style.alignItems = 'center';
-      span.style.minHeight = '34px';
-      span.style.whiteSpace = 'pre';
-      span.textContent = v.length ? v : ' ';
-      ci.replaceWith(span);
-    });
-
-    // html2pdf reads the *legacy* `page-break-inside` (Tailwind's break-inside
-    // class isn't enough), so stamp it on every item block to stop a single
-    // item being split across two pages.
-    clone.querySelectorAll<HTMLElement>('.pdf-keep').forEach((node) => {
-      node.style.pageBreakInside = 'avoid';
-      node.style.breakInside = 'avoid';
-    });
-
-    clone.style.width = `${A4_USABLE_PX}px`;
-    clone.style.minWidth = '0';
-    clone.style.overflow = 'visible';
-    clone.style.borderRadius = '0';
-    clone.style.boxShadow = 'none';
-
-    const offscreen = document.createElement('div');
-    offscreen.style.position = 'fixed';
-    offscreen.style.left = '-10000px';
-    offscreen.style.top = '0';
-    offscreen.style.width = `${A4_USABLE_PX}px`;
-    offscreen.style.background = '#ffffff';
-    offscreen.appendChild(clone);
-    document.body.appendChild(offscreen);
-
-    const filename = `Testing-Report-${todayISO()}.pdf`;
-    const worker = html2pdf().set({
-      margin: 8,
-      filename,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        windowWidth: A4_USABLE_PX,
-      },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak: { mode: ['css', 'legacy'], before: '.tr-page-break', avoid: ['tr', '.pdf-keep'] },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any).from(clone);
-
-    return { worker, filename, teardown: () => document.body.removeChild(offscreen) };
-  };
+  // Assemble the structured data for the pdfmake builder from the grouped
+  // dispatches + per-group editable form state.
+  const buildTrData = (): TestingReportPdf => ({
+    company: {
+      name: company?.name, address: company?.address, phone: company?.phone,
+      whatsappNumber: company?.whatsappNumber, email: company?.email,
+      gstNumber: company?.gstNumber, logoUrl: company?.logoUrl,
+    },
+    brand: brandColor,
+    reportDate: fmtDate(todayISO()),
+    groups: groups.map((g) => {
+      const form = forms[g.key];
+      return {
+        reportNo: form?.reportNo ?? '',
+        customer: g.customerName,
+        state: g.rows[0]?.customerState ?? '-',
+        poNumber: g.poNumber,
+        poDate: fmtDate(g.orderDate),
+        woNumber: form?.woNumber ?? '',
+        woDate: form?.woDate ? fmtDate(form.woDate) : '',
+        invoiceNo: form?.invoiceNo ?? '',
+        invoiceDate: form?.invoiceDate ? fmtDate(form.invoiceDate) : '',
+        testedBy: form?.testedBy ?? '',
+        approvedBy: form?.approvedBy ?? '',
+        items: g.rows.map((d) => {
+          const samples = sampleRowsByDispatch[d.id] ?? [];
+          return {
+            measure: d.measure || '-', grade: d.grade || '-',
+            turns: d.turns != null ? String(d.turns) : '-',
+            appliedVoltage: d.testVoltage != null ? d.testVoltage.toFixed(3) : '-',
+            pcs: String(d.pcs), samplePcs: String(samples.length),
+            samplingRate: samplingRate(d.pcs),
+            maxCurrent: d.testCurrent != null ? `${d.testCurrent.toFixed(1)} mA` : '-',
+            samples,
+          };
+        }),
+      };
+    }),
+  });
 
   const handleDownload = async () => {
-    const job = buildPdfJob();
-    if (!job) return;
+    if (!dispatches.length) return;
     setGenerating(true);
-    await new Promise((r) => requestAnimationFrame(r));
-    try { await job.worker.save(); }
-    finally { job.teardown(); setGenerating(false); }
+    try { await downloadTestingReportPdf(buildTrData(), `Testing-Report-${todayISO()}.pdf`); }
+    finally { setGenerating(false); }
   };
 
   const handleWhatsappShare = async () => {
-    const job = buildPdfJob();
-    if (!job) return;
+    if (!dispatches.length) return;
     setGenerating(true);
-    await new Promise((r) => requestAnimationFrame(r));
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const blob = (await (job.worker as any).output('blob')) as Blob;
+      const blob = await testingReportPdfBlob(buildTrData());
       const message = [
         `*Testing Report*`,
         company?.name ? `From: ${company.name}` : null,
-        `Groups: ${groups.length} PO${groups.length === 1 ? '' : 's'} · ${dispatches.length} item${dispatches.length === 1 ? '' : 's'}`,
+        `Groups: ${groups.length} PO${groups.length === 1 ? "" : "s"} · ${dispatches.length} item${dispatches.length === 1 ? "" : "s"}`,
         `Date: ${fmtDate(todayISO())}`,
       ].filter(Boolean).join('\n');
       await shareViaWhatsApp({
@@ -317,10 +284,9 @@ export const TestingReportPage = () => {
         target: company?.defaultShareTarget,
         companyPhone: company?.whatsappNumber ?? null,
         customerPhone: dispatches[0]?.customerPhone ?? null,
-        pdf: { blob, filename: job.filename.replace(/\.pdf$/i, '') },
+        pdf: { blob, filename: `Testing-Report-${todayISO()}` },
       });
     } finally {
-      job.teardown();
       setGenerating(false);
     }
   };

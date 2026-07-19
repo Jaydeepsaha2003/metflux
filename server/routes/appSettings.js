@@ -22,6 +22,10 @@ const logoUpload = multer({
 });
 
 const LOGO_KEY = 'app_logo';
+const COLOR_KEY = 'brand_color';
+// Accept #rgb / #rrggbb only — this value is injected into the page as a colour,
+// so validate strictly to avoid any CSS/style injection.
+const HEX_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
 const getSetting = async (key) => {
   const row = await qOne('SELECT `settingValue` FROM `AppSetting` WHERE `settingKey` = ?', [key]);
@@ -35,7 +39,21 @@ const setSetting = (key, value) => q(
 
 /* GET /api/app-settings — current branding */
 router.get('/', asyncHandler(async (_req, res) => {
-  res.json({ logoUrl: await getSetting(LOGO_KEY) });
+  res.json({ logoUrl: await getSetting(LOGO_KEY), brandColor: await getSetting(COLOR_KEY) });
+}));
+
+/* PUT /api/app-settings/color — set (or clear) the global brand colour.
+   Body: { brandColor: "#1d4ed8" } or { brandColor: null } to reset to default. */
+router.put('/color', asyncHandler(async (req, res) => {
+  const raw = req.body?.brandColor;
+  if (raw === null || raw === '' || raw === undefined) {
+    await q('DELETE FROM `AppSetting` WHERE `settingKey` = ?', [COLOR_KEY]);
+    return res.json({ brandColor: null });
+  }
+  const value = String(raw).trim();
+  if (!HEX_RE.test(value)) throw new AppError('brandColor must be a hex colour like #1d4ed8', 400, 'BAD_COLOR');
+  await setSetting(COLOR_KEY, value.toLowerCase());
+  res.json({ brandColor: value.toLowerCase() });
 }));
 
 /* POST /api/app-settings/logo — upload the global logo */

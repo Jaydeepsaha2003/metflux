@@ -8,7 +8,8 @@ import { ArrowLeft, Download, Package, Loader2, MessageCircle, ClipboardCheck, C
 import { api } from '@/lib/api';
 import { shareViaWhatsApp, type ShareTarget } from '@/lib/share';
 import { readDraft, useFormDraft, fmtDraftTime } from '@/hooks/useFormDraft';
-import html2pdf from 'html2pdf.js';
+import { useBranding } from '@/store/branding';
+import { downloadPackingListPdf, packingListPdfBlob, type PackingListPdf } from '@/lib/reportPdf';
 
 /* ── Types ────────────────────────────────────────────────────── */
 type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE';
@@ -275,6 +276,7 @@ export const PackingListPage = () => {
   const addressLine = company?.address?.replace(/\n+/g, ', ').trim() ?? '';
 
   /* PDF download */
+  const brandColor = useBranding((s) => s.brandColor);
   const printRef = useRef<HTMLDivElement>(null);
   const [generating, setGenerating] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -309,64 +311,38 @@ export const PackingListPage = () => {
     }
   };
 
-  // Build the print-ready clone (swap inputs → spans, mount offscreen) and
-  // return an html2pdf worker plus a teardown. Shared by download + share.
-  // woForName overrides the filename's WO No. (the live `woNo` state may not have
-  // re-rendered yet right after a server assignment).
-  const buildPdfJob = (woForName?: string) => {
-    const el = printRef.current;
-    if (!el || !dispatches.length) return null;
-
-    const A4_USABLE_PX = 734;
-    const clone = el.cloneNode(true) as HTMLElement;
-
-    const liveInputs = Array.from(el.querySelectorAll<HTMLInputElement>('input'));
-    const cloneInputs = Array.from(clone.querySelectorAll<HTMLInputElement>('input'));
-    cloneInputs.forEach((ci, i) => {
-      const v = liveInputs[i]?.value ?? '';
-      const span = document.createElement('span');
-      span.className = ci.className;
-      span.style.display = 'block';
-      span.style.lineHeight = '36px';
-      span.style.whiteSpace = 'pre';
-      span.textContent = v.length ? v : ' ';
-      ci.replaceWith(span);
-    });
-
-    clone.style.width = `${A4_USABLE_PX}px`;
-    clone.style.minWidth = '0';
-    clone.style.overflow = 'visible';
-    clone.style.borderRadius = '0';
-    clone.style.boxShadow = 'none';
-
-    const offscreen = document.createElement('div');
-    offscreen.style.position = 'fixed';
-    offscreen.style.left = '-10000px';
-    offscreen.style.top = '0';
-    offscreen.style.width = `${A4_USABLE_PX}px`;
-    offscreen.style.background = '#ffffff';
-    offscreen.appendChild(clone);
-    document.body.appendChild(offscreen);
-
-    const filename = `Packing-List-${woForName || woNo || 'PL'}.pdf`;
-    const worker = html2pdf().set({
-      margin: 8,
-      filename,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        windowWidth: A4_USABLE_PX,
-      },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any).from(clone);
-
-    return { worker, filename, teardown: () => document.body.removeChild(offscreen) };
-  };
+  // Assemble the structured data the pdfmake builder needs. `woOverride` lets a
+  // caller pass the just-server-assigned WO No. before `woNo` state re-renders.
+  const buildPlData = (woOverride?: string): PackingListPdf => ({
+    company: {
+      name: company?.name, address: company?.address, phone: company?.phone,
+      whatsappNumber: company?.whatsappNumber, email: company?.email,
+      gstNumber: company?.gstNumber, logoUrl: company?.logoUrl,
+    },
+    brand: brandColor,
+    meta: {
+      customer: customerLabel, state: stateLabel,
+      woNo: woOverride || woNo || '—', woDate: woDate ? fmtDate(woDate) : '',
+      invoiceNo: invoiceNo || '', invoiceDate: invoiceDate ? fmtDate(invoiceDate) : '',
+    },
+    groups: coreGroups.map((cg) => {
+      const cgRows = cg.grades.flatMap(([, gr]) => gr);
+      const multi = cg.grades.length > 1;
+      return {
+        label: cg.label,
+        pcs: cgRows.reduce((s, r) => s + (parseInt(r.qty) || 0), 0),
+        weight: cgRows.reduce((s, r) => s + (parseFloat(r.weight) || 0), 0),
+        grades: cg.grades.map(([grade, gr]) => ({
+          grade, multi,
+          rows: gr.map((r) => ({ poNo: r.poNo, poDate: r.poDate, description: r.description, qty: r.qty, rate: r.rate, weight: r.weight, remarks: r.remarks })),
+          subtotalPcs: gr.reduce((s, r) => s + (parseInt(r.qty) || 0), 0),
+          subtotalWeight: gr.reduce((s, r) => s + (parseFloat(r.weight) || 0), 0),
+        })),
+      };
+    }),
+    grandPcs: grandTotalPcs, grandWeight: grandTotalWeight,
+    testedBy, approvedBy, dateStr: woDate ? fmtDate(woDate) : '',
+  });
 
   const handleDownload = async () => {
     setGenerating(true);
@@ -374,13 +350,9 @@ export const PackingListPage = () => {
     const saved = await persistPackingList();
     const finalWo = saved.plNumber ?? woNo;
     if (saved.plNumber && saved.plNumber !== woNo) setWoNo(saved.plNumber);
-    // let the server-assigned WO No. paint into the doc before we snapshot it
-    await new Promise((r) => requestAnimationFrame(r));
-    const job = buildPdfJob(finalWo);
-    if (!job) { setGenerating(false); return; }
-    await new Promise((r) => requestAnimationFrame(r));
-    try { await job.worker.save(); }
-    finally { job.teardown(); setGenerating(false); }
+    try {
+      await downloadPackingListPdf(buildPlData(finalWo), `Packing-List-${finalWo || 'PL'}.pdf`);
+    } finally { setGenerating(false); }
     if (saved.ok) clearDraft(); // work is now persisted server-side — drop the local draft
   };
 
@@ -390,13 +362,8 @@ export const PackingListPage = () => {
     const saved = await persistPackingList();
     const finalWo = saved.plNumber ?? woNo;
     if (saved.plNumber && saved.plNumber !== woNo) setWoNo(saved.plNumber);
-    await new Promise((r) => requestAnimationFrame(r));
-    const job = buildPdfJob(finalWo);
-    if (!job) { setGenerating(false); return; }
-    await new Promise((r) => requestAnimationFrame(r));
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const blob = (await (job.worker as any).output('blob')) as Blob;
+      const blob = await packingListPdfBlob(buildPlData(finalWo));
       const message = [
         `*Packing List ${finalWo || 'DRAFT'}*`,
         company?.name ? `From: ${company.name}` : null,
@@ -410,10 +377,9 @@ export const PackingListPage = () => {
         target: company?.defaultShareTarget,
         companyPhone: company?.whatsappNumber ?? null,
         customerPhone: dispatches[0]?.customerPhone ?? null,
-        pdf: { blob, filename: job.filename.replace(/\.pdf$/i, '') },
+        pdf: { blob, filename: `Packing-List-${finalWo || 'PL'}` },
       });
     } finally {
-      job.teardown();
       setGenerating(false);
     }
     if (saved.ok) clearDraft(); // persisted server-side — drop the local draft

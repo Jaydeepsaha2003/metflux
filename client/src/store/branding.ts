@@ -3,12 +3,15 @@
 // app start; updated live after an admin uploads/removes a logo.
 import { create } from 'zustand';
 import { api } from '@/lib/api';
+import { applyBrandColor } from '@/lib/brandColor';
 
 type BrandingState = {
   logoUrl: string | null;
+  brandColor: string | null;
   loaded: boolean;
   load: () => Promise<void>;
   set: (logoUrl: string | null) => void;
+  setColor: (brandColor: string | null) => void;
 };
 
 // Point the browser tab favicon at the uploaded logo (data URL) when present.
@@ -26,12 +29,14 @@ const applyFavicon = (logoUrl: string | null) => {
 
 export const useBranding = create<BrandingState>((set) => ({
   logoUrl: null,
+  brandColor: null,
   loaded: false,
   load: async () => {
     try {
-      const r = await api<{ logoUrl: string | null }>('/public/app-branding');
-      set({ logoUrl: r.logoUrl, loaded: true });
+      const r = await api<{ logoUrl: string | null; brandColor: string | null }>('/public/app-branding');
+      set({ logoUrl: r.logoUrl, brandColor: r.brandColor ?? null, loaded: true });
       applyFavicon(r.logoUrl);
+      applyBrandColor(r.brandColor ?? null);
     } catch {
       set({ loaded: true });
     }
@@ -39,5 +44,9 @@ export const useBranding = create<BrandingState>((set) => ({
   set: (logoUrl) => {
     set({ logoUrl });
     applyFavicon(logoUrl);
+  },
+  setColor: (brandColor) => {
+    set({ brandColor });
+    applyBrandColor(brandColor);
   },
 }));

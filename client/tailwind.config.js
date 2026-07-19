@@ -4,19 +4,22 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Brand green – sampled to match the Metflux logo mark.
+        // Brand palette – driven by CSS variables so it can be re-themed per
+        // deployment/domain at runtime (see index.css :root defaults + the
+        // branding store's applyBrandColor). Channels are space-separated RGB so
+        // Tailwind's /alpha opacity utilities keep working. Default = Metflux green.
         brand: {
-          50:  '#ecfdf3',
-          100: '#d1fadf',
-          200: '#a6f4c5',
-          300: '#6ce9a6',
-          400: '#32d583',
-          500: '#22c55e', // primary
-          600: '#16a34a',
-          700: '#15803d',
-          800: '#166534',
-          900: '#0e3a22',
-          950: '#052e16',
+          50:  'rgb(var(--brand-50) / <alpha-value>)',
+          100: 'rgb(var(--brand-100) / <alpha-value>)',
+          200: 'rgb(var(--brand-200) / <alpha-value>)',
+          300: 'rgb(var(--brand-300) / <alpha-value>)',
+          400: 'rgb(var(--brand-400) / <alpha-value>)',
+          500: 'rgb(var(--brand-500) / <alpha-value>)',
+          600: 'rgb(var(--brand-600) / <alpha-value>)',
+          700: 'rgb(var(--brand-700) / <alpha-value>)',
+          800: 'rgb(var(--brand-800) / <alpha-value>)',
+          900: 'rgb(var(--brand-900) / <alpha-value>)',
+          950: 'rgb(var(--brand-950) / <alpha-value>)',
         },
         // Charcoal/ink – matches the dark grey strokes in the logo.
         ink: {
