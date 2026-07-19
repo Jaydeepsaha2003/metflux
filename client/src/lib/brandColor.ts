@@ -54,6 +54,21 @@ export const brandShadeHex = (hex: string | null | undefined, stop = 500): strin
   return rgbToHex(ramp[stop] ?? ramp[500]);
 };
 
+// Per-domain brand colour. This app identifies the brand by hostname (the same
+// way index.html sets the tab title), so the colour is resolved the same way —
+// each domain themes itself with no per-deployment config. A colour saved on the
+// Branding page still overrides this. Metflux → null (the green :root default).
+const HOST_BRAND: { match: string; hex: string }[] = [
+  // Toroflux — placeholder brand blue; replace with the exact logo colour.
+  { match: 'toroflux', hex: '#1d4ed8' },
+];
+
+export const hostBrandColor = (): string | null => {
+  const h = (typeof location !== 'undefined' ? location.hostname : '').toLowerCase();
+  for (const b of HOST_BRAND) if (h.includes(b.match)) return b.hex;
+  return null;
+};
+
 /** Write --brand-* onto <html>. Pass null to clear overrides (revert to the
     green :root defaults in index.css). */
 export const applyBrandColor = (hex: string | null | undefined) => {

@@ -3,7 +3,7 @@
 // app start; updated live after an admin uploads/removes a logo.
 import { create } from 'zustand';
 import { api } from '@/lib/api';
-import { applyBrandColor } from '@/lib/brandColor';
+import { applyBrandColor, hostBrandColor } from '@/lib/brandColor';
 
 type BrandingState = {
   logoUrl: string | null;
@@ -32,11 +32,19 @@ export const useBranding = create<BrandingState>((set) => ({
   brandColor: null,
   loaded: false,
   load: async () => {
+    // Apply the per-domain colour immediately (brand is keyed by hostname), so
+    // there's no flash of the default green before the network responds.
+    const hostColor = hostBrandColor();
+    applyBrandColor(hostColor);
+    set({ brandColor: hostColor });
     try {
       const r = await api<{ logoUrl: string | null; brandColor: string | null }>('/public/app-branding');
-      set({ logoUrl: r.logoUrl, brandColor: r.brandColor ?? null, loaded: true });
+      // A colour explicitly saved on the Branding page wins; otherwise keep the
+      // hostname default (so each domain themes itself with no config).
+      const color = r.brandColor ?? hostColor;
+      set({ logoUrl: r.logoUrl, brandColor: color, loaded: true });
       applyFavicon(r.logoUrl);
-      applyBrandColor(r.brandColor ?? null);
+      applyBrandColor(color);
     } catch {
       set({ loaded: true });
     }
