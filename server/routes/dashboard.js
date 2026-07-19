@@ -354,8 +354,10 @@ router.get('/analysis', requireAnyPermission('view_analysis', 'manage_invoices')
           FROM \`SalesInvoice\`
           WHERE \`companyId\` = ? AND \`invoiceDate\` >= ? AND \`invoiceDate\` <= ?`,
       [companyId, rangeStart, rangeEnd]),
+    // Collected = actual receipts in the bank/cash book (same source as the
+    // ledger & Amount Receivable), so Analysis reconciles with the bank.
     qOne(`SELECT COUNT(*) cnt, COALESCE(SUM(\`amount\`),0) received
-          FROM \`Payment\` WHERE \`companyId\` = ? AND \`paymentDate\` >= ? AND \`paymentDate\` <= ?`,
+          FROM \`CashbookEntry\` WHERE \`companyId\` = ? AND \`side\` = 'RECEIPT' AND \`entryDate\` >= ? AND \`entryDate\` <= ?`,
       [companyId, rangeStart, rangeEnd]),
     qOne(`SELECT COALESCE(SUM(\`amount\` - \`paidAmount\`),0) outstanding,
             COALESCE(SUM(CASE WHEN \`status\` <> 'PAID' AND \`dueDate\` IS NOT NULL AND \`dueDate\` < NOW()
@@ -376,8 +378,8 @@ router.get('/analysis', requireAnyPermission('view_analysis', 'manage_invoices')
     q(`SELECT DATE_FORMAT(\`invoiceDate\`,'%Y-%m') m, COALESCE(SUM(\`amount\`),0) amt
         FROM \`SalesInvoice\` WHERE \`companyId\` = ? AND \`invoiceDate\` >= ? GROUP BY m`,
       [companyId, trendStart]),
-    q(`SELECT DATE_FORMAT(\`paymentDate\`,'%Y-%m') m, COALESCE(SUM(\`amount\`),0) amt
-        FROM \`Payment\` WHERE \`companyId\` = ? AND \`paymentDate\` >= ? GROUP BY m`,
+    q(`SELECT DATE_FORMAT(\`entryDate\`,'%Y-%m') m, COALESCE(SUM(\`amount\`),0) amt
+        FROM \`CashbookEntry\` WHERE \`companyId\` = ? AND \`side\` = 'RECEIPT' AND \`entryDate\` >= ? GROUP BY m`,
       [companyId, trendStart]),
     q(`SELECT DATE_FORMAT(\`prodDate\`,'%Y-%m') m, COALESCE(SUM(\`pcs\`),0) pcs
         FROM \`Production\` WHERE \`companyId\` = ? AND \`prodDate\` >= ? GROUP BY m`,
