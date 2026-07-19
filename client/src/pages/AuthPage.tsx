@@ -87,7 +87,7 @@ export const AuthPage = () => {
             <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-0.5">
               Admin Portal
             </div>
-            <div className="text-base font-bold text-slate-900" style={{ fontFamily: 'Poppins, sans-serif' }}>
+            <div className="text-base font-bold text-slate-900" style={{ fontFamily: 'Montserrat, sans-serif' }}>
               {brand.name}
             </div>
           </div>

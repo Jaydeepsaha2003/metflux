@@ -64,7 +64,7 @@ export const buildStatementHtml = (i: StatementInput): string => {
 </head>
 <body>
   <div style="display:none;max-height:0;overflow:hidden;opacity:0">Outstanding statement for ${esc(i.partyName)} — ${rupee(i.total)}.</div>
-  <div class="container" style="font-family:'Poppins',Arial,Helvetica,sans-serif;color:#0f172a;padding:16px 12px">
+  <div class="container" style="font-family:'Montserrat',Arial,Helvetica,sans-serif;color:#0f172a;padding:16px 12px">
     <div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden">
       <div style="height:5px;background:#16a34a"></div>
       <div class="head" style="padding:22px 24px 6px">
