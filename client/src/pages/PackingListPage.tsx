@@ -72,7 +72,7 @@ const Cell = ({
     onChange={(e) => onChange(e.target.value)}
     style={{ fontFamily: 'inherit' }}
     className={`block w-full h-9 bg-transparent border-0 border-b border-transparent
-      focus:border-brand-400 focus:outline-none text-[12px] leading-9 py-0 px-1 align-middle box-border
+      focus:border-brand-400 focus:outline-none text-[11px] font-bold leading-9 py-0 px-1 align-middle box-border
       ${align === 'left' ? 'text-left' : align === 'right' ? 'text-right' : 'text-center'}
       ${bold ? 'font-semibold' : ''}`}
   />
@@ -80,18 +80,17 @@ const Cell = ({
 
 /* ── Display cell — read-only twin of <Cell> for the static columns ─ */
 const Display = ({
-  value, align = 'center', bold, wrap,
+  value, align = 'center', wrap,
 }: {
   value: string;
-  align?: 'left' | 'center' | 'right'; bold?: boolean; wrap?: boolean;
+  align?: 'left' | 'center' | 'right'; wrap?: boolean;
 }) => (
   <div
-    className={`block w-full px-1 text-[12px]
+    className={`block w-full px-1 text-[11px] font-bold
       ${wrap
         ? 'min-h-9 py-1 leading-snug whitespace-normal break-words'
         : 'h-9 leading-9 truncate'}
-      ${align === 'left' ? 'text-left' : align === 'right' ? 'text-right' : 'text-center'}
-      ${bold ? 'font-semibold' : ''}`}
+      ${align === 'left' ? 'text-left' : align === 'right' ? 'text-right' : 'text-center'}`}
   >
     {value}
   </div>
@@ -580,13 +579,12 @@ export const PackingListPage = () => {
                 <table className="w-full text-sm border-collapse table-fixed">
                   <colgroup>
                     <col style={{ width: '36px' }} />   {/* SR */}
-                    <col style={{ width: '14%' }} />    {/* PO NO  — 14% of 820px ≈ 115px */}
-                    <col style={{ width: '12%' }} />    {/* PO DATE — 12% of 820px ≈ 98px, fits dd/mm/yyyy */}
+                    <col style={{ width: '15%' }} />    {/* PO NO */}
+                    <col style={{ width: '13%' }} />    {/* PO DATE — fits dd/mm/yyyy */}
                     <col />                              {/* ITEM DESCRIPTION — auto */}
-                    <col style={{ width: '7%' }} />     {/* QTY */}
-                    <col style={{ width: '10%' }} />    {/* RATE */}
-                    <col style={{ width: '12%' }} />    {/* TOTAL WEIGHT */}
-                    <col style={{ width: '12%' }} />    {/* REMARKS */}
+                    <col style={{ width: '9%' }} />     {/* QTY */}
+                    <col style={{ width: '14%' }} />    {/* TOTAL WEIGHT */}
+                    <col style={{ width: '14%' }} />    {/* REMARKS */}
                   </colgroup>
                   <thead>
                     <tr className="bg-brand-600 text-white border-b-2 border-brand-700 text-center font-bold uppercase tracking-wide text-[10px]">
@@ -595,7 +593,6 @@ export const PackingListPage = () => {
                       <th className="px-1 py-1.5 border-r border-slate-300 align-middle">PO DATE</th>
                       <th className="px-1 py-1.5 border-r border-slate-300 text-left align-middle">ITEM DESCRIPTION</th>
                       <th className="px-1 py-1.5 border-r border-slate-300 align-middle">QTY (PCS)</th>
-                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">RATE (₹/PC)</th>
                       <th className="px-1 py-1.5 border-r border-slate-300 align-middle">TOTAL WT (KG)</th>
                       <th className="px-1 py-1.5 align-middle">REMARKS</th>
                     </tr>
@@ -609,16 +606,16 @@ export const PackingListPage = () => {
                           {/* Grade sub-header */}
                           {multiGrade && (
                             <tr className="bg-slate-50 border-y border-slate-300">
-                              <td colSpan={8} className="px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 align-middle">
+                              <td colSpan={7} className="px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 align-middle">
                                 Grade: {grade}
                               </td>
                             </tr>
                           )}
 
-                          {/* Data rows — h-7 keeps every row at a consistent height, align-middle centers the input vertically */}
+                          {/* Data rows — Calibri Bold 11 for legibility (per request) */}
                           {gradeRows.map((row, idx) => (
-                            <tr key={row.dispatchId} className="h-9 border-b border-slate-200 hover:bg-slate-50/50">
-                              <td className="px-1 border-r border-slate-200 text-center font-medium text-slate-500 text-[12px] align-middle">
+                            <tr key={row.dispatchId} className="h-9 border-b border-slate-200 hover:bg-slate-50/50" style={{ fontFamily: 'Calibri, "Segoe UI", Tahoma, sans-serif' }}>
+                              <td className="px-1 border-r border-slate-200 text-center font-bold text-slate-600 text-[11px] align-middle">
                                 {idx + 1}
                               </td>
                               <td className="px-0.5 border-r border-slate-200 align-middle">
@@ -632,9 +629,6 @@ export const PackingListPage = () => {
                               </td>
                               <td className="px-0.5 border-r border-slate-200 align-middle">
                                 <Display value={row.qty} />
-                              </td>
-                              <td className="px-0.5 border-r border-slate-200 align-middle">
-                                <Display value={row.rate} />
                               </td>
                               <td className="px-0.5 border-r border-slate-200 align-middle">
                                 <Display value={row.weight} />
@@ -654,7 +648,6 @@ export const PackingListPage = () => {
                               <td className="px-1 border-r border-slate-300 text-center text-[11px] font-bold text-slate-700 align-middle">
                                 {gradePcs}
                               </td>
-                              <td className="px-1 border-r border-slate-300 align-middle" />
                               <td className="px-1 border-r border-slate-300 text-center text-[11px] font-bold font-mono text-slate-700 align-middle">
                                 {gradeWeight.toFixed(3)}
                               </td>
@@ -673,7 +666,6 @@ export const PackingListPage = () => {
                       <td className="px-1 border-r border-slate-400 text-center text-xs font-black text-slate-800 align-middle">
                         {cgPcs}
                       </td>
-                      <td className="px-1 border-r border-slate-400 align-middle" />
                       <td className="px-1 border-r border-slate-400 text-center text-xs font-black font-mono text-slate-800 align-middle">
                         {cgWeight.toFixed(3)}
                       </td>

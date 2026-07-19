@@ -10,8 +10,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { brandShadeHex } from '@/lib/brandColor';
 
-// Every document uses Montserrat. Italics map to the upright faces (the reports
-// carry no italic text) so we only ship two TTFs.
+// Documents use Montserrat overall; the Packing List item rows use Carlito
+// (Calibri-compatible). Italics map to the upright faces (no italic text).
 const FONTS = {
   Montserrat: {
     normal: 'Montserrat-Regular.ttf',
@@ -19,18 +19,24 @@ const FONTS = {
     italics: 'Montserrat-Regular.ttf',
     bolditalics: 'Montserrat-SemiBold.ttf',
   },
+  Carlito: {
+    normal: 'Carlito-Regular.ttf',
+    bold: 'Carlito-Bold.ttf',
+    italics: 'Carlito-Regular.ttf',
+    bolditalics: 'Carlito-Bold.ttf',
+  },
 };
 
 let _pdfMake: any = null;
 const loadPdfMake = async (): Promise<any> => {
   if (_pdfMake) return _pdfMake;
-  const [pdfMakeMod, vfsMod]: any = await Promise.all([
+  const [pdfMakeMod, mont, carl]: any = await Promise.all([
     import('pdfmake/build/pdfmake'),
     import('@/assets/montserratVfs'),
+    import('@/assets/carlitoVfs'),
   ]);
   const pdfMake = pdfMakeMod.default ?? pdfMakeMod;
-  // Ship only the Montserrat VFS + font config (no bundled Roboto needed).
-  pdfMake.vfs = { ...vfsMod.montserratVfs };
+  pdfMake.vfs = { ...mont.montserratVfs, ...carl.carlitoVfs };
   pdfMake.fonts = FONTS;
   _pdfMake = pdfMake;
   return pdfMake;
@@ -172,8 +178,11 @@ const buildPackingListDoc = (d: PackingListPdf) => {
   const brandMid = brandShadeHex(d.brand, 600);
   const brandLight = brandShadeHex(d.brand, 50);
 
-  const COLS = [18, 68, 52, '*', 34, 46, 54, 58];
+  // 7 columns (Rate removed): SR | PO NO | PO DATE | DESCRIPTION | QTY | TOTAL WT | REMARKS
+  const COLS = [20, 74, 62, '*', 42, 66, 66];
   const th = (t: string, align: any = 'center') => ({ text: t, bold: true, fontSize: 7.5, color: WHITE, fillColor: brandMid, alignment: align, characterSpacing: 0.2 });
+  // Item-row cell — Calibri-compatible (Carlito) bold 11, per request.
+  const rc = (t: string, align: any = 'center') => ({ text: t, alignment: align, font: 'Carlito', bold: true, fontSize: 11 });
 
   const content: any[] = [header(d.company, 'PACKING LIST', brandDark), rule(brandDark)];
   content.push(infoGrid([
@@ -186,31 +195,25 @@ const buildPackingListDoc = (d: PackingListPdf) => {
     const body: any[] = [];
     // Section header (spans all columns)
     body.push([
-      { text: g.label.toUpperCase(), colSpan: 8, bold: true, color: WHITE, fillColor: brandDark, fontSize: 8.5, characterSpacing: 1, margin: [2, 2, 2, 2] },
-      {}, {}, {}, {}, {}, {}, {},
+      { text: g.label.toUpperCase(), colSpan: 7, bold: true, color: WHITE, fillColor: brandDark, fontSize: 8.5, characterSpacing: 1, margin: [2, 2, 2, 2] },
+      {}, {}, {}, {}, {}, {},
     ]);
     // Column headers
-    body.push([th('SR'), th('PO NO'), th('PO DATE'), th('ITEM DESCRIPTION', 'left'), th('QTY (PCS)'), th('RATE (₹/PC)'), th('TOTAL WT (KG)'), th('REMARKS', 'left')]);
+    body.push([th('SR'), th('PO NO'), th('PO DATE'), th('ITEM DESCRIPTION', 'left'), th('QTY (PCS)'), th('TOTAL WT (KG)'), th('REMARKS', 'left')]);
 
     let sr = 0;
     for (const grp of g.grades) {
       if (grp.multi) {
         body.push([
-          { text: `Grade: ${grp.grade}`, colSpan: 8, bold: true, fontSize: 7, color: GREY, fillColor: '#f1f5f9', margin: [2, 1, 2, 1] },
-          {}, {}, {}, {}, {}, {}, {},
+          { text: `Grade: ${grp.grade}`, colSpan: 7, bold: true, fontSize: 7, color: GREY, fillColor: '#f1f5f9', margin: [2, 1, 2, 1] },
+          {}, {}, {}, {}, {}, {},
         ]);
       }
       for (const r of grp.rows) {
         sr += 1;
         body.push([
-          { text: String(sr), alignment: 'center', fontSize: 8, color: GREY },
-          { text: r.poNo, alignment: 'center', fontSize: 8 },
-          { text: r.poDate, alignment: 'center', fontSize: 8 },
-          { text: r.description, alignment: 'left', fontSize: 8 },
-          { text: r.qty, alignment: 'center', fontSize: 8 },
-          { text: r.rate, alignment: 'right', fontSize: 8 },
-          { text: r.weight, alignment: 'right', fontSize: 8 },
-          { text: r.remarks, alignment: 'left', fontSize: 8 },
+          rc(String(sr)), rc(r.poNo), rc(r.poDate), rc(r.description, 'left'),
+          rc(r.qty), rc(r.weight, 'right'), rc(r.remarks, 'left'),
         ]);
       }
       if (grp.multi) {
@@ -218,7 +221,6 @@ const buildPackingListDoc = (d: PackingListPdf) => {
           { text: `Grade ${grp.grade} Subtotal`, colSpan: 4, alignment: 'right', bold: true, fontSize: 7, color: GREY, fillColor: '#f8fafc', margin: [2, 1, 2, 1] },
           {}, {}, {},
           { text: String(grp.subtotalPcs), alignment: 'center', bold: true, fontSize: 8, fillColor: '#f8fafc' },
-          { text: '', fillColor: '#f8fafc' },
           { text: grp.subtotalWeight.toFixed(3), alignment: 'right', bold: true, fontSize: 8, fillColor: '#f8fafc' },
           { text: '', fillColor: '#f8fafc' },
         ]);
@@ -229,7 +231,6 @@ const buildPackingListDoc = (d: PackingListPdf) => {
       { text: `${g.label} Total`, colSpan: 4, alignment: 'right', bold: true, fontSize: 8, color: INK, fillColor: '#e2e8f0', margin: [2, 2, 2, 2] },
       {}, {}, {},
       { text: String(g.pcs), alignment: 'center', bold: true, fontSize: 9, fillColor: '#e2e8f0' },
-      { text: '', fillColor: '#e2e8f0' },
       { text: g.weight.toFixed(3), alignment: 'right', bold: true, fontSize: 9, fillColor: '#e2e8f0' },
       { text: '', fillColor: '#e2e8f0' },
     ]);
