@@ -59,8 +59,10 @@ export const brandShadeHex = (hex: string | null | undefined, stop = 500): strin
 // each domain themes itself with no per-deployment config. A colour saved on the
 // Branding page still overrides this. Metflux → null (the green :root default).
 const HOST_BRAND: { match: string; hex: string }[] = [
-  // Toroflux — placeholder brand blue; replace with the exact logo colour.
-  { match: 'toroflux', hex: '#1d4ed8' },
+  // Toroflux — the electric royal blue of the toroidal-core "o" in the logo.
+  // The generated 600/700 shades (used for header bands) land on the logo's
+  // deeper navy, matching its gradient.
+  { match: 'toroflux', hex: '#1560e6' },
 ];
 
 export const hostBrandColor = (): string | null => {
