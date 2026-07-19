@@ -548,7 +548,7 @@ export const PackingListPage = () => {
               </div>
             </div>
             <div className="text-right shrink-0">
-              <div className="text-base font-bold uppercase tracking-widest text-white bg-brand-700 px-5 py-2 rounded flex items-center justify-center">
+              <div className="text-xl font-bold uppercase tracking-widest text-white bg-brand-700 px-6 py-1.5 rounded flex items-center justify-center">
                 Packing List
               </div>
             </div>

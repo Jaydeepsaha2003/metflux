@@ -54,7 +54,10 @@ const INK = '#0f172a';
 const GREY = '#475569';
 const LIGHT = '#e2e8f0';
 
-// Company letterhead + a brand-coloured title banner, as a borderless table.
+// Company letterhead (logo vertically centred against the text) + a slim
+// brand-coloured title banner. Uses a `columns` layout (not a table) so the
+// banner is only as tall as its own text instead of stretching to the height
+// of the company block.
 const header = (company: PdfCompany, title: string, brandDark: string) => {
   const infoLines: any[] = [
     { text: company?.name || 'Company Name', bold: true, fontSize: 16, color: brandDark, characterSpacing: 0.3 },
@@ -65,30 +68,39 @@ const header = (company: PdfCompany, title: string, brandDark: string) => {
   if (contact) infoLines.push({ text: contact, fontSize: 9, color: GREY, margin: [0, 1, 0, 0] });
   if (company?.gstNumber) infoLines.push({ text: `GSTIN: ${company.gstNumber}`, fontSize: 9, color: GREY, margin: [0, 1, 0, 0] });
 
-  const left: any = { stack: infoLines };
-  if (company?.logoUrl) {
-    left.stack = [
-      { columns: [
-        { image: company.logoUrl, width: 46, height: 46, fit: [46, 46] },
-        { stack: infoLines, width: '*', margin: [8, 0, 0, 0] },
-      ] },
-    ];
-  }
+  const LOGO = 46;
+  // Approximate text-block height (name line + the smaller lines) to nudge the
+  // logo down so it sits centred against the text rather than aligned to the top.
+  const textH = 20 + (infoLines.length - 1) * 12;
+  const logoTop = Math.max(0, Math.round((textH - LOGO) / 2));
 
-  return {
+  const leftColumn: any = company?.logoUrl
+    ? {
+        width: '*',
+        columns: [
+          { image: company.logoUrl, width: LOGO, fit: [LOGO, LOGO], margin: [0, logoTop, 0, 0] },
+          { width: '*', stack: infoLines, margin: [8, 0, 0, 0] },
+        ],
+      }
+    : { width: '*', stack: infoLines };
+
+  // Slim banner — font just above the company-name heading; tight padding.
+  const titleColumn: any = {
+    width: 'auto',
     table: {
-      widths: ['*', 'auto'],
+      widths: ['auto'],
       body: [[
-        left,
-        { text: title, alignment: 'center', color: WHITE, bold: true, fontSize: 13.5,
-          characterSpacing: 1.5, fillColor: brandDark, margin: [14, 13, 14, 13] },
+        { text: title, alignment: 'center', color: WHITE, bold: true, fontSize: 17,
+          characterSpacing: 1.2, fillColor: brandDark, margin: [18, 7, 18, 7] },
       ]],
     },
-    layout: {
-      hLineWidth: () => 0, vLineWidth: () => 0,
-      paddingLeft: () => 0, paddingRight: () => 0, paddingTop: () => 0, paddingBottom: () => 6,
-    },
-    margin: [0, 0, 0, 4],
+    layout: { hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => 0, paddingRight: () => 0, paddingTop: () => 0, paddingBottom: () => 0 },
+  };
+
+  return {
+    columns: [leftColumn, titleColumn],
+    columnGap: 12,
+    margin: [0, 0, 0, 6],
   };
 };
 
