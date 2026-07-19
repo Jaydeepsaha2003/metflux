@@ -1,12 +1,12 @@
 // Render a party's aging as a shareable "statement" — drawn directly on a canvas
-// so it uses the app's loaded web fonts (Montserrat for text, Calibri Bold → Montserrat
+// so it uses the app's loaded web fonts (Poppins for text, Calibri Bold → Poppins
 // Bold for figures). Dark card themed in the Metflux brand green. Exported as a
 // PNG (WhatsApp / inline) or a PDF (email attachment).
 import html2pdf from 'html2pdf.js';
 
 const inr = (n: number) => '₹ ' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const TXT = (px: number, weight = 400) => `${weight} ${px}px "Montserrat", ui-sans-serif, sans-serif`;
-const NUM = (px: number) => `700 ${px}px "Montserrat", ui-sans-serif, sans-serif`;
+const TXT = (px: number, weight = 400) => `${weight} ${px}px "Poppins", ui-sans-serif, sans-serif`;
+const NUM = (px: number) => `700 ${px}px "Calibri", "Poppins", ui-sans-serif, sans-serif`;
 
 const C = {
   outer: '#0d0e11', card: '#1a1c20', border: 'rgba(255,255,255,0.07)',
@@ -55,7 +55,7 @@ const ensureFonts = () => {
     try {
       const f = (document as Document & { fonts?: FontFaceSet }).fonts;
       if (!f) return;
-      await Promise.all(['400 14px Montserrat', '500 13px Montserrat', '600 16px Montserrat', '700 22px Montserrat'].map((s) => f.load(s)));
+      await Promise.all(['400 14px Poppins', '500 13px Poppins', '600 16px Poppins', '700 22px Poppins'].map((s) => f.load(s)));
       await f.ready;
     } catch { /* fall back to system fonts */ }
   })();

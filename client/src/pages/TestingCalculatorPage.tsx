@@ -406,7 +406,7 @@ export const TestingCalculatorPage = () => {
 
       {/* ── Offscreen printable document — one size per A4 page ── */}
       <div style={{ position: 'fixed', left: -10000, top: 0, width: 1040 }} aria-hidden>
-        <div ref={printRef} style={{ width: 1040, fontFamily: 'Montserrat, sans-serif', color: '#000', background: '#fff' }}>
+        <div ref={printRef} style={{ width: 1040, fontFamily: 'Poppins, sans-serif', color: '#000', background: '#fff' }}>
           {exportRows.map((it, idx) => {
             const core = coreLabel[it.coreType];
             const measure = measureOf(it);

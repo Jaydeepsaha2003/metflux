@@ -330,7 +330,7 @@ const PortalDataView = ({ token, sessionToken, onAuthError }: DataViewProps) => 
             </div>
           </div>
           {(company.phone || company.email || company.address) && (
-            <div className="p-4 sm:p-5" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+            <div className="p-4 sm:p-5" style={{ fontFamily: 'Poppins, sans-serif' }}>
               <p className="mb-2 text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-400">Supplied by</p>
               <p className="mb-2.5 text-[12px] font-semibold leading-tight text-emerald-700">{company.name}</p>
               <div className="space-y-1.5">
