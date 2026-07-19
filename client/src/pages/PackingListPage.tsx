@@ -521,7 +521,7 @@ export const PackingListPage = () => {
           className="bg-white text-black min-w-[820px] rounded-xl overflow-hidden print:min-w-0 print:rounded-none print:overflow-visible">
 
           {/* Company header */}
-          <div className="flex items-center justify-between border-b-2 border-black px-6 pt-4 pb-3 gap-4">
+          <div className="flex items-center justify-between border-b-2 border-brand-700 px-6 pt-4 pb-3 gap-4">
             <div className="flex items-center gap-5">
               {company?.logoUrl
                 ? <img src={company.logoUrl} alt={company.name} className="h-20 w-20 object-contain shrink-0" />
@@ -546,8 +546,8 @@ export const PackingListPage = () => {
               </div>
             </div>
             <div className="text-right shrink-0">
-              <div className="text-base font-bold uppercase tracking-widest text-slate-900 border-2 border-slate-700 px-4 py-1.5 rounded flex items-center justify-center">
-                Packaging List
+              <div className="text-base font-bold uppercase tracking-widest text-white bg-brand-700 px-5 py-2 rounded flex items-center justify-center">
+                Packing List
               </div>
             </div>
           </div>
@@ -573,7 +573,7 @@ export const PackingListPage = () => {
               <div key={cg.coreType} className={`core-section${cgIdx > 0 ? ' border-t-2 border-black' : ''}`}>
 
                 {/* Core-type section header */}
-                <div className="px-4 py-1.5 bg-slate-800 text-white text-[11px] font-bold uppercase tracking-widest">
+                <div className="px-4 py-1.5 bg-brand-700 text-white text-[11px] font-bold uppercase tracking-widest">
                   {cg.label}
                 </div>
 
@@ -589,7 +589,7 @@ export const PackingListPage = () => {
                     <col style={{ width: '12%' }} />    {/* REMARKS */}
                   </colgroup>
                   <thead>
-                    <tr className="bg-slate-100 border-b-2 border-slate-400 text-center font-bold uppercase tracking-wide text-[10px]">
+                    <tr className="bg-brand-600 text-white border-b-2 border-brand-700 text-center font-bold uppercase tracking-wide text-[10px]">
                       <th className="px-1 py-1.5 border-r border-slate-300 align-middle">SR</th>
                       <th className="px-1 py-1.5 border-r border-slate-300 align-middle">PO NO</th>
                       <th className="px-1 py-1.5 border-r border-slate-300 align-middle">PO DATE</th>
@@ -686,10 +686,10 @@ export const PackingListPage = () => {
           })}
 
           {/* Grand total */}
-          <div className="border-t-2 border-black bg-slate-800 text-white flex justify-end gap-10 px-6 py-4 text-base font-bold">
-            <span className="uppercase tracking-widest text-slate-300 text-sm self-center">Grand Total</span>
-            <span className="text-[22px]">{grandTotalPcs} <span className="text-sm font-medium text-slate-300">pcs</span></span>
-            <span className="text-[22px]">{grandTotalWeight.toFixed(3)} <span className="text-sm font-medium text-slate-300">kg</span></span>
+          <div className="border-t-2 border-brand-800 bg-brand-700 text-white flex justify-end gap-10 px-6 py-4 text-base font-bold">
+            <span className="uppercase tracking-widest text-brand-100 text-sm self-center">Grand Total</span>
+            <span className="text-[22px]">{grandTotalPcs} <span className="text-sm font-medium text-brand-100">pcs</span></span>
+            <span className="text-[22px]">{grandTotalWeight.toFixed(3)} <span className="text-sm font-medium text-brand-100">kg</span></span>
           </div>
 
           {/* Signature footer */}
@@ -716,7 +716,7 @@ export const PackingListPage = () => {
 
 const InfoRow = ({ label, value, border }: { label: string; value: string; border: string }) => (
   <div className={`flex ${border} border-slate-300`}>
-    <span className="w-28 shrink-0 bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 border-r border-slate-300">
+    <span className="w-28 shrink-0 bg-brand-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-brand-800 border-r border-slate-300">
       {label}
     </span>
     <span className="flex-1 px-3 py-1.5 text-sm font-medium">{value}</span>

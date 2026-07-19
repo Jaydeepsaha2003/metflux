@@ -10,16 +10,28 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { brandShadeHex } from '@/lib/brandColor';
 
+// Every document uses Montserrat. Italics map to the upright faces (the reports
+// carry no italic text) so we only ship two TTFs.
+const FONTS = {
+  Montserrat: {
+    normal: 'Montserrat-Regular.ttf',
+    bold: 'Montserrat-SemiBold.ttf',
+    italics: 'Montserrat-Regular.ttf',
+    bolditalics: 'Montserrat-SemiBold.ttf',
+  },
+};
+
 let _pdfMake: any = null;
 const loadPdfMake = async (): Promise<any> => {
   if (_pdfMake) return _pdfMake;
-  const pdfMakeMod: any = await import('pdfmake/build/pdfmake');
-  const vfsMod: any = await import('pdfmake/build/vfs_fonts');
+  const [pdfMakeMod, vfsMod]: any = await Promise.all([
+    import('pdfmake/build/pdfmake'),
+    import('@/assets/montserratVfs'),
+  ]);
   const pdfMake = pdfMakeMod.default ?? pdfMakeMod;
-  // pdfmake 0.2.x ships the VFS as the module's default/namespace (font filename
-  // → base64). Tolerate every shape seen across versions.
-  const vfs = vfsMod.default?.pdfMake?.vfs ?? vfsMod.pdfMake?.vfs ?? vfsMod.default ?? vfsMod;
-  pdfMake.vfs = vfs;
+  // Ship only the Montserrat VFS + font config (no bundled Roboto needed).
+  pdfMake.vfs = { ...vfsMod.montserratVfs };
+  pdfMake.fonts = FONTS;
   _pdfMake = pdfMake;
   return pdfMake;
 };
@@ -178,7 +190,7 @@ const buildPackingListDoc = (d: PackingListPdf) => {
       {}, {}, {}, {}, {}, {}, {},
     ]);
     // Column headers
-    body.push([th('SR'), th('PO NO'), th('PO DATE'), th('ITEM DESCRIPTION', 'left'), th('QTY'), th('RATE'), th('TOTAL WT'), th('REMARKS', 'left')]);
+    body.push([th('SR'), th('PO NO'), th('PO DATE'), th('ITEM DESCRIPTION', 'left'), th('QTY (PCS)'), th('RATE (₹/PC)'), th('TOTAL WT (KG)'), th('REMARKS', 'left')]);
 
     let sr = 0;
     for (const grp of g.grades) {
@@ -250,7 +262,7 @@ const buildPackingListDoc = (d: PackingListPdf) => {
 
   return {
     pageSize: 'A4', pageMargins: [24, 22, 24, 28],
-    defaultStyle: { font: 'Roboto', fontSize: 9, color: INK, lineHeight: 1.05 },
+    defaultStyle: { font: 'Montserrat', fontSize: 9, color: INK, lineHeight: 1.05 },
     content, footer: docFooter(d.company),
   };
 };
@@ -343,7 +355,7 @@ const buildTestingReportDoc = (d: TestingReportPdf) => {
 
   return {
     pageSize: 'A4', pageMargins: [24, 22, 24, 28],
-    defaultStyle: { font: 'Roboto', fontSize: 9, color: INK, lineHeight: 1.05 },
+    defaultStyle: { font: 'Montserrat', fontSize: 9, color: INK, lineHeight: 1.05 },
     content, footer: docFooter(d.company),
   };
 };

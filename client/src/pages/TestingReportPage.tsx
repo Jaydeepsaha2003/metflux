@@ -345,7 +345,7 @@ export const TestingReportPage = () => {
                 {/* Company header — logo + brand block on the left only.
                     The document title moves to its own centered banner below
                     so it reads as a clear "TESTING REPORT" heading. */}
-                <div className="flex items-center border-b-2 border-black px-6 pt-4 pb-3 gap-4">
+                <div className="flex items-center border-b-2 border-brand-700 px-6 pt-4 pb-3 gap-4">
                   <div className="flex items-center gap-5">
                     {company?.logoUrl
                       ? <img src={company.logoUrl} alt={company.name} className="h-20 w-20 object-contain shrink-0" />
@@ -372,8 +372,8 @@ export const TestingReportPage = () => {
                 </div>
 
                 {/* Centered, bold document title — full-width banner. */}
-                <div className="border-b-2 border-black px-6 py-2.5 text-center">
-                  <span className="inline-block text-lg font-extrabold uppercase tracking-[0.25em] text-slate-900 border-2 border-slate-800 px-6 py-1.5 rounded">
+                <div className="border-b-2 border-brand-700 px-6 py-2.5 text-center">
+                  <span className="inline-block text-lg font-extrabold uppercase tracking-[0.25em] text-white bg-brand-700 px-6 py-2 rounded">
                     Testing Report
                   </span>
                 </div>
@@ -437,7 +437,7 @@ export const TestingReportPage = () => {
                       )}
                       {/* Item header — measure / grade / turns / voltage first,
                           then the pcs counts + spec current. */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 border-b border-slate-300 bg-slate-50">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 border-b border-slate-300 bg-brand-50">
                         <HdrCell label="Measure"             value={d.measure || '—'} />
                         <HdrCell label="Grade"               value={d.grade || '—'} />
                         <HdrCell label="No. of Turns"        value={d.turns != null ? String(d.turns) : '—'} />
@@ -458,7 +458,7 @@ export const TestingReportPage = () => {
                           ))}
                         </colgroup>
                         <thead>
-                          <tr className="bg-slate-100 border-b-2 border-slate-400 text-center font-bold uppercase tracking-wide text-[9px]">
+                          <tr className="bg-brand-600 text-white border-b-2 border-brand-700 text-center font-bold uppercase tracking-wide text-[9px]">
                             {Array.from({ length: PER_ROW }).map((_, i) => (
                               <Fragment key={i}>
                                 <th className="px-1 py-1.5 border-r border-slate-300 align-middle">SN</th>
@@ -547,7 +547,7 @@ const HdrCell = ({ label, value, strong }: { label: string; value: string; stron
 
 const InfoRow = ({ label, value, border }: { label: string; value: string; border: string }) => (
   <div className={`flex ${border} border-slate-300`}>
-    <span className="flex w-28 shrink-0 items-center bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 border-r border-slate-300">
+    <span className="flex w-28 shrink-0 items-center bg-brand-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-brand-800 border-r border-slate-300">
       {label}
     </span>
     <span className="flex flex-1 items-center px-3 py-1.5 text-sm font-medium">{value}</span>
@@ -564,7 +564,7 @@ const InfoEdit = ({
   border: string;
 }) => (
   <div className={`flex ${border} border-slate-300`}>
-    <span className="flex w-28 shrink-0 items-center bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 border-r border-slate-300">
+    <span className="flex w-28 shrink-0 items-center bg-brand-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-brand-800 border-r border-slate-300">
       {label}
     </span>
     <input
