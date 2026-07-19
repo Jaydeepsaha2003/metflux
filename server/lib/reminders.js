@@ -53,6 +53,7 @@ const runProductionReminder = async (localDate) => {
   const companies = await activeCompanies();
   for (const c of companies) {
     await notifyCompanyAdmins(c.id, {
+      type: 'PRODUCTION',
       title: 'Production summary reminder',
       body: `Review today's production output for ${c.name}.`,
       url: '/s/admin/production/summary',
@@ -95,6 +96,7 @@ const runInvoiceDueReminder = async (localDate) => {
     if (sales.n) parts.push(`${sales.n} sales (${inr(sales.amt)}) to collect`);
     if (purch.n) parts.push(`${purch.n} purchase (${inr(purch.amt)}) to pay`);
     await notifyCompanyAdmins(c.id, {
+      type: 'DUE',
       title: 'Invoices due today',
       body: parts.join(' · '),
       url: sales.n ? '/s/admin/sales-invoices/aging' : '/s/admin/accounts/creditor-aging',

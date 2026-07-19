@@ -4,6 +4,7 @@
 import webpush from 'web-push';
 import { q, qOne, insert, update } from './db.js';
 import { env } from './env.js';
+import { createNotification } from './notifications.js';
 
 let configured = false;
 const ensureConfigured = () => {
@@ -69,6 +70,7 @@ export const broadcastToCompany = async (companyId, payload) => {
   };
 };
 
+// Web push only (no persisted notification). Used by the self-test.
 export const sendToUser = async (userId, payload) => {
   if (!ensureConfigured()) return { sent: 0 };
   const subs = await q('SELECT * FROM `PushSubscription` WHERE `userId` = ?', [userId]);
@@ -76,9 +78,17 @@ export const sendToUser = async (userId, payload) => {
   return { sent: results.filter((r) => r.ok).length };
 };
 
-// Push to every active company admin (used by login alerts + daily reminders).
+// Deliver to one user: persist an in-app notification (bell panel) AND push.
+export const deliver = async (companyId, userId, payload) => {
+  await createNotification({
+    companyId, userId, type: payload.type ?? 'SYSTEM',
+    title: payload.title, body: payload.body ?? null, url: payload.url ?? null, tag: payload.tag ?? null,
+  });
+  return sendToUser(userId, payload);
+};
+
+// Deliver to every active company admin (login alerts + daily reminders).
 export const notifyCompanyAdmins = async (companyId, payload) => {
-  if (!ensureConfigured()) return { sent: 0, admins: 0 };
   const admins = await q(
     `SELECT DISTINCT u.\`id\` AS id FROM \`User\` u
        INNER JOIN \`Membership\` m ON m.\`userId\` = u.\`id\`
@@ -88,7 +98,7 @@ export const notifyCompanyAdmins = async (companyId, payload) => {
   );
   let sent = 0;
   for (const a of admins) {
-    const r = await sendToUser(a.id, payload);
+    const r = await deliver(companyId, a.id, payload);
     sent += r.sent;
   }
   return { sent, admins: admins.length };

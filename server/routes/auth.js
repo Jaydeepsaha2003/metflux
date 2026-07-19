@@ -19,7 +19,7 @@ import {
 } from '../lib/auth.js';
 import { effectivePermissions, sanitizePermissions } from '../lib/permissions.js';
 import { clientIp, parseDevice, geoLookup } from '../lib/session.js';
-import { sendToUser } from '../lib/push.js';
+import { deliver } from '../lib/push.js';
 
 // Push a "new sign-in" alert to every company admin when a non-admin staff
 // member logs in. Fire-and-forget — never blocks or fails the login.
@@ -35,12 +35,13 @@ const notifyAdminsOfLogin = async (companyId, user, meta) => {
     if (!admins.length) return;
     const detail = [meta.device, meta.ip].filter(Boolean).join(' · ');
     const payload = {
+      type: 'LOGIN',
       title: 'New sign-in',
       body: `${user.name} signed in${detail ? ` — ${detail}` : ''}`,
       url: '/s/admin/settings/user-logs',
       tag: 'login',
     };
-    await Promise.all(admins.map((a) => sendToUser(a.id, payload)));
+    await Promise.all(admins.map((a) => deliver(companyId, a.id, payload)));
   } catch { /* ignore */ }
 };
 
