@@ -11,6 +11,7 @@ import { requireAuth, requireAnyPermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 import { round2, normName } from '../lib/invoicing.js';
 import { parseJournalRegister } from '../lib/journalRegister.js';
+import { notifyCompanyAdmins } from '../lib/push.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -53,6 +54,11 @@ router.post('/import', requireAnyPermission(...PERM), asyncHandler(async (req, r
     }
     return { vouchers: vouchers.length, lines, unbalanced };
   });
+  notifyCompanyAdmins(companyId, {
+    type: 'JOURNAL', title: 'Journal Register imported',
+    body: `${summary.vouchers} vouchers (${summary.lines} lines)${summary.unbalanced ? ` · ${summary.unbalanced} unbalanced` : ''}`,
+    url: '/s/admin/accounts/journal', tag: 'journal-import',
+  }, { push: false }).catch(() => {});
   res.status(201).json(summary);
 }));
 

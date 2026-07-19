@@ -7,6 +7,7 @@ import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 import { logAudit, snapshotEntity } from '../lib/audit.js';
+import { notifyCompanyAdmins } from '../lib/push.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -167,6 +168,11 @@ router.post('/', requirePermission('add_po'), asyncHandler(async (req, res) => {
   });
 
   await logAudit(req, { entity: 'PoOrder', entityId: result.id, action: 'CREATE', summary: `SO ${data.poNumber} · ${customer.name} · ${data.items.length} item(s)` });
+  notifyCompanyAdmins(req.tenant.companyId, {
+    type: 'SALES_ORDER', title: 'New sales order',
+    body: `${customer.name} — PO ${data.poNumber} (${data.items.length} item${data.items.length === 1 ? '' : 's'})`,
+    url: '/s/admin/po/manage', tag: 'so-new',
+  }, { push: false }).catch(() => {});
   res.status(201).json(result);
 }));
 

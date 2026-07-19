@@ -9,6 +9,7 @@ import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requireAnyPermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 import { round2, invoiceStatus, parseDMY, normName, allocatePaymentFifo, allocatePaymentManual } from '../lib/invoicing.js';
+import { notifyCompanyAdmins } from '../lib/push.js';
 import { cellPick, numOpt, rowIsBlank, errMessage } from '../lib/importHelpers.js';
 
 const router = Router();
@@ -66,6 +67,11 @@ router.post('/', requireAnyPermission('receive_payments', 'manage_invoices'), as
   const customer = await qOne('SELECT `id`, `name` FROM `Customer` WHERE `id` = ? AND `companyId` = ?', [data.customerId, req.tenant.companyId]);
   if (!customer) throw new AppError('Customer not found', 400, 'BAD_CUSTOMER');
   const result = await txn((tx) => recordPayment(tx, { companyId: req.tenant.companyId, userId: req.auth.userId, customer, ...data }));
+  notifyCompanyAdmins(req.tenant.companyId, {
+    type: 'PAYMENT', title: 'Payment received',
+    body: `₹${Math.round(Number(data.amount) || 0).toLocaleString('en-IN')} from ${customer.name}`,
+    url: '/s/admin/sales-invoices/payments', tag: 'payment',
+  }, { push: false }).catch(() => {});
   res.status(201).json(result);
 }));
 

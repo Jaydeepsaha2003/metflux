@@ -5,6 +5,7 @@ import { q, qOne, insert, update, del } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
+import { notifyCompanyAdmins } from '../lib/push.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -259,7 +260,13 @@ router.post('/', requirePermission('dispatch'), asyncHandler(async (req, res) =>
     createdById: req.auth.userId,
   });
   const fresh = await qOne(`${DISPATCH_ROW_SQL} WHERE d.\`id\` = ?`, [created.id]);
-  res.status(201).json(flatten(fresh));
+  const d = flatten(fresh);
+  notifyCompanyAdmins(req.tenant.companyId, {
+    type: 'DISPATCH', title: 'New dispatch',
+    body: [d.customerName, `${d.pcs} pcs`, d.vehicleNo].filter(Boolean).join(' · '),
+    url: '/s/admin/dispatch', tag: 'dispatch',
+  }, { push: false }).catch(() => {});
+  res.status(201).json(d);
 }));
 
 /* PATCH /:id */

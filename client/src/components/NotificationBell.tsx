@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Bell, Check, X, Loader2, Send, CheckCheck, Trash2, Clock, LogIn, Factory, AlertCircle, CreditCard,
+  FileText, Truck, Wallet, BookText, ListChecks,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { enablePush } from '@/lib/push';
@@ -51,7 +52,7 @@ const beep = () => {
 };
 const buzz = () => { try { navigator.vibrate?.([200, 100, 200]); } catch { /* ignore */ } };
 
-const relTime = (iso: string) => {
+export const relTime = (iso: string) => {
   const d = new Date(iso).getTime();
   if (Number.isNaN(d)) return '';
   const s = Math.round((Date.now() - d) / 1000);
@@ -63,10 +64,14 @@ const relTime = (iso: string) => {
   return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 };
 
-const ICON: Record<string, { icon: typeof Bell; tone: string }> = {
+export const ICON: Record<string, { icon: typeof Bell; tone: string }> = {
   LOGIN: { icon: LogIn, tone: 'bg-sky-50 text-sky-600' },
   DUE: { icon: CreditCard, tone: 'bg-amber-50 text-amber-600' },
   PRODUCTION: { icon: Factory, tone: 'bg-violet-50 text-violet-600' },
+  SALES_ORDER: { icon: FileText, tone: 'bg-brand-50 text-brand-600' },
+  DISPATCH: { icon: Truck, tone: 'bg-sky-50 text-sky-600' },
+  PAYMENT: { icon: Wallet, tone: 'bg-emerald-50 text-emerald-600' },
+  JOURNAL: { icon: BookText, tone: 'bg-slate-100 text-slate-600' },
   TEST: { icon: Bell, tone: 'bg-emerald-50 text-emerald-600' },
   SYSTEM: { icon: AlertCircle, tone: 'bg-slate-100 text-slate-600' },
 };
@@ -251,6 +256,10 @@ export const NotificationBell = () => {
               );
             })}
           </div>
+          <button onClick={() => { navigate('/notifications'); setOpen(false); }}
+            className="flex w-full items-center justify-center gap-1.5 border-t border-slate-100 px-4 py-2 text-xs font-medium text-brand-700 hover:bg-slate-50">
+            <ListChecks className="h-3.5 w-3.5" /> See all notifications
+          </button>
         </div>,
         document.body
       )}

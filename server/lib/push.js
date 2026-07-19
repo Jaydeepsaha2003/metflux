@@ -87,8 +87,10 @@ export const deliver = async (companyId, userId, payload) => {
   return sendToUser(userId, payload);
 };
 
-// Deliver to every active company admin (login alerts + daily reminders).
-export const notifyCompanyAdmins = async (companyId, payload) => {
+// Notify every active company admin. `push` controls whether a web push is
+// also sent (critical alerts) or the notification is panel-only (business
+// events like a new order/payment, so phones aren't spammed).
+export const notifyCompanyAdmins = async (companyId, payload, { push = true } = {}) => {
   const admins = await q(
     `SELECT DISTINCT u.\`id\` AS id FROM \`User\` u
        INNER JOIN \`Membership\` m ON m.\`userId\` = u.\`id\`
@@ -98,8 +100,11 @@ export const notifyCompanyAdmins = async (companyId, payload) => {
   );
   let sent = 0;
   for (const a of admins) {
-    const r = await deliver(companyId, a.id, payload);
-    sent += r.sent;
+    await createNotification({
+      companyId, userId: a.id, type: payload.type ?? 'SYSTEM',
+      title: payload.title, body: payload.body ?? null, url: payload.url ?? null, tag: payload.tag ?? null,
+    });
+    if (push) { const r = await sendToUser(a.id, payload); sent += r.sent; }
   }
   return { sent, admins: admins.length };
 };
