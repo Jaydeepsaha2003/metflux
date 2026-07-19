@@ -60,12 +60,14 @@ const LIGHT = '#e2e8f0';
 // of the company block.
 const header = (company: PdfCompany, title: string, brandDark: string) => {
   const infoLines: any[] = [
-    { text: company?.name || 'Company Name', bold: true, fontSize: 16, color: brandDark, characterSpacing: 0.3 },
+    // Dark company name (matches the on-screen preview); the brand colour lives
+    // in the banner + rule, not the name.
+    { text: company?.name || 'Company Name', bold: true, fontSize: 16, color: INK, characterSpacing: 0.3 },
   ];
   const addr = company?.address?.replace(/\n+/g, ', ').trim();
   if (addr) infoLines.push({ text: addr, fontSize: 9, color: GREY, margin: [0, 2, 0, 0] });
   const contact = [company?.phone, company?.whatsappNumber, company?.email].filter(Boolean).join('  |  ');
-  if (contact) infoLines.push({ text: contact, fontSize: 9, color: GREY, margin: [0, 1, 0, 0] });
+  if (contact) infoLines.push({ text: [{ text: 'Contact: ', bold: true }, contact], fontSize: 9, color: GREY, margin: [0, 1, 0, 0] });
   if (company?.gstNumber) infoLines.push({ text: `GSTIN: ${company.gstNumber}`, fontSize: 9, color: GREY, margin: [0, 1, 0, 0] });
 
   const LOGO = 46;

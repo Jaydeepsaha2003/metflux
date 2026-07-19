@@ -375,7 +375,7 @@ export const TestingReportPage = () => {
 
                 {/* Centered, bold document title — full-width banner. */}
                 <div className="border-b-2 border-brand-700 px-6 py-2.5 text-center">
-                  <span className="inline-block text-xl font-extrabold uppercase tracking-[0.25em] text-white bg-brand-700 px-6 py-1.5 rounded">
+                  <span className="inline-block text-xl font-extrabold uppercase tracking-[0.25em] text-white bg-brand-700 px-6 py-2">
                     Testing Report
                   </span>
                 </div>
