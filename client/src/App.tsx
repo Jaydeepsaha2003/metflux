@@ -39,6 +39,9 @@ const FluxGradesPage      = page(() => import('@/pages/FluxGradesPage'), 'FluxGr
 const CompaniesListPage   = page(() => import('@/pages/CompaniesListPage'), 'CompaniesListPage');
 const CompanyFormPage     = page(() => import('@/pages/CompanyFormPage'), 'CompanyFormPage');
 const POOrderNewPage      = page(() => import('@/pages/POOrderNewPage'), 'POOrderNewPage');
+const QuotationNewPage    = page(() => import('@/pages/QuotationNewPage'), 'QuotationNewPage');
+const QuotationsPage      = page(() => import('@/pages/QuotationsPage'), 'QuotationsPage');
+const QuotationPrintPage  = page(() => import('@/pages/QuotationPrintPage'), 'QuotationPrintPage');
 const POManagePage        = page(() => import('@/pages/POManagePage'), 'POManagePage');
 const POEditPage          = page(() => import('@/pages/POEditPage'), 'POEditPage');
 const POOrderEditPage     = page(() => import('@/pages/POOrderEditPage'), 'POOrderEditPage');
@@ -114,6 +117,9 @@ export const App = () => {
       <Route path="/po/manage/:id"   element={<POEditPage />} />
       <Route path="/po/edit/:poId"   element={<POOrderEditPage />} />
       <Route path="/po/summary"      element={<SOSummaryPage />} />
+      <Route path="/quotation/new"        element={<QuotationNewPage />} />
+      <Route path="/quotation/manage"     element={<QuotationsPage />} />
+      <Route path="/quotation/:id/print"  element={<QuotationPrintPage />} />
 
       {/* Production */}
       <Route path="/production"          element={<ProductionListPage />} />

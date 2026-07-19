@@ -40,6 +40,8 @@ const NAV: NavItem[] = [
       { kind: 'leaf', to: '/po/new',     label: 'New Sales Order', icon: Plus,       perm: 'add_po' },
       { kind: 'leaf', to: '/po/manage',  label: 'SO Modify',       icon: ListChecks, perm: 'view_po' },
       { kind: 'leaf', to: '/po/summary', label: 'SO Summary',      icon: BarChart3,  perm: 'po_summary' },
+      { kind: 'leaf', to: '/quotation/new',    label: 'New Quotation', icon: FileText,      perm: 'add_po' },
+      { kind: 'leaf', to: '/quotation/manage', label: 'Quotations',    icon: ClipboardList, perm: 'view_po' },
     ],
   },
   {

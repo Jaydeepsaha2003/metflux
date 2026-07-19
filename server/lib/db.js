@@ -71,6 +71,7 @@ const TABLES_WITH_UPDATED_AT = new Set([
   'SupplierPayment',
   'Warehouse',
   'StockMovement',
+  'Quotation',
 ]);
 
 const pickConn = (override) => override ?? pool;
