@@ -121,6 +121,13 @@ export const AppLayout = () => {
   const location = useLocation();
   const { user, clear } = useAuthStore();
   const appLogo = useBranding((s) => s.logoUrl);
+
+  // Theme the whole UI for the active company (e.g. TOROFLUX INDUSTRIES → blue),
+  // re-applying whenever the user switches company. Company colour takes
+  // precedence over the saved Branding-page colour and the hostname default.
+  const companyName = useAuthStore((s) => activeMembership(s)?.companyName ?? null);
+  const applyForCompany = useBranding((s) => s.applyForCompany);
+  useEffect(() => { applyForCompany(companyName); }, [companyName, applyForCompany]);
   const [hovered, setHovered] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(() =>
