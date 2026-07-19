@@ -105,9 +105,9 @@ const infoGrid = (pairs: [string, string][], brandLight: string) => {
     const a = pairs[i]; const b = pairs[i + 1] ?? ['', ''];
     body.push([
       { text: a[0], bold: true, fontSize: 9, color: GREY, fillColor: brandLight },
-      { text: a[1] || '—', fontSize: 10.5 },
+      { text: a[1] || '—', fontSize: 9.5, bold: true },
       { text: b[0], bold: true, fontSize: 9, color: GREY, fillColor: brandLight },
-      { text: b[1] || '—', fontSize: 10.5 },
+      { text: b[1] || '—', fontSize: 9.5, bold: true },
     ]);
   }
   return {
@@ -200,7 +200,7 @@ const buildPackingListDoc = (d: PackingListPdf) => {
       {}, {}, {}, {}, {}, {},
     ]);
     // Column headers
-    body.push([th('SR'), th('PO NO'), th('PO DATE'), th('ITEM DESCRIPTION', 'left'), th('QTY (PCS)'), th('TOTAL WT (KG)'), th('REMARKS', 'left')]);
+    body.push([th('SR'), th('PO NO'), th('PO DATE'), th('ITEM DESCRIPTION', 'left'), th('QTY (PCS)'), th('WT (KG)'), th('REMARKS', 'left')]);
 
     let sr = 0;
     for (const grp of g.grades) {
@@ -307,10 +307,10 @@ const buildTestingReportDoc = (d: TestingReportPdf) => {
       // Item spec band — 4 label/value pairs across two rows.
       const band = (label: string, value: string, strong = false) => ({
         stack: [
-          { text: label, fontSize: 7, bold: true, color: GREY },
-          { text: value || '—', fontSize: 9, bold: strong, color: strong ? INK : GREY, margin: [0, 1, 0, 0] },
+          { text: label, fontSize: 8, bold: true, color: GREY },
+          { text: value || '—', fontSize: 10.5, bold: true, color: strong ? INK : GREY, margin: [0, 1.5, 0, 0] },
         ],
-        fillColor: brandLight, margin: [4, 3, 4, 3],
+        fillColor: brandLight, margin: [4, 4, 4, 4],
       });
       content.push({
         table: {
@@ -328,8 +328,8 @@ const buildTestingReportDoc = (d: TestingReportPdf) => {
       const PER = Math.min(4, Math.max(1, it.samples.length));
       const headRow: any[] = [];
       for (let i = 0; i < PER; i++) {
-        headRow.push({ text: 'SN', bold: true, fontSize: 7, color: WHITE, fillColor: brandMid, alignment: 'center' });
-        headRow.push({ text: 'Actual IeMax (mA)', bold: true, fontSize: 7, color: WHITE, fillColor: brandMid, alignment: 'center' });
+        headRow.push({ text: 'SN', bold: true, fontSize: 8.5, color: WHITE, fillColor: brandMid, alignment: 'center' });
+        headRow.push({ text: 'Actual IeMax (mA)', bold: true, fontSize: 8.5, color: WHITE, fillColor: brandMid, alignment: 'center' });
       }
       const body: any[] = [headRow];
       for (let i = 0; i < it.samples.length; i += PER) {
@@ -338,8 +338,8 @@ const buildTestingReportDoc = (d: TestingReportPdf) => {
         for (let c = 0; c < PER; c++) {
           const present = c < slice.length;
           const sn = i + c + 1;
-          row.push({ text: present ? String(sn) : '', alignment: 'center', fontSize: 8, color: GREY });
-          row.push({ text: present ? (slice[c] != null ? (slice[c] as number).toFixed(2) : '—') : '', alignment: 'center', fontSize: 8 });
+          row.push({ text: present ? String(sn) : '', alignment: 'center', fontSize: 9.5, color: GREY });
+          row.push({ text: present ? (slice[c] != null ? (slice[c] as number).toFixed(2) : '—') : '', alignment: 'center', fontSize: 10.5, bold: true });
         }
         body.push(row);
       }

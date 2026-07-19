@@ -593,7 +593,7 @@ export const PackingListPage = () => {
                       <th className="px-1 py-1.5 border-r border-slate-300 align-middle">PO DATE</th>
                       <th className="px-1 py-1.5 border-r border-slate-300 text-left align-middle">ITEM DESCRIPTION</th>
                       <th className="px-1 py-1.5 border-r border-slate-300 align-middle">QTY (PCS)</th>
-                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">TOTAL WT (KG)</th>
+                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">WT (KG)</th>
                       <th className="px-1 py-1.5 align-middle">REMARKS</th>
                     </tr>
                   </thead>
@@ -711,6 +711,6 @@ const InfoRow = ({ label, value, border }: { label: string; value: string; borde
     <span className="w-28 shrink-0 bg-brand-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-brand-800 border-r border-slate-300">
       {label}
     </span>
-    <span className="flex-1 px-3 py-1.5 text-sm font-medium">{value}</span>
+    <span className="flex-1 px-3 py-1.5 text-[13px] font-bold">{value}</span>
   </div>
 );

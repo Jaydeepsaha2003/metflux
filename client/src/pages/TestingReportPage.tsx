@@ -483,10 +483,10 @@ export const TestingReportPage = () => {
                                 const val = row[ci];
                                 return (
                                   <Fragment key={ci}>
-                                    <td className="px-1 border-r border-slate-200 text-center text-[11px] font-medium text-slate-500 align-middle">
+                                    <td className="px-1 border-r border-slate-200 text-center text-[12px] font-medium text-slate-500 align-middle">
                                       {present ? sn : ''}
                                     </td>
-                                    <td className={`px-1 text-center text-[11px] tabular-nums align-middle ${ci < PER_ROW - 1 ? 'border-r-2 border-slate-300' : ''}`}>
+                                    <td className={`px-1 text-center text-[12px] font-semibold tabular-nums align-middle ${ci < PER_ROW - 1 ? 'border-r-2 border-slate-300' : ''}`}>
                                       {present ? (val != null ? val.toFixed(2) : '—') : ''}
                                     </td>
                                   </Fragment>
@@ -540,8 +540,8 @@ export const TestingReportPage = () => {
    vertical padding + relaxed line-height keep descenders clear of the border. */
 const HdrCell = ({ label, value, strong }: { label: string; value: string; strong?: boolean }) => (
   <div className="min-w-0 border-r border-b border-slate-200 px-2 py-2 text-center leading-normal">
-    <div className="text-[8px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
-    <div className={`mt-1 break-words text-[11px] leading-normal ${strong ? 'font-bold text-slate-900' : 'font-medium text-slate-800'}`}>{value}</div>
+    <div className="text-[9px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+    <div className={`mt-1 break-words text-[12px] leading-normal ${strong ? 'font-bold text-slate-900' : 'font-semibold text-slate-800'}`}>{value}</div>
   </div>
 );
 
@@ -550,7 +550,7 @@ const InfoRow = ({ label, value, border }: { label: string; value: string; borde
     <span className="flex w-28 shrink-0 items-center bg-brand-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-brand-800 border-r border-slate-300">
       {label}
     </span>
-    <span className="flex flex-1 items-center px-3 py-1.5 text-sm font-medium">{value}</span>
+    <span className="flex flex-1 items-center px-3 py-1.5 text-[13px] font-bold">{value}</span>
   </div>
 );
 
@@ -571,7 +571,7 @@ const InfoEdit = ({
       type={type}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="flex-1 min-w-0 self-stretch bg-transparent px-3 py-1.5 text-sm font-medium outline-none focus:bg-amber-50/40"
+      className="flex-1 min-w-0 self-stretch bg-transparent px-3 py-1.5 text-[13px] font-bold outline-none focus:bg-amber-50/40"
     />
   </div>
 );
