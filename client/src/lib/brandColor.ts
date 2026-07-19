@@ -54,22 +54,28 @@ export const brandShadeHex = (hex: string | null | undefined, stop = 500): strin
   return rgbToHex(ramp[stop] ?? ramp[500]);
 };
 
-// Per-domain brand colour. This app identifies the brand by hostname (the same
-// way index.html sets the tab title), so the colour is resolved the same way —
-// each domain themes itself with no per-deployment config. A colour saved on the
-// Branding page still overrides this. Metflux → null (the green :root default).
-const HOST_BRAND: { match: string; hex: string }[] = [
+// Brand colour by name. The brand is recognised from a string — a hostname (for
+// the app UI, like index.html's tab-title script) OR a company name (so a PDF
+// generated for a given company carries that company's colour even on another
+// company's domain). Anything unmatched → null = the green :root default.
+const BRAND_MAP: { match: string; hex: string }[] = [
   // Toroflux — the electric royal blue of the toroidal-core "o" in the logo.
   // The generated 600/700 shades (used for header bands) land on the logo's
   // deeper navy, matching its gradient.
   { match: 'toroflux', hex: '#1560e6' },
 ];
 
-export const hostBrandColor = (): string | null => {
-  const h = (typeof location !== 'undefined' ? location.hostname : '').toLowerCase();
-  for (const b of HOST_BRAND) if (h.includes(b.match)) return b.hex;
+/** Resolve a brand colour from any identifying string (hostname / company name).
+    Returns null when nothing matches (→ default green). */
+export const brandColorFor = (text?: string | null): string | null => {
+  const s = String(text ?? '').toLowerCase();
+  for (const b of BRAND_MAP) if (s.includes(b.match)) return b.hex;
   return null;
 };
+
+/** The current domain's brand colour (app UI theming). */
+export const hostBrandColor = (): string | null =>
+  brandColorFor(typeof location !== 'undefined' ? location.hostname : '');
 
 /** Write --brand-* onto <html>. Pass null to clear overrides (revert to the
     green :root defaults in index.css). */

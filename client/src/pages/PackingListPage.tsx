@@ -9,6 +9,7 @@ import { api } from '@/lib/api';
 import { shareViaWhatsApp, type ShareTarget } from '@/lib/share';
 import { readDraft, useFormDraft, fmtDraftTime } from '@/hooks/useFormDraft';
 import { useBranding } from '@/store/branding';
+import { brandColorFor } from '@/lib/brandColor';
 import { downloadPackingListPdf, packingListPdfBlob, type PackingListPdf } from '@/lib/reportPdf';
 
 /* ── Types ────────────────────────────────────────────────────── */
@@ -318,7 +319,9 @@ export const PackingListPage = () => {
       whatsappNumber: company?.whatsappNumber, email: company?.email,
       gstNumber: company?.gstNumber, logoUrl: company?.logoUrl,
     },
-    brand: brandColor,
+    // Colour follows the company the PDF is FOR (e.g. Toroflux → blue even on
+    // another domain); falls back to the current domain's colour otherwise.
+    brand: brandColorFor(company?.name) ?? brandColor,
     meta: {
       customer: customerLabel, state: stateLabel,
       woNo: woOverride || woNo || '—', woDate: woDate ? fmtDate(woDate) : '',

@@ -15,6 +15,7 @@ import { ArrowLeft, Download, ClipboardCheck, Loader2, MessageCircle } from 'luc
 import { api } from '@/lib/api';
 import { shareViaWhatsApp, type ShareTarget } from '@/lib/share';
 import { useBranding } from '@/store/branding';
+import { brandColorFor } from '@/lib/brandColor';
 import { downloadTestingReportPdf, testingReportPdfBlob, type TestingReportPdf } from '@/lib/reportPdf';
 
 /* ── Types ────────────────────────────────────────────────────── */
@@ -229,7 +230,8 @@ export const TestingReportPage = () => {
       whatsappNumber: company?.whatsappNumber, email: company?.email,
       gstNumber: company?.gstNumber, logoUrl: company?.logoUrl,
     },
-    brand: brandColor,
+    // Colour follows the company the report is FOR; falls back to the domain's.
+    brand: brandColorFor(company?.name) ?? brandColor,
     reportDate: fmtDate(todayISO()),
     groups: groups.map((g) => {
       const form = forms[g.key];
