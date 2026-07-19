@@ -6,6 +6,7 @@ import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 import { logAudit, snapshotEntity } from '../lib/audit.js';
+import { notifyCompanyAdmins } from '../lib/push.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -270,6 +271,11 @@ router.post('/', requirePermission('rec_production'), asyncHandler(async (req, r
     createdById: req.auth.userId,
   });
   await logAudit(req, { entity: 'Production', entityId: created.id, action: 'CREATE', summary: `Production ${data.pcs} pcs · ${data.labourName}` });
+  notifyCompanyAdmins(req.tenant.companyId, {
+    type: 'PRODUCTION', title: 'Production received',
+    body: [`${data.pcs} pcs`, [item.grade, item.measure].filter(Boolean).join(' '), data.labourName].filter(Boolean).join(' · '),
+    url: '/s/admin/production', tag: 'production-recv',
+  }, { push: false }).catch(() => {});
   res.status(201).json(created);
 }));
 

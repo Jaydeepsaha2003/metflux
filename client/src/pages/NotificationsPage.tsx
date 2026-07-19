@@ -13,7 +13,8 @@ type Notif = { id: string; type: string; title: string; body: string | null; url
 
 const LABEL: Record<string, string> = {
   LOGIN: 'Sign-in', DUE: 'Invoices due', PRODUCTION: 'Production',
-  SALES_ORDER: 'Sales order', DISPATCH: 'Dispatch', PAYMENT: 'Payment', JOURNAL: 'Journal', TEST: 'Test', SYSTEM: 'System',
+  SALES_ORDER: 'Sales order', DISPATCH: 'Dispatch', PAYMENT: 'Payment',
+  SUPPLIER_ORDER: 'Supplier PO', REJECTION: 'Rejection', JOURNAL: 'Journal', TEST: 'Test', SYSTEM: 'System',
 };
 
 export const NotificationsPage = () => {

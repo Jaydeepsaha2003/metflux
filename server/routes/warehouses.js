@@ -14,6 +14,7 @@ import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission, requireAnyPermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 import { specKeyOf, pickSpec } from '../lib/warehouse.js';
+import { notifyCompanyAdmins } from '../lib/push.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -455,6 +456,11 @@ router.post('/reject', requireAnyPermission(...REJ_PERM), asyncHandler(async (re
     notes: (data.notes && data.notes.trim()) ? data.notes.trim() : 'Rejection',
     createdById: req.auth.userId,
   });
+  notifyCompanyAdmins(req.tenant.companyId, {
+    type: 'REJECTION', title: 'Production rejected',
+    body: [`${data.pcs} pcs`, [item.grade, item.measure].filter(Boolean).join(' ')].filter(Boolean).join(' · '),
+    url: '/s/admin/production/rejection', tag: 'rejection',
+  }, { push: false }).catch(() => {});
   res.status(201).json({ id: created.id, rejected: data.pcs });
 }));
 

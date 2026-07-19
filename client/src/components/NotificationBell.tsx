@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Bell, Check, X, Loader2, Send, CheckCheck, Trash2, Clock, LogIn, Factory, AlertCircle, CreditCard,
-  FileText, Truck, Wallet, BookText, ListChecks,
+  FileText, Truck, Wallet, BookText, ListChecks, ShoppingCart, Ban,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { enablePush } from '@/lib/push';
@@ -71,6 +71,8 @@ export const ICON: Record<string, { icon: typeof Bell; tone: string }> = {
   SALES_ORDER: { icon: FileText, tone: 'bg-brand-50 text-brand-600' },
   DISPATCH: { icon: Truck, tone: 'bg-sky-50 text-sky-600' },
   PAYMENT: { icon: Wallet, tone: 'bg-emerald-50 text-emerald-600' },
+  SUPPLIER_ORDER: { icon: ShoppingCart, tone: 'bg-brand-50 text-brand-600' },
+  REJECTION: { icon: Ban, tone: 'bg-rose-50 text-rose-600' },
   JOURNAL: { icon: BookText, tone: 'bg-slate-100 text-slate-600' },
   TEST: { icon: Bell, tone: 'bg-emerald-50 text-emerald-600' },
   SYSTEM: { icon: AlertCircle, tone: 'bg-slate-100 text-slate-600' },

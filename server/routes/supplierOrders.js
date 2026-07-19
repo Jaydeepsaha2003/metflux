@@ -6,6 +6,7 @@ import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 import { logAudit, snapshotEntity } from '../lib/audit.js';
+import { notifyCompanyAdmins } from '../lib/push.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -146,6 +147,11 @@ router.post('/', requirePermission('add_supplier_po'), asyncHandler(async (req, 
   });
 
   await logAudit(req, { entity: 'SupplierOrder', entityId: poId, action: 'CREATE', summary: `Supplier PO ${data.poNumber} · ${supplier.name}` });
+  notifyCompanyAdmins(req.tenant.companyId, {
+    type: 'SUPPLIER_ORDER', title: 'New supplier PO',
+    body: `${supplier.name} — PO ${data.poNumber} (${data.items.length} item${data.items.length === 1 ? '' : 's'})`,
+    url: '/s/admin/supplier-po/track', tag: 'supplier-po',
+  }, { push: false }).catch(() => {});
   res.status(201).json(await loadOne(poId, req.tenant.companyId));
 }));
 
