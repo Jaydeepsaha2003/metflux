@@ -42,6 +42,7 @@ const POOrderNewPage      = page(() => import('@/pages/POOrderNewPage'), 'POOrde
 const QuotationNewPage    = page(() => import('@/pages/QuotationNewPage'), 'QuotationNewPage');
 const QuotationsPage      = page(() => import('@/pages/QuotationsPage'), 'QuotationsPage');
 const QuotationPrintPage  = page(() => import('@/pages/QuotationPrintPage'), 'QuotationPrintPage');
+const QuotationSettingsPage = page(() => import('@/pages/QuotationSettingsPage'), 'QuotationSettingsPage');
 const POManagePage        = page(() => import('@/pages/POManagePage'), 'POManagePage');
 const POEditPage          = page(() => import('@/pages/POEditPage'), 'POEditPage');
 const POOrderEditPage     = page(() => import('@/pages/POOrderEditPage'), 'POOrderEditPage');
@@ -120,6 +121,7 @@ export const App = () => {
       <Route path="/quotation/new"        element={<QuotationNewPage />} />
       <Route path="/quotation/manage"     element={<QuotationsPage />} />
       <Route path="/quotation/:id/print"  element={<QuotationPrintPage />} />
+      <Route path="/settings/quotation"    element={<QuotationSettingsPage />} />
 
       {/* Production */}
       <Route path="/production"          element={<ProductionListPage />} />

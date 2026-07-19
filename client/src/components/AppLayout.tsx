@@ -96,6 +96,7 @@ const NAV: NavItem[] = [
       { kind: 'leaf', to: '/settings/flux-grades', label: 'Flux Grades', icon: Activity, perm: 'add_material' },
       { kind: 'leaf', to: '/settings/labours',   label: 'Workers',   icon: Users2,    perm: 'add_staff' },
       { kind: 'leaf', to: '/settings/suppliers', label: 'Suppliers', icon: Truck,     perm: 'add_supplier' },
+      { kind: 'leaf', to: '/settings/quotation', label: 'Quotation Terms', icon: FileText, adminOnly: true },
       { kind: 'leaf', to: '/settings/user-logs',   label: 'User Logs',   icon: MonitorSmartphone, adminOnly: true },
       { kind: 'leaf', to: '/settings/audit-log',   label: 'Audit Log',   icon: History, perm: 'view_audit_log' },
       { kind: 'leaf', to: '/settings/branding',    label: 'App Branding', icon: ImageIcon, platformOnly: true },

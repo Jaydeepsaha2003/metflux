@@ -11,7 +11,7 @@
 //   Authorised Signatory footer
 //
 // PDF via html2pdf — same machinery as SupplierPOPrintPage.
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Download, Loader2, MessageCircle } from 'lucide-react';
@@ -88,14 +88,32 @@ export const QuotationPrintPage = () => {
     queryKey: ['company-me'],
     queryFn: () => api<CompanyMe>('/companies/me'),
   });
+  // Company-wide quotation defaults (bank + terms) set in Settings → Quotation Terms.
+  const { data: qsettings } = useQuery({
+    queryKey: ['company-settings', 'quotation'],
+    queryFn: () => api<{ bankName: string; bankBranch: string; bankAccountName: string; bankAccountNumber: string; bankIfsc: string; terms: string }>('/company-settings/quotation'),
+  });
 
-  /* Editable bank details + terms — no bank fields are stored, so the user fills
-     these once before downloading (defaults are placeholders they can overwrite). */
+  /* Editable bank details + terms — pre-filled from the company's saved
+     quotation settings; still overridable per-quote before downloading. */
   const [bankName, setBankName] = useState('');
   const [bankAcc, setBankAcc] = useState('');
+  const [bankAcctName, setBankAcctName] = useState('');
   const [bankIfsc, setBankIfsc] = useState('');
   const [bankBranch, setBankBranch] = useState('');
-  const [terms, setTerms] = useState('1. Subject to Jurisdiction only.\n2. Goods once sold will not be taken back.\n3. Prices are subject to change without prior notice.');
+  const [terms, setTerms] = useState('');
+  const [edited, setEdited] = useState(false);
+
+  // Apply saved defaults once loaded (unless the user has already edited a field).
+  useEffect(() => {
+    if (!qsettings || edited) return;
+    setBankName(qsettings.bankName || '');
+    setBankAcc(qsettings.bankAccountNumber || '');
+    setBankAcctName(qsettings.bankAccountName || '');
+    setBankIfsc(qsettings.bankIfsc || '');
+    setBankBranch(qsettings.bankBranch || '');
+    setTerms(qsettings.terms || '1. Subject to Jurisdiction only.');
+  }, [qsettings, edited]);
 
   const totals = useMemo(() => {
     if (!qt) return { sub: 0, gstRate: 0, tax: 0, grand: 0, intra: false, totalQty: 0, unit: 'Pcs' };
@@ -372,18 +390,20 @@ export const QuotationPrintPage = () => {
               <div className="text-[11px] font-bold uppercase tracking-wide text-slate-700 mb-1.5">Bank Details</div>
               <div className="grid grid-cols-[90px_1fr] gap-y-0.5 gap-x-2">
                 <span className="text-slate-600">Bank :</span>
-                <input className="border-b border-dashed border-slate-300 bg-transparent outline-none focus:border-brand-500 px-1" value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="AXIS BANK" />
+                <input className="border-b border-dashed border-slate-300 bg-transparent outline-none focus:border-brand-500 px-1" value={bankName} onChange={(e) => { setBankName(e.target.value); setEdited(true); }} placeholder="ICICI BANK" />
+                <span className="text-slate-600">A/C Name :</span>
+                <input className="border-b border-dashed border-slate-300 bg-transparent outline-none focus:border-brand-500 px-1" value={bankAcctName} onChange={(e) => { setBankAcctName(e.target.value); setEdited(true); }} placeholder="Account holder" />
                 <span className="text-slate-600">A/C No. :</span>
-                <input className="border-b border-dashed border-slate-300 bg-transparent outline-none focus:border-brand-500 px-1" value={bankAcc} onChange={(e) => setBankAcc(e.target.value)} placeholder="000000000000" />
+                <input className="border-b border-dashed border-slate-300 bg-transparent outline-none focus:border-brand-500 px-1" value={bankAcc} onChange={(e) => { setBankAcc(e.target.value); setEdited(true); }} placeholder="000000000000" />
                 <span className="text-slate-600">IFSC :</span>
-                <input className="border-b border-dashed border-slate-300 bg-transparent outline-none focus:border-brand-500 px-1" value={bankIfsc} onChange={(e) => setBankIfsc(e.target.value)} placeholder="UTIB0000000" />
+                <input className="border-b border-dashed border-slate-300 bg-transparent outline-none focus:border-brand-500 px-1" value={bankIfsc} onChange={(e) => { setBankIfsc(e.target.value); setEdited(true); }} placeholder="ICIC0000000" />
                 <span className="text-slate-600">Branch :</span>
-                <input className="border-b border-dashed border-slate-300 bg-transparent outline-none focus:border-brand-500 px-1" value={bankBranch} onChange={(e) => setBankBranch(e.target.value)} placeholder="Branch" />
+                <input className="border-b border-dashed border-slate-300 bg-transparent outline-none focus:border-brand-500 px-1" value={bankBranch} onChange={(e) => { setBankBranch(e.target.value); setEdited(true); }} placeholder="Branch" />
               </div>
             </div>
             <div className="px-5 py-2">
               <div className="text-[11px] font-bold uppercase tracking-wide text-slate-700 mb-1.5">Terms &amp; Conditions</div>
-              <textarea className="w-full text-[11px] leading-snug border border-slate-200 rounded-md p-1.5 outline-none focus:border-brand-500 min-h-[80px]" value={terms} onChange={(e) => setTerms(e.target.value)} />
+              <textarea className="w-full text-[11px] leading-snug border border-slate-200 rounded-md p-1.5 outline-none focus:border-brand-500 min-h-[80px]" value={terms} onChange={(e) => { setTerms(e.target.value); setEdited(true); }} />
             </div>
           </div>
 
