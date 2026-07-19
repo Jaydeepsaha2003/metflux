@@ -1012,7 +1012,7 @@ const Stat = ({ label, value, accent }: { label: string; value: string; accent?:
 
 /* ---------- TOROIDAL ---------- */
 export const ToroidalForm = ({
-  grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed,
+  grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed, hideTesting = false,
 }: {
   grades: GradeRow[];
   fluxGrades: FluxGroup[];
@@ -1021,6 +1021,8 @@ export const ToroidalForm = ({
   onPrefillConsumed?: () => void;
   edit?: { item: Item; nonce: number } | null;
   onEditConsumed?: () => void;
+  /** Quotation mode — flux/test calibration is irrelevant to a quote, so hide it. */
+  hideTesting?: boolean;
 }) => {
   const [grade, setGrade] = useState('');
   const [material, setMaterial] = useState('');
@@ -1156,27 +1158,30 @@ export const ToroidalForm = ({
       </div>
 
       {/* Row 2 — narrow numeric fields: dimensions, pcs, turns, flux.
-          Six fields fit cleanly in one row on md+ screens. */}
-      <div className="mt-2 grid grid-cols-3 gap-x-2 gap-y-2 sm:grid-cols-3 md:grid-cols-6">
+          Six fields fit cleanly in one row on md+ screens. Turns/flux are hidden
+          in quotation mode (testing calibration isn't part of a quote). */}
+      <div className={cn('mt-2 grid grid-cols-3 gap-x-2 gap-y-2 sm:grid-cols-3', hideTesting ? 'md:grid-cols-4' : 'md:grid-cols-6')}>
         <NumField label="ID" value={id} onChange={setId} />
         <NumField label="OD" value={od} onChange={setOd} />
         <NumField label="HT" value={ht} onChange={setHt} />
         <NumField label="Pcs" value={pcs} onChange={setPcs} />
-        <NumField label="Turns" value={turns} onChange={setTurns} />
-        <Field label="Flux">
-          <SearchableSelect
-            dense
-            value={flux > 0 ? String(flux) : ''}
-            onChange={(v) => setFlux(parseFloat(v) || 0)}
-            options={fluxOptions}
-            placeholder={
-              !grade ? 'Pick grade first'
-              : !gradeHasFluxData ? `No flux data for "${grade}"`
-              : 'Select flux…'
-            }
-            disabled={!grade || !gradeHasFluxData}
-          />
-        </Field>
+        {!hideTesting && (<>
+          <NumField label="Turns" value={turns} onChange={setTurns} />
+          <Field label="Flux">
+            <SearchableSelect
+              dense
+              value={flux > 0 ? String(flux) : ''}
+              onChange={(v) => setFlux(parseFloat(v) || 0)}
+              options={fluxOptions}
+              placeholder={
+                !grade ? 'Pick grade first'
+                : !gradeHasFluxData ? `No flux data for "${grade}"`
+                : 'Select flux…'
+              }
+              disabled={!grade || !gradeHasFluxData}
+            />
+          </Field>
+        </>)}
       </div>
 
       {/* Computed values — geometry + flux-test results.
@@ -1185,16 +1190,18 @@ export const ToroidalForm = ({
         <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-6">
           <Stat label="Wt / pc"      value={calc.weightPerPc.toFixed(3)} />
           <Stat label="Total Wt"     value={calc.totalWeight.toFixed(3)} accent="primary" />
-          <Stat label="Flux ( T )"   value={flux > 0 ? `${flux.toFixed(2)} T` : '—'} />
-          <Stat label="ATe/cm"       value={ateCm > 0 ? ateCm.toFixed(3) : '—'} />
-          <Stat label="V (Volts)"    value={fluxCalc.testVoltage > 0 ? fluxCalc.testVoltage.toFixed(3) : '—'} />
-          <Stat label="Ie max (mA)"  value={
-            fluxCalc.testCurrent > 0
-              ? fluxCalc.testCurrent.toFixed(2)
-              : flux > 0 && ateCm === 0
-                ? 'Set ATe/cm'
-                : '—'
-          } />
+          {!hideTesting && (<>
+            <Stat label="Flux ( T )"   value={flux > 0 ? `${flux.toFixed(2)} T` : '—'} />
+            <Stat label="ATe/cm"       value={ateCm > 0 ? ateCm.toFixed(3) : '—'} />
+            <Stat label="V (Volts)"    value={fluxCalc.testVoltage > 0 ? fluxCalc.testVoltage.toFixed(3) : '—'} />
+            <Stat label="Ie max (mA)"  value={
+              fluxCalc.testCurrent > 0
+                ? fluxCalc.testCurrent.toFixed(2)
+                : flux > 0 && ateCm === 0
+                  ? 'Set ATe/cm'
+                  : '—'
+            } />
+          </>)}
           <div className="col-span-2 sm:col-span-6">
             <Stat label="Measure" value={calc.measure} />
           </div>
@@ -1220,7 +1227,7 @@ export const ToroidalForm = ({
 
 /* ---------- RECTANGULAR ---------- */
 export const RectangularForm = ({
-  grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed,
+  grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed, hideTesting = false,
 }: {
   grades: GradeRow[];
   fluxGrades: FluxGroup[];
@@ -1229,6 +1236,8 @@ export const RectangularForm = ({
   onPrefillConsumed?: () => void;
   edit?: { item: Item; nonce: number } | null;
   onEditConsumed?: () => void;
+  /** Quotation mode — flux/test calibration is irrelevant to a quote, so hide it. */
+  hideTesting?: boolean;
 }) => {
   const [grade, setGrade] = useState('');
   const [material, setMaterial] = useState('');
@@ -1374,29 +1383,32 @@ export const RectangularForm = ({
         <NumField label={rateBasis === 'PER_KG' ? 'Rate (₹/kg)' : 'Rate (₹/pcs)'} value={rateValue} onChange={setRateValue} />
       </div>
 
-      {/* Row 2 — narrow numeric fields. 8 fields fit cleanly in one line on md+. */}
-      <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-2 sm:grid-cols-4 md:grid-cols-8">
+      {/* Row 2 — narrow numeric fields. 8 fields fit cleanly in one line on md+.
+          Turns/flux are hidden in quotation mode (not part of a quote). */}
+      <div className={cn('mt-2 grid grid-cols-2 gap-x-2 gap-y-2 sm:grid-cols-4', hideTesting ? 'md:grid-cols-6' : 'md:grid-cols-8')}>
         <NumField label="ID 1" value={id1} onChange={setId1} />
         <NumField label="ID 2" value={id2} onChange={setId2} />
         <NumField label="OD 1" value={od1} onChange={setOd1} />
         <NumField label="OD 2" value={od2} onChange={setOd2} />
         <NumField label="HT"   value={ht}  onChange={setHt} />
         <NumField label="Pcs"  value={pcs} onChange={setPcs} />
-        <NumField label="Turns" value={turns} onChange={setTurns} />
-        <Field label="Flux">
-          <SearchableSelect
-            dense
-            value={flux > 0 ? String(flux) : ''}
-            onChange={(v) => setFlux(parseFloat(v) || 0)}
-            options={fluxOptions}
-            placeholder={
-              !grade ? 'Pick grade first'
-              : !gradeHasFluxData ? `No flux data for "${grade}"`
-              : 'Select flux…'
-            }
-            disabled={!grade || !gradeHasFluxData}
-          />
-        </Field>
+        {!hideTesting && (<>
+          <NumField label="Turns" value={turns} onChange={setTurns} />
+          <Field label="Flux">
+            <SearchableSelect
+              dense
+              value={flux > 0 ? String(flux) : ''}
+              onChange={(v) => setFlux(parseFloat(v) || 0)}
+              options={fluxOptions}
+              placeholder={
+                !grade ? 'Pick grade first'
+                : !gradeHasFluxData ? `No flux data for "${grade}"`
+                : 'Select flux…'
+              }
+              disabled={!grade || !gradeHasFluxData}
+            />
+          </Field>
+        </>)}
       </div>
 
       {buildMismatch && (
@@ -1416,16 +1428,18 @@ export const RectangularForm = ({
           <Stat label="Core M/L" value={calc.coreMl.toFixed(3)} />
           <Stat label="Wt / pc" value={calc.weightPerPc.toFixed(3)} />
           <Stat label="Total Wt" value={calc.totalWeight.toFixed(3)} accent="primary" />
-          <Stat label="Flux ( T )"   value={flux > 0 ? `${flux.toFixed(2)} T` : '—'} />
-          <Stat label="ATe/cm"       value={ateCm > 0 ? ateCm.toFixed(3) : '—'} />
-          <Stat label="V (Volts)"    value={fluxCalc.testVoltage > 0 ? fluxCalc.testVoltage.toFixed(3) : '—'} />
-          <Stat label="Ie max (mA)"  value={
-            fluxCalc.testCurrent > 0
-              ? fluxCalc.testCurrent.toFixed(2)
-              : flux > 0 && ateCm === 0
-                ? 'Set ATe/cm'
-                : '—'
-          } />
+          {!hideTesting && (<>
+            <Stat label="Flux ( T )"   value={flux > 0 ? `${flux.toFixed(2)} T` : '—'} />
+            <Stat label="ATe/cm"       value={ateCm > 0 ? ateCm.toFixed(3) : '—'} />
+            <Stat label="V (Volts)"    value={fluxCalc.testVoltage > 0 ? fluxCalc.testVoltage.toFixed(3) : '—'} />
+            <Stat label="Ie max (mA)"  value={
+              fluxCalc.testCurrent > 0
+                ? fluxCalc.testCurrent.toFixed(2)
+                : flux > 0 && ateCm === 0
+                  ? 'Set ATe/cm'
+                  : '—'
+            } />
+          </>)}
         </div>
         <div className="mt-1.5 border-t border-rose-100 pt-1.5">
           <Stat label="Measure" value={calc.measure} />
@@ -1451,7 +1465,7 @@ export const RectangularForm = ({
 
 /* ---------- NANO ---------- */
 export const NanoForm = ({
-  grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed, composite: compositeMode = false, typeGrades = [],
+  grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed, composite: compositeMode = false, typeGrades = [], hideTesting = false,
 }: {
   grades: GradeRow[];
   fluxGrades: FluxGroup[];
@@ -1462,6 +1476,8 @@ export const NanoForm = ({
   onEditConsumed?: () => void;
   composite?: boolean; // COMPOSITE core type — always show CRGO + Nano, rule from the Type.
   typeGrades?: GradeRow[]; // composite join types (Continuous Loop / Exact Split / …)
+  /** Quotation mode — flux/test calibration is irrelevant to a quote, so hide it. */
+  hideTesting?: boolean;
 }) => {
   const selfCore: CoreType = compositeMode ? 'COMPOSITE' : 'NANO';
   const [grade, setGrade] = useState('');
@@ -1711,7 +1727,9 @@ export const NanoForm = ({
             )}
 
             {/* Testing parameters — computed on the Nano core dims. Optional, but
-                filling them lets a composite order produce a Testing Report. */}
+                filling them lets a composite order produce a Testing Report.
+                Hidden in quotation mode (not part of a quote). */}
+            {!hideTesting && (
             <div>
               <SecLabel>Testing parameters (Nano core)</SecLabel>
               <div className="grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-4">
@@ -1744,6 +1762,7 @@ export const NanoForm = ({
                 </div>
               )}
             </div>
+            )}
           </>
         ) : (
           <>
@@ -1769,7 +1788,8 @@ export const NanoForm = ({
               </div>
             </div>
 
-            {/* Testing parameters — one aligned line */}
+            {/* Testing parameters — one aligned line. Hidden in quotation mode. */}
+            {!hideTesting && (
             <div>
               <SecLabel>Testing parameters</SecLabel>
               <div className="grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-4">
@@ -1802,6 +1822,7 @@ export const NanoForm = ({
                 </div>
               )}
             </div>
+            )}
           </>
         )}
       </div>

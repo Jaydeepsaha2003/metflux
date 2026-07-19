@@ -192,7 +192,7 @@ export const QuotationNewPage = () => {
         </div>
 
         {coreType === 'TOROIDAL' && (
-          <ToroidalForm
+          <ToroidalForm hideTesting
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'TOROIDAL'))}
             fluxGrades={fluxResp?.grades ?? []}
             onAdd={addItem} prefill={prefill} onPrefillConsumed={() => setPrefill(null)}
@@ -200,7 +200,7 @@ export const QuotationNewPage = () => {
           />
         )}
         {coreType === 'RECTANGULAR' && (
-          <RectangularForm
+          <RectangularForm hideTesting
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'RECTANGULAR'))}
             fluxGrades={fluxRespRect?.grades ?? []}
             onAdd={addItem} prefill={prefill} onPrefillConsumed={() => setPrefill(null)}
@@ -208,7 +208,7 @@ export const QuotationNewPage = () => {
           />
         )}
         {coreType === 'NANO' && (
-          <NanoForm
+          <NanoForm hideTesting
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'NANO'))}
             fluxGrades={fluxRespNano?.grades ?? []}
             onAdd={addItem} prefill={prefill} onPrefillConsumed={() => setPrefill(null)}
@@ -216,7 +216,7 @@ export const QuotationNewPage = () => {
           />
         )}
         {coreType === 'COMPOSITE' && (
-          <NanoForm composite
+          <NanoForm composite hideTesting
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'NANO'))}
             typeGrades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'COMPOSITE'))}
             fluxGrades={fluxRespNano?.grades ?? []}
