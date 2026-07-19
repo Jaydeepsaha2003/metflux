@@ -19,20 +19,23 @@ router.use(requireAuth, resolveTenant);
    print fields (HSN/SAC + unit of measure). */
 const itemSchema = z.object({
   coreType: z.enum(['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE']),
-  grade: z.string().trim().min(1).max(80),
+  // grade / measure / dimensions are optional so a MANUAL line (free-text
+  // description + qty + rate, no core spec) can be quoted when an item isn't in
+  // the catalogue. Calculated items still send them all.
+  grade: z.string().trim().max(80).optional().default(''),
   material: z.string().trim().min(1).max(120),
-  measure: z.string().trim().min(1).max(160),
+  measure: z.string().trim().max(160).optional().default(''),
   hsnCode: z.string().trim().max(20).optional().nullable(),
   unit: z.string().trim().max(20).optional().nullable(),
-  id1: z.coerce.number().nonnegative(),
+  id1: z.coerce.number().nonnegative().optional().default(0),
   id2: z.coerce.number().nonnegative().optional().nullable(),
-  od1: z.coerce.number().nonnegative(),
+  od1: z.coerce.number().nonnegative().optional().default(0),
   od2: z.coerce.number().nonnegative().optional().nullable(),
-  ht: z.coerce.number().nonnegative(),
+  ht: z.coerce.number().nonnegative().optional().default(0),
   builtup: z.coerce.number().nonnegative().optional().nullable(),
-  weightPerPc: z.coerce.number().nonnegative(),
+  weightPerPc: z.coerce.number().nonnegative().optional().default(0),
   pcs: z.coerce.number().int().positive(),
-  totalWeight: z.coerce.number().nonnegative(),
+  totalWeight: z.coerce.number().nonnegative().optional().default(0),
   coreAc: z.coerce.number().nonnegative().optional().nullable(),
   coreMl: z.coerce.number().nonnegative().optional().nullable(),
   d13: z.coerce.number().nonnegative().optional().nullable(),

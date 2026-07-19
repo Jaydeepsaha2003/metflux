@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Save, Loader2, Trash2, Copy, FileText, Calendar, Hash, User2 } from 'lucide-react';
+import { Save, Loader2, Trash2, Copy, FileText, Calendar, Hash, User2, Plus } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { SearchableSelect } from '@/components/SearchableSelect';
@@ -35,6 +35,77 @@ const cellInput =
   'h-7 w-full rounded-md border border-slate-300 bg-white px-2 text-[13px] outline-none ' +
   'focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20';
 
+/* Manual / custom quotation line — free-text description + qty + rate, for items
+   not in the grade/material catalogue. No core spec or dimensions. */
+const ManualLineForm = ({ onAdd }: { onAdd: (item: QItem) => void }) => {
+  const [description, setDescription] = useState('');
+  const [hsnCode, setHsnCode] = useState('');
+  const [unit, setUnit] = useState('Pcs');
+  const [qty, setQty] = useState(0);
+  const [rate, setRate] = useState(0);
+  const [err, setErr] = useState('');
+
+  const add = () => {
+    if (!description.trim()) { setErr('Enter a description.'); return; }
+    if (qty <= 0) { setErr('Enter a quantity.'); return; }
+    setErr('');
+    onAdd({
+      // coreType is required by the item shape but unused on the quotation print
+      // (which lists items ungrouped); a manual line carries no core spec.
+      coreType: 'TOROIDAL',
+      grade: '', material: description.trim(), measure: '',
+      id1: 0, od1: 0, ht: 0, weightPerPc: 0, pcs: qty, totalWeight: 0,
+      hsnCode: hsnCode.trim(), unit: unit.trim() || 'Pcs',
+      rateBasis: 'PER_PCS',
+      rateValue: rate > 0 ? rate : undefined,
+      ratePerPc: rate > 0 ? rate : undefined,
+      totalAmount: rate > 0 ? +(rate * qty).toFixed(2) : undefined,
+    });
+    setDescription(''); setHsnCode(''); setUnit('Pcs'); setQty(0); setRate(0);
+  };
+
+  return (
+    <div className="rounded-lg border border-brand-200 bg-brand-50/40 p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-brand-800">Custom item</span>
+        <span className="text-[11px] text-slate-400">— free text, no core specification</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
+        <label className="col-span-2 block sm:col-span-3">
+          <span className="mb-1 block text-[11px] text-slate-500">Description</span>
+          <input className={cellInput} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Copper winding wire 1.2mm" />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-[11px] text-slate-500">HSN/SAC</span>
+          <input className={cellInput} value={hsnCode} onChange={(e) => setHsnCode(e.target.value)} placeholder="85049010" />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-[11px] text-slate-500">Qty</span>
+          <input type="number" min={0} className={cellInput} value={qty || ''} onChange={(e) => setQty(parseInt(e.target.value, 10) || 0)} />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-[11px] text-slate-500">Unit</span>
+          <input className={cellInput} value={unit} onChange={(e) => setUnit(e.target.value)} />
+        </label>
+      </div>
+      <div className="mt-2 grid grid-cols-2 items-end gap-2 sm:grid-cols-6">
+        <label className="block sm:col-span-2">
+          <span className="mb-1 block text-[11px] text-slate-500">Rate (₹ / unit)</span>
+          <input type="number" min={0} className={cellInput} value={rate || ''} onChange={(e) => setRate(parseFloat(e.target.value) || 0)} />
+        </label>
+        <div className="text-xs text-slate-500 sm:col-span-2">
+          Amount: <span className="font-semibold text-brand-700 tabular-nums">₹{money0(rate * qty)}</span>
+        </div>
+        <div className="col-span-2 flex justify-end sm:col-span-2">
+          <button type="button" onClick={add} className="btn-primary w-full sm:w-auto"><Plus className="h-4 w-4" /> Add custom line</button>
+        </div>
+      </div>
+      {err && <div className="mt-2 text-[11px] text-red-600">{err}</div>}
+    </div>
+  );
+};
+
 export const QuotationNewPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -47,7 +118,7 @@ export const QuotationNewPage = () => {
   const [notes, setNotes] = useState('');
 
   /* ----- entry ----- */
-  const [coreType, setCoreType] = useState<CoreType | ''>('');
+  const [coreType, setCoreType] = useState<CoreType | 'MANUAL' | ''>('');
   const [items, setItems] = useState<QItem[]>([]);
 
   /* Copy grade / material / rate-basis from a row into the entry form. */
@@ -60,6 +131,7 @@ export const QuotationNewPage = () => {
   };
 
   const addItem = (item: Item) => setItems((prev) => [...prev, { ...item, unit: 'Pcs', hsnCode: '' }]);
+  const addManual = (item: QItem) => setItems((prev) => [...prev, item]);
   const patchItem = (idx: number, patch: Partial<QItem>) =>
     setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
   const removeItem = (idx: number) => setItems((prev) => prev.filter((_, i) => i !== idx));
@@ -189,6 +261,12 @@ export const QuotationNewPage = () => {
               </button>
             ))}
           </div>
+          <span className="text-xs text-slate-400">or</span>
+          <button type="button" onClick={() => setCoreType('MANUAL')}
+            className={cn('inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm font-medium transition',
+              coreType === 'MANUAL' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-300 text-slate-600 hover:bg-slate-50')}>
+            <Plus className="h-3.5 w-3.5" /> Custom item
+          </button>
         </div>
 
         {coreType === 'TOROIDAL' && (
@@ -224,9 +302,10 @@ export const QuotationNewPage = () => {
             edit={null} onEditConsumed={() => {}}
           />
         )}
+        {coreType === 'MANUAL' && <ManualLineForm onAdd={addManual} />}
         {!coreType && (
           <div className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500">
-            Pick a core type above to start adding items.
+            Pick a core type above, or use <span className="font-medium">Custom item</span>, to start adding items.
           </div>
         )}
       </section>
@@ -264,11 +343,20 @@ export const QuotationNewPage = () => {
                   <tr key={idx} className="border-b border-slate-100 align-top">
                     <td className="px-2 py-2 text-slate-500">{idx + 1}</td>
                     <td className="px-2 py-2">
-                      <div className="flex items-center gap-1.5">
-                        <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium uppercase', coreBadge(it.coreType))}>{coreShort(it.coreType)}</span>
-                        <span className="font-medium text-slate-800">{it.material}</span>
-                      </div>
-                      <div className="mt-0.5 font-mono text-[11px] text-slate-500 break-all">{it.grade} · {it.measure}</div>
+                      {(() => {
+                        const manual = !it.grade && !it.measure;
+                        const sub = [it.grade, it.measure].filter(Boolean).join(' · ');
+                        return (<>
+                          <div className="flex items-center gap-1.5">
+                            <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium uppercase',
+                              manual ? 'bg-slate-100 text-slate-600' : coreBadge(it.coreType))}>
+                              {manual ? 'Custom' : coreShort(it.coreType)}
+                            </span>
+                            <span className="font-medium text-slate-800">{it.material}</span>
+                          </div>
+                          {sub && <div className="mt-0.5 font-mono text-[11px] text-slate-500 break-all">{sub}</div>}
+                        </>);
+                      })()}
                     </td>
                     <td className="px-2 py-2">
                       <input className={cellInput} value={it.hsnCode ?? ''} onChange={(e) => patchItem(idx, { hsnCode: e.target.value })} placeholder="85049010" />
