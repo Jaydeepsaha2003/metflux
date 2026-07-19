@@ -72,7 +72,7 @@ const Cell = ({
     onChange={(e) => onChange(e.target.value)}
     style={{ fontFamily: 'inherit' }}
     className={`block w-full h-9 bg-transparent border-0 border-b border-transparent
-      focus:border-brand-400 focus:outline-none text-[11px] font-bold leading-9 py-0 px-1 align-middle box-border
+      focus:border-brand-400 focus:outline-none text-[13px] font-normal leading-9 py-0 px-1 align-middle box-border
       ${align === 'left' ? 'text-left' : align === 'right' ? 'text-right' : 'text-center'}
       ${bold ? 'font-semibold' : ''}`}
   />
@@ -86,7 +86,7 @@ const Display = ({
   align?: 'left' | 'center' | 'right'; wrap?: boolean;
 }) => (
   <div
-    className={`block w-full px-1 text-[11px] font-bold
+    className={`block w-full px-1 text-[13px] font-normal
       ${wrap
         ? 'min-h-9 py-1 leading-snug whitespace-normal break-words'
         : 'h-9 leading-9 truncate'}
@@ -615,7 +615,7 @@ export const PackingListPage = () => {
                           {/* Data rows — Calibri Bold 11 for legibility (per request) */}
                           {gradeRows.map((row, idx) => (
                             <tr key={row.dispatchId} className="h-9 border-b border-slate-200 hover:bg-slate-50/50" style={{ fontFamily: 'Calibri, "Segoe UI", Tahoma, sans-serif' }}>
-                              <td className="px-1 border-r border-slate-200 text-center font-bold text-slate-600 text-[11px] align-middle">
+                              <td className="px-1 border-r border-slate-200 text-center font-normal text-slate-700 text-[13px] align-middle">
                                 {idx + 1}
                               </td>
                               <td className="px-0.5 border-r border-slate-200 align-middle">

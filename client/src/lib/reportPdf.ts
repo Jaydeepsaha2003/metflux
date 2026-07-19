@@ -57,13 +57,13 @@ const LIGHT = '#e2e8f0';
 // Company letterhead + a brand-coloured title banner, as a borderless table.
 const header = (company: PdfCompany, title: string, brandDark: string) => {
   const infoLines: any[] = [
-    { text: company?.name || 'Company Name', bold: true, fontSize: 14, color: brandDark, characterSpacing: 0.3 },
+    { text: company?.name || 'Company Name', bold: true, fontSize: 16, color: brandDark, characterSpacing: 0.3 },
   ];
   const addr = company?.address?.replace(/\n+/g, ', ').trim();
-  if (addr) infoLines.push({ text: addr, fontSize: 8, color: GREY, margin: [0, 2, 0, 0] });
+  if (addr) infoLines.push({ text: addr, fontSize: 9, color: GREY, margin: [0, 2, 0, 0] });
   const contact = [company?.phone, company?.whatsappNumber, company?.email].filter(Boolean).join('  |  ');
-  if (contact) infoLines.push({ text: contact, fontSize: 8, color: GREY, margin: [0, 1, 0, 0] });
-  if (company?.gstNumber) infoLines.push({ text: `GSTIN: ${company.gstNumber}`, fontSize: 8, color: GREY, margin: [0, 1, 0, 0] });
+  if (contact) infoLines.push({ text: contact, fontSize: 9, color: GREY, margin: [0, 1, 0, 0] });
+  if (company?.gstNumber) infoLines.push({ text: `GSTIN: ${company.gstNumber}`, fontSize: 9, color: GREY, margin: [0, 1, 0, 0] });
 
   const left: any = { stack: infoLines };
   if (company?.logoUrl) {
@@ -80,8 +80,8 @@ const header = (company: PdfCompany, title: string, brandDark: string) => {
       widths: ['*', 'auto'],
       body: [[
         left,
-        { text: title, alignment: 'center', color: WHITE, bold: true, fontSize: 12,
-          characterSpacing: 1.5, fillColor: brandDark, margin: [12, 12, 12, 12] },
+        { text: title, alignment: 'center', color: WHITE, bold: true, fontSize: 13.5,
+          characterSpacing: 1.5, fillColor: brandDark, margin: [14, 13, 14, 13] },
       ]],
     },
     layout: {
@@ -104,10 +104,10 @@ const infoGrid = (pairs: [string, string][], brandLight: string) => {
   for (let i = 0; i < pairs.length; i += 2) {
     const a = pairs[i]; const b = pairs[i + 1] ?? ['', ''];
     body.push([
-      { text: a[0], bold: true, fontSize: 7.5, color: GREY, fillColor: brandLight },
-      { text: a[1] || '—', fontSize: 9 },
-      { text: b[0], bold: true, fontSize: 7.5, color: GREY, fillColor: brandLight },
-      { text: b[1] || '—', fontSize: 9 },
+      { text: a[0], bold: true, fontSize: 9, color: GREY, fillColor: brandLight },
+      { text: a[1] || '—', fontSize: 10.5 },
+      { text: b[0], bold: true, fontSize: 9, color: GREY, fillColor: brandLight },
+      { text: b[1] || '—', fontSize: 10.5 },
     ]);
   }
   return {
@@ -180,9 +180,10 @@ const buildPackingListDoc = (d: PackingListPdf) => {
 
   // 7 columns (Rate removed): SR | PO NO | PO DATE | DESCRIPTION | QTY | TOTAL WT | REMARKS
   const COLS = [20, 74, 62, '*', 42, 66, 66];
-  const th = (t: string, align: any = 'center') => ({ text: t, bold: true, fontSize: 7.5, color: WHITE, fillColor: brandMid, alignment: align, characterSpacing: 0.2 });
-  // Item-row cell — Calibri-compatible (Carlito) bold 11, per request.
-  const rc = (t: string, align: any = 'center') => ({ text: t, alignment: align, font: 'Carlito', bold: true, fontSize: 11 });
+  const th = (t: string, align: any = 'center') => ({ text: t, bold: true, fontSize: 9, color: WHITE, fillColor: brandMid, alignment: align, characterSpacing: 0.2 });
+  // Item-row cell — Calibri-compatible (Carlito), regular weight (Carlito has no
+  // separate semibold), size 10 so rows read a touch smaller than the headings.
+  const rc = (t: string, align: any = 'center') => ({ text: t, alignment: align, font: 'Carlito', fontSize: 10 });
 
   const content: any[] = [header(d.company, 'PACKING LIST', brandDark), rule(brandDark)];
   content.push(infoGrid([
@@ -195,7 +196,7 @@ const buildPackingListDoc = (d: PackingListPdf) => {
     const body: any[] = [];
     // Section header (spans all columns)
     body.push([
-      { text: g.label.toUpperCase(), colSpan: 7, bold: true, color: WHITE, fillColor: brandDark, fontSize: 8.5, characterSpacing: 1, margin: [2, 2, 2, 2] },
+      { text: g.label.toUpperCase(), colSpan: 7, bold: true, color: WHITE, fillColor: brandDark, fontSize: 10, characterSpacing: 1, margin: [2, 3, 2, 3] },
       {}, {}, {}, {}, {}, {},
     ]);
     // Column headers
@@ -205,7 +206,7 @@ const buildPackingListDoc = (d: PackingListPdf) => {
     for (const grp of g.grades) {
       if (grp.multi) {
         body.push([
-          { text: `Grade: ${grp.grade}`, colSpan: 7, bold: true, fontSize: 7, color: GREY, fillColor: '#f1f5f9', margin: [2, 1, 2, 1] },
+          { text: `Grade: ${grp.grade}`, colSpan: 7, bold: true, fontSize: 8.5, color: GREY, fillColor: '#f1f5f9', margin: [2, 1.5, 2, 1.5] },
           {}, {}, {}, {}, {}, {},
         ]);
       }
@@ -218,20 +219,20 @@ const buildPackingListDoc = (d: PackingListPdf) => {
       }
       if (grp.multi) {
         body.push([
-          { text: `Grade ${grp.grade} Subtotal`, colSpan: 4, alignment: 'right', bold: true, fontSize: 7, color: GREY, fillColor: '#f8fafc', margin: [2, 1, 2, 1] },
+          { text: `Grade ${grp.grade} Subtotal`, colSpan: 4, alignment: 'right', bold: true, fontSize: 9, color: GREY, fillColor: '#f8fafc', margin: [2, 1.5, 2, 1.5] },
           {}, {}, {},
-          { text: String(grp.subtotalPcs), alignment: 'center', bold: true, fontSize: 8, fillColor: '#f8fafc' },
-          { text: grp.subtotalWeight.toFixed(3), alignment: 'right', bold: true, fontSize: 8, fillColor: '#f8fafc' },
+          { text: String(grp.subtotalPcs), alignment: 'center', bold: true, fontSize: 10, fillColor: '#f8fafc' },
+          { text: grp.subtotalWeight.toFixed(3), alignment: 'right', bold: true, fontSize: 10, fillColor: '#f8fafc' },
           { text: '', fillColor: '#f8fafc' },
         ]);
       }
     }
     // Core-type total
     body.push([
-      { text: `${g.label} Total`, colSpan: 4, alignment: 'right', bold: true, fontSize: 8, color: INK, fillColor: '#e2e8f0', margin: [2, 2, 2, 2] },
+      { text: `${g.label} Total`, colSpan: 4, alignment: 'right', bold: true, fontSize: 10, color: INK, fillColor: '#e2e8f0', margin: [2, 3, 2, 3] },
       {}, {}, {},
-      { text: String(g.pcs), alignment: 'center', bold: true, fontSize: 9, fillColor: '#e2e8f0' },
-      { text: g.weight.toFixed(3), alignment: 'right', bold: true, fontSize: 9, fillColor: '#e2e8f0' },
+      { text: String(g.pcs), alignment: 'center', bold: true, fontSize: 11, fillColor: '#e2e8f0' },
+      { text: g.weight.toFixed(3), alignment: 'right', bold: true, fontSize: 11, fillColor: '#e2e8f0' },
       { text: '', fillColor: '#e2e8f0' },
     ]);
 
@@ -250,9 +251,9 @@ const buildPackingListDoc = (d: PackingListPdf) => {
     table: {
       widths: ['*', 'auto', 'auto'],
       body: [[
-        { text: 'GRAND TOTAL', color: WHITE, bold: true, fontSize: 10, characterSpacing: 1, fillColor: brandDark, margin: [6, 6, 6, 6] },
-        { text: `${d.grandPcs} pcs`, color: WHITE, bold: true, fontSize: 12, alignment: 'right', fillColor: brandDark, margin: [6, 5, 12, 5] },
-        { text: `${d.grandWeight.toFixed(3)} kg`, color: WHITE, bold: true, fontSize: 12, alignment: 'right', fillColor: brandDark, margin: [6, 5, 6, 5] },
+        { text: 'GRAND TOTAL', color: WHITE, bold: true, fontSize: 12, characterSpacing: 1, fillColor: brandDark, margin: [6, 7, 6, 7] },
+        { text: `${d.grandPcs} pcs`, color: WHITE, bold: true, fontSize: 15, alignment: 'right', fillColor: brandDark, margin: [6, 6, 12, 6] },
+        { text: `${d.grandWeight.toFixed(3)} kg`, color: WHITE, bold: true, fontSize: 15, alignment: 'right', fillColor: brandDark, margin: [6, 6, 6, 6] },
       ]],
     },
     layout: { hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => 0, paddingRight: () => 0, paddingTop: () => 0, paddingBottom: () => 0 },
