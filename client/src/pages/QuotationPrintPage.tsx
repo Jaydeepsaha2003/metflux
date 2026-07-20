@@ -250,8 +250,8 @@ export const QuotationPrintPage = () => {
             </div>
             <div className="flex flex-col items-end gap-1.5 shrink-0">
               {company?.logoUrl
-                ? <img src={company.logoUrl} alt={company.name} className="h-16 w-auto max-w-[180px] object-contain" />
-                : <div className="h-16 w-28 rounded-lg bg-slate-100 grid place-items-center text-xs text-slate-400">LOGO</div>}
+                ? <img src={company.logoUrl} alt={company.name} className="h-24 w-auto max-w-[220px] object-contain" />
+                : <div className="h-24 w-36 rounded-lg bg-slate-100 grid place-items-center text-xs text-slate-400">LOGO</div>}
               <div className="bg-brand-700 text-white px-4 py-1.5 text-center">
                 <div className="text-sm font-extrabold uppercase tracking-[0.15em] whitespace-nowrap">Sales Quotation</div>
               </div>

@@ -421,7 +421,7 @@ const buildQuotationDoc = (d: QuotationPdf) => {
 
   const noBorders = { hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => 0, paddingRight: () => 0, paddingTop: () => 0, paddingBottom: () => 0 };
   const rightStack: any[] = [];
-  if (c.logoUrl) rightStack.push({ image: c.logoUrl, fit: [180, 66], alignment: 'right', margin: [0, 0, 0, 2] });
+  if (c.logoUrl) rightStack.push({ image: c.logoUrl, fit: [214, 100], alignment: 'right', margin: [0, 0, 0, 3] });
   // Compact, bold, single-line banner — auto width, right-aligned.
   rightStack.push({
     columns: [
@@ -433,7 +433,7 @@ const buildQuotationDoc = (d: QuotationPdf) => {
   });
 
   const content: any[] = [
-    { columns: [{ width: '*', stack: infoLines, margin: [0, 4, 0, 0] }, { width: 200, stack: rightStack }], columnGap: 16, margin: [0, 0, 0, 6] },
+    { columns: [{ width: '*', stack: infoLines, margin: [0, 4, 0, 0] }, { width: 220, stack: rightStack }], columnGap: 16, margin: [0, 0, 0, 6] },
     rule(brandDark),
   ];
 
