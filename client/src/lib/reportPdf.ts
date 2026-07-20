@@ -438,8 +438,8 @@ const buildQuotationDoc = (d: QuotationPdf) => {
   // Party details (left) + quotation meta (right)
   const metaRow = (label: string, value: string) => ({
     columns: [
-      { text: label, width: 74, fontSize: 9, color: GREY, bold: true },
-      { text: value || '—', width: '*', fontSize: 9, bold: true },
+      { text: label, width: 66, fontSize: 9, color: GREY, bold: true, font: 'Poppins' },
+      { text: value || '—', width: '*', fontSize: 9, bold: true, font: 'Poppins', noWrap: true },
     ], margin: [0, 0, 0, 2],
   });
   content.push({
@@ -451,7 +451,7 @@ const buildQuotationDoc = (d: QuotationPdf) => {
         ...(d.party.phone ? [{ text: `Phone ${d.party.phone}`, fontSize: 9, color: GREY }] : []),
         { text: [{ text: 'GSTIN: ', bold: true }, d.party.gstin || '—'], fontSize: 9, margin: [0, 2, 0, 0] },
       ], margin: [0, 0, 12, 0] },
-      { width: 'auto', stack: [
+      { width: 190, stack: [
         metaRow('Quotation No.', d.quotationNo),
         metaRow('Dated', d.quotationDate),
         ...(d.validUntil ? [metaRow('Valid Until', d.validUntil)] : []),

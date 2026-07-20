@@ -268,7 +268,7 @@ export const QuotationPrintPage = () => {
               <div className="pt-1"><span className="text-slate-500 font-semibold">GSTIN : </span><span className="font-mono">{qt.customer.gstNumber ?? '—'}</span></div>
             </div>
             <div className="px-5 py-3 space-y-1.5">
-              <div className="flex"><span className="w-32 text-slate-500 font-semibold">Quotation No. :</span><span className="font-mono font-semibold">{qt.quotationNo}</span></div>
+              <div className="flex"><span className="w-32 text-slate-500 font-semibold">Quotation No. :</span><span className="font-semibold whitespace-nowrap">{qt.quotationNo}</span></div>
               <div className="flex"><span className="w-32 text-slate-500 font-semibold">Dated :</span><span>{fmtDate(qt.quotationDate)}</span></div>
               {qt.validUntil && <div className="flex"><span className="w-32 text-slate-500 font-semibold">Valid Until :</span><span>{fmtDate(qt.validUntil)}</span></div>}
               <div className="flex"><span className="w-32 text-slate-500 font-semibold">Status :</span><span>{qt.status.charAt(0) + qt.status.slice(1).toLowerCase()}</span></div>
