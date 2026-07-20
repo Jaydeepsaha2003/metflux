@@ -1,6 +1,7 @@
 // Mounts every /api/* sub-router. Add new resources here.
 import { Router } from 'express';
 import { apiLimiter } from '../lib/rateLimit.js';
+import { auditMutations } from '../lib/audit.js';
 import authRouter from './auth.js';
 import usersRouter from './users.js';
 import companiesRouter from './companies.js';
@@ -40,6 +41,10 @@ import customerPortalRouter from './customerPortal.js';
 export const apiRouter = Router();
 
 apiRouter.use(apiLimiter);
+
+// Catch-all mutation audit — logs every create/update/delete across all menus
+// that don't already write their own (richer) audit entry.
+apiRouter.use(auditMutations);
 
 // Public, unauthenticated endpoints — must come BEFORE any router that uses
 // requireAuth at the module level. Has its own per-IP rate limit inside.

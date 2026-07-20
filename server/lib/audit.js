@@ -41,13 +41,13 @@ export const snapshotEntity = async (entity, id) => {
   return { table: def.table, id, row, children };
 };
 
-/** Insert an audit row. Never throws — auditing must not break the operation. */
-export const logAudit = async (req, { entity, entityId, action, summary = null, before = null, after = null }) => {
+/** Raw insert of one AuditLog row. Never throws. */
+const writeAuditRow = async ({ companyId, userId, userName, entity, entityId, action, summary, before, after }) => {
   try {
     await q(
       'INSERT INTO `AuditLog` (`id`,`companyId`,`userId`,`userName`,`entity`,`entityId`,`action`,`summary`,`beforeJson`,`afterJson`,`restorable`,`createdAt`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
       [
-        newId(), req.tenant?.companyId ?? null, req.auth?.userId ?? null, req.auth?.userName ?? null,
+        newId(), companyId ?? null, userId ?? null, userName ?? null,
         entity, entityId ?? null, action, summary ? String(summary).slice(0, 300) : null,
         before ? JSON.stringify(before) : null,
         after ? JSON.stringify(after) : null,
@@ -55,6 +55,62 @@ export const logAudit = async (req, { entity, entityId, action, summary = null, 
       ]
     );
   } catch (e) { /* swallow — never block the request */ }
+};
+
+/** Insert a rich (entity-specific, restorable) audit row. Marks the request so
+ *  the catch-all middleware below doesn't also log a generic entry for it. */
+export const logAudit = async (req, { entity, entityId, action, summary = null, before = null, after = null }) => {
+  if (req) req._audited = true;
+  await writeAuditRow({
+    companyId: req?.tenant?.companyId, userId: req?.auth?.userId, userName: req?.auth?.userName,
+    entity, entityId, action, summary, before, after,
+  });
+};
+
+/* ── Catch-all mutation audit ────────────────────────────────────────────────
+   Records every create/update/delete across the whole API automatically, so
+   sections without hand-written audit (accounts, masters, settings, …) still
+   leave a "who did what, when" trail. Routes that call logAudit() themselves
+   set req._audited and are skipped here (no duplicate). Read-only GETs, failed
+   requests, and high-noise/auth endpoints are ignored. Generic entries carry no
+   before-snapshot, so they are not restorable — only the record. */
+
+// First path segment → human label shown in the Audit Log.
+const SECTION_LABEL = {
+  'sales-invoices': 'Sales Invoice', 'purchases': 'Purchase Invoice', 'payments': 'Payment',
+  'cashbook': 'Cashbook', 'receipts-payments': 'Receipts & Payments', 'journal': 'Journal',
+  'customers': 'Customer', 'suppliers': 'Supplier', 'material-grades': 'Material',
+  'flux-grades': 'Flux Grade', 'labours': 'Worker', 'warehouses': 'Warehouse',
+  'work-allotments': 'Work Allotment', 'users': 'User', 'companies': 'Company',
+  'company-settings': 'Settings', 'app-settings': 'Branding', 'quotations': 'Quotation',
+  'po-orders': 'Sales Order', 'supplier-orders': 'Supplier Order', 'production': 'Production',
+  'dispatch': 'Dispatch', 'packing-lists': 'Packing List', 'returns': 'Return',
+};
+// Endpoints that are pure noise or auth flow — never audited generically.
+const AUDIT_SKIP = new Set(['notifications', 'push', 'whatsapp', 'email', 'auth', 'share', 'customer-portal', 'public', 'reminders']);
+const ACTION_BY_METHOD = { POST: 'CREATE', PUT: 'UPDATE', PATCH: 'UPDATE', DELETE: 'DELETE' };
+
+export const auditMutations = (req, res, next) => {
+  const action = ACTION_BY_METHOD[req.method];
+  if (!action) return next();                       // GET/HEAD/OPTIONS
+  const parts = (req.path || '').split('/').filter(Boolean);
+  const section = parts[0];
+  if (!section || AUDIT_SKIP.has(section)) return next();
+
+  res.on('finish', () => {
+    if (req._audited) return;                        // already logged in detail
+    if (res.statusCode >= 400) return;               // failed request
+    if (!req.auth?.userId) return;                   // unauthenticated
+    const idLike = parts[1] && /^[0-9a-z-]{8,}$/i.test(parts[1]) ? parts[1] : null;
+    writeAuditRow({
+      companyId: req.tenant?.companyId, userId: req.auth.userId, userName: req.auth.userName,
+      entity: SECTION_LABEL[section] || section,
+      entityId: idLike,
+      action,
+      summary: `${req.method} ${req.originalUrl.split('?')[0]}`.slice(0, 200),
+    });
+  });
+  next();
 };
 
 /** Re-create (delete-undo) or revert (edit-undo) an entity from a snapshot. */
