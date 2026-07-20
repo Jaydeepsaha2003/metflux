@@ -309,6 +309,26 @@ router.delete('/:id', requirePermission('dispatch'), asyncHandler(async (req, re
   const row = await qOne('SELECT `id` FROM `Dispatch` WHERE `id` = ? AND `companyId` = ?',
     [req.params.id, req.tenant.companyId]);
   if (!row) throw new AppError('Dispatch record not found', 404, 'NOT_FOUND');
+
+  // Guard: a dispatch already committed to a packing list must NOT be deletable
+  // directly — PackingListItem has ON DELETE CASCADE on dispatchId, so deleting
+  // the dispatch would silently strip it from an already-issued (printed)
+  // packing list and let the same goods be re-dispatched onto another one.
+  // Force the user to delete that packing list first (a deliberate action).
+  const onPl = await qOne(
+    `SELECT p.\`plNumber\` AS plNumber
+       FROM \`PackingListItem\` pli
+       INNER JOIN \`PackingList\` p ON p.\`id\` = pli.\`packingListId\`
+      WHERE pli.\`dispatchId\` = ?`,
+    [row.id]
+  );
+  if (onPl) {
+    throw new AppError(
+      `This dispatch is part of packing list ${onPl.plNumber}. Delete that packing list first (Dispatch → Packing Lists), then delete the dispatch — this prevents it silently disappearing from an already-printed packing list.`,
+      409, 'ON_PACKING_LIST'
+    );
+  }
+
   await del('Dispatch', row.id);
   res.status(204).end();
 }));
