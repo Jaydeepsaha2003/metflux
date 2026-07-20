@@ -119,6 +119,7 @@ export const App = () => {
       <Route path="/po/edit/:poId"   element={<POOrderEditPage />} />
       <Route path="/po/summary"      element={<SOSummaryPage />} />
       <Route path="/quotation/new"        element={<QuotationNewPage />} />
+      <Route path="/quotation/:id/edit"   element={<QuotationNewPage />} />
       <Route path="/quotation/manage"     element={<QuotationsPage />} />
       <Route path="/quotation/:id/print"  element={<QuotationPrintPage />} />
       <Route path="/settings/quotation"    element={<QuotationSettingsPage />} />

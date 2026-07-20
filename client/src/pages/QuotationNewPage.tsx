@@ -4,7 +4,7 @@
 // number, PDF print). A quotation touches nothing downstream until it is
 // converted into a Sales Order from the Quotations list.
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Save, Loader2, Trash2, Copy, FileText, Calendar, Hash, User2, Plus } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
@@ -109,6 +109,8 @@ const ManualLineForm = ({ onAdd }: { onAdd: (item: QItem) => void }) => {
 export const QuotationNewPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { id: editId } = useParams<{ id?: string }>();
+  const isEdit = !!editId;
 
   /* ----- header ----- */
   const [quotationNo, setQuotationNo] = useState('');
@@ -158,11 +160,46 @@ export const QuotationNewPage = () => {
     queryFn: () => api<{ grades: FluxGroup[] }>('/flux-grades/grouped?coreType=NANO'),
   });
 
+  /* ----- edit mode: load the existing quotation once and prefill ----- */
+  const { data: existing } = useQuery({
+    queryKey: ['quotation', editId],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    queryFn: () => api<any>(`/quotations/${editId}`),
+    enabled: isEdit,
+  });
+  const [prefilled, setPrefilled] = useState(false);
+  useEffect(() => {
+    if (!existing || prefilled) return;
+    setQuotationNo(existing.quotationNo ?? '');
+    setCustomerId(existing.customerId ?? '');
+    setQuotationDate(existing.quotationDate ? String(existing.quotationDate).slice(0, 10) : todayISO());
+    setValidUntil(existing.validUntil ? String(existing.validUntil).slice(0, 10) : '');
+    setNotes(existing.notes ?? '');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setItems((existing.items ?? []).map((r: any): QItem => ({
+      coreType: r.coreType, grade: r.grade ?? '', material: r.material ?? '', measure: r.measure ?? '',
+      hsnCode: r.hsnCode ?? '', unit: r.unit ?? 'Pcs',
+      id1: r.id1 ?? 0, id2: r.id2 ?? undefined, od1: r.od1 ?? 0, od2: r.od2 ?? undefined,
+      ht: r.ht ?? 0, builtup: r.builtup ?? undefined,
+      weightPerPc: r.weightPerPc ?? 0, pcs: r.pcs ?? 0, totalWeight: r.totalWeight ?? 0,
+      coreAc: r.coreAc ?? undefined, coreMl: r.coreMl ?? undefined, d13: r.d13 ?? undefined,
+      turns: r.turns ?? undefined, flux: r.flux ?? undefined, ateCm: r.ateCm ?? undefined,
+      testVoltage: r.testVoltage ?? undefined, testCurrent: r.testCurrent ?? undefined,
+      rateBasis: r.rateBasis ?? undefined, rateValue: r.rateValue ?? undefined,
+      ratePerKg: r.ratePerKg ?? undefined, ratePerPc: r.ratePerPc ?? undefined, totalAmount: r.totalAmount ?? undefined,
+      nanoPrice: r.nanoPrice ?? undefined, casePrice: r.casePrice ?? undefined, caseWeight: r.caseWeight ?? undefined, nanoSoRate: r.nanoSoRate ?? undefined,
+    })));
+    setPrefilled(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existing, prefilled]);
+
   /* Auto-suggest the next quotation number when the date changes (only while the
-     field is empty or holds a previous auto-suggestion the user hasn't edited). */
+     field is empty or holds a previous auto-suggestion the user hasn't edited).
+     Disabled while editing — the existing number is kept. */
   const { data: nextNo } = useQuery({
     queryKey: ['quotation-next', quotationDate],
     queryFn: () => api<{ quotationNo: string }>(`/quotations/next-number?date=${quotationDate}`),
+    enabled: !isEdit,
   });
   const [autoNo, setAutoNo] = useState('');
   useEffect(() => {
@@ -183,8 +220,8 @@ export const QuotationNewPage = () => {
   const [error, setError] = useState('');
   const createMut = useMutation({
     mutationFn: () =>
-      api<{ id: string }>('/quotations', {
-        method: 'POST',
+      api<{ id: string }>(isEdit ? `/quotations/${editId}` : '/quotations', {
+        method: isEdit ? 'PUT' : 'POST',
         body: JSON.stringify({
           quotationNo: quotationNo.trim(),
           customerId,
@@ -196,7 +233,8 @@ export const QuotationNewPage = () => {
       }),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['quotations'] });
-      navigate(`/quotation/${res.id}/print`);
+      queryClient.invalidateQueries({ queryKey: ['quotation-print', editId] });
+      navigate(`/quotation/${isEdit ? editId : res.id}/print`);
     },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Failed to save quotation'),
   });
@@ -214,7 +252,7 @@ export const QuotationNewPage = () => {
       <div className="flex flex-wrap items-center gap-3">
         <Link to="/quotation/manage" className="btn-ghost text-slate-600">Back</Link>
         <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight">
-          <FileText className="h-5 w-5 text-brand-600" /> New Quotation
+          <FileText className="h-5 w-5 text-brand-600" /> {isEdit ? 'Edit Quotation' : 'New Quotation'}
         </h1>
       </div>
 
@@ -393,7 +431,7 @@ export const QuotationNewPage = () => {
           <Link to="/quotation/manage" className="btn-ghost text-slate-600">Cancel</Link>
           <button type="button" onClick={submit} disabled={createMut.isPending} className="btn-primary disabled:opacity-60">
             {createMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            Save Quotation
+            {isEdit ? 'Save Changes' : 'Save Quotation'}
           </button>
         </div>
       </section>

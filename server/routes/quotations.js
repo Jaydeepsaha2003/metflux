@@ -276,6 +276,60 @@ router.get('/:id', requirePermission('view_po'), asyncHandler(async (req, res) =
   res.json({ ...quotation, customer, items });
 }));
 
+/* ---------- PUT /quotations/:id — full edit (header + items) ---------- */
+/* Only OPEN quotations can be edited; a CONVERTED one is locked. Items are
+   replaced wholesale (delete + re-insert) since a quotation is a standalone
+   draft with no downstream references until converted. */
+router.put('/:id', requirePermission('add_po'), asyncHandler(async (req, res) => {
+  const data = createSchema.parse(req.body);
+  const quotation = await qOne(
+    'SELECT * FROM `Quotation` WHERE `id` = ? AND `companyId` = ?',
+    [req.params.id, req.tenant.companyId]
+  );
+  if (!quotation) throw new AppError('Quotation not found', 404, 'NOT_FOUND');
+  if (quotation.status !== 'OPEN') throw new AppError('Only open quotations can be edited', 400, 'QUOTE_LOCKED');
+
+  const customer = await qOne('SELECT * FROM `Customer` WHERE `id` = ? AND `companyId` = ?', [data.customerId, req.tenant.companyId]);
+  if (!customer) throw new AppError('Customer not found', 400, 'BAD_CUSTOMER');
+
+  const result = await txn(async (tx) => {
+    await tx.update('Quotation', quotation.id, {
+      customerId: customer.id,
+      quotationDate: data.quotationDate,
+      validUntil: data.validUntil ?? null,
+      notes: data.notes ?? null,
+      terms: data.terms ?? null,
+    });
+    await tx.q('DELETE FROM `QuotationItem` WHERE `quotationId` = ?', [quotation.id]);
+    let seq = 0;
+    for (const it of data.items) {
+      const derived = deriveRate(it);
+      await tx.insert('QuotationItem', {
+        quotationId: quotation.id,
+        coreType: it.coreType, grade: it.grade, material: it.material, measure: it.measure,
+        hsnCode: it.hsnCode ?? null, unit: it.unit ?? 'Pcs',
+        id1: it.id1, id2: it.id2 ?? null, od1: it.od1, od2: it.od2 ?? null,
+        ht: it.ht, builtup: it.builtup ?? null,
+        weightPerPc: it.weightPerPc, pcs: it.pcs, totalWeight: it.totalWeight,
+        coreAc: it.coreAc ?? null, coreMl: it.coreMl ?? null, d13: it.d13 ?? null,
+        turns: it.turns ?? null, flux: it.flux ?? null, ateCm: it.ateCm ?? null,
+        testVoltage: it.testVoltage ?? null, testCurrent: it.testCurrent ?? null,
+        rateBasis: it.rateBasis ?? null, rateValue: it.rateValue ?? null,
+        ratePerKg: derived.ratePerKg, ratePerPc: derived.ratePerPc, totalAmount: derived.totalAmount,
+        nanoPrice: it.nanoPrice ?? null, casePrice: it.casePrice ?? null,
+        caseWeight: it.caseWeight ?? null, nanoSoRate: it.nanoSoRate ?? null,
+        seq: seq++,
+      });
+    }
+    const fresh = await tx.qOne('SELECT * FROM `Quotation` WHERE `id` = ?', [quotation.id]);
+    return fresh;
+  });
+
+  await logAudit(req, { entity: 'Quotation', entityId: quotation.id, action: 'UPDATE', summary: `Edited quotation ${quotation.quotationNo} · ${customer.name} · ${data.items.length} item(s)` });
+  const items = await loadItems(quotation.id);
+  res.json({ ...result, customer, items });
+}));
+
 /* ---------- PATCH /quotations/:id — edit header (dates / notes / terms) ---------- */
 const headerUpdateSchema = z.object({
   customerId:    z.string().min(1).optional(),

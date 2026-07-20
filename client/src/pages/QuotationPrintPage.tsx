@@ -244,10 +244,10 @@ export const QuotationPrintPage = () => {
         <div ref={printRef} id="quote-print-doc"
              className="bg-white text-slate-900 min-w-[760px] rounded-xl overflow-hidden print:min-w-0 print:rounded-none print:overflow-visible">
 
-          {/* Company letterhead */}
-          <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-4 border-b-2 border-slate-900">
+          {/* Company letterhead — brand-coloured rule, larger logo */}
+          <div className="flex items-center justify-between gap-4 px-6 pt-5 pb-4 border-b-4 border-brand-600">
             <div className="min-w-0">
-              <div className="text-xl font-black uppercase tracking-wide leading-tight">{company?.name ?? 'Company Name'}</div>
+              <div className="text-2xl font-black uppercase tracking-wide leading-tight text-brand-800">{company?.name ?? 'Company Name'}</div>
               {company?.address && <div className="text-[11px] font-semibold text-slate-700 mt-1 max-w-md leading-snug whitespace-pre-line">{company.address}</div>}
               <div className="text-[11px] text-slate-700 mt-1 leading-snug">
                 {company?.phone && <>Phone : {company.phone}<br /></>}
@@ -256,19 +256,19 @@ export const QuotationPrintPage = () => {
               </div>
             </div>
             {company?.logoUrl
-              ? <img src={company.logoUrl} alt={company.name} className="h-20 w-auto object-contain shrink-0" />
-              : <div className="h-20 w-20 rounded-lg bg-slate-100 grid place-items-center text-xs text-slate-400 shrink-0">LOGO</div>}
+              ? <img src={company.logoUrl} alt={company.name} className="h-28 w-auto max-w-[220px] object-contain shrink-0" />
+              : <div className="h-28 w-28 rounded-lg bg-slate-100 grid place-items-center text-xs text-slate-400 shrink-0">LOGO</div>}
           </div>
 
-          {/* Title */}
-          <div className="text-center py-2.5 border-b border-slate-300">
-            <h2 className="text-lg font-bold uppercase tracking-widest">Sales Quotation</h2>
+          {/* Title — brand banner */}
+          <div className="bg-brand-700 text-white text-center py-2">
+            <h2 className="text-lg font-bold uppercase tracking-[0.25em]">Sales Quotation</h2>
           </div>
 
           {/* Party block + quotation meta */}
           <div className="grid grid-cols-2 text-[12px] border-b border-slate-300">
             <div className="border-r border-slate-300 px-5 py-3 space-y-1.5">
-              <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">Party Details</div>
+              <div className="text-[10px] uppercase tracking-wide text-brand-700 font-bold">Party Details</div>
               <div className="font-semibold">{qt.customer.name}</div>
               {partyLines.map((line, i) => <div key={i} className="text-slate-700 whitespace-pre-line">{line}</div>)}
               {qt.customer.phone && <div className="text-slate-700">Phone {qt.customer.phone}</div>}
@@ -294,23 +294,27 @@ export const QuotationPrintPage = () => {
               <col style={{ width: '13%' }} />
             </colgroup>
             <thead>
-              <tr className="bg-slate-100 border-b-2 border-slate-400">
-                <th className="px-2 py-1.5 border-r border-slate-300 text-center font-bold">S.N</th>
-                <th className="px-2 py-1.5 border-r border-slate-300 text-left font-bold">Description of Goods</th>
-                <th className="px-2 py-1.5 border-r border-slate-300 text-center font-bold">HSN/SAC</th>
-                <th className="px-2 py-1.5 border-r border-slate-300 text-right font-bold">Qty</th>
-                <th className="px-2 py-1.5 border-r border-slate-300 text-center font-bold">Unit</th>
-                <th className="px-2 py-1.5 border-r border-slate-300 text-right font-bold">Price</th>
+              <tr className="bg-brand-600 text-white border-b-2 border-brand-700">
+                <th className="px-2 py-1.5 border-r border-brand-500 text-center font-bold">S.N</th>
+                <th className="px-2 py-1.5 border-r border-brand-500 text-left font-bold">Description of Goods</th>
+                <th className="px-2 py-1.5 border-r border-brand-500 text-center font-bold">HSN/SAC</th>
+                <th className="px-2 py-1.5 border-r border-brand-500 text-right font-bold">Qty</th>
+                <th className="px-2 py-1.5 border-r border-brand-500 text-center font-bold">Unit</th>
+                <th className="px-2 py-1.5 border-r border-brand-500 text-right font-bold">Price</th>
                 <th className="px-2 py-1.5 text-right font-bold">Amount</th>
               </tr>
             </thead>
             <tbody>
-              {qt.items.map((it, idx) => (
+              {qt.items.map((it, idx) => {
+                // Hide the grade sub-line when it's already part of the material name
+                // (e.g. material "SS CASE" + grade "SS" was showing a redundant "SS").
+                const showGrade = it.grade && !it.material.toUpperCase().includes(it.grade.toUpperCase());
+                return (
                 <tr key={it.id} className="border-b border-slate-200 align-top">
                   <td className="px-2 py-2 border-r border-slate-200 text-center">{idx + 1}</td>
                   <td className="px-2 py-2 border-r border-slate-200">
                     <div className="font-medium">{it.material}{it.measure ? ` - ${it.measure}` : ''}</div>
-                    {it.grade && <div className="mt-0.5 text-[11px] text-slate-500">{it.grade}</div>}
+                    {showGrade && <div className="mt-0.5 text-[11px] text-slate-500">{it.grade}</div>}
                   </td>
                   <td className="px-2 py-2 border-r border-slate-200 text-center font-mono">{it.hsnCode || '—'}</td>
                   <td className="px-2 py-2 border-r border-slate-200 text-right tabular-nums">{it.pcs.toLocaleString('en-IN')}</td>
@@ -318,7 +322,8 @@ export const QuotationPrintPage = () => {
                   <td className="px-2 py-2 border-r border-slate-200 text-right tabular-nums">{fmt2(rateOf(it))}</td>
                   <td className="px-2 py-2 text-right tabular-nums font-semibold">{fmt2(it.totalAmount ?? 0)}</td>
                 </tr>
-              ))}
+                );
+              })}
               <tr className="bg-slate-50 border-y border-slate-300">
                 <td colSpan={3} className="px-2 py-1.5 text-right text-[11px] uppercase tracking-wide text-slate-600 font-semibold">Total :</td>
                 <td className="px-2 py-1.5 text-right tabular-nums font-semibold">{totals.totalQty.toLocaleString('en-IN')}</td>
@@ -345,9 +350,9 @@ export const QuotationPrintPage = () => {
               ) : (
                 <div className="flex justify-between"><span className="text-slate-600">IGST @ {totals.gstRate.toFixed(2)}%</span><span className="tabular-nums">{fmt2(totals.tax)}</span></div>
               ))}
-              <div className="flex justify-between border-t border-slate-400 pt-1 mt-1">
-                <span className="font-bold">Grand Total</span>
-                <span className="tabular-nums font-bold">₹ {fmt2(totals.grand)}</span>
+              <div className="flex justify-between border-t-2 border-brand-600 pt-1.5 mt-1.5">
+                <span className="font-bold text-brand-800">Grand Total</span>
+                <span className="tabular-nums font-bold text-brand-800">₹ {fmt2(totals.grand)}</span>
               </div>
             </div>
           </div>
@@ -384,27 +389,27 @@ export const QuotationPrintPage = () => {
             </div>
           )}
 
-          {/* Bank details + Terms (editable) */}
-          <div className="grid grid-cols-2 text-[12px] border-b border-slate-300">
-            <div className="border-r border-slate-300 px-5 py-2">
-              <div className="text-[11px] font-bold uppercase tracking-wide text-slate-700 mb-1.5">Bank Details</div>
-              <div className="grid grid-cols-[90px_1fr] gap-y-0.5 gap-x-2">
-                <span className="text-slate-600">Bank :</span>
-                <input className="border-b border-dashed border-slate-300 bg-transparent outline-none focus:border-brand-500 px-1" value={bankName} onChange={(e) => { setBankName(e.target.value); setEdited(true); }} placeholder="ICICI BANK" />
-                <span className="text-slate-600">A/C Name :</span>
-                <input className="border-b border-dashed border-slate-300 bg-transparent outline-none focus:border-brand-500 px-1" value={bankAcctName} onChange={(e) => { setBankAcctName(e.target.value); setEdited(true); }} placeholder="Account holder" />
-                <span className="text-slate-600">A/C No. :</span>
-                <input className="border-b border-dashed border-slate-300 bg-transparent outline-none focus:border-brand-500 px-1" value={bankAcc} onChange={(e) => { setBankAcc(e.target.value); setEdited(true); }} placeholder="000000000000" />
-                <span className="text-slate-600">IFSC :</span>
-                <input className="border-b border-dashed border-slate-300 bg-transparent outline-none focus:border-brand-500 px-1" value={bankIfsc} onChange={(e) => { setBankIfsc(e.target.value); setEdited(true); }} placeholder="ICIC0000000" />
-                <span className="text-slate-600">Branch :</span>
-                <input className="border-b border-dashed border-slate-300 bg-transparent outline-none focus:border-brand-500 px-1" value={bankBranch} onChange={(e) => { setBankBranch(e.target.value); setEdited(true); }} placeholder="Branch" />
-              </div>
-            </div>
-            <div className="px-5 py-2">
-              <div className="text-[11px] font-bold uppercase tracking-wide text-slate-700 mb-1.5">Terms &amp; Conditions</div>
-              <textarea className="w-full text-[11px] leading-snug border border-slate-200 rounded-md p-1.5 outline-none focus:border-brand-500 min-h-[80px]" value={terms} onChange={(e) => { setTerms(e.target.value); setEdited(true); }} />
-            </div>
+          {/* Bank details — single line, full width */}
+          <div className="border-b border-slate-300 px-5 py-2 text-[12px]">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-brand-700 mr-2">Bank Details</span>
+            <span className="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-1 align-middle">
+              <span className="text-slate-500">Bank:</span>
+              <input className="w-28 border-b border-dashed border-slate-300 bg-transparent outline-none focus:border-brand-500 px-1" value={bankName} onChange={(e) => { setBankName(e.target.value); setEdited(true); }} placeholder="ICICI BANK" />
+              <span className="text-slate-400">·</span><span className="text-slate-500">A/C Name:</span>
+              <input className="w-36 border-b border-dashed border-slate-300 bg-transparent outline-none focus:border-brand-500 px-1" value={bankAcctName} onChange={(e) => { setBankAcctName(e.target.value); setEdited(true); }} placeholder="Account holder" />
+              <span className="text-slate-400">·</span><span className="text-slate-500">A/C No:</span>
+              <input className="w-32 border-b border-dashed border-slate-300 bg-transparent outline-none focus:border-brand-500 px-1 font-mono" value={bankAcc} onChange={(e) => { setBankAcc(e.target.value); setEdited(true); }} placeholder="000000000000" />
+              <span className="text-slate-400">·</span><span className="text-slate-500">IFSC:</span>
+              <input className="w-28 border-b border-dashed border-slate-300 bg-transparent outline-none focus:border-brand-500 px-1 font-mono" value={bankIfsc} onChange={(e) => { setBankIfsc(e.target.value); setEdited(true); }} placeholder="ICIC0000000" />
+              <span className="text-slate-400">·</span><span className="text-slate-500">Branch:</span>
+              <input className="w-28 border-b border-dashed border-slate-300 bg-transparent outline-none focus:border-brand-500 px-1" value={bankBranch} onChange={(e) => { setBankBranch(e.target.value); setEdited(true); }} placeholder="Branch" />
+            </span>
+          </div>
+
+          {/* Terms & Conditions — full width, left to right */}
+          <div className="border-b border-slate-300 px-5 py-2">
+            <div className="text-[11px] font-bold uppercase tracking-wide text-brand-700 mb-1.5">Terms &amp; Conditions</div>
+            <textarea className="w-full text-[11px] leading-snug border border-slate-200 rounded-md p-2 outline-none focus:border-brand-500 min-h-[96px]" value={terms} onChange={(e) => { setTerms(e.target.value); setEdited(true); }} />
           </div>
 
           {/* Signature footer */}

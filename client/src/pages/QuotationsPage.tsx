@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileText, Plus, Search, Loader2, Printer, ArrowRightLeft, Trash2, CheckCircle2, XCircle } from 'lucide-react';
+import { FileText, Plus, Search, Loader2, Printer, ArrowRightLeft, Trash2, CheckCircle2, XCircle, Pencil } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
@@ -141,6 +141,9 @@ export const QuotationsPage = () => {
                     <td className="px-3 py-2.5">
                       <div className="flex items-center justify-end gap-1">
                         <Link to={`/quotation/${r.id}/print`} title="Print / PDF" className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"><Printer className="h-4 w-4" /></Link>
+                        {r.status === 'OPEN' && (
+                          <Link to={`/quotation/${r.id}/edit`} title="Edit quotation" className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-brand-700"><Pencil className="h-4 w-4" /></Link>
+                        )}
                         {r.status === 'OPEN' && (
                           <button type="button" onClick={() => onConvert(r)} disabled={busyId === r.id} title="Convert to Sales Order"
                             className="rounded p-1.5 text-emerald-600 hover:bg-emerald-50 disabled:opacity-50">
