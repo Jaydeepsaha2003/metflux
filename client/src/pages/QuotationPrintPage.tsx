@@ -248,7 +248,7 @@ export const QuotationPrintPage = () => {
                 {company?.gstNumber && <>GSTIN : <span className="font-mono">{company.gstNumber}</span></>}
               </div>
             </div>
-            <div className="flex flex-col items-end gap-2 shrink-0">
+            <div className="flex flex-col items-end gap-0.5 shrink-0">
               {company?.logoUrl
                 ? <img src={company.logoUrl} alt={company.name} className="w-auto max-w-[220px] max-h-[72px] object-contain" />
                 : <div className="h-16 w-36 rounded-lg bg-slate-100 grid place-items-center text-xs text-slate-400">LOGO</div>}
