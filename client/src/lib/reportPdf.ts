@@ -408,13 +408,17 @@ const buildQuotationDoc = (d: QuotationPdf) => {
   if (contact) infoLines.push({ text: [{ text: 'Contact: ', bold: true }, contact], fontSize: 9, color: GREY, margin: [0, 1, 0, 0] });
   if (c.gstNumber) infoLines.push({ text: `GSTIN: ${c.gstNumber}`, fontSize: 9, color: GREY, margin: [0, 1, 0, 0] });
 
+  const noBorders = { hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => 0, paddingRight: () => 0, paddingTop: () => 0, paddingBottom: () => 0 };
   const rightStack: any[] = [];
   if (c.logoUrl) rightStack.push({ image: c.logoUrl, fit: [180, 66], alignment: 'right', margin: [0, 0, 0, 8] });
+  // Compact, bold, single-line banner — auto width, right-aligned.
   rightStack.push({
-    table: { widths: ['*'], body: [[
-      { text: 'SALES QUOTATION', alignment: 'center', color: WHITE, bold: true, fontSize: 15, characterSpacing: 2, fillColor: brandDark, margin: [14, 12, 14, 12] },
-    ]] },
-    layout: { hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => 0, paddingRight: () => 0, paddingTop: () => 0, paddingBottom: () => 0 },
+    columns: [
+      { text: '', width: '*' },
+      { width: 'auto', table: { widths: ['auto'], body: [[
+        { text: 'SALES QUOTATION', color: WHITE, bold: true, fontSize: 12, characterSpacing: 1.2, fillColor: brandDark, margin: [12, 6, 12, 6], noWrap: true },
+      ]] }, layout: noBorders },
+    ],
   });
 
   const content: any[] = [
