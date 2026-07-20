@@ -172,8 +172,8 @@ const signatures = (testedBy: string, approvedBy: string, dateStr: string, brand
 const docFooter = (company: PdfCompany) => (currentPage: number, pageCount: number) => ({
   margin: [24, 6, 24, 0],
   columns: [
-    { text: company?.name || '', fontSize: 7, color: GREY },
-    { text: `Page ${currentPage} of ${pageCount}`, alignment: 'right', fontSize: 7, color: GREY },
+    { text: company?.name || '', fontSize: 7, color: GREY, font: 'Montserrat' },
+    { text: `Page ${currentPage} of ${pageCount}`, alignment: 'right', fontSize: 7, color: GREY, font: 'Montserrat' },
   ],
 });
 
@@ -410,22 +410,24 @@ const buildQuotationDoc = (d: QuotationPdf) => {
   // Quotation-specific letterhead: company text on the LEFT; logo on the
   // TOP-RIGHT with the SALES QUOTATION banner stacked directly beneath it.
   const c = d.company;
-  const infoLines: any[] = [{ text: c.name || 'Company Name', bold: true, fontSize: 17, color: brandDark, characterSpacing: 0.3 }];
+  // Letterhead + footers use Montserrat (matching the packing list / testing report).
+  const MONT = 'Montserrat';
+  const infoLines: any[] = [{ text: c.name || 'Company Name', bold: true, fontSize: 17, color: brandDark, characterSpacing: 0.3, font: MONT }];
   const addr = c.address?.replace(/\n+/g, ', ').trim();
-  if (addr) infoLines.push({ text: addr, fontSize: 9, color: GREY, margin: [0, 2, 0, 0] });
+  if (addr) infoLines.push({ text: addr, fontSize: 9, color: GREY, margin: [0, 2, 0, 0], font: MONT });
   const contact = [c.phone, c.whatsappNumber, c.email].filter(Boolean).join('  |  ');
-  if (contact) infoLines.push({ text: [{ text: 'Contact: ', bold: true }, contact], fontSize: 9, color: GREY, margin: [0, 1, 0, 0] });
-  if (c.gstNumber) infoLines.push({ text: `GSTIN: ${c.gstNumber}`, fontSize: 9, color: GREY, margin: [0, 1, 0, 0] });
+  if (contact) infoLines.push({ text: [{ text: 'Contact: ', bold: true }, contact], fontSize: 9, color: GREY, margin: [0, 1, 0, 0], font: MONT });
+  if (c.gstNumber) infoLines.push({ text: `GSTIN: ${c.gstNumber}`, fontSize: 9, color: GREY, margin: [0, 1, 0, 0], font: MONT });
 
   const noBorders = { hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => 0, paddingRight: () => 0, paddingTop: () => 0, paddingBottom: () => 0 };
   const rightStack: any[] = [];
-  if (c.logoUrl) rightStack.push({ image: c.logoUrl, fit: [180, 66], alignment: 'right', margin: [0, 0, 0, 8] });
+  if (c.logoUrl) rightStack.push({ image: c.logoUrl, fit: [180, 66], alignment: 'right', margin: [0, 0, 0, 2] });
   // Compact, bold, single-line banner — auto width, right-aligned.
   rightStack.push({
     columns: [
       { text: '', width: '*' },
       { width: 'auto', table: { widths: ['auto'], body: [[
-        { text: 'SALES QUOTATION', color: WHITE, bold: true, fontSize: 12, characterSpacing: 1.2, fillColor: brandDark, margin: [12, 6, 12, 6], noWrap: true },
+        { text: 'SALES QUOTATION', color: WHITE, bold: true, fontSize: 12, characterSpacing: 1.2, fillColor: brandDark, margin: [12, 6, 12, 6], noWrap: true, font: MONT },
       ]] }, layout: noBorders },
     ],
   });
@@ -535,17 +537,26 @@ const buildQuotationDoc = (d: QuotationPdf) => {
   seg('IFSC', d.bank.ifsc); seg('Branch', d.bank.branch);
   if (bankSegs.length > 1) content.push({ text: bankSegs, fontSize: 9, lineHeight: 1.25, margin: [0, 0, 0, 6] });
 
-  // Terms — full width
+  // Terms — full-width brand-tinted panel with a left accent bar; semibold text.
   if (d.terms) {
-    content.push({ text: 'TERMS & CONDITIONS', bold: true, fontSize: 8, color: brandDark, margin: [0, 2, 0, 2] });
-    content.push({ text: d.terms, fontSize: 8.5, color: INK, lineHeight: 1.25, margin: [0, 0, 0, 8] });
+    content.push({
+      table: { widths: ['*'], body: [
+        [{ text: 'TERMS & CONDITIONS', bold: true, fontSize: 9, color: WHITE, fillColor: brandDark, characterSpacing: 1, margin: [8, 4, 8, 4] }],
+        [{ text: d.terms, fontSize: 8.5, bold: true, color: INK, lineHeight: 1.35, fillColor: brandLight, margin: [8, 6, 8, 8] }],
+      ] },
+      layout: {
+        hLineWidth: () => 0, vLineWidth: (i: number) => (i === 0 ? 2.5 : 0), vLineColor: () => brandMid,
+        paddingLeft: () => 0, paddingRight: () => 0, paddingTop: () => 0, paddingBottom: () => 0,
+      },
+      margin: [0, 2, 0, 8],
+    });
   }
 
-  // Signature footer
+  // Signature footer (Montserrat, like the reports)
   content.push({
     columns: [
-      { width: '*', stack: [{ text: "Receiver's Signature", fontSize: 9, color: GREY }, { text: 'E. & O.E.', fontSize: 8, color: GREY, margin: [0, 24, 0, 0] }] },
-      { width: '*', stack: [{ text: `For, ${d.company.name || ''}`, fontSize: 9, bold: true, alignment: 'right' }, { text: 'Authorised Signatory', fontSize: 9, color: GREY, alignment: 'right', margin: [0, 24, 0, 0] }] },
+      { width: '*', stack: [{ text: "Receiver's Signature", fontSize: 9, color: GREY, font: MONT }, { text: 'E. & O.E.', fontSize: 8, color: GREY, margin: [0, 24, 0, 0], font: MONT }] },
+      { width: '*', stack: [{ text: `For, ${d.company.name || ''}`, fontSize: 9, bold: true, alignment: 'right', font: MONT }, { text: 'Authorised Signatory', fontSize: 9, color: GREY, alignment: 'right', margin: [0, 24, 0, 0], font: MONT }] },
     ],
     margin: [0, 6, 0, 0],
   });
