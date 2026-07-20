@@ -237,8 +237,8 @@ export const QuotationPrintPage = () => {
         <div ref={printRef} id="quote-print-doc"
              className="bg-white text-slate-900 min-w-[760px] rounded-xl overflow-hidden print:min-w-0 print:rounded-none print:overflow-visible">
 
-          {/* Company letterhead — brand-coloured rule, larger logo */}
-          <div className="flex items-center justify-between gap-4 px-6 pt-5 pb-4 border-b-4 border-brand-600">
+          {/* Company letterhead — company text left; logo + SALES QUOTATION stacked top-right */}
+          <div className="flex items-start justify-between gap-6 px-6 pt-5 pb-4 border-b-4 border-brand-600">
             <div className="min-w-0">
               <div className="text-2xl font-black uppercase tracking-wide leading-tight text-brand-800">{company?.name ?? 'Company Name'}</div>
               {company?.address && <div className="text-[11px] font-semibold text-slate-700 mt-1 max-w-md leading-snug whitespace-pre-line">{company.address}</div>}
@@ -248,14 +248,14 @@ export const QuotationPrintPage = () => {
                 {company?.gstNumber && <>GSTIN : <span className="font-mono">{company.gstNumber}</span></>}
               </div>
             </div>
-            {company?.logoUrl
-              ? <img src={company.logoUrl} alt={company.name} className="h-28 w-auto max-w-[220px] object-contain shrink-0" />
-              : <div className="h-28 w-28 rounded-lg bg-slate-100 grid place-items-center text-xs text-slate-400 shrink-0">LOGO</div>}
-          </div>
-
-          {/* Title — brand banner */}
-          <div className="bg-brand-700 text-white text-center py-2">
-            <h2 className="text-lg font-bold uppercase tracking-[0.25em]">Sales Quotation</h2>
+            <div className="flex flex-col items-end gap-2.5 shrink-0">
+              {company?.logoUrl
+                ? <img src={company.logoUrl} alt={company.name} className="h-16 w-auto max-w-[180px] object-contain" />
+                : <div className="h-16 w-28 rounded-lg bg-slate-100 grid place-items-center text-xs text-slate-400">LOGO</div>}
+              <div className="bg-brand-700 text-white px-6 py-3 text-center min-w-[190px]">
+                <div className="text-base font-bold uppercase tracking-[0.2em] leading-tight">Sales Quotation</div>
+              </div>
+            </div>
           </div>
 
           {/* Party block + quotation meta */}

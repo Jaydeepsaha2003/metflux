@@ -398,7 +398,29 @@ const buildQuotationDoc = (d: QuotationPdf) => {
   const brandLight = brandShadeHex(d.brand, 50);
   const th = (t: string, align: any = 'center') => ({ text: t, bold: true, fontSize: 8.5, color: WHITE, fillColor: brandMid, alignment: align });
 
-  const content: any[] = [header(d.company, 'SALES QUOTATION', brandDark), rule(brandDark)];
+  // Quotation-specific letterhead: company text on the LEFT; logo on the
+  // TOP-RIGHT with the SALES QUOTATION banner stacked directly beneath it.
+  const c = d.company;
+  const infoLines: any[] = [{ text: c.name || 'Company Name', bold: true, fontSize: 17, color: brandDark, characterSpacing: 0.3 }];
+  const addr = c.address?.replace(/\n+/g, ', ').trim();
+  if (addr) infoLines.push({ text: addr, fontSize: 9, color: GREY, margin: [0, 2, 0, 0] });
+  const contact = [c.phone, c.whatsappNumber, c.email].filter(Boolean).join('  |  ');
+  if (contact) infoLines.push({ text: [{ text: 'Contact: ', bold: true }, contact], fontSize: 9, color: GREY, margin: [0, 1, 0, 0] });
+  if (c.gstNumber) infoLines.push({ text: `GSTIN: ${c.gstNumber}`, fontSize: 9, color: GREY, margin: [0, 1, 0, 0] });
+
+  const rightStack: any[] = [];
+  if (c.logoUrl) rightStack.push({ image: c.logoUrl, fit: [180, 66], alignment: 'right', margin: [0, 0, 0, 8] });
+  rightStack.push({
+    table: { widths: ['*'], body: [[
+      { text: 'SALES QUOTATION', alignment: 'center', color: WHITE, bold: true, fontSize: 15, characterSpacing: 2, fillColor: brandDark, margin: [14, 12, 14, 12] },
+    ]] },
+    layout: { hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => 0, paddingRight: () => 0, paddingTop: () => 0, paddingBottom: () => 0 },
+  });
+
+  const content: any[] = [
+    { columns: [{ width: '*', stack: infoLines, margin: [0, 4, 0, 0] }, { width: 200, stack: rightStack }], columnGap: 16, margin: [0, 0, 0, 6] },
+    rule(brandDark),
+  ];
 
   // Party details (left) + quotation meta (right)
   const metaRow = (label: string, value: string) => ({
