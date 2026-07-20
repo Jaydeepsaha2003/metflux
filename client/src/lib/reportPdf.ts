@@ -25,18 +25,25 @@ const FONTS = {
     italics: 'Carlito-Regular.ttf',
     bolditalics: 'Carlito-Bold.ttf',
   },
+  Poppins: {
+    normal: 'Poppins-Regular.ttf',
+    bold: 'Poppins-SemiBold.ttf',
+    italics: 'Poppins-Regular.ttf',
+    bolditalics: 'Poppins-SemiBold.ttf',
+  },
 };
 
 let _pdfMake: any = null;
 const loadPdfMake = async (): Promise<any> => {
   if (_pdfMake) return _pdfMake;
-  const [pdfMakeMod, mont, carl]: any = await Promise.all([
+  const [pdfMakeMod, mont, carl, pop]: any = await Promise.all([
     import('pdfmake/build/pdfmake'),
     import('@/assets/montserratVfs'),
     import('@/assets/carlitoVfs'),
+    import('@/assets/poppinsVfs'),
   ]);
   const pdfMake = pdfMakeMod.default ?? pdfMakeMod;
-  pdfMake.vfs = { ...mont.montserratVfs, ...carl.carlitoVfs };
+  pdfMake.vfs = { ...mont.montserratVfs, ...carl.carlitoVfs, ...pop.poppinsVfs };
   pdfMake.fonts = FONTS;
   _pdfMake = pdfMake;
   return pdfMake;
@@ -396,7 +403,9 @@ const buildQuotationDoc = (d: QuotationPdf) => {
   const brandDark = brandShadeHex(d.brand, 700);
   const brandMid = brandShadeHex(d.brand, 600);
   const brandLight = brandShadeHex(d.brand, 50);
-  const th = (t: string, align: any = 'center') => ({ text: t, bold: true, fontSize: 8.5, color: WHITE, fillColor: brandMid, alignment: align });
+  // Item table headers + rows stay in Montserrat; the rest of the document uses
+  // Poppins (set via defaultStyle below).
+  const th = (t: string, align: any = 'center') => ({ text: t, bold: true, fontSize: 8.5, color: WHITE, fillColor: brandMid, alignment: align, font: 'Montserrat' });
 
   // Quotation-specific letterhead: company text on the LEFT; logo on the
   // TOP-RIGHT with the SALES QUOTATION banner stacked directly beneath it.
@@ -458,21 +467,21 @@ const buildQuotationDoc = (d: QuotationPdf) => {
   ]];
   d.items.forEach((it, i) => {
     body.push([
-      { text: String(i + 1), alignment: 'center', fontSize: 9 },
-      { stack: [{ text: it.description, fontSize: 9, bold: true }, ...(it.sub ? [{ text: it.sub, fontSize: 8, color: GREY }] : [])] },
-      { text: it.hsn || '—', alignment: 'center', fontSize: 9 },
-      { text: it.qty, alignment: 'right', fontSize: 9 },
-      { text: it.unit, alignment: 'center', fontSize: 9 },
-      { text: it.price, alignment: 'right', fontSize: 9 },
-      { text: it.amount, alignment: 'right', fontSize: 9, bold: true },
+      { text: String(i + 1), alignment: 'center', fontSize: 9, font: 'Montserrat' },
+      { stack: [{ text: it.description, fontSize: 9, bold: true }, ...(it.sub ? [{ text: it.sub, fontSize: 8, color: GREY }] : [])], font: 'Montserrat' },
+      { text: it.hsn || '—', alignment: 'center', fontSize: 9, font: 'Montserrat' },
+      { text: it.qty, alignment: 'right', fontSize: 9, font: 'Montserrat' },
+      { text: it.unit, alignment: 'center', fontSize: 9, font: 'Montserrat' },
+      { text: it.price, alignment: 'right', fontSize: 9, font: 'Montserrat' },
+      { text: it.amount, alignment: 'right', fontSize: 9, bold: true, font: 'Montserrat' },
     ]);
   });
   body.push([
-    { text: 'Total', colSpan: 3, alignment: 'right', bold: true, fontSize: 9, color: INK, fillColor: '#e2e8f0', margin: [2, 2, 2, 2] }, {}, {},
-    { text: d.totalQty, alignment: 'right', bold: true, fontSize: 9, fillColor: '#e2e8f0' },
-    { text: d.unit, alignment: 'center', fontSize: 9, fillColor: '#e2e8f0' },
+    { text: 'Total', colSpan: 3, alignment: 'right', bold: true, fontSize: 9, color: INK, fillColor: '#e2e8f0', margin: [2, 2, 2, 2], font: 'Montserrat' }, {}, {},
+    { text: d.totalQty, alignment: 'right', bold: true, fontSize: 9, fillColor: '#e2e8f0', font: 'Montserrat' },
+    { text: d.unit, alignment: 'center', fontSize: 9, fillColor: '#e2e8f0', font: 'Montserrat' },
     { text: '', fillColor: '#e2e8f0' },
-    { text: d.subTotal, alignment: 'right', bold: true, fontSize: 9, fillColor: '#e2e8f0' },
+    { text: d.subTotal, alignment: 'right', bold: true, fontSize: 9, fillColor: '#e2e8f0', font: 'Montserrat' },
   ]);
   content.push({
     table: { headerRows: 1, widths: [24, '*', 55, 40, 34, 58, 66], dontBreakRows: true, body },
@@ -543,7 +552,9 @@ const buildQuotationDoc = (d: QuotationPdf) => {
 
   return {
     pageSize: 'A4', pageMargins: [24, 22, 24, 28],
-    defaultStyle: { font: 'Montserrat', fontSize: 9, color: INK, lineHeight: 1.05 },
+    // Whole quotation in Poppins except the items table (headers + rows), which
+    // set font: 'Montserrat' per cell above.
+    defaultStyle: { font: 'Poppins', fontSize: 9, color: INK, lineHeight: 1.05 },
     content, footer: docFooter(d.company),
   };
 };
