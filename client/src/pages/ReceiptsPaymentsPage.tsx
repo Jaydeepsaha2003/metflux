@@ -61,6 +61,13 @@ export const ReceiptsPaymentsPage = () => {
   const [result, setResult] = useState<PostResult | null>(null);
   const [storeResult, setStoreResult] = useState<{ stored: number; skipped: number } | null>(null);
 
+  // Current balance in bank = net of the whole stored cash/bank book
+  // (all receipts − all payments). Refreshed after posting / clearing.
+  const { data: bank } = useQuery({
+    queryKey: ['cashbook-bank-balance'],
+    queryFn: () => api<{ receipts: number; payments: number; net: number }>('/cashbook/overview'),
+  });
+
   const runPreview = async (matrix: unknown[][]) => {
     const data = await api<Preview>('/receipts-payments/preview', { method: 'POST', body: JSON.stringify({ rows: matrix }) });
     setPreview(data);
@@ -101,7 +108,7 @@ export const ReceiptsPaymentsPage = () => {
     },
     onSuccess: ({ store, post }) => {
       setResult(post); setStoreResult(store);
-      ['payments', 'sales-invoices', 'debtor-aging', 'creditor-aging', 'purchases', 'cashbook-summary', 'cashbook-entries', 'cashbook-unclassified'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+      ['payments', 'sales-invoices', 'debtor-aging', 'creditor-aging', 'purchases', 'cashbook-summary', 'cashbook-entries', 'cashbook-unclassified', 'cashbook-bank-balance'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
       setPreview(null); setRows(null);
     },
     onError: (e) => setUploadErr(e instanceof Error ? e.message : 'Import failed — nothing was saved.'),
@@ -110,7 +117,7 @@ export const ReceiptsPaymentsPage = () => {
   const resetAll = useMutation({
     mutationFn: () => api<{ receipts: number; payments: number; entries: number }>('/cashbook/reset', { method: 'POST' }),
     onSuccess: (r) => {
-      ['payments', 'sales-invoices', 'debtor-aging', 'creditor-aging', 'purchases', 'cashbook-summary', 'cashbook-entries', 'cashbook-unclassified', 'cashbook-overview', 'cashbook-duplicates', 'cashbook-transactions'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+      ['payments', 'sales-invoices', 'debtor-aging', 'creditor-aging', 'purchases', 'cashbook-summary', 'cashbook-entries', 'cashbook-unclassified', 'cashbook-overview', 'cashbook-duplicates', 'cashbook-transactions', 'cashbook-bank-balance'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
       setPreview(null); setRows(null); setResult(null);
       setUploadErr(`Cleared ${r.receipts} receipt(s), ${r.payments} payment(s) and ${r.entries} cashbook rows. You can re-upload now.`);
     },
@@ -178,6 +185,27 @@ export const ReceiptsPaymentsPage = () => {
             {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
             Upload Register
           </button>
+        </div>
+      </div>
+
+      {/* Balance in bank — net of the whole stored cash/bank book */}
+      <div className="flex flex-wrap items-stretch gap-3">
+        <div className="flex flex-1 min-w-[220px] items-center justify-between rounded-xl border border-brand-200 bg-brand-50 px-4 py-3">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-brand-700">Balance in bank</div>
+            <div className="mt-0.5 text-[11px] text-slate-500">Total receipts − total payments (whole book)</div>
+          </div>
+          <div className={cn('text-2xl font-bold tabular-nums', (bank?.net ?? 0) >= 0 ? 'text-brand-700' : 'text-red-600')}>
+            {inr(bank?.net ?? 0)}
+          </div>
+        </div>
+        <div className="flex min-w-[140px] flex-col justify-center rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <div className="text-[11px] font-medium text-slate-500">Total receipts</div>
+          <div className="text-sm font-semibold tabular-nums text-emerald-700">{inr(bank?.receipts ?? 0)}</div>
+        </div>
+        <div className="flex min-w-[140px] flex-col justify-center rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <div className="text-[11px] font-medium text-slate-500">Total payments</div>
+          <div className="text-sm font-semibold tabular-nums text-slate-700">{inr(bank?.payments ?? 0)}</div>
         </div>
       </div>
 
