@@ -9,10 +9,11 @@ import { api, ApiError } from '@/lib/api';
 type QuotationSettings = {
   bankName: string; bankBranch: string; bankAccountName: string;
   bankAccountNumber: string; bankIfsc: string; terms: string;
+  seriesStart: number | null;
 };
 
 const EMPTY: QuotationSettings = {
-  bankName: '', bankBranch: '', bankAccountName: '', bankAccountNumber: '', bankIfsc: '', terms: '',
+  bankName: '', bankBranch: '', bankAccountName: '', bankAccountNumber: '', bankIfsc: '', terms: '', seriesStart: null,
 };
 
 const SAMPLE_TERMS = `Payment Terms
@@ -67,6 +68,25 @@ export const QuotationSettingsPage = () => {
           Quotation Settings
         </h1>
         <p className="mt-1 text-sm text-slate-500">Bank details and Terms &amp; Conditions used on every quotation. Set them once here — each quotation pre-fills these and you can still tweak before downloading.</p>
+      </div>
+
+      {/* Quotation numbering */}
+      <div className="card p-5 space-y-3">
+        <h2 className="text-sm font-semibold text-slate-900">Quotation Numbering</h2>
+        <div className="flex flex-wrap items-end gap-4">
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-slate-600">Series starts from</span>
+            <input
+              type="number" min={1} className={`${field} w-36`}
+              value={form.seriesStart ?? ''}
+              onChange={(e) => { const v = e.target.value.trim(); setForm((f) => ({ ...f, seriesStart: v ? Math.max(1, parseInt(v, 10) || 1) : null })); setSavedOk(false); }}
+              placeholder="e.g. 131"
+            />
+          </label>
+          <p className="flex-1 min-w-[220px] text-xs text-slate-500">
+            The next quotation number will start at this serial (e.g. <span className="font-medium">131</span> → the next number ends <span className="font-mono">…/SQ/131/{new Date().getFullYear()}-{String(new Date().getFullYear() + 1).slice(2)}</span>). Leave blank to start from 1. Once numbers pass this value the series just continues.
+          </p>
+        </div>
       </div>
 
       {/* Bank details */}

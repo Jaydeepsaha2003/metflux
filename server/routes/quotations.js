@@ -116,7 +116,18 @@ const nextQuotationNo = async (companyId, date, db) => {
     const m = new RegExp(`^${prefix}/SQ/(\\d+)/${fy}$`).exec(r.quotationNo ?? '');
     if (m) max = Math.max(max, parseInt(m[1], 10));
   }
-  return `${prefix}/SQ/${max + 1}/${fy}`;
+  // Honour a configured starting serial (Settings → Quotation Terms), e.g.
+  // Toroflux starts at 131. The next number is never below that floor.
+  let start = 1;
+  try {
+    const s = await db.qOne("SELECT `settingValue` FROM `CompanySetting` WHERE `companyId` = ? AND `settingKey` = 'quotation_settings'", [companyId]);
+    if (s?.settingValue) {
+      const j = JSON.parse(s.settingValue);
+      if (j?.seriesStart) start = Math.max(1, Number(j.seriesStart) || 1);
+    }
+  } catch { /* setting absent / unparseable → start from 1 */ }
+  const next = Math.max(max + 1, start);
+  return `${prefix}/SQ/${next}/${fy}`;
 };
 
 const loadItems = async (quotationId) => q(

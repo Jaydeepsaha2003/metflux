@@ -21,9 +21,12 @@ const quotationSchema = z.object({
   bankAccountNumber: z.string().max(60).optional().default(''),
   bankIfsc:          z.string().max(40).optional().default(''),
   terms:             z.string().max(8000).optional().default(''),
+  // Starting serial for the quotation number series (e.g. Toroflux → 131 means
+  // the next quotation number is …/SQ/131/FY). Null/empty = start from 1.
+  seriesStart:       z.coerce.number().int().min(1).max(9_999_999).optional().nullable(),
 }).strip();
 
-const EMPTY = { bankName: '', bankBranch: '', bankAccountName: '', bankAccountNumber: '', bankIfsc: '', terms: '' };
+const EMPTY = { bankName: '', bankBranch: '', bankAccountName: '', bankAccountNumber: '', bankIfsc: '', terms: '', seriesStart: null };
 
 const readSetting = async (companyId, key) => {
   const row = await qOne(
