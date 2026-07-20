@@ -15,9 +15,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Download, Loader2, MessageCircle } from 'lucide-react';
-import html2pdf from 'html2pdf.js';
 import { api } from '@/lib/api';
 import { shareViaWhatsApp, type ShareTarget } from '@/lib/share';
+import { useBranding } from '@/store/branding';
+import { brandColorFor } from '@/lib/brandColor';
+import { downloadQuotationPdf, quotationPdfBlob, type QuotationPdf } from '@/lib/reportPdf';
 
 type Customer = { id: string; name: string; gstNumber: string | null; gstRate: number; state: string | null; address: string | null; phone?: string | null };
 type QItem = {
@@ -130,76 +132,67 @@ export const QuotationPrintPage = () => {
     return { sub: +sub.toFixed(2), gstRate, tax, grand, intra, totalQty, unit };
   }, [qt, company?.gstNumber]);
 
-  const buildPdfJob = () => {
-    const el = printRef.current;
-    if (!el || !qt) return null;
-    const A4_USABLE_PX = 720;
-    const clone = el.cloneNode(true) as HTMLElement;
+  // Colour follows the company the quotation is FOR; falls back to the domain's.
+  const storeBrand = useBranding((s) => s.brandColor);
 
-    const liveCtrls = Array.from(el.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea'));
-    const cloneCtrls = Array.from(clone.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea'));
-    cloneCtrls.forEach((ci, i) => {
-      const live = liveCtrls[i];
-      const val = (live?.value ?? '').toString();
-      const span = document.createElement(ci.tagName === 'TEXTAREA' ? 'div' : 'span');
-      span.className = ci.className;
-      span.style.whiteSpace = 'pre-wrap';
-      span.style.display = 'block';
-      span.style.border = 'none';
-      span.style.borderBottom = 'none';
-      span.style.outline = 'none';
-      span.style.minHeight = 'auto';
-      span.textContent = val.length ? val : ' ';
-      ci.replaceWith(span);
-    });
-
-    clone.style.width = `${A4_USABLE_PX}px`;
-    clone.style.minWidth = '0';
-    clone.style.overflow = 'visible';
-    clone.style.borderRadius = '0';
-    clone.style.boxShadow = 'none';
-
-    const offscreen = document.createElement('div');
-    offscreen.style.position = 'fixed';
-    offscreen.style.left = '-10000px';
-    offscreen.style.top = '0';
-    offscreen.style.width = `${A4_USABLE_PX}px`;
-    offscreen.style.background = '#ffffff';
-    offscreen.appendChild(clone);
-    document.body.appendChild(offscreen);
-
-    const filename = `Quotation-${qt.quotationNo.replace(/[\\/:*?"<>|]/g, '-')}.pdf`;
-    const worker = html2pdf().set({
-      margin: 8,
-      filename,
-      image: { type: 'jpeg', quality: 0.97 },
-      html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff', width: A4_USABLE_PX, windowWidth: A4_USABLE_PX },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', 'thead', '.no-break'] },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any).from(clone);
-
-    return { worker, filename, teardown: () => document.body.removeChild(offscreen) };
+  // Assemble the structured data for the pdfmake builder.
+  const buildQtData = (): QuotationPdf | null => {
+    if (!qt) return null;
+    return {
+      company: {
+        name: company?.name, address: company?.address, phone: company?.phone,
+        whatsappNumber: company?.whatsappNumber, email: company?.email,
+        gstNumber: company?.gstNumber, logoUrl: company?.logoUrl,
+      },
+      brand: brandColorFor(company?.name) ?? storeBrand,
+      quotationNo: qt.quotationNo,
+      quotationDate: fmtDate(qt.quotationDate),
+      validUntil: qt.validUntil ? fmtDate(qt.validUntil) : '',
+      status: qt.status.charAt(0) + qt.status.slice(1).toLowerCase(),
+      party: {
+        name: qt.customer.name,
+        lines: [qt.customer.address, qt.customer.state].filter(Boolean) as string[],
+        phone: qt.customer.phone ?? '',
+        gstin: qt.customer.gstNumber ?? '',
+      },
+      items: qt.items.map((it) => {
+        const showGrade = it.grade && !it.material.toUpperCase().includes(it.grade.toUpperCase());
+        return {
+          description: `${it.material}${it.measure ? ` - ${it.measure}` : ''}`,
+          sub: showGrade ? it.grade : '',
+          hsn: it.hsnCode || '',
+          qty: it.pcs.toLocaleString('en-IN'),
+          unit: it.unit || 'Pcs',
+          price: fmt2(rateOf(it)),
+          amount: fmt2(it.totalAmount ?? 0),
+        };
+      }),
+      totalQty: totals.totalQty.toLocaleString('en-IN'),
+      unit: totals.unit,
+      subTotal: fmt2(totals.sub),
+      gstRate: totals.gstRate, intra: totals.intra,
+      tax: fmt2(totals.tax), grandTotal: fmt2(totals.grand),
+      amountWords: numberToWordsIndian(totals.grand),
+      bank: { name: bankName, accountName: bankAcctName, accountNumber: bankAcc, ifsc: bankIfsc, branch: bankBranch },
+      terms, notes: qt.notes ?? '',
+    };
   };
+  const fileName = () => `Quotation-${(qt?.quotationNo ?? 'PL').replace(/[\\/:*?"<>|]/g, '-')}`;
 
   const handleDownload = async () => {
+    const data = buildQtData();
+    if (!data) return;
     setGenerating(true);
-    const job = buildPdfJob();
-    if (!job) { setGenerating(false); return; }
-    await new Promise((r) => requestAnimationFrame(r));
-    try { await job.worker.save(); }
-    finally { job.teardown(); setGenerating(false); }
+    try { await downloadQuotationPdf(data, `${fileName()}.pdf`); }
+    finally { setGenerating(false); }
   };
 
   const handleWhatsappShare = async () => {
-    if (!qt) return;
+    const data = buildQtData();
+    if (!qt || !data) return;
     setGenerating(true);
-    const job = buildPdfJob();
-    if (!job) { setGenerating(false); return; }
-    await new Promise((r) => requestAnimationFrame(r));
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const blob = (await (job.worker as any).output('blob')) as Blob;
+      const blob = await quotationPdfBlob(data);
       const message = [
         `*Sales Quotation ${qt.quotationNo}*`,
         company?.name ? `From: ${company.name}` : null,
@@ -212,9 +205,9 @@ export const QuotationPrintPage = () => {
         target: company?.defaultShareTarget,
         companyPhone: company?.whatsappNumber ?? null,
         customerPhone: qt.customer.phone ?? null,
-        pdf: { blob, filename: job.filename.replace(/\.pdf$/i, '') },
+        pdf: { blob, filename: fileName() },
       });
-    } finally { job.teardown(); setGenerating(false); }
+    } finally { setGenerating(false); }
   };
 
   if (isLoading) return <div className="card p-10 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-slate-400" /></div>;

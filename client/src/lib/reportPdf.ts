@@ -379,7 +379,158 @@ const buildTestingReportDoc = (d: TestingReportPdf) => {
   };
 };
 
+/* ── Sales Quotation ─────────────────────────────────────────── */
+export type QuotationPdf = {
+  company: PdfCompany;
+  brand?: string | null;
+  quotationNo: string; quotationDate: string; validUntil: string; status: string;
+  party: { name: string; lines: string[]; phone: string; gstin: string };
+  items: Array<{ description: string; sub: string; hsn: string; qty: string; unit: string; price: string; amount: string }>;
+  totalQty: string; unit: string; subTotal: string;
+  gstRate: number; intra: boolean; tax: string; grandTotal: string; amountWords: string;
+  bank: { name: string; accountName: string; accountNumber: string; ifsc: string; branch: string };
+  terms: string; notes: string;
+};
+
+const buildQuotationDoc = (d: QuotationPdf) => {
+  const brandDark = brandShadeHex(d.brand, 700);
+  const brandMid = brandShadeHex(d.brand, 600);
+  const brandLight = brandShadeHex(d.brand, 50);
+  const th = (t: string, align: any = 'center') => ({ text: t, bold: true, fontSize: 8.5, color: WHITE, fillColor: brandMid, alignment: align });
+
+  const content: any[] = [header(d.company, 'SALES QUOTATION', brandDark), rule(brandDark)];
+
+  // Party details (left) + quotation meta (right)
+  const metaRow = (label: string, value: string) => ({
+    columns: [
+      { text: label, width: 74, fontSize: 9, color: GREY, bold: true },
+      { text: value || '—', width: '*', fontSize: 9, bold: true },
+    ], margin: [0, 0, 0, 2],
+  });
+  content.push({
+    columns: [
+      { width: '*', stack: [
+        { text: 'PARTY DETAILS', bold: true, fontSize: 8, color: brandDark, characterSpacing: 0.5 },
+        { text: d.party.name, bold: true, fontSize: 11, margin: [0, 2, 0, 0] },
+        ...d.party.lines.map((l) => ({ text: l, fontSize: 9, color: GREY })),
+        ...(d.party.phone ? [{ text: `Phone ${d.party.phone}`, fontSize: 9, color: GREY }] : []),
+        { text: [{ text: 'GSTIN: ', bold: true }, d.party.gstin || '—'], fontSize: 9, margin: [0, 2, 0, 0] },
+      ], margin: [0, 0, 12, 0] },
+      { width: 'auto', stack: [
+        metaRow('Quotation No.', d.quotationNo),
+        metaRow('Dated', d.quotationDate),
+        ...(d.validUntil ? [metaRow('Valid Until', d.validUntil)] : []),
+        metaRow('Status', d.status),
+      ] },
+    ],
+    margin: [0, 0, 0, 8],
+  });
+
+  // Items table
+  const body: any[] = [[
+    th('S.N'), th('Description of Goods', 'left'), th('HSN/SAC'), th('Qty', 'right'), th('Unit'), th('Price', 'right'), th('Amount', 'right'),
+  ]];
+  d.items.forEach((it, i) => {
+    body.push([
+      { text: String(i + 1), alignment: 'center', fontSize: 9 },
+      { stack: [{ text: it.description, fontSize: 9, bold: true }, ...(it.sub ? [{ text: it.sub, fontSize: 8, color: GREY }] : [])] },
+      { text: it.hsn || '—', alignment: 'center', fontSize: 9 },
+      { text: it.qty, alignment: 'right', fontSize: 9 },
+      { text: it.unit, alignment: 'center', fontSize: 9 },
+      { text: it.price, alignment: 'right', fontSize: 9 },
+      { text: it.amount, alignment: 'right', fontSize: 9, bold: true },
+    ]);
+  });
+  body.push([
+    { text: 'Total', colSpan: 3, alignment: 'right', bold: true, fontSize: 9, color: INK, fillColor: '#e2e8f0', margin: [2, 2, 2, 2] }, {}, {},
+    { text: d.totalQty, alignment: 'right', bold: true, fontSize: 9, fillColor: '#e2e8f0' },
+    { text: d.unit, alignment: 'center', fontSize: 9, fillColor: '#e2e8f0' },
+    { text: '', fillColor: '#e2e8f0' },
+    { text: d.subTotal, alignment: 'right', bold: true, fontSize: 9, fillColor: '#e2e8f0' },
+  ]);
+  content.push({
+    table: { headerRows: 1, widths: [24, '*', 55, 40, 34, 58, 66], dontBreakRows: true, body },
+    layout: { hLineWidth: () => 0.4, vLineWidth: () => 0.4, hLineColor: () => LIGHT, vLineColor: () => LIGHT, paddingLeft: () => 3, paddingRight: () => 3, paddingTop: () => 2.5, paddingBottom: () => 2.5 },
+    margin: [0, 0, 0, 0],
+  });
+
+  // Amount in words (left) + totals (right)
+  const totalLines: any[] = [{ columns: [{ text: 'Sub Total', width: '*', fontSize: 9, color: GREY }, { text: d.subTotal, width: 'auto', fontSize: 9, alignment: 'right' }] }];
+  if (d.gstRate > 0) {
+    if (d.intra) {
+      const half = (parseFloat(d.tax.replace(/,/g, '')) / 2).toFixed(2);
+      totalLines.push({ columns: [{ text: `CGST @ ${(d.gstRate / 2).toFixed(2)}%`, width: '*', fontSize: 9, color: GREY }, { text: half, width: 'auto', fontSize: 9, alignment: 'right' }] });
+      totalLines.push({ columns: [{ text: `SGST @ ${(d.gstRate / 2).toFixed(2)}%`, width: '*', fontSize: 9, color: GREY }, { text: half, width: 'auto', fontSize: 9, alignment: 'right' }] });
+    } else {
+      totalLines.push({ columns: [{ text: `IGST @ ${d.gstRate.toFixed(2)}%`, width: '*', fontSize: 9, color: GREY }, { text: d.tax, width: 'auto', fontSize: 9, alignment: 'right' }] });
+    }
+  }
+  totalLines.push({
+    columns: [{ text: 'Grand Total', width: '*', fontSize: 11, bold: true, color: brandDark }, { text: `₹ ${d.grandTotal}`, width: 'auto', fontSize: 11, bold: true, alignment: 'right', color: brandDark }],
+    margin: [0, 3, 0, 0],
+  });
+  content.push({
+    table: { widths: ['*', 'auto'], body: [[
+      { stack: [{ text: 'AMOUNT IN WORDS', bold: true, fontSize: 8, color: GREY }, { text: `INR ${d.amountWords}`, bold: true, fontSize: 9.5, margin: [0, 2, 0, 0] }], margin: [0, 2, 10, 2] },
+      { width: 200, stack: totalLines, margin: [0, 2, 0, 2] },
+    ]] },
+    layout: { hLineWidth: (i: number) => (i === 0 || i === 1 ? 0.5 : 0), vLineWidth: (i: number) => (i === 1 ? 0.5 : 0), hLineColor: () => LIGHT, vLineColor: () => LIGHT, paddingLeft: () => 6, paddingRight: () => 6, paddingTop: () => 2, paddingBottom: () => 2 },
+    margin: [0, 0, 0, 8],
+  });
+
+  // Tax breakup
+  if (d.gstRate > 0) {
+    const taxLabel = d.intra ? 'CGST + SGST' : 'IGST';
+    content.push({
+      table: { widths: ['*', '*', '*', '*'], body: [
+        [{ text: 'Tax Rate', bold: true, fontSize: 8, color: GREY, fillColor: brandLight }, { text: 'Taxable Amt', bold: true, fontSize: 8, color: GREY, alignment: 'right', fillColor: brandLight }, { text: `${taxLabel} Amt`, bold: true, fontSize: 8, color: GREY, alignment: 'right', fillColor: brandLight }, { text: 'Total Tax', bold: true, fontSize: 8, color: GREY, alignment: 'right', fillColor: brandLight }],
+        [{ text: `${d.gstRate.toFixed(0)}%`, fontSize: 9 }, { text: d.subTotal, fontSize: 9, alignment: 'right' }, { text: d.tax, fontSize: 9, alignment: 'right' }, { text: d.tax, fontSize: 9, bold: true, alignment: 'right' }],
+      ] },
+      layout: { hLineWidth: () => 0.4, vLineWidth: () => 0.4, hLineColor: () => LIGHT, vLineColor: () => LIGHT, paddingLeft: () => 5, paddingRight: () => 5, paddingTop: () => 2.5, paddingBottom: () => 2.5 },
+      margin: [0, 0, 0, 8],
+    });
+  }
+
+  if (d.notes) content.push({ text: [{ text: 'Note: ', bold: true, color: GREY }, d.notes], fontSize: 9, margin: [0, 0, 0, 8] });
+
+  // Bank details — one flowing line (wraps to 2 if long)
+  const bankSegs: any[] = [{ text: 'Bank Details   ', bold: true, color: brandDark }];
+  const seg = (label: string, value: string) => { if (value) bankSegs.push({ text: `${label}: `, color: GREY }, { text: value + '    ' }); };
+  seg('Bank', d.bank.name); seg('A/C Name', d.bank.accountName); seg('A/C No', d.bank.accountNumber);
+  seg('IFSC', d.bank.ifsc); seg('Branch', d.bank.branch);
+  if (bankSegs.length > 1) content.push({ text: bankSegs, fontSize: 9, lineHeight: 1.25, margin: [0, 0, 0, 6] });
+
+  // Terms — full width
+  if (d.terms) {
+    content.push({ text: 'TERMS & CONDITIONS', bold: true, fontSize: 8, color: brandDark, margin: [0, 2, 0, 2] });
+    content.push({ text: d.terms, fontSize: 8.5, color: INK, lineHeight: 1.25, margin: [0, 0, 0, 8] });
+  }
+
+  // Signature footer
+  content.push({
+    columns: [
+      { width: '*', stack: [{ text: "Receiver's Signature", fontSize: 9, color: GREY }, { text: 'E. & O.E.', fontSize: 8, color: GREY, margin: [0, 24, 0, 0] }] },
+      { width: '*', stack: [{ text: `For, ${d.company.name || ''}`, fontSize: 9, bold: true, alignment: 'right' }, { text: 'Authorised Signatory', fontSize: 9, color: GREY, alignment: 'right', margin: [0, 24, 0, 0] }] },
+    ],
+    margin: [0, 6, 0, 0],
+  });
+
+  return {
+    pageSize: 'A4', pageMargins: [24, 22, 24, 28],
+    defaultStyle: { font: 'Montserrat', fontSize: 9, color: INK, lineHeight: 1.05 },
+    content, footer: docFooter(d.company),
+  };
+};
+
 /* ── Public API ──────────────────────────────────────────────── */
+export const downloadQuotationPdf = async (data: QuotationPdf, filename: string) => {
+  const pdfMake = await loadPdfMake();
+  pdfMake.createPdf(buildQuotationDoc(data)).download(filename);
+};
+export const quotationPdfBlob = async (data: QuotationPdf): Promise<Blob> => {
+  const pdfMake = await loadPdfMake();
+  return new Promise((resolve) => pdfMake.createPdf(buildQuotationDoc(data)).getBlob(resolve));
+};
 export const downloadPackingListPdf = async (data: PackingListPdf, filename: string) => {
   const pdfMake = await loadPdfMake();
   pdfMake.createPdf(buildPackingListDoc(data)).download(filename);
