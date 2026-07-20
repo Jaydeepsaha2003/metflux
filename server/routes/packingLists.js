@@ -6,6 +6,7 @@ import { q, qOne, insert, update, del, txn } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
+import { logAudit, snapshotEntity } from '../lib/audit.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -319,11 +320,13 @@ router.put('/:plId', requirePermission('dispatch'), asyncHandler(async (req, res
 /* DELETE /:plId */
 router.delete('/:plId', requirePermission('dispatch'), asyncHandler(async (req, res) => {
   const pl = await qOne(
-    'SELECT `id` FROM `PackingList` WHERE `id` = ? AND `companyId` = ?',
+    'SELECT `id`, `plNumber` FROM `PackingList` WHERE `id` = ? AND `companyId` = ?',
     [req.params.plId, req.tenant.companyId]
   );
   if (!pl) throw new AppError('Packing list not found', 404, 'NOT_FOUND');
+  const before = await snapshotEntity('PackingList', pl.id);
   await del('PackingList', pl.id);
+  await logAudit(req, { entity: 'PackingList', entityId: pl.id, action: 'DELETE', summary: `Deleted packing list ${pl.plNumber}`, before });
   res.status(204).end();
 }));
 

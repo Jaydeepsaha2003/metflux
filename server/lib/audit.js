@@ -16,6 +16,7 @@ export const AUDIT_ENTITIES = {
   Return:        { table: 'Return',        label: 'Return',         children: [{ table: 'ReturnItem', fk: 'returnId' }] },
   Production:    { table: 'Production',     label: 'Production',      children: [] },
   Dispatch:      { table: 'Dispatch',      label: 'Dispatch',       children: [] },
+  PackingList:   { table: 'PackingList',   label: 'Packing List',   children: [{ table: 'PackingListItem', fk: 'packingListId' }] },
   Customer:      { table: 'Customer',      label: 'Customer',       children: [] },
   Supplier:      { table: 'Supplier',      label: 'Supplier',       children: [{ table: 'SupplierMembership', fk: 'supplierId' }] },
   Labour:        { table: 'Labour',        label: 'Worker',         children: [{ table: 'LabourMembership', fk: 'labourId' }] },

@@ -6,6 +6,7 @@ import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 import { notifyCompanyAdmins } from '../lib/push.js';
+import { logAudit, snapshotEntity } from '../lib/audit.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -261,6 +262,8 @@ router.post('/', requirePermission('dispatch'), asyncHandler(async (req, res) =>
   });
   const fresh = await qOne(`${DISPATCH_ROW_SQL} WHERE d.\`id\` = ?`, [created.id]);
   const d = flatten(fresh);
+  await logAudit(req, { entity: 'Dispatch', entityId: created.id, action: 'CREATE',
+    summary: `Dispatch ${d.pcs} pcs · ${d.customerName ?? ''} · ${d.measure ?? ''} (PO ${d.poNumber ?? ''})`.replace(/\s+·\s+·/g, ' ·').trim() });
   notifyCompanyAdmins(req.tenant.companyId, {
     type: 'DISPATCH', title: 'New dispatch',
     body: [d.customerName, `${d.pcs} pcs`, d.vehicleNo].filter(Boolean).join(' · '),
@@ -299,7 +302,12 @@ router.patch('/:id', requirePermission('dispatch'), asyncHandler(async (req, res
   if (data.vehicleNo    !== undefined) patch.vehicleNo = data.vehicleNo ?? null;
   if (data.notes        !== undefined) patch.notes = data.notes ?? null;
 
-  if (Object.keys(patch).length > 0) await update('Dispatch', existing.id, patch);
+  if (Object.keys(patch).length > 0) {
+    const before = await snapshotEntity('Dispatch', existing.id);
+    await update('Dispatch', existing.id, patch);
+    await logAudit(req, { entity: 'Dispatch', entityId: existing.id, action: 'UPDATE',
+      summary: `Edited dispatch — ${Object.keys(patch).join(', ')}`, before });
+  }
   const fresh = await qOne(`${DISPATCH_ROW_SQL} WHERE d.\`id\` = ?`, [existing.id]);
   res.json(flatten(fresh));
 }));
@@ -329,7 +337,12 @@ router.delete('/:id', requirePermission('dispatch'), asyncHandler(async (req, re
     );
   }
 
+  const info = await qOne(`${DISPATCH_ROW_SQL} WHERE d.\`id\` = ?`, [row.id]);
+  const d = info ? flatten(info) : null;
+  const before = await snapshotEntity('Dispatch', row.id);
   await del('Dispatch', row.id);
+  await logAudit(req, { entity: 'Dispatch', entityId: row.id, action: 'DELETE',
+    summary: d ? `Deleted dispatch ${d.pcs} pcs · ${d.customerName ?? ''} · ${d.measure ?? ''} (PO ${d.poNumber ?? ''})`.replace(/\s+·\s+·/g, ' ·').trim() : 'Deleted dispatch', before });
   res.status(204).end();
 }));
 
