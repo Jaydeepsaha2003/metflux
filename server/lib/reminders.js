@@ -99,7 +99,7 @@ const runInvoiceDueReminder = async (localDate) => {
       type: 'DUE',
       title: 'Invoices due today',
       body: parts.join(' · '),
-      url: sales.n ? '/s/admin/sales-invoices/aging' : '/s/admin/accounts/creditor-aging',
+      url: sales.n ? '/s/admin/sales-invoices?due=today' : '/s/admin/accounts/creditor-aging',
       tag: 'invoice-due',
     }).catch(() => {});
   }

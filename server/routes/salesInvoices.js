@@ -455,18 +455,23 @@ router.get('/aging', requireAnyPermission('view_debtor_aging', 'manage_invoices'
 
 /* ---------- GET / — paginated list ---------- */
 router.get('/', requireAnyPermission('view_sales_register', 'manage_invoices'), asyncHandler(async (req, res) => {
-  const { page, pageSize, search, status, filter, docType } = z.object({
+  const { page, pageSize, search, status, filter, docType, due } = z.object({
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(10000).default(50),
     search: z.string().trim().max(120).optional(),
     status: z.enum(['UNPAID', 'PARTIAL', 'PAID', 'OVERDUE', 'ALL']).default('ALL'),
     filter: z.enum(['ALL', 'ATTENTION']).default('ALL'),
     docType: z.enum(['ALL', 'INVOICE', 'CREDIT_NOTE']).default('ALL'),
+    // `due=today` — unpaid invoices whose due date is today (the "Invoices due
+    // today" reminder deep-links here). `due=overdue` — due today or earlier.
+    due: z.enum(['today', 'overdue']).optional(),
   }).parse(req.query);
   const skip = (page - 1) * pageSize;
 
   let where = 'si.`companyId` = ?';
   const params = [req.tenant.companyId];
+  if (due === 'today') where += " AND si.`status` <> 'PAID' AND si.`dueDate` IS NOT NULL AND DATE(si.`dueDate`) = CURDATE()";
+  else if (due === 'overdue') where += " AND si.`status` <> 'PAID' AND si.`dueDate` IS NOT NULL AND DATE(si.`dueDate`) <= CURDATE()";
   if (status === 'OVERDUE') where += " AND si.`status` <> 'PAID' AND si.`dueDate` IS NOT NULL AND si.`dueDate` < NOW()";
   else if (status !== 'ALL') { where += ' AND si.`status` = ?'; params.push(status); }
   if (filter === 'ATTENTION') where += ' AND (si.`customerId` IS NULL OR si.`dueDate` IS NULL)';

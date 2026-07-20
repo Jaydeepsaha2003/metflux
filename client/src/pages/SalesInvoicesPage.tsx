@@ -2,9 +2,10 @@
 // browse / filter the resulting invoices. Rows that couldn't match a customer
 // or compute a due date are flagged for attention and can be fixed inline.
 import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Receipt, Upload, Loader2, Search, AlertTriangle, X, CheckCircle2, Trash2, Pencil,
+  Receipt, Upload, Loader2, Search, AlertTriangle, X, CheckCircle2, Trash2, Pencil, CalendarClock,
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { readXlsxMatrix } from '@/lib/excel';
@@ -52,12 +53,18 @@ export const SalesInvoicesPage = () => {
   const [docType, setDocType] = useState<DocFilter>('ALL');
   const [attention, setAttention] = useState(false);
   const [page, setPage] = useState(1);
+  // `?due=today|overdue` deep-link from the "Invoices due today" reminder — shows
+  // just those invoices, highlighted. Cleared by the banner's dismiss button.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const due = searchParams.get('due') === 'today' ? 'today'
+    : searchParams.get('due') === 'overdue' ? 'overdue' : '';
+  const clearDue = () => setSearchParams((p) => { p.delete('due'); return p; }, { replace: true });
   // Bulk-selection state. `selected` holds explicitly-ticked ids (persists across
   // pages); `allMatching` means "every invoice matching the current filter".
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [allMatching, setAllMatching] = useState(false);
   // Changing the filter invalidates any selection — start fresh.
-  useEffect(() => { setPage(1); setSelected(new Set()); setAllMatching(false); }, [search, status, attention, docType]);
+  useEffect(() => { setPage(1); setSelected(new Set()); setAllMatching(false); }, [search, status, attention, docType, due]);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -71,9 +78,9 @@ export const SalesInvoicesPage = () => {
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['sales-invoices', search, status, attention, docType, page],
+    queryKey: ['sales-invoices', search, status, attention, docType, page, due],
     queryFn: () => api<ListResp>(
-      `/sales-invoices?status=${status}&filter=${attention ? 'ATTENTION' : 'ALL'}&docType=${docType}&page=${page}&pageSize=${PAGE_SIZE}${search ? `&search=${encodeURIComponent(search)}` : ''}`
+      `/sales-invoices?status=${status}&filter=${attention ? 'ATTENTION' : 'ALL'}&docType=${docType}&page=${page}&pageSize=${PAGE_SIZE}${search ? `&search=${encodeURIComponent(search)}` : ''}${due ? `&due=${due}` : ''}`
     ),
   });
 
@@ -172,6 +179,22 @@ export const SalesInvoicesPage = () => {
         />
       </div>
 
+      {/* Due-invoices drill-down banner (from the "Invoices due today" reminder) */}
+      {due && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-amber-100 text-amber-700"><CalendarClock className="h-5 w-5" /></span>
+          <div className="text-sm">
+            <div className="font-semibold text-amber-900">{due === 'today' ? 'Invoices due today' : 'Due today or overdue'}</div>
+            <div className="text-amber-800">
+              {(data?.total ?? 0)} invoice{(data?.total ?? 0) === 1 ? '' : 's'} · <span className="font-semibold">{inr(data?.totals.balance ?? 0)}</span> to collect
+            </div>
+          </div>
+          <button onClick={clearDue} className="ml-auto btn-ghost border border-amber-300 text-amber-800 hover:bg-amber-100 text-sm">
+            <X className="h-4 w-4" /> Show all invoices
+          </button>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[200px] sm:max-w-xs">
@@ -231,7 +254,7 @@ export const SalesInvoicesPage = () => {
           <div className="py-12 text-center text-slate-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
         ) : !data?.items.length ? (
           <div className="py-12 text-center text-sm text-slate-400">
-            No invoices{search || status !== 'ALL' || attention ? ' match this filter.' : ' yet — upload your sales vouchers to begin.'}
+            No invoices{due ? (due === 'today' ? ' are due today.' : ' are due or overdue.') : search || status !== 'ALL' || attention ? ' match this filter.' : ' yet — upload your sales vouchers to begin.'}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -264,7 +287,7 @@ export const SalesInvoicesPage = () => {
                 {data.items.map((inv) => {
                   const checked = allMatching || selected.has(inv.id);
                   return (
-                  <tr key={inv.id} className={cn('border-t border-slate-100 hover:bg-slate-50/60', checked && 'bg-brand-50/40', !checked && inv.needsAttention && 'bg-red-50/40')}>
+                  <tr key={inv.id} className={cn('border-t border-slate-100 hover:bg-slate-50/60', checked && 'bg-brand-50/40', !checked && inv.needsAttention && 'bg-red-50/40', due && 'border-l-2 border-l-amber-400')}>
                     <td className="px-3 py-2.5">
                       <input
                         type="checkbox"
