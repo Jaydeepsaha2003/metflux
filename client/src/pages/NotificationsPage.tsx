@@ -7,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Bell, Loader2, CheckCheck, Trash2, Clock, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
-import { ICON, relTime } from '@/components/NotificationBell';
+import { ICON, relTime, notifPath } from '@/components/NotificationBell';
 
 type Notif = { id: string; type: string; title: string; body: string | null; url: string | null; isRead: boolean; createdAt: string };
 
@@ -39,7 +39,8 @@ export const NotificationsPage = () => {
 
   const open = (n: Notif) => {
     if (!n.isRead) readOne.mutate(n.id);
-    if (n.url) navigate(n.url.replace(/^https?:\/\/[^/]+/, '').replace(/^\/s\/admin/, '') || '/');
+    const path = notifPath(n);
+    if (path) navigate(path);
   };
 
   return (

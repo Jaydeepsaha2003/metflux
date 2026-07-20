@@ -78,6 +78,18 @@ export const ICON: Record<string, { icon: typeof Bell; tone: string }> = {
   SYSTEM: { icon: AlertCircle, tone: 'bg-slate-100 text-slate-600' },
 };
 
+// Resolve the in-app path a notification should open. Strips the origin +
+// /s/admin prefix from the stored url. Older "Invoices due today" reminders were
+// saved pointing at the aging summary — upgrade those to the due-today drill-down
+// so clicking a notification received before that change still lands correctly.
+export const notifPath = (n: { type: string; url: string | null }): string | null => {
+  let path = n.url ? (n.url.replace(/^https?:\/\/[^/]+/, '').replace(/^\/s\/admin/, '') || '/') : null;
+  if (n.type === 'DUE' && path && path.replace(/\?.*$/, '').startsWith('/sales-invoices')) {
+    path = '/sales-invoices?due=today';
+  }
+  return path;
+};
+
 export const NotificationBell = () => {
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -152,11 +164,8 @@ export const NotificationBell = () => {
 
   const openNotif = (n: Notif) => {
     if (!n.isRead) readOne.mutate(n.id);
-    if (n.url) {
-      const path = n.url.replace(/^https?:\/\/[^/]+/, '').replace(/^\/s\/admin/, '') || '/';
-      navigate(path);
-      setOpen(false);
-    }
+    const path = notifPath(n);
+    if (path) { navigate(path); setOpen(false); }
   };
 
   const onEnable = async () => { setPushState('working'); const r = await enablePush(); setPushState(r.ok ? 'on' : (r.reason.includes('denied') ? 'denied' : 'idle')); };
