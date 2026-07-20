@@ -30,6 +30,7 @@ type DispatchDetail = {
   id1: number; id2: number | null; od1: number; od2: number | null; ht: number;
   dispatchDate: string; pcs: number; weightPerPc: number;
   totalWeight: number;            // calculated (pcs × weightPerPc)
+  boxes: number | null;           // No. of boxes the dispatch was packed in
   actualWeight: number | null;    // weighbridge reading; falls back to totalWeight when null
   vehicleNo: string | null;
   ratePerPc: number | null;       // SO rate per piece (from the order item)
@@ -51,7 +52,7 @@ type RowState = {
   coreType: CoreType;
   grade: string;
   poNo: string; poDate: string; description: string;
-  qty: string; rate: string; weight: string; remarks: string;
+  qty: string; box: string; rate: string; weight: string; remarks: string;
 };
 
 const fmtDate = (iso: string | null | undefined) => {
@@ -212,6 +213,7 @@ export const PackingListPage = () => {
         poDate: d.orderDate ? fmtDate(d.orderDate) : '',
         description: `${CORE_PREFIX[d.coreType] ?? 'RC'}-${d.measure ?? ''} / ${d.grade ?? ''}`,
         qty: String(d.pcs),
+        box: d.boxes != null ? String(d.boxes) : '',
         rate: d.ratePerPc != null ? d.ratePerPc.toFixed(2) : '',
         weight: displayWeight != null ? displayWeight.toFixed(3) : '',
         remarks: '',
@@ -260,6 +262,7 @@ export const PackingListPage = () => {
   const customerLabel = uniqueCustomers.join(', ');
   const stateLabel = uniqueStates.join(', ') || '—';
   const grandTotalPcs = rows.reduce((s, r) => s + (parseInt(r.qty) || 0), 0);
+  const grandTotalBox = rows.reduce((s, r) => s + (parseInt(r.box) || 0), 0);
   const grandTotalWeight = rows.reduce((s, r) => s + (parseFloat(r.weight) || 0), 0);
 
   // Auto-save an in-progress draft (build mode only) so a refresh or accidental
@@ -333,16 +336,18 @@ export const PackingListPage = () => {
       return {
         label: cg.label,
         pcs: cgRows.reduce((s, r) => s + (parseInt(r.qty) || 0), 0),
+        box: cgRows.reduce((s, r) => s + (parseInt(r.box) || 0), 0),
         weight: cgRows.reduce((s, r) => s + (parseFloat(r.weight) || 0), 0),
         grades: cg.grades.map(([grade, gr]) => ({
           grade, multi,
-          rows: gr.map((r) => ({ poNo: r.poNo, poDate: r.poDate, description: r.description, qty: r.qty, rate: r.rate, weight: r.weight, remarks: r.remarks })),
+          rows: gr.map((r) => ({ poNo: r.poNo, poDate: r.poDate, description: r.description, qty: r.qty, box: r.box, rate: r.rate, weight: r.weight, remarks: r.remarks })),
           subtotalPcs: gr.reduce((s, r) => s + (parseInt(r.qty) || 0), 0),
+          subtotalBox: gr.reduce((s, r) => s + (parseInt(r.box) || 0), 0),
           subtotalWeight: gr.reduce((s, r) => s + (parseFloat(r.weight) || 0), 0),
         })),
       };
     }),
-    grandPcs: grandTotalPcs, grandWeight: grandTotalWeight,
+    grandPcs: grandTotalPcs, grandBox: grandTotalBox, grandWeight: grandTotalWeight,
     testedBy, approvedBy, dateStr: woDate ? fmtDate(woDate) : '',
   });
 
@@ -568,6 +573,7 @@ export const PackingListPage = () => {
           {coreGroups.map((cg, cgIdx) => {
             const cgRows = cg.grades.flatMap(([, gr]) => gr);
             const cgPcs = cgRows.reduce((s, r) => s + (parseInt(r.qty) || 0), 0);
+            const cgBox = cgRows.reduce((s, r) => s + (parseInt(r.box) || 0), 0);
             const cgWeight = cgRows.reduce((s, r) => s + (parseFloat(r.weight) || 0), 0);
             const multiGrade = cg.grades.length > 1;
 
@@ -582,12 +588,13 @@ export const PackingListPage = () => {
                 <table className="w-full text-sm border-collapse table-fixed">
                   <colgroup>
                     <col style={{ width: '36px' }} />   {/* SR */}
-                    <col style={{ width: '15%' }} />    {/* PO NO */}
-                    <col style={{ width: '13%' }} />    {/* PO DATE — fits dd/mm/yyyy */}
+                    <col style={{ width: '14%' }} />    {/* PO NO */}
+                    <col style={{ width: '12%' }} />    {/* PO DATE — fits dd/mm/yyyy */}
                     <col />                              {/* ITEM DESCRIPTION — auto */}
                     <col style={{ width: '9%' }} />     {/* QTY */}
-                    <col style={{ width: '14%' }} />    {/* TOTAL WEIGHT */}
-                    <col style={{ width: '14%' }} />    {/* REMARKS */}
+                    <col style={{ width: '7%' }} />     {/* BOX */}
+                    <col style={{ width: '13%' }} />    {/* TOTAL WEIGHT */}
+                    <col style={{ width: '13%' }} />    {/* REMARKS */}
                   </colgroup>
                   <thead>
                     <tr className="bg-brand-600 text-white border-b-2 border-brand-700 text-center font-bold uppercase tracking-wide text-[10px]">
@@ -596,6 +603,7 @@ export const PackingListPage = () => {
                       <th className="px-1 py-1.5 border-r border-slate-300 align-middle">PO DATE</th>
                       <th className="px-1 py-1.5 border-r border-slate-300 text-left align-middle">ITEM DESCRIPTION</th>
                       <th className="px-1 py-1.5 border-r border-slate-300 align-middle">QTY (PCS)</th>
+                      <th className="px-1 py-1.5 border-r border-slate-300 align-middle">BOX</th>
                       <th className="px-1 py-1.5 border-r border-slate-300 align-middle">WT (KG)</th>
                       <th className="px-1 py-1.5 align-middle">REMARKS</th>
                     </tr>
@@ -603,13 +611,14 @@ export const PackingListPage = () => {
                   <tbody>
                     {cg.grades.map(([grade, gradeRows]) => {
                       const gradePcs = gradeRows.reduce((s, r) => s + (parseInt(r.qty) || 0), 0);
+                      const gradeBox = gradeRows.reduce((s, r) => s + (parseInt(r.box) || 0), 0);
                       const gradeWeight = gradeRows.reduce((s, r) => s + (parseFloat(r.weight) || 0), 0);
                       return (
                         <Fragment key={grade}>
                           {/* Grade sub-header */}
                           {multiGrade && (
                             <tr className="bg-slate-50 border-y border-slate-300">
-                              <td colSpan={7} className="px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 align-middle">
+                              <td colSpan={8} className="px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 align-middle">
                                 Grade: {grade}
                               </td>
                             </tr>
@@ -634,6 +643,9 @@ export const PackingListPage = () => {
                                 <Display value={row.qty} />
                               </td>
                               <td className="px-0.5 border-r border-slate-200 align-middle">
+                                <Cell value={row.box} onChange={(v) => updateRow(row.dispatchId, 'box', v)} />
+                              </td>
+                              <td className="px-0.5 border-r border-slate-200 align-middle">
                                 <Display value={row.weight} />
                               </td>
                               <td className="px-0.5 align-middle">
@@ -650,6 +662,9 @@ export const PackingListPage = () => {
                               </td>
                               <td className="px-1 border-r border-slate-300 text-center text-[11px] font-bold text-slate-700 align-middle">
                                 {gradePcs}
+                              </td>
+                              <td className="px-1 border-r border-slate-300 text-center text-[11px] font-bold text-slate-700 align-middle">
+                                {gradeBox || ''}
                               </td>
                               <td className="px-1 border-r border-slate-300 text-center text-[11px] font-bold font-mono text-slate-700 align-middle">
                                 {gradeWeight.toFixed(3)}
@@ -669,6 +684,9 @@ export const PackingListPage = () => {
                       <td className="px-1 border-r border-slate-400 text-center text-xs font-black text-slate-800 align-middle">
                         {cgPcs}
                       </td>
+                      <td className="px-1 border-r border-slate-400 text-center text-xs font-black text-slate-800 align-middle">
+                        {cgBox || ''}
+                      </td>
                       <td className="px-1 border-r border-slate-400 text-center text-xs font-black font-mono text-slate-800 align-middle">
                         {cgWeight.toFixed(3)}
                       </td>
@@ -684,6 +702,7 @@ export const PackingListPage = () => {
           <div className="border-t-2 border-brand-800 bg-brand-700 text-white flex justify-end gap-10 px-6 py-4 text-base font-bold">
             <span className="uppercase tracking-widest text-brand-100 text-sm self-center">Grand Total</span>
             <span className="text-[22px]">{grandTotalPcs} <span className="text-sm font-medium text-brand-100">pcs</span></span>
+            {grandTotalBox > 0 && <span className="text-[22px]">{grandTotalBox} <span className="text-sm font-medium text-brand-100">box</span></span>}
             <span className="text-[22px]">{grandTotalWeight.toFixed(3)} <span className="text-sm font-medium text-brand-100">kg</span></span>
           </div>
 

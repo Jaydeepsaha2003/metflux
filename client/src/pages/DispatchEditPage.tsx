@@ -20,6 +20,7 @@ type Item = {
   pcs: number;
   weightPerPc: number;
   totalWeight: number;
+  boxes: number | null;
   actualWeight: number | null;
   vehicleNo: string | null;
 };
@@ -39,6 +40,7 @@ export const DispatchEditPage = () => {
   const [dispatchDate, setDispatchDate] = useState('');
   const [vehicleNo, setVehicleNo] = useState('');
   const [pcs, setPcs] = useState(0);
+  const [boxes, setBoxes] = useState(0);
   const [actualWeight, setActualWeight] = useState(0);
   const [error, setError] = useState<{ message: string; details?: string[] } | null>(null);
 
@@ -48,6 +50,7 @@ export const DispatchEditPage = () => {
     setVehicleNo(item.vehicleNo ?? '');
     setPcs(item.pcs);
     setActualWeight(item.actualWeight ?? 0);
+    setBoxes(item.boxes ?? 0);
   }, [item]);
 
   const totalWeight = useMemo(
@@ -89,6 +92,7 @@ export const DispatchEditPage = () => {
       pcs,
       weightPerPc: item.weightPerPc,
       totalWeight,
+      boxes: boxes > 0 ? boxes : null,
       actualWeight: actualWeight > 0 ? actualWeight : null,
       vehicleNo: vehicleNo.trim() || null,
     });
@@ -142,6 +146,14 @@ export const DispatchEditPage = () => {
               </Field>
               <Field label="Total Weight">
                 <input className="input bg-slate-50" value={totalWeight ? totalWeight.toFixed(3) : ''} readOnly />
+              </Field>
+              <Field label="No. of Boxes">
+                <input
+                  className="input" type="number" inputMode="numeric" min={0}
+                  value={boxes || ''}
+                  onChange={(e) => setBoxes(parseInt(e.target.value || '0', 10) || 0)}
+                  placeholder="Optional"
+                />
               </Field>
               <Field label="Actual Weight">
                 <input

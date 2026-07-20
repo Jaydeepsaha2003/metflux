@@ -76,6 +76,7 @@ export const DispatchNewPage = () => {
   const [dispatchDate, setDispatchDate] = useState(todayISO());
   const [vehicleNo, setVehicleNo] = useState('');
   const [pcs, setPcs] = useState(0);
+  const [boxes, setBoxes] = useState(0);
   const [actualWeight, setActualWeight] = useState(0);
   const [error, setError] = useState<{ message: string; details?: string[] } | null>(null);
   const [createdId, setCreatedId] = useState<string | null>(null);
@@ -142,6 +143,7 @@ export const DispatchNewPage = () => {
       pcs,
       weightPerPc: selected.weightPerPc,
       totalWeight,
+      boxes: boxes > 0 ? boxes : null,
       actualWeight: actualWeight > 0 ? actualWeight : null,
       vehicleNo: vehicleNo.trim() || null,
     });
@@ -381,7 +383,7 @@ export const DispatchNewPage = () => {
               <Stat label="Ready to Dispatch" value={String(selected.readyPcs)} accent="primary" />
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               <Field label="Dispatch Date">
                 <input className="input" type="date" value={dispatchDate} onChange={(e) => setDispatchDate(e.target.value)} />
               </Field>
@@ -398,6 +400,14 @@ export const DispatchNewPage = () => {
               </Field>
               <Field label="Total Weight">
                 <input className="input bg-slate-50" value={totalWeight ? totalWeight.toFixed(3) : ''} readOnly />
+              </Field>
+              <Field label="No. of Boxes">
+                <input
+                  className="input" type="number" inputMode="numeric" min={0}
+                  value={boxes || ''}
+                  onChange={(e) => setBoxes(parseInt(e.target.value || '0', 10) || 0)}
+                  placeholder="Optional"
+                />
               </Field>
               <Field label="Actual Weight">
                 <input

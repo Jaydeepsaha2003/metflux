@@ -17,6 +17,7 @@ const createSchema = z.object({
   pcs: z.coerce.number().int().positive(),
   weightPerPc: z.coerce.number().nonnegative(),
   totalWeight: z.coerce.number().nonnegative(),
+  boxes: z.coerce.number().int().nonnegative().optional().nullable(),
   actualWeight: z.coerce.number().nonnegative().optional().nullable(),
   vehicleNo: z.string().trim().max(80).optional().nullable(),
   notes: z.string().max(2000).optional().nullable(),
@@ -27,6 +28,7 @@ const updateSchema = z.object({
   pcs: z.coerce.number().int().positive().optional(),
   weightPerPc: z.coerce.number().nonnegative().optional(),
   totalWeight: z.coerce.number().nonnegative().optional(),
+  boxes: z.coerce.number().int().nonnegative().optional().nullable(),
   actualWeight: z.coerce.number().nonnegative().optional().nullable(),
   vehicleNo: z.string().trim().max(80).optional().nullable(),
   notes: z.string().max(2000).optional().nullable(),
@@ -94,6 +96,7 @@ const flatten = (r) => {
     pcs: r.pcs,
     weightPerPc: r.weightPerPc,
     totalWeight: r.totalWeight,
+    boxes: r.boxes ?? null,
     actualWeight: r.actualWeight ?? null,
     vehicleNo: r.vehicleNo,
     notes: r.notes,
@@ -254,6 +257,7 @@ router.post('/', requirePermission('dispatch'), asyncHandler(async (req, res) =>
     pcs: data.pcs,
     weightPerPc: data.weightPerPc,
     totalWeight: data.totalWeight,
+    boxes: data.boxes ?? null,
     actualWeight: data.actualWeight ?? null,
     vehicleNo: data.vehicleNo ?? null,
     notes: data.notes ?? null,
@@ -298,6 +302,7 @@ router.patch('/:id', requirePermission('dispatch'), asyncHandler(async (req, res
   if (data.pcs          !== undefined) patch.pcs = data.pcs;
   if (data.weightPerPc  !== undefined) patch.weightPerPc = data.weightPerPc;
   if (data.totalWeight  !== undefined) patch.totalWeight = data.totalWeight;
+  if (data.boxes        !== undefined) patch.boxes = data.boxes ?? null;
   if (data.actualWeight !== undefined) patch.actualWeight = data.actualWeight ?? null;
   if (data.vehicleNo    !== undefined) patch.vehicleNo = data.vehicleNo ?? null;
   if (data.notes        !== undefined) patch.notes = data.notes ?? null;

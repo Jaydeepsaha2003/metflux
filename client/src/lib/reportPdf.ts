@@ -176,14 +176,14 @@ export type PackingListPdf = {
   brand?: string | null;
   meta: { customer: string; state: string; woNo: string; woDate: string; invoiceNo: string; invoiceDate: string };
   groups: Array<{
-    label: string; pcs: number; weight: number;
+    label: string; pcs: number; box: number; weight: number;
     grades: Array<{
       grade: string; multi: boolean;
-      rows: Array<{ poNo: string; poDate: string; description: string; qty: string; rate: string; weight: string; remarks: string }>;
-      subtotalPcs: number; subtotalWeight: number;
+      rows: Array<{ poNo: string; poDate: string; description: string; qty: string; box: string; rate: string; weight: string; remarks: string }>;
+      subtotalPcs: number; subtotalBox: number; subtotalWeight: number;
     }>;
   }>;
-  grandPcs: number; grandWeight: number;
+  grandPcs: number; grandBox: number; grandWeight: number;
   testedBy: string; approvedBy: string; dateStr: string;
 };
 
@@ -192,8 +192,8 @@ const buildPackingListDoc = (d: PackingListPdf) => {
   const brandMid = brandShadeHex(d.brand, 600);
   const brandLight = brandShadeHex(d.brand, 50);
 
-  // 7 columns (Rate removed): SR | PO NO | PO DATE | DESCRIPTION | QTY | TOTAL WT | REMARKS
-  const COLS = [20, 74, 62, '*', 42, 66, 66];
+  // 8 columns: SR | PO NO | PO DATE | DESCRIPTION | QTY | BOX | WT | REMARKS
+  const COLS = [20, 72, 58, '*', 40, 34, 60, 60];
   const th = (t: string, align: any = 'center') => ({ text: t, bold: true, fontSize: 9, color: WHITE, fillColor: brandMid, alignment: align, characterSpacing: 0.2 });
   // Item-row cell — Calibri-compatible (Carlito), regular weight (Carlito has no
   // separate semibold), size 10 so rows read a touch smaller than the headings.
@@ -210,25 +210,25 @@ const buildPackingListDoc = (d: PackingListPdf) => {
     const body: any[] = [];
     // Section header (spans all columns)
     body.push([
-      { text: g.label.toUpperCase(), colSpan: 7, bold: true, color: WHITE, fillColor: brandDark, fontSize: 10, characterSpacing: 1, margin: [2, 3, 2, 3] },
-      {}, {}, {}, {}, {}, {},
+      { text: g.label.toUpperCase(), colSpan: 8, bold: true, color: WHITE, fillColor: brandDark, fontSize: 10, characterSpacing: 1, margin: [2, 3, 2, 3] },
+      {}, {}, {}, {}, {}, {}, {},
     ]);
     // Column headers
-    body.push([th('SR'), th('PO NO'), th('PO DATE'), th('ITEM DESCRIPTION', 'left'), th('QTY (PCS)'), th('WT (KG)'), th('REMARKS', 'left')]);
+    body.push([th('SR'), th('PO NO'), th('PO DATE'), th('ITEM DESCRIPTION', 'left'), th('QTY (PCS)'), th('BOX'), th('WT (KG)'), th('REMARKS', 'left')]);
 
     let sr = 0;
     for (const grp of g.grades) {
       if (grp.multi) {
         body.push([
-          { text: `Grade: ${grp.grade}`, colSpan: 7, bold: true, fontSize: 8.5, color: GREY, fillColor: '#f1f5f9', margin: [2, 1.5, 2, 1.5] },
-          {}, {}, {}, {}, {}, {},
+          { text: `Grade: ${grp.grade}`, colSpan: 8, bold: true, fontSize: 8.5, color: GREY, fillColor: '#f1f5f9', margin: [2, 1.5, 2, 1.5] },
+          {}, {}, {}, {}, {}, {}, {},
         ]);
       }
       for (const r of grp.rows) {
         sr += 1;
         body.push([
           rc(String(sr)), rc(r.poNo), rc(r.poDate), rc(r.description, 'left'),
-          rc(r.qty), rc(r.weight, 'right'), rc(r.remarks, 'left'),
+          rc(r.qty), rc(r.box), rc(r.weight, 'right'), rc(r.remarks, 'left'),
         ]);
       }
       if (grp.multi) {
@@ -236,6 +236,7 @@ const buildPackingListDoc = (d: PackingListPdf) => {
           { text: `Grade ${grp.grade} Subtotal`, colSpan: 4, alignment: 'right', bold: true, fontSize: 9, color: GREY, fillColor: '#f8fafc', margin: [2, 1.5, 2, 1.5] },
           {}, {}, {},
           { text: String(grp.subtotalPcs), alignment: 'center', bold: true, fontSize: 10, fillColor: '#f8fafc' },
+          { text: grp.subtotalBox ? String(grp.subtotalBox) : '', alignment: 'center', bold: true, fontSize: 10, fillColor: '#f8fafc' },
           { text: grp.subtotalWeight.toFixed(3), alignment: 'right', bold: true, fontSize: 10, fillColor: '#f8fafc' },
           { text: '', fillColor: '#f8fafc' },
         ]);
@@ -246,6 +247,7 @@ const buildPackingListDoc = (d: PackingListPdf) => {
       { text: `${g.label} Total`, colSpan: 4, alignment: 'right', bold: true, fontSize: 10, color: INK, fillColor: '#e2e8f0', margin: [2, 3, 2, 3] },
       {}, {}, {},
       { text: String(g.pcs), alignment: 'center', bold: true, fontSize: 11, fillColor: '#e2e8f0' },
+      { text: g.box ? String(g.box) : '', alignment: 'center', bold: true, fontSize: 11, fillColor: '#e2e8f0' },
       { text: g.weight.toFixed(3), alignment: 'right', bold: true, fontSize: 11, fillColor: '#e2e8f0' },
       { text: '', fillColor: '#e2e8f0' },
     ]);
@@ -263,10 +265,11 @@ const buildPackingListDoc = (d: PackingListPdf) => {
   // Grand total strip
   content.push({
     table: {
-      widths: ['*', 'auto', 'auto'],
+      widths: d.grandBox > 0 ? ['*', 'auto', 'auto', 'auto'] : ['*', 'auto', 'auto'],
       body: [[
         { text: 'GRAND TOTAL', color: WHITE, bold: true, fontSize: 12, characterSpacing: 1, fillColor: brandDark, margin: [6, 7, 6, 7] },
         { text: `${d.grandPcs} pcs`, color: WHITE, bold: true, fontSize: 15, alignment: 'right', fillColor: brandDark, margin: [6, 6, 12, 6] },
+        ...(d.grandBox > 0 ? [{ text: `${d.grandBox} box`, color: WHITE, bold: true, fontSize: 15, alignment: 'right', fillColor: brandDark, margin: [6, 6, 12, 6] }] : []),
         { text: `${d.grandWeight.toFixed(3)} kg`, color: WHITE, bold: true, fontSize: 15, alignment: 'right', fillColor: brandDark, margin: [6, 6, 6, 6] },
       ]],
     },
