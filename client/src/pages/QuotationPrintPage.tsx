@@ -28,9 +28,10 @@ type QItem = {
   rateBasis: 'PER_KG' | 'PER_PCS' | null; rateValue: number | null;
   ratePerPc: number | null; totalAmount: number | null;
 };
+type BankDetails = { name?: string; branch?: string; accountName?: string; accountNumber?: string; ifsc?: string };
 type Quotation = {
   id: string; quotationNo: string; quotationDate: string; validUntil: string | null;
-  status: string; notes: string | null; terms: string | null;
+  status: string; notes: string | null; terms: string | null; bankDetails: BankDetails | null;
   customer: Customer; items: QItem[];
 };
 type CompanyMe = {
@@ -106,16 +107,18 @@ export const QuotationPrintPage = () => {
   const [terms, setTerms] = useState('');
   const [edited, setEdited] = useState(false);
 
-  // Apply saved defaults once loaded (unless the user has already edited a field).
+  // Prefer the quotation's own saved bank + terms; fall back to company defaults.
+  // (Unless the user has already edited a field on this screen.)
   useEffect(() => {
-    if (!qsettings || edited) return;
-    setBankName(qsettings.bankName || '');
-    setBankAcc(qsettings.bankAccountNumber || '');
-    setBankAcctName(qsettings.bankAccountName || '');
-    setBankIfsc(qsettings.bankIfsc || '');
-    setBankBranch(qsettings.bankBranch || '');
-    setTerms(qsettings.terms || '1. Subject to Jurisdiction only.');
-  }, [qsettings, edited]);
+    if (edited || !qt) return;
+    const b = qt.bankDetails ?? null;
+    setBankName(b?.name || qsettings?.bankName || '');
+    setBankAcc(b?.accountNumber || qsettings?.bankAccountNumber || '');
+    setBankAcctName(b?.accountName || qsettings?.bankAccountName || '');
+    setBankIfsc(b?.ifsc || qsettings?.bankIfsc || '');
+    setBankBranch(b?.branch || qsettings?.bankBranch || '');
+    setTerms(qt.terms || qsettings?.terms || '1. Subject to Jurisdiction only.');
+  }, [qt, qsettings, edited]);
 
   const totals = useMemo(() => {
     if (!qt) return { sub: 0, gstRate: 0, tax: 0, grand: 0, intra: false, totalQty: 0, unit: 'Pcs' };

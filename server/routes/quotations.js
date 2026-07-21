@@ -70,15 +70,33 @@ const deriveRate = ({ rateBasis, rateValue, weightPerPc, pcs, totalWeight }) => 
   };
 };
 
+const bankSchema = z.object({
+  name:          z.string().max(160).optional().default(''),
+  branch:        z.string().max(160).optional().default(''),
+  accountName:   z.string().max(160).optional().default(''),
+  accountNumber: z.string().max(60).optional().default(''),
+  ifsc:          z.string().max(40).optional().default(''),
+}).strip().optional().nullable();
+
 const createSchema = z.object({
   quotationNo: z.string().trim().min(1).max(60).optional(),
   customerId: z.string().min(1),
   quotationDate: z.coerce.date(),
   validUntil: z.coerce.date().optional().nullable(),
   notes: z.string().max(2000).optional().nullable(),
-  terms: z.string().max(4000).optional().nullable(),
+  terms: z.string().max(8000).optional().nullable(),
+  bankDetails: bankSchema,
   items: z.array(itemSchema).min(1, 'Add at least one item before submitting'),
 });
+
+// Serialise bank details for storage; null when nothing meaningful was set.
+const bankJson = (b) => {
+  if (!b) return null;
+  const has = [b.name, b.branch, b.accountName, b.accountNumber, b.ifsc].some((v) => (v ?? '').trim());
+  return has ? JSON.stringify(b) : null;
+};
+// Parse the stored bankDetails JSON back into an object for responses.
+const parseBank = (v) => { try { return v ? JSON.parse(v) : null; } catch { return null; } };
 
 /* ---------- number generation ---------- */
 
@@ -229,6 +247,7 @@ router.post('/', requirePermission('add_po'), asyncHandler(async (req, res) => {
       validUntil: data.validUntil ?? null,
       notes: data.notes ?? null,
       terms: data.terms ?? null,
+      bankDetails: bankJson(data.bankDetails),
       status: 'OPEN',
       createdById: req.auth.userId,
     });
@@ -272,7 +291,7 @@ router.post('/', requirePermission('add_po'), asyncHandler(async (req, res) => {
   });
 
   await logAudit(req, { entity: 'Quotation', entityId: result.id, action: 'CREATE', summary: `Quotation ${result.quotationNo} · ${customer.name} · ${data.items.length} item(s)` });
-  res.status(201).json(result);
+  res.status(201).json({ ...result, bankDetails: parseBank(result.bankDetails) });
 }));
 
 /* ---------- GET /quotations/:id — detail (for edit + print) ---------- */
@@ -284,7 +303,7 @@ router.get('/:id', requirePermission('view_po'), asyncHandler(async (req, res) =
   if (!quotation) throw new AppError('Quotation not found', 404, 'NOT_FOUND');
   const customer = await qOne('SELECT * FROM `Customer` WHERE `id` = ?', [quotation.customerId]);
   const items = await loadItems(quotation.id);
-  res.json({ ...quotation, customer, items });
+  res.json({ ...quotation, bankDetails: parseBank(quotation.bankDetails), customer, items });
 }));
 
 /* ---------- PUT /quotations/:id — full edit (header + items) ---------- */
@@ -310,6 +329,7 @@ router.put('/:id', requirePermission('add_po'), asyncHandler(async (req, res) =>
       validUntil: data.validUntil ?? null,
       notes: data.notes ?? null,
       terms: data.terms ?? null,
+      bankDetails: bankJson(data.bankDetails),
     });
     await tx.q('DELETE FROM `QuotationItem` WHERE `quotationId` = ?', [quotation.id]);
     let seq = 0;
@@ -338,7 +358,7 @@ router.put('/:id', requirePermission('add_po'), asyncHandler(async (req, res) =>
 
   await logAudit(req, { entity: 'Quotation', entityId: quotation.id, action: 'UPDATE', summary: `Edited quotation ${quotation.quotationNo} · ${customer.name} · ${data.items.length} item(s)` });
   const items = await loadItems(quotation.id);
-  res.json({ ...result, customer, items });
+  res.json({ ...result, bankDetails: parseBank(result.bankDetails), customer, items });
 }));
 
 /* ---------- PATCH /quotations/:id — edit header (dates / notes / terms) ---------- */

@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Save, Loader2, Trash2, Copy, FileText, Calendar, Hash, User2, Plus } from 'lucide-react';
+import { Save, Loader2, Trash2, Copy, FileText, Calendar, Hash, User2, Plus, Landmark } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { SearchableSelect } from '@/components/SearchableSelect';
@@ -119,6 +119,15 @@ export const QuotationNewPage = () => {
   const [validUntil, setValidUntil] = useState('');
   const [notes, setNotes] = useState('');
 
+  /* ----- per-quotation bank details + terms (prefilled from company defaults) ----- */
+  const [bankName, setBankName] = useState('');
+  const [bankBranch, setBankBranch] = useState('');
+  const [bankAccountName, setBankAccountName] = useState('');
+  const [bankAccountNumber, setBankAccountNumber] = useState('');
+  const [bankIfsc, setBankIfsc] = useState('');
+  const [terms, setTerms] = useState('');
+  const [bankTermsReady, setBankTermsReady] = useState(false); // guard one-time prefill
+
   /* ----- entry ----- */
   const [coreType, setCoreType] = useState<CoreType | 'MANUAL' | ''>('');
   const [items, setItems] = useState<QItem[]>([]);
@@ -159,6 +168,11 @@ export const QuotationNewPage = () => {
     queryKey: ['flux-grades-grouped', 'NANO'],
     queryFn: () => api<{ grades: FluxGroup[] }>('/flux-grades/grouped?coreType=NANO'),
   });
+  // Company-wide bank + terms defaults (Settings → Quotation Terms).
+  const { data: qsettings } = useQuery({
+    queryKey: ['company-settings', 'quotation'],
+    queryFn: () => api<{ bankName: string; bankBranch: string; bankAccountName: string; bankAccountNumber: string; bankIfsc: string; terms: string }>('/company-settings/quotation'),
+  });
 
   /* ----- edit mode: load the existing quotation once and prefill ----- */
   const { data: existing } = useQuery({
@@ -192,6 +206,25 @@ export const QuotationNewPage = () => {
     setPrefilled(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existing, prefilled]);
+
+  // Prefill bank + terms once: existing quotation's own values when editing
+  // (blanks fall back to company defaults), else the company defaults.
+  useEffect(() => {
+    if (bankTermsReady) return;
+    if (isEdit && !existing) return;
+    if (!isEdit && !qsettings) return;
+    const s = qsettings;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const b = (existing?.bankDetails ?? null) as any;
+    setBankName(b?.name || s?.bankName || '');
+    setBankBranch(b?.branch || s?.bankBranch || '');
+    setBankAccountName(b?.accountName || s?.bankAccountName || '');
+    setBankAccountNumber(b?.accountNumber || s?.bankAccountNumber || '');
+    setBankIfsc(b?.ifsc || s?.bankIfsc || '');
+    setTerms((existing?.terms ?? '') || s?.terms || '');
+    setBankTermsReady(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qsettings, existing, isEdit, bankTermsReady]);
 
   /* Auto-suggest the next quotation number when the date changes (only while the
      field is empty or holds a previous auto-suggestion the user hasn't edited).
@@ -228,6 +261,11 @@ export const QuotationNewPage = () => {
           quotationDate,
           validUntil: validUntil || null,
           notes: notes.trim() || null,
+          terms: terms.trim() || null,
+          bankDetails: {
+            name: bankName.trim(), branch: bankBranch.trim(), accountName: bankAccountName.trim(),
+            accountNumber: bankAccountNumber.trim(), ifsc: bankIfsc.trim(),
+          },
           items: items.map((it) => ({ ...it, _dbId: undefined, _locked: undefined })),
         }),
       }),
@@ -419,11 +457,39 @@ export const QuotationNewPage = () => {
         )}
       </section>
 
+      {/* ============ BANK DETAILS & TERMS (per quotation) ============ */}
+      <section className="card overflow-hidden">
+        <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50/70 px-4 py-2.5">
+          <span className="grid h-7 w-7 place-items-center rounded-lg bg-brand-50 text-brand-600"><Landmark className="h-4 w-4" /></span>
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900">Bank Details &amp; Terms</h2>
+            <p className="text-[11px] text-slate-500">Pre-filled from Settings → Quotation Terms. Edit here to override for <span className="font-medium">this quotation only</span>.</p>
+          </div>
+        </div>
+        <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
+          <label className="block"><span className="mb-1 block text-xs font-medium text-slate-600">Bank Name</span>
+            <input className={cellInput} value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="ICICI BANK" /></label>
+          <label className="block"><span className="mb-1 block text-xs font-medium text-slate-600">Branch</span>
+            <input className={cellInput} value={bankBranch} onChange={(e) => setBankBranch(e.target.value)} placeholder="POR, VADODARA" /></label>
+          <label className="block"><span className="mb-1 block text-xs font-medium text-slate-600">Account Name</span>
+            <input className={cellInput} value={bankAccountName} onChange={(e) => setBankAccountName(e.target.value)} placeholder="TOROFLUX INDUSTRIES" /></label>
+          <label className="block"><span className="mb-1 block text-xs font-medium text-slate-600">Account Number</span>
+            <input className={cellInput} value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} placeholder="401305500230" /></label>
+          <label className="block"><span className="mb-1 block text-xs font-medium text-slate-600">IFSC Code</span>
+            <input className={cellInput} value={bankIfsc} onChange={(e) => setBankIfsc(e.target.value)} placeholder="ICIC0004013" /></label>
+        </div>
+        <div className="px-4 pb-4">
+          <span className="mb-1 block text-xs font-medium text-slate-600">Terms &amp; Conditions</span>
+          <textarea className="w-full rounded-md border border-slate-300 p-2.5 text-sm leading-relaxed outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" rows={8}
+            value={terms} onChange={(e) => setTerms(e.target.value)} placeholder="Payment Terms&#10;- Credit Facility: 30 DAYS AGAINST PDC&#10;..." />
+        </div>
+      </section>
+
       {/* ============ NOTES + SUBMIT ============ */}
       <section className="card p-4 space-y-3">
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-slate-600">Notes <span className="text-slate-400">(optional — shown on the quotation)</span></span>
-          <textarea className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20" rows={2}
+          <span className="mb-1 block text-xs font-medium text-slate-600">Notes <span className="text-slate-400">(optional — short line shown above Terms)</span></span>
+          <textarea className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" rows={2}
             value={notes} onChange={(e) => setNotes(e.target.value)} />
         </label>
         {error && <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
