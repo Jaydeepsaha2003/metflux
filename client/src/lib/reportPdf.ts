@@ -423,7 +423,7 @@ const buildQuotationDoc = (d: QuotationPdf) => {
   const rightStack: any[] = [];
   // Use `width` (not `fit`) so the row reserves the logo's ACTUAL scaled height —
   // `fit` reserves the full box height and leaves an empty strip under a wide logo.
-  if (c.logoUrl) rightStack.push({ image: c.logoUrl, width: 205, alignment: 'right', margin: [0, 0, 0, 3] });
+  if (c.logoUrl) rightStack.push({ image: c.logoUrl, width: 190, alignment: 'right', margin: [0, 0, 0, 4] });
   // Compact, bold, single-line banner — auto width, right-aligned.
   rightStack.push({
     columns: [
@@ -435,7 +435,7 @@ const buildQuotationDoc = (d: QuotationPdf) => {
   });
 
   const content: any[] = [
-    { columns: [{ width: '*', stack: infoLines, margin: [0, 4, 0, 0] }, { width: 220, stack: rightStack }], columnGap: 16, margin: [0, 0, 0, 6] },
+    { columns: [{ width: '*', stack: infoLines, margin: [0, 2, 0, 0] }, { width: 200, stack: rightStack }], columnGap: 14, margin: [0, 0, 0, 4] },
     rule(brandDark),
   ];
 

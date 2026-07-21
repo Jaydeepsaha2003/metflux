@@ -241,7 +241,7 @@ export const QuotationPrintPage = () => {
              className="bg-white text-slate-900 min-w-[760px] rounded-xl overflow-hidden print:min-w-0 print:rounded-none print:overflow-visible">
 
           {/* Company letterhead — company text left; logo + SALES QUOTATION stacked top-right */}
-          <div className="flex items-start justify-between gap-6 px-6 pt-5 pb-4 border-b-4 border-brand-600">
+          <div className="flex items-start justify-between gap-6 px-6 pt-4 pb-3 border-b-4 border-brand-600">
             <div className="min-w-0">
               <div className="text-2xl font-black uppercase tracking-wide leading-tight text-brand-800">{company?.name ?? 'Company Name'}</div>
               {company?.address && <div className="text-[11px] font-semibold text-slate-700 mt-1 max-w-md leading-snug whitespace-pre-line">{company.address}</div>}
