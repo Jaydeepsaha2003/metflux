@@ -423,7 +423,7 @@ const buildQuotationDoc = (d: QuotationPdf) => {
   const rightStack: any[] = [];
   // Use `width` (not `fit`) so the row reserves the logo's ACTUAL scaled height —
   // `fit` reserves the full box height and leaves an empty strip under a wide logo.
-  if (c.logoUrl) rightStack.push({ image: c.logoUrl, width: 120, alignment: 'right', margin: [0, 0, 0, 0] });
+  if (c.logoUrl) rightStack.push({ image: c.logoUrl, width: 130, alignment: 'right', margin: [0, 0, 0, 0] });
 // Compact, bold, single-line banner — auto width, right-aligned.
 rightStack.push({
   columns: [
@@ -432,7 +432,6 @@ rightStack.push({
       { text: 'SALES QUOTATION', color: WHITE, bold: true, fontSize: 12, characterSpacing: 1.2, fillColor: brandDark, margin: [12, 6, 12, 6], noWrap: true, font: MONT },
     ]] }, layout: noBorders },
   ],
-  margin: [0, -4, 0, 0],
 });
 
   const content: any[] = [
