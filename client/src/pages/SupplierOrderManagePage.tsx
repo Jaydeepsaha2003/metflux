@@ -130,7 +130,7 @@ export const SupplierOrderManagePage = () => {
           <div className="text-xs text-slate-500">{data ? `${data.total} order${data.total === 1 ? '' : 's'}` : ''}</div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto hidden md:block">
           <table className="w-full text-sm whitespace-nowrap">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
@@ -208,6 +208,49 @@ export const SupplierOrderManagePage = () => {
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile cards — < md */}
+        <div className="md:hidden divide-y divide-slate-100">
+          {isLoading && <div className="px-4 py-10 text-center text-slate-400"><Loader2 className="h-5 w-5 animate-spin inline" /></div>}
+          {!isLoading && !data?.items.length && (
+            <div className="px-4 py-10 text-center text-sm text-slate-400">
+              No supplier POs yet. <Link to="/supplier-po/new" className="text-brand-700 hover:underline">Create one →</Link>
+            </div>
+          )}
+          {data?.items.map((po) => {
+            const total = po.items.reduce((s, it) => s + it.amount, 0);
+            return (
+              <div key={po.id} className="px-4 py-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-mono text-xs font-semibold text-brand-700">{po.poNumber}</div>
+                    <div className="mt-0.5 text-sm font-medium text-slate-900 truncate">{po.supplier.name}</div>
+                  </div>
+                  <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium', statusBadge[po.status])}>{po.status}</span>
+                </div>
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
+                  <span>Order: {fmt(po.orderDate)}</span>
+                  <span>Expected: {fmt(po.expectedDate)}</span>
+                  <span>{po.items.length} item{po.items.length === 1 ? '' : 's'}</span>
+                  <span className="font-mono font-semibold text-slate-700">₹ {total.toFixed(2)}</span>
+                </div>
+                <div className="mt-2 flex items-center justify-end gap-2 border-t border-slate-100 pt-2">
+                  <Link to={`/supplier-po/print/${po.id}`} className="btn-ghost border border-slate-300 text-slate-700 text-xs" title="Print / PDF"><FileText className="h-4 w-4" /> PDF</Link>
+                  <Link to={`/supplier-po/manage/${po.id}`} className="btn-ghost border border-slate-300 text-brand-700 text-xs" title="Edit"><Pencil className="h-4 w-4" /> Edit</Link>
+                  <button
+                    onClick={async () => {
+                      const ok = await confirm({ title: 'Delete supplier PO?', message: <>Delete PO <strong>{po.poNumber}</strong>? This cannot be undone.</>, tone: 'danger', confirmLabel: 'Delete' });
+                      if (ok) remove.mutate(po.id);
+                    }}
+                    className="btn-ghost border border-slate-300 text-red-600 text-xs" title="Delete"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
       {confirmDialog}
