@@ -6,9 +6,10 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Warehouse, Plus, Loader2, PackageOpen, Truck, X, FileText, CheckCircle2,
-  Pencil, Trash2, PackagePlus, Check, ChevronRight, ChevronDown,
+  Pencil, Trash2, PackagePlus, Check, ChevronRight, ChevronDown, Search, Download,
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import { downloadXlsx, todayStamp } from '@/lib/excel';
 import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
 import { toroidalCalc, rectangularCalc, nanoCalc, round3, compositeRuleFromMaterial, compositeCalc } from '@/lib/calc';
@@ -70,6 +71,7 @@ export const WarehousePage = () => {
   const [openingOpen, setOpeningOpen] = useState(false);
   const [storeErr, setStoreErr] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState('');
   const toggleExpand = (key: string) => setExpanded((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
 
   const { data: stores } = useQuery({ queryKey: ['warehouses'], queryFn: () => api<{ items: Store[] }>('/warehouses') });
@@ -95,6 +97,23 @@ export const WarehousePage = () => {
   });
 
   const selStore = (stores?.items ?? []).find((s) => s.id === warehouseId);
+
+  // Search across store / type / grade / material / measure.
+  const stockRows = (() => {
+    const q = search.trim().toLowerCase();
+    const rows = stock?.items ?? [];
+    if (!q) return rows;
+    return rows.filter((s) => [s.warehouseName, coreLabel[s.coreType] ?? s.coreType, s.grade, s.material, s.measure]
+      .some((v) => String(v ?? '').toLowerCase().includes(q)));
+  })();
+  const exportStock = () => {
+    if (!stockRows.length) return;
+    downloadXlsx(`store-stock-${todayStamp()}`, 'Stock', stockRows.map((s) => ({
+      Store: s.warehouseName, Type: coreLabel[s.coreType] ?? s.coreType, Grade: s.grade,
+      Material: s.material, Measure: s.measure, 'Wt / pc (kg)': s.weightPerPc,
+      'On hand (pcs)': s.onHand, 'Weight (kg)': s.onHandWeight,
+    })));
+  };
   const askDelete = async (s: Store) => {
     const ok = await confirm({
       title: 'Delete store?',
@@ -171,19 +190,30 @@ export const WarehousePage = () => {
 
       {/* Stock on hand */}
       <section className="card overflow-hidden">
-        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-          <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+        <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2 shrink-0">
             <PackageOpen className="h-4 w-4 text-slate-500" /> Stock on hand
           </h2>
-          <button onClick={() => setOpeningOpen(true)} className="btn-ghost border border-slate-300 text-brand-700 hover:bg-brand-50 text-sm">
-            <PackagePlus className="h-4 w-4" /> Opening Stock
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[180px]">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input className="input h-9 w-full pl-8 text-sm" placeholder="Search grade, material, measure…" value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
+            <button onClick={exportStock} disabled={!stockRows.length} className="btn-ghost border border-slate-300 text-emerald-700 hover:bg-emerald-50 text-sm disabled:opacity-50">
+              <Download className="h-4 w-4" /> Excel
+            </button>
+            <button onClick={() => setOpeningOpen(true)} className="btn-ghost border border-slate-300 text-brand-700 hover:bg-brand-50 text-sm">
+              <PackagePlus className="h-4 w-4" /> Opening Stock
+            </button>
+          </div>
         </div>
         {isLoading ? (
           <div className="py-12 text-center text-slate-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
-        ) : !stock?.items.length ? (
+        ) : !stockRows.length ? (
           <div className="py-12 text-center text-sm text-slate-400">
-            No stock in store. Send overproduction here from the <Link to="/dispatch/new" className="text-brand-700 underline">New Dispatch</Link> page.
+            {search.trim()
+              ? 'No stock matches your search.'
+              : <>No stock in store. Send overproduction here from the <Link to="/dispatch/new" className="text-brand-700 underline">New Dispatch</Link> page.</>}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -203,7 +233,7 @@ export const WarehousePage = () => {
                 </tr>
               </thead>
               <tbody>
-                {stock.items.map((s) => {
+                {stockRows.map((s) => {
                   const key = `${s.warehouseId}:${s.specKey}`;
                   const open = expanded.has(key);
                   return (
