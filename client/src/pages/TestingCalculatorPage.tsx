@@ -11,7 +11,7 @@ import {
 import html2pdf from 'html2pdf.js';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
-import { fluxTestCalc, rectangularCalc, rectangularFluxTestCalc, nanoTestCalc } from '@/lib/calc';
+import { fluxTestCalc, rectangularCalc, rectangularFluxTestCalc, nanoTestCalc, toroidalCalc, nanoCalc, round3 } from '@/lib/calc';
 import { todayStamp } from '@/lib/excel';
 
 type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE';
@@ -59,6 +59,17 @@ const rectGeom = (it: Item) =>
 const measureOf = (it: Item) => it.coreType === 'RECTANGULAR'
   ? rectGeom(it).measure
   : `${+it.id} x ${+it.od} x ${+it.ht}`;
+
+// Weight per piece (kg) from the dimensions — same math as the New Sales Order form.
+const weightOf = (it: Item): number => {
+  if (!numOk(it)) return 0;
+  if (it.coreType === 'RECTANGULAR') return rectGeom(it).weightPerPc;
+  if (it.coreType === 'NANO' || it.coreType === 'COMPOSITE') {
+    const c = nanoCalc({ id: +it.id, od: +it.od, ht: +it.ht, pcs: 0 });
+    return round3(c.coreWeight + c.caseWeight);
+  }
+  return toroidalCalc({ id: +it.id, od: +it.od, ht: +it.ht, pcs: 0 }).weightPerPc;
+};
 
 /* Parse a toroidal measure "180 x 110 x 200" → { id, od, ht }. */
 const parseToroidal = (measure: string) => {
@@ -142,12 +153,13 @@ export const TestingCalculatorPage = () => {
   };
 
   // Unified export columns — a Core + Measure pair keeps mixed rows aligned.
-  const fixedCols = ['CORE', 'MEASURE', 'TURNS', 'GRADE'];
+  const fixedCols = ['CORE', 'MEASURE', 'TURNS', 'GRADE', 'WT/PC (KG)'];
   const dimsOf = (it: Item): (string | number)[] => [
     coreLabel[it.coreType],
     measureOf(it),
     +it.turns,
     it.grade || '—',
+    weightOf(it) || '—',
   ];
 
   const addFromPo = (po: PoSummaryItem) => {
@@ -374,6 +386,13 @@ export const TestingCalculatorPage = () => {
                 )}
               </div>
 
+              {/* Weight per piece */}
+              {numOk(it) && weightOf(it) > 0 && (
+                <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
+                  Weight / pc: <span className="tabular-nums">{weightOf(it).toFixed(3)} kg</span>
+                </div>
+              )}
+
               {/* Live preview */}
               {numOk(it) && it.fluxes.length > 0 && (
                 <div className="mt-3 overflow-x-auto rounded-lg border border-slate-100">
@@ -446,7 +465,7 @@ export const TestingCalculatorPage = () => {
                   <table className="w-full border-collapse text-[13px]">
                     <thead>
                       <tr className="bg-slate-100">
-                        {['Core', 'Measure', 'Turns', 'Grade', 'Flux (T)', 'Volt (V)', 'V (mV)', 'Ie max (A)', 'Ie max (mA)'].map((h) => (
+                        {['Core', 'Measure', 'Turns', 'Grade', 'Wt/pc (kg)', 'Flux (T)', 'Volt (V)', 'V (mV)', 'Ie max (A)', 'Ie max (mA)'].map((h) => (
                           <th key={h} className="border border-slate-500 px-2 py-1.5 text-center text-[12px] font-bold uppercase tracking-wide">{h}</th>
                         ))}
                       </tr>
@@ -461,6 +480,7 @@ export const TestingCalculatorPage = () => {
                               <td rowSpan={n} className="border border-slate-500 px-2 py-1.5 text-center align-middle font-semibold">{measure}</td>
                               <td rowSpan={n} className="border border-slate-500 px-2 py-1.5 text-center align-middle tabular-nums">{it.turns}</td>
                               <td rowSpan={n} className="border border-slate-500 px-2 py-1.5 text-center align-middle font-medium">{it.grade}</td>
+                              <td rowSpan={n} className="border border-slate-500 px-2 py-1.5 text-center align-middle tabular-nums font-semibold">{weightOf(it) ? weightOf(it).toFixed(3) : '—'}</td>
                             </>}
                             <td className="border border-slate-500 px-2 py-1.5 text-center tabular-nums">{f.toFixed(2)}</td>
                             <td className="border border-slate-500 px-2 py-1.5 text-right tabular-nums">{c ? c.volt.toFixed(3) : '—'}</td>
