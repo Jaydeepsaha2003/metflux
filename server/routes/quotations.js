@@ -322,8 +322,19 @@ router.put('/:id', requirePermission('add_po'), asyncHandler(async (req, res) =>
   const customer = await qOne('SELECT * FROM `Customer` WHERE `id` = ? AND `companyId` = ?', [data.customerId, req.tenant.companyId]);
   if (!customer) throw new AppError('Customer not found', 400, 'BAD_CUSTOMER');
 
+  // Allow renaming the quotation number, but keep it unique within the company.
+  const quotationNo = (data.quotationNo ?? '').trim() || quotation.quotationNo;
+  if (quotationNo !== quotation.quotationNo) {
+    const clash = await qOne(
+      'SELECT `id` FROM `Quotation` WHERE `companyId` = ? AND `quotationNo` = ? AND `id` <> ?',
+      [req.tenant.companyId, quotationNo, quotation.id]
+    );
+    if (clash) throw new AppError('That quotation number is already in use', 400, 'DUPLICATE_NO');
+  }
+
   const result = await txn(async (tx) => {
     await tx.update('Quotation', quotation.id, {
+      quotationNo,
       customerId: customer.id,
       quotationDate: data.quotationDate,
       validUntil: data.validUntil ?? null,
@@ -356,7 +367,7 @@ router.put('/:id', requirePermission('add_po'), asyncHandler(async (req, res) =>
     return fresh;
   });
 
-  await logAudit(req, { entity: 'Quotation', entityId: quotation.id, action: 'UPDATE', summary: `Edited quotation ${quotation.quotationNo} · ${customer.name} · ${data.items.length} item(s)` });
+  await logAudit(req, { entity: 'Quotation', entityId: quotation.id, action: 'UPDATE', summary: `Edited quotation ${quotationNo} · ${customer.name} · ${data.items.length} item(s)` });
   const items = await loadItems(quotation.id);
   res.json({ ...result, bankDetails: parseBank(result.bankDetails), customer, items });
 }));

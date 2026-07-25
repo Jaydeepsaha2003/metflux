@@ -3,10 +3,10 @@
 // by POOrderNewPage — but saves a standalone Quotation document (own MEI/SQ
 // number, PDF print). A quotation touches nothing downstream until it is
 // converted into a Sales Order from the Quotations list.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Save, Loader2, Trash2, Copy, FileText, Calendar, Hash, User2, Plus, Landmark } from 'lucide-react';
+import { Save, Loader2, Trash2, Copy, Pencil, FileText, Calendar, Hash, User2, Plus, Landmark } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { SearchableSelect } from '@/components/SearchableSelect';
@@ -141,11 +141,33 @@ export const QuotationNewPage = () => {
     setPrefill({ coreType: it.coreType, grade: it.grade, material: it.material, rateBasis: it.rateBasis ?? 'PER_KG' });
   };
 
-  const addItem = (item: Item) => setItems((prev) => [...prev, { ...item, unit: 'Pcs', hsnCode: '' }]);
+  /* Extras (HSN/unit) live outside the core-type sub-forms, so when a row is
+     pulled back for editing we stash them and re-apply on the replacing add. */
+  const pendingExtras = useRef<{ hsnCode?: string; unit?: string } | null>(null);
+  const addItem = (item: Item) => setItems((prev) => {
+    const ex = pendingExtras.current;
+    pendingExtras.current = null;
+    return [...prev, { ...item, unit: ex?.unit ?? 'Pcs', hsnCode: ex?.hsnCode ?? '' }];
+  });
   const addManual = (item: QItem) => setItems((prev) => [...prev, item]);
   const patchItem = (idx: number, patch: Partial<QItem>) =>
     setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
   const removeItem = (idx: number) => setItems((prev) => prev.filter((_, i) => i !== idx));
+
+  /* Edit a calculated line: pull the whole row back into its core-type entry
+     form, then drop it from the list — re-adding replaces it (same as the SO
+     form). Custom/manual lines have no sub-form, so they stay copy/remove only. */
+  const [editSeed, setEditSeed] = useState<{ item: Item; nonce: number } | null>(null);
+  const editNonce = useRef(0);
+  const editItem = (idx: number) => {
+    const it = items[idx];
+    if (!it) return;
+    setCoreType(it.coreType);
+    editNonce.current += 1;
+    pendingExtras.current = { hsnCode: it.hsnCode, unit: it.unit };
+    setEditSeed({ item: it, nonce: editNonce.current });
+    setItems((prev) => prev.filter((_, i) => i !== idx));
+  };
 
   /* ----- dropdown data (same sources the SO form uses) ----- */
   const { data: customersResp } = useQuery({
@@ -350,7 +372,7 @@ export const QuotationNewPage = () => {
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'TOROIDAL'))}
             fluxGrades={fluxResp?.grades ?? []}
             onAdd={addItem} prefill={prefill} onPrefillConsumed={() => setPrefill(null)}
-            edit={null} onEditConsumed={() => {}}
+            edit={editSeed?.item.coreType === 'TOROIDAL' ? editSeed : null} onEditConsumed={() => setEditSeed(null)}
           />
         )}
         {coreType === 'RECTANGULAR' && (
@@ -358,7 +380,7 @@ export const QuotationNewPage = () => {
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'RECTANGULAR'))}
             fluxGrades={fluxRespRect?.grades ?? []}
             onAdd={addItem} prefill={prefill} onPrefillConsumed={() => setPrefill(null)}
-            edit={null} onEditConsumed={() => {}}
+            edit={editSeed?.item.coreType === 'RECTANGULAR' ? editSeed : null} onEditConsumed={() => setEditSeed(null)}
           />
         )}
         {coreType === 'NANO' && (
@@ -366,7 +388,7 @@ export const QuotationNewPage = () => {
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'NANO'))}
             fluxGrades={fluxRespNano?.grades ?? []}
             onAdd={addItem} prefill={prefill} onPrefillConsumed={() => setPrefill(null)}
-            edit={null} onEditConsumed={() => {}}
+            edit={editSeed?.item.coreType === 'NANO' ? editSeed : null} onEditConsumed={() => setEditSeed(null)}
           />
         )}
         {coreType === 'COMPOSITE' && (
@@ -375,7 +397,7 @@ export const QuotationNewPage = () => {
             typeGrades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'COMPOSITE'))}
             fluxGrades={fluxRespNano?.grades ?? []}
             onAdd={addItem} prefill={prefill} onPrefillConsumed={() => setPrefill(null)}
-            edit={null} onEditConsumed={() => {}}
+            edit={editSeed?.item.coreType === 'COMPOSITE' ? editSeed : null} onEditConsumed={() => setEditSeed(null)}
           />
         )}
         {coreType === 'MANUAL' && <ManualLineForm onAdd={addManual} />}
@@ -445,6 +467,9 @@ export const QuotationNewPage = () => {
                     <td className="px-2 py-2 text-right font-semibold tabular-nums">{it.totalAmount != null ? `₹${money0(it.totalAmount)}` : '—'}</td>
                     <td className="px-2 py-2">
                       <div className="flex items-center gap-1">
+                        {(it.grade || it.measure) && (
+                          <button type="button" onClick={() => editItem(idx)} title="Edit this item" className="rounded p-1 text-slate-400 hover:bg-brand-50 hover:text-brand-700"><Pencil className="h-4 w-4" /></button>
+                        )}
                         <button type="button" onClick={() => copyToForm(it)} title="Copy grade/material to form" className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><Copy className="h-4 w-4" /></button>
                         <button type="button" onClick={() => removeItem(idx)} title="Remove" className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                       </div>
