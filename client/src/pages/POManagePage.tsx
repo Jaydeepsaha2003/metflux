@@ -141,51 +141,58 @@ export const POManagePage = () => {
   });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 sm:space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Modify Sales Order</h1>
+        <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl">
+          <FileText className="h-6 w-6 text-brand-600" />
+          Modify Sales Order
+        </h1>
         <Link to="/po/new" className="btn-primary w-full sm:w-auto">
           <FileText className="h-4 w-4" /> New Sales Order
         </Link>
       </div>
 
       {/* Filters */}
-      <div className="card p-3 flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[240px]">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input
-            className="input pl-9"
-            placeholder="Search SO #, customer, measure, grade or material"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <div className="inline-flex rounded-lg bg-slate-100 p-0.5 text-sm">
-          {(['ACTIVE', 'CANCELLED', 'ALL'] as const).map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setStatus(s)}
-              className={cn(
-                'rounded-md px-3 py-1.5 font-medium transition',
-                status === s ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-              )}
-            >
-              {s === 'ACTIVE' ? 'Active' : s === 'CANCELLED' ? 'Cancelled' : 'All'}
-            </button>
-          ))}
-        </div>
-        <div className="text-xs text-slate-500 ml-auto">
-          {data ? `${data.total} item${data.total === 1 ? '' : 's'}` : ''}
+      <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              className="input pl-9 w-full"
+              placeholder="Search SO #, customer, measure, grade or material"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3 sm:justify-end">
+            <div className="inline-flex rounded-lg bg-slate-100 p-0.5 text-sm">
+              {(['ACTIVE', 'CANCELLED', 'ALL'] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setStatus(s)}
+                  className={cn(
+                    'rounded-md px-3 py-1.5 font-medium transition',
+                    status === s ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                  )}
+                >
+                  {s === 'ACTIVE' ? 'Active' : s === 'CANCELLED' ? 'Cancelled' : 'All'}
+                </button>
+              ))}
+            </div>
+            <div className="text-xs text-slate-500 whitespace-nowrap">
+              {data ? `${data.total} item${data.total === 1 ? '' : 's'}` : ''}
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Loading / empty states */}
       {isLoading && (
-        <div className="card p-10 text-center text-slate-400">Loading…</div>
+        <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-400">Loading…</div>
       )}
       {!isLoading && data?.items.length === 0 && (
-        <div className="card p-10 text-center text-slate-400">
+        <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-400">
           No sales-order items found.{' '}
           <Link to="/po/new" className="text-brand-700 hover:text-brand-800 font-medium">
             Create the first one →
@@ -195,7 +202,7 @@ export const POManagePage = () => {
 
       {/* Desktop table — md+ */}
       {!isLoading && data && data.items.length > 0 && (
-        <div className="card overflow-hidden hidden md:block">
+        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden hidden md:block">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-left text-xs tracking-wide text-slate-500">
@@ -349,11 +356,11 @@ export const POManagePage = () => {
           {groups.map((group) => {
             const isOpen = expandedPos.has(group.poOrderId);
             return (
-              <div key={group.poOrderId} className="card overflow-hidden">
+              <div key={group.poOrderId} className="rounded-xl border border-slate-200 bg-white overflow-hidden">
                 <button
                   type="button"
                   onClick={() => togglePoExpand(group.poOrderId)}
-                  className="w-full px-3 py-3 text-left"
+                  className="w-full px-4 py-3 text-left"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
@@ -376,7 +383,7 @@ export const POManagePage = () => {
 
                 {isOpen && (
                   <div className="border-t border-slate-200">
-                    <div className="flex items-center justify-between px-3 py-2 bg-slate-50">
+                    <div className="flex items-center justify-between px-4 py-2 bg-slate-50">
                       <span className="text-xs text-slate-500 font-medium">{group.totalPcs} pcs · {group.totalWeight.toFixed(3)} kg</span>
                       <Link
                         to={`/po/new/${group.poOrderId}`}
@@ -388,7 +395,7 @@ export const POManagePage = () => {
                     </div>
                     {group.items.map((it) => (
                       <div key={it.id} className="border-t border-slate-100">
-                        <div className="px-3 py-3 space-y-2">
+                        <div className="px-4 py-3 space-y-2.5">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
@@ -469,7 +476,7 @@ export const POManagePage = () => {
             );
           })}
           {data && (
-            <div className="card overflow-hidden">
+            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
               <Pagination page={page} pageSize={PAGE_SIZE} total={data.total} onPageChange={setPage} />
             </div>
           )}

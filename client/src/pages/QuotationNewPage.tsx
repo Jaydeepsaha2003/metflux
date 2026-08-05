@@ -372,12 +372,12 @@ export const QuotationNewPage = () => {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <Link to="/quotation/manage" className="btn-ghost text-slate-600">Back</Link>
-        <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight">
+    <div className="space-y-4 sm:space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl">
           <FileText className="h-5 w-5 text-brand-600" /> {isEdit ? 'Edit Quotation' : 'New Quotation'}
         </h1>
+        <Link to="/quotation/manage" className="btn-ghost self-start text-slate-600 sm:self-auto">Back</Link>
       </div>
 
       {/* ============ DRAFT RESTORE BANNER ============ */}
@@ -398,8 +398,8 @@ export const QuotationNewPage = () => {
       )}
 
       {/* ============ HEADER ============ */}
-      <section className="card p-4">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="card p-4 sm:p-5">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <label className="block">
             <span className="mb-1 flex items-center gap-1 text-xs font-medium text-slate-600"><Hash className="h-3.5 w-3.5" /> Quotation No.</span>
             <input className={cellInput} value={quotationNo} onChange={(e) => setQuotationNo(e.target.value)} placeholder="MEI/SQ/1/2026-27" />
@@ -428,7 +428,7 @@ export const QuotationNewPage = () => {
       </section>
 
       {/* ============ ITEM ENTRY ============ */}
-      <section className="card p-4">
+      <section className="card p-4 sm:p-5">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span className="text-sm font-semibold text-slate-900">Add item</span>
           <div className="inline-flex rounded-lg bg-slate-100 p-0.5 text-sm">
@@ -592,16 +592,16 @@ export const QuotationNewPage = () => {
       </section>
 
       {/* ============ NOTES + SUBMIT ============ */}
-      <section className="card p-4 space-y-3">
+      <section className="card space-y-3 p-4 sm:p-5">
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-slate-600">Notes <span className="text-slate-400">(optional — short line shown above Terms)</span></span>
           <textarea className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" rows={2}
             value={notes} onChange={(e) => setNotes(e.target.value)} />
         </label>
         {error && <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
-        <div className="flex items-center justify-end gap-2">
-          <Link to="/quotation/manage" className="btn-ghost text-slate-600">Cancel</Link>
-          <button type="button" onClick={submit} disabled={createMut.isPending} className="btn-primary disabled:opacity-60">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
+          <Link to="/quotation/manage" className="btn-ghost w-full text-slate-600 sm:w-auto">Cancel</Link>
+          <button type="button" onClick={submit} disabled={createMut.isPending} className="btn-primary w-full disabled:opacity-60 sm:w-auto">
             {createMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {isEdit ? 'Save Changes' : 'Save Quotation'}
           </button>

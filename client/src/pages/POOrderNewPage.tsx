@@ -430,7 +430,7 @@ export const POOrderNewPage = () => {
   const fmtMoney = (n: number) => Math.round(n).toLocaleString('en-IN');
 
   return (
-    <div className="space-y-4 pb-4">
+    <div className="space-y-4 pb-4 sm:space-y-5">
       {/* ============ DRAFT RESTORE BANNER ============ */}
       {!isEdit && draftAvailable && draftData && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
@@ -451,8 +451,9 @@ export const POOrderNewPage = () => {
       )}
 
       {/* ============ TITLE ============ */}
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-slate-900">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="flex items-center gap-2 text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
+          <Package className="h-5 w-5 text-brand-600" />
           {isEdit ? 'Edit Sales Order' : 'New Sales Order'}
         </h1>
         {items.length > 0 && (
@@ -515,7 +516,7 @@ export const POOrderNewPage = () => {
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-sm font-semibold text-slate-900">Add line item</h2>
           {/* Segmented pill selector — replaces the dropdown for a touchable, visible toggle */}
-          <div className="inline-flex rounded-lg bg-slate-100 p-0.5 text-sm self-start">
+          <div className="flex flex-wrap gap-0.5 rounded-lg bg-slate-100 p-0.5 text-sm self-start">
             <button
               type="button"
               onClick={() => setCoreType('TOROIDAL')}
@@ -1130,7 +1131,7 @@ export const ToroidalForm = ({
   };
 
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3">
+    <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-3 sm:p-4">
       <div className="mb-2 flex items-center gap-2">
         <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
         <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-800">Toroidal</span>
@@ -1358,7 +1359,7 @@ export const RectangularForm = ({
   };
 
   return (
-    <div className="rounded-lg border border-rose-200 bg-rose-50/40 p-3">
+    <div className="rounded-xl border border-rose-200 bg-rose-50/40 p-3 sm:p-4">
       <div className="mb-2 flex items-center gap-2">
         <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
         <span className="text-[11px] font-semibold uppercase tracking-wider text-rose-800">Rectangular</span>

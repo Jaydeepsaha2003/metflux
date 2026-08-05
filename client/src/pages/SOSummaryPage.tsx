@@ -269,9 +269,9 @@ export const SOSummaryPage = () => {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
           <BarChart3 className="h-5 w-5 text-brand-600" /> SO Summary
         </h1>
         <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -329,12 +329,12 @@ export const SOSummaryPage = () => {
 
       {/* Loading / empty */}
       {isLoading && (
-        <div className="card p-10 text-center text-slate-400">
+        <div className="card p-8 sm:p-10 text-center text-slate-400">
           <Loader2 className="h-5 w-5 animate-spin mx-auto" />
         </div>
       )}
       {!isLoading && !items.length && (
-        <div className="card p-10 text-center text-sm text-slate-400">
+        <div className="card p-8 sm:p-10 text-center text-sm text-slate-400">
           No sales-order items match.
         </div>
       )}
