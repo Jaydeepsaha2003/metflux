@@ -104,14 +104,17 @@ export const RejectionPage = () => {
   };
 
   return (
-    <div className="max-w-full space-y-4 text-[13px]">
-      <div>
-        <h1 className="flex items-center gap-2 text-lg font-bold tracking-tight">
-          <Ban className="h-5 w-5 text-rose-600" /> Rejection
-        </h1>
-        <p className="mt-0.5 text-xs text-slate-500">
-          Move produced pcs into a store as <b>rejected</b> stock. Rejected qty leaves the production floor — it stops showing in Dispatch and is not sellable store stock.
-        </p>
+    <div className="max-w-full space-y-4 text-[13px] sm:space-y-5">
+      {/* Page header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl">
+            <Ban className="h-6 w-6 shrink-0 text-rose-600" /> Rejection
+          </h1>
+          <p className="mt-1 max-w-3xl text-xs text-slate-500 sm:text-sm">
+            Move produced pcs into a store as <b>rejected</b> stock. Rejected qty leaves the production floor — it stops showing in Dispatch and is not sellable store stock.
+          </p>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -125,144 +128,241 @@ export const RejectionPage = () => {
       </div>
 
       {tab === 'reject' ? (
-        <div className="card overflow-hidden">
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
           {/* Shared controls */}
-          <div className="grid grid-cols-1 gap-2 border-b border-slate-100 p-3 sm:grid-cols-3 sm:items-end">
+          <div className="grid grid-cols-1 gap-3 border-b border-slate-100 p-4 sm:grid-cols-3 sm:items-end sm:p-5">
             <div>
-              <span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Store (for rejected stock)</span>
+              <span className="mb-1 block text-xs font-medium text-slate-600">Store (for rejected stock)</span>
               <SearchableSelect dense value={warehouseId} onChange={setWarehouseId} options={storeOpts}
                 placeholder={activeStores.length ? 'Pick a store…' : 'No active store — create one under Store / Warehouse'} />
             </div>
             <label className="block">
-              <span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Note</span>
-              <input className="input h-8 text-xs" placeholder="Rejection" value={note} onChange={(e) => setNote(e.target.value)} />
+              <span className="mb-1 block text-xs font-medium text-slate-600">Note</span>
+              <input className="input h-9 w-full text-xs" placeholder="Rejection" value={note} onChange={(e) => setNote(e.target.value)} />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Search</span>
+              <span className="mb-1 block text-xs font-medium text-slate-600">Search</span>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                <input className="input h-8 pl-8 text-xs" placeholder="Customer, PO, grade, measure…" value={search} onChange={(e) => setSearch(e.target.value)} />
+                <input className="input h-9 w-full pl-8 text-xs" placeholder="Customer, PO, grade, measure…" value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
             </label>
           </div>
-          {err && <div className="mx-3 mt-2 rounded border border-red-200 bg-red-50 px-3 py-1.5 text-[11px] text-red-700">{err}</div>}
+          {err && <div className="mx-4 mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700 sm:mx-5">{err}</div>}
 
           {isLoading ? (
-            <div className="py-8 text-center text-slate-400"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></div>
+            <div className="py-10 text-center text-slate-400"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></div>
           ) : !items.length ? (
-            <div className="py-8 text-center text-xs text-slate-400">{search ? 'No matching produced items.' : 'No produced pcs available to reject.'}</div>
+            <div className="py-10 text-center text-xs text-slate-400">{search ? 'No matching produced items.' : 'No produced pcs available to reject.'}</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs whitespace-nowrap">
-                <thead><tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                  <th className="px-3 py-1.5 text-left">Customer</th>
-                  <th className="px-3 py-1.5 text-left">PO No.</th>
-                  <th className="px-3 py-1.5 text-left">Core</th>
-                  <th className="px-3 py-1.5 text-left">Grade</th>
-                  <th className="px-3 py-1.5 text-left">Material</th>
-                  <th className="px-3 py-1.5 text-left">Measure</th>
-                  <th className="px-3 py-1.5 text-right">Wt/Pc</th>
-                  <th className="px-3 py-1.5 text-right">Available</th>
-                  <th className="px-3 py-1.5 text-right">Reject pcs</th>
-                  <th className="w-20 px-2 py-1.5" />
-                </tr></thead>
-                <tbody className="divide-y divide-slate-100">
-                  {items.map((it) => (
-                    <tr key={it.id} className="hover:bg-rose-50/40">
-                      <td className="px-3 py-1 font-medium">{it.customerName || it.customerCode || '—'}</td>
-                      <td className="px-3 py-1 text-slate-600">{it.poNumber}</td>
-                      <td className="px-3 py-1 text-slate-600">{coreShort(it.coreType)}</td>
-                      <td className="px-3 py-1 text-slate-600">{it.grade || '—'}</td>
-                      <td className="px-3 py-1 text-slate-600">{it.material || '—'}</td>
-                      <td className="px-3 py-1 text-slate-600">{it.measure || '—'}</td>
-                      <td className="px-3 py-1 text-right tabular-nums text-slate-500">{it.weightPerPc ? it.weightPerPc.toFixed(3) : '—'}</td>
-                      <td className="px-3 py-1 text-right tabular-nums font-semibold text-slate-800">{it.availablePcs}</td>
-                      <td className="px-2 py-1 text-right">
-                        <input type="number" min="1" max={it.availablePcs} value={pcsByItem[it.id] ?? ''}
-                          onChange={(e) => setPcsByItem((p) => ({ ...p, [it.id]: e.target.value }))}
-                          onKeyDown={(e) => { if (e.key === 'Enter') rejectRow(it); }}
-                          className="h-7 w-16 rounded border border-slate-300 px-2 text-right text-xs tabular-nums outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20" placeholder="0" />
-                      </td>
-                      <td className="px-2 py-1 text-center">
-                        <button onClick={() => rejectRow(it)} disabled={busyItem === it.id}
-                          className="inline-flex h-7 items-center gap-1 rounded-md bg-rose-600 px-2 text-[11px] font-medium text-white hover:bg-rose-700 disabled:opacity-50">
-                          {busyItem === it.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Ban className="h-3 w-3" />} Reject
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <>
+              {/* Mobile: stacked cards */}
+              <div className="space-y-2 p-3 md:hidden">
+                {items.map((it) => (
+                  <div key={it.id} className="rounded-lg border border-slate-200 bg-white p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold text-slate-800">{it.customerName || it.customerCode || '—'}</div>
+                        <div className="text-[11px] text-slate-500">{it.poNumber}</div>
+                      </div>
+                      <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">{coreShort(it.coreType)}</span>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+                      <div><span className="text-slate-400">Grade: </span><span className="text-slate-700">{it.grade || '—'}</span></div>
+                      <div><span className="text-slate-400">Material: </span><span className="text-slate-700">{it.material || '—'}</span></div>
+                      <div><span className="text-slate-400">Measure: </span><span className="text-slate-700">{it.measure || '—'}</span></div>
+                      <div><span className="text-slate-400">Wt/Pc: </span><span className="tabular-nums text-slate-700">{it.weightPerPc ? it.weightPerPc.toFixed(3) : '—'}</span></div>
+                      <div><span className="text-slate-400">Available: </span><span className="tabular-nums font-semibold text-slate-800">{it.availablePcs}</span></div>
+                    </div>
+                    <div className="mt-3 flex items-center gap-2">
+                      <input type="number" min="1" max={it.availablePcs} value={pcsByItem[it.id] ?? ''}
+                        onChange={(e) => setPcsByItem((p) => ({ ...p, [it.id]: e.target.value }))}
+                        onKeyDown={(e) => { if (e.key === 'Enter') rejectRow(it); }}
+                        className="h-9 w-20 rounded-lg border border-slate-300 px-2 text-right text-xs tabular-nums outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20" placeholder="Reject pcs" />
+                      <button onClick={() => rejectRow(it)} disabled={busyItem === it.id}
+                        className="inline-flex h-9 flex-1 items-center justify-center gap-1 rounded-lg bg-rose-600 px-3 text-xs font-medium text-white hover:bg-rose-700 disabled:opacity-50">
+                        {busyItem === it.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />} Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop: table */}
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full whitespace-nowrap text-xs">
+                  <thead><tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    <th className="px-3 py-2 text-left">Customer</th>
+                    <th className="px-3 py-2 text-left">PO No.</th>
+                    <th className="px-3 py-2 text-left">Core</th>
+                    <th className="px-3 py-2 text-left">Grade</th>
+                    <th className="px-3 py-2 text-left">Material</th>
+                    <th className="px-3 py-2 text-left">Measure</th>
+                    <th className="px-3 py-2 text-right">Wt/Pc</th>
+                    <th className="px-3 py-2 text-right">Available</th>
+                    <th className="px-3 py-2 text-right">Reject pcs</th>
+                    <th className="w-20 px-2 py-2" />
+                  </tr></thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {items.map((it) => (
+                      <tr key={it.id} className="hover:bg-rose-50/40">
+                        <td className="px-3 py-1.5 font-medium">{it.customerName || it.customerCode || '—'}</td>
+                        <td className="px-3 py-1.5 text-slate-600">{it.poNumber}</td>
+                        <td className="px-3 py-1.5 text-slate-600">{coreShort(it.coreType)}</td>
+                        <td className="px-3 py-1.5 text-slate-600">{it.grade || '—'}</td>
+                        <td className="px-3 py-1.5 text-slate-600">{it.material || '—'}</td>
+                        <td className="px-3 py-1.5 text-slate-600">{it.measure || '—'}</td>
+                        <td className="px-3 py-1.5 text-right tabular-nums text-slate-500">{it.weightPerPc ? it.weightPerPc.toFixed(3) : '—'}</td>
+                        <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-slate-800">{it.availablePcs}</td>
+                        <td className="px-2 py-1.5 text-right">
+                          <input type="number" min="1" max={it.availablePcs} value={pcsByItem[it.id] ?? ''}
+                            onChange={(e) => setPcsByItem((p) => ({ ...p, [it.id]: e.target.value }))}
+                            onKeyDown={(e) => { if (e.key === 'Enter') rejectRow(it); }}
+                            className="h-7 w-16 rounded border border-slate-300 px-2 text-right text-xs tabular-nums outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20" placeholder="0" />
+                        </td>
+                        <td className="px-2 py-1.5 text-center">
+                          <button onClick={() => rejectRow(it)} disabled={busyItem === it.id}
+                            className="inline-flex h-7 items-center gap-1 rounded-md bg-rose-600 px-2 text-[11px] font-medium text-white hover:bg-rose-700 disabled:opacity-50">
+                            {busyItem === it.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Ban className="h-3 w-3" />} Reject
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       ) : (
-        <div className="card overflow-hidden">
-          {editErr && <div className="mx-3 mt-2 rounded border border-red-200 bg-red-50 px-3 py-1.5 text-[11px] text-red-700">{editErr}</div>}
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          {editErr && <div className="mx-4 mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700 sm:mx-5">{editErr}</div>}
           {!rejList.length ? (
-            <div className="py-8 text-center text-xs text-slate-400">No rejections yet.</div>
+            <div className="py-10 text-center text-xs text-slate-400">No rejections yet.</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs whitespace-nowrap">
-                <thead><tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                  <th className="px-3 py-1.5 text-left">Date</th>
-                  <th className="px-3 py-1.5 text-left">Customer / PO</th>
-                  <th className="px-3 py-1.5 text-left">Spec</th>
-                  <th className="px-3 py-1.5 text-left">Store</th>
-                  <th className="px-3 py-1.5 text-right">Pcs</th>
-                  <th className="px-3 py-1.5 text-left">Note</th>
-                  <th className="w-24 px-2 py-1.5" />
-                </tr></thead>
-                <tbody className="divide-y divide-slate-100">
-                  {rejList.map((r) => {
-                    const editing = edit?.id === r.id;
-                    return (
-                      <tr key={r.id} className="hover:bg-slate-50/60">
-                        <td className="px-3 py-1 text-slate-600">
-                          {editing
-                            ? <input type="date" value={edit!.date} onChange={(e) => setEdit((s) => s && { ...s, date: e.target.value })} className="h-7 rounded border border-slate-300 px-1 text-xs" />
-                            : fmtD(r.movementDate)}
-                        </td>
-                        <td className="px-3 py-1">{[r.customerName, r.poNumber].filter(Boolean).join(' · ') || '—'}</td>
-                        <td className="px-3 py-1 text-slate-600">{specText(r)}</td>
-                        <td className="px-3 py-1 text-slate-600">
-                          {editing
-                            ? <select value={edit!.warehouseId} onChange={(e) => setEdit((s) => s && { ...s, warehouseId: e.target.value })} className="h-7 rounded border border-slate-300 px-1 text-xs">
-                                {storeOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                              </select>
-                            : r.warehouseName}
-                        </td>
-                        <td className="px-3 py-1 text-right tabular-nums font-semibold text-rose-700">
-                          {editing
-                            ? <input type="number" min="1" value={edit!.pcs} onChange={(e) => setEdit((s) => s && { ...s, pcs: e.target.value })} className="h-7 w-16 rounded border border-slate-300 px-2 text-right text-xs tabular-nums" />
-                            : r.pcs}
-                        </td>
-                        <td className="px-3 py-1 text-slate-500">
-                          {editing
-                            ? <input value={edit!.notes} onChange={(e) => setEdit((s) => s && { ...s, notes: e.target.value })} placeholder="Rejection" className="h-7 w-40 rounded border border-slate-300 px-2 text-xs" />
-                            : (r.notes || '—')}
-                        </td>
-                        <td className="px-2 py-1 text-center">
-                          {editing ? (
-                            <div className="inline-flex items-center gap-1">
-                              <button onClick={() => saveEdit.mutate()} disabled={saveEdit.isPending} className="rounded p-1 text-emerald-600 hover:bg-emerald-50" title="Save">
-                                {saveEdit.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                              </button>
-                              <button onClick={() => { setEdit(null); setEditErr(null); }} className="rounded p-1 text-slate-400 hover:bg-slate-100" title="Cancel"><X className="h-3.5 w-3.5" /></button>
-                            </div>
-                          ) : (
-                            <div className="inline-flex items-center gap-1">
-                              <button onClick={() => startEdit(r)} className="rounded p-1 text-brand-600 hover:bg-brand-50" title="Modify"><Pencil className="h-3.5 w-3.5" /></button>
-                              <button onClick={() => onUndo(r)} disabled={delRej.isPending} className="rounded p-1 text-red-500 hover:bg-red-50" title="Undo (return pcs to floor)"><Trash2 className="h-3.5 w-3.5" /></button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <>
+              {/* Mobile: stacked cards */}
+              <div className="space-y-2 p-3 md:hidden">
+                {rejList.map((r) => {
+                  const editing = edit?.id === r.id;
+                  return (
+                    <div key={r.id} className="rounded-lg border border-slate-200 bg-white p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="truncate font-semibold text-slate-800">{[r.customerName, r.poNumber].filter(Boolean).join(' · ') || '—'}</div>
+                          <div className="text-[11px] text-slate-500">{specText(r)}</div>
+                        </div>
+                        {editing ? (
+                          <div className="inline-flex shrink-0 items-center gap-1">
+                            <button onClick={() => saveEdit.mutate()} disabled={saveEdit.isPending} className="rounded p-1.5 text-emerald-600 hover:bg-emerald-50" title="Save">
+                              {saveEdit.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                            </button>
+                            <button onClick={() => { setEdit(null); setEditErr(null); }} className="rounded p-1.5 text-slate-400 hover:bg-slate-100" title="Cancel"><X className="h-4 w-4" /></button>
+                          </div>
+                        ) : (
+                          <div className="inline-flex shrink-0 items-center gap-1">
+                            <button onClick={() => startEdit(r)} className="rounded p-1.5 text-brand-600 hover:bg-brand-50" title="Modify"><Pencil className="h-4 w-4" /></button>
+                            <button onClick={() => onUndo(r)} disabled={delRej.isPending} className="rounded p-1.5 text-red-500 hover:bg-red-50" title="Undo (return pcs to floor)"><Trash2 className="h-4 w-4" /></button>
+                          </div>
+                        )}
+                      </div>
+                      {editing ? (
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                          <label className="block">
+                            <span className="mb-1 block text-[10px] font-medium text-slate-500">Date</span>
+                            <input type="date" value={edit!.date} onChange={(e) => setEdit((s) => s && { ...s, date: e.target.value })} className="h-8 w-full rounded border border-slate-300 px-2 text-xs" />
+                          </label>
+                          <label className="block">
+                            <span className="mb-1 block text-[10px] font-medium text-slate-500">Pcs</span>
+                            <input type="number" min="1" value={edit!.pcs} onChange={(e) => setEdit((s) => s && { ...s, pcs: e.target.value })} className="h-8 w-full rounded border border-slate-300 px-2 text-right text-xs tabular-nums" />
+                          </label>
+                          <label className="block">
+                            <span className="mb-1 block text-[10px] font-medium text-slate-500">Store</span>
+                            <select value={edit!.warehouseId} onChange={(e) => setEdit((s) => s && { ...s, warehouseId: e.target.value })} className="h-8 w-full rounded border border-slate-300 px-1 text-xs">
+                              {storeOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                            </select>
+                          </label>
+                          <label className="block">
+                            <span className="mb-1 block text-[10px] font-medium text-slate-500">Note</span>
+                            <input value={edit!.notes} onChange={(e) => setEdit((s) => s && { ...s, notes: e.target.value })} placeholder="Rejection" className="h-8 w-full rounded border border-slate-300 px-2 text-xs" />
+                          </label>
+                        </div>
+                      ) : (
+                        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+                          <div><span className="text-slate-400">Date: </span><span className="text-slate-700">{fmtD(r.movementDate)}</span></div>
+                          <div><span className="text-slate-400">Store: </span><span className="text-slate-700">{r.warehouseName}</span></div>
+                          <div><span className="text-slate-400">Pcs: </span><span className="tabular-nums font-semibold text-rose-700">{r.pcs}</span></div>
+                          <div className="col-span-2"><span className="text-slate-400">Note: </span><span className="text-slate-600">{r.notes || '—'}</span></div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop: table */}
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full whitespace-nowrap text-xs">
+                  <thead><tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    <th className="px-3 py-2 text-left">Date</th>
+                    <th className="px-3 py-2 text-left">Customer / PO</th>
+                    <th className="px-3 py-2 text-left">Spec</th>
+                    <th className="px-3 py-2 text-left">Store</th>
+                    <th className="px-3 py-2 text-right">Pcs</th>
+                    <th className="px-3 py-2 text-left">Note</th>
+                    <th className="w-24 px-2 py-2" />
+                  </tr></thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {rejList.map((r) => {
+                      const editing = edit?.id === r.id;
+                      return (
+                        <tr key={r.id} className="hover:bg-slate-50/60">
+                          <td className="px-3 py-1.5 text-slate-600">
+                            {editing
+                              ? <input type="date" value={edit!.date} onChange={(e) => setEdit((s) => s && { ...s, date: e.target.value })} className="h-7 rounded border border-slate-300 px-1 text-xs" />
+                              : fmtD(r.movementDate)}
+                          </td>
+                          <td className="px-3 py-1.5">{[r.customerName, r.poNumber].filter(Boolean).join(' · ') || '—'}</td>
+                          <td className="px-3 py-1.5 text-slate-600">{specText(r)}</td>
+                          <td className="px-3 py-1.5 text-slate-600">
+                            {editing
+                              ? <select value={edit!.warehouseId} onChange={(e) => setEdit((s) => s && { ...s, warehouseId: e.target.value })} className="h-7 rounded border border-slate-300 px-1 text-xs">
+                                  {storeOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                </select>
+                              : r.warehouseName}
+                          </td>
+                          <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-rose-700">
+                            {editing
+                              ? <input type="number" min="1" value={edit!.pcs} onChange={(e) => setEdit((s) => s && { ...s, pcs: e.target.value })} className="h-7 w-16 rounded border border-slate-300 px-2 text-right text-xs tabular-nums" />
+                              : r.pcs}
+                          </td>
+                          <td className="px-3 py-1.5 text-slate-500">
+                            {editing
+                              ? <input value={edit!.notes} onChange={(e) => setEdit((s) => s && { ...s, notes: e.target.value })} placeholder="Rejection" className="h-7 w-40 rounded border border-slate-300 px-2 text-xs" />
+                              : (r.notes || '—')}
+                          </td>
+                          <td className="px-2 py-1.5 text-center">
+                            {editing ? (
+                              <div className="inline-flex items-center gap-1">
+                                <button onClick={() => saveEdit.mutate()} disabled={saveEdit.isPending} className="rounded p-1 text-emerald-600 hover:bg-emerald-50" title="Save">
+                                  {saveEdit.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                                </button>
+                                <button onClick={() => { setEdit(null); setEditErr(null); }} className="rounded p-1 text-slate-400 hover:bg-slate-100" title="Cancel"><X className="h-3.5 w-3.5" /></button>
+                              </div>
+                            ) : (
+                              <div className="inline-flex items-center gap-1">
+                                <button onClick={() => startEdit(r)} className="rounded p-1 text-brand-600 hover:bg-brand-50" title="Modify"><Pencil className="h-3.5 w-3.5" /></button>
+                                <button onClick={() => onUndo(r)} disabled={delRej.isPending} className="rounded p-1 text-red-500 hover:bg-red-50" title="Undo (return pcs to floor)"><Trash2 className="h-3.5 w-3.5" /></button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}

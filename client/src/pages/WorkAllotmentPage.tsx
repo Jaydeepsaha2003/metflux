@@ -104,10 +104,10 @@ export const WorkAllotmentPage = () => {
   const someChecked = selected.size > 0;
 
   return (
-    <div className="space-y-6 max-w-full">
+    <div className="space-y-4 sm:space-y-5 max-w-full">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-        <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
-          <ClipboardList className="h-5 w-5 text-brand-600" /> Work Allotment
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
+          <ClipboardList className="h-6 w-6 text-brand-600" /> Work Allotment
         </h1>
         <div className="relative w-full sm:w-72">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
@@ -136,9 +136,9 @@ export const WorkAllotmentPage = () => {
             </button>
           )}
         </div>
-        <div className="card overflow-hidden">
+        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
           {loadingPending ? (
-            <div className="flex items-center justify-center gap-2 py-10 text-slate-400">
+            <div className="flex items-center justify-center gap-2 py-10 text-slate-400 text-sm">
               <Loader2 className="h-5 w-5 animate-spin" /> Loading…
             </div>
           ) : !pending?.items.length ? (
@@ -273,9 +273,9 @@ export const WorkAllotmentPage = () => {
           </h2>
           <span className="text-[11px] font-medium text-slate-400">(auto-deleted after 7 days)</span>
         </div>
-        <div className="card overflow-hidden">
+        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
           {loadingGenerated ? (
-            <div className="flex items-center justify-center gap-2 py-10 text-slate-400">
+            <div className="flex items-center justify-center gap-2 py-10 text-slate-400 text-sm">
               <Loader2 className="h-5 w-5 animate-spin" /> Loading…
             </div>
           ) : !generated?.items.length ? (

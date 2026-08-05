@@ -158,27 +158,27 @@ export const ProductionNewPage = () => {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <Link to="/production" className="btn-ghost text-slate-600">
-          <ArrowLeft className="h-4 w-4" /> Back
-        </Link>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+    <div className="space-y-4 sm:space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl">
           <Factory className="h-5 w-5 text-brand-600" /> Record Production
         </h1>
+        <Link to="/production" className="btn-ghost w-full justify-center text-slate-600 sm:w-auto">
+          <ArrowLeft className="h-4 w-4" /> Back
+        </Link>
       </div>
 
       {/* Inline confirmation — non-blocking, auto-hides */}
       {savedAt && (
-        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-800 flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4" />
+        <div className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-800">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
           Production saved. Pick another item to record the next entry.
         </div>
       )}
 
       {/* ---- pending items ---- */}
-      <section className="card overflow-hidden">
-        <div className="flex flex-col gap-2 border-b border-slate-200 px-3 py-3 sm:flex-row sm:items-center sm:gap-3 sm:px-4">
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="flex flex-col gap-2 border-b border-slate-200 p-4 sm:flex-row sm:items-center sm:gap-3 sm:p-5">
           <h2 className="text-sm font-semibold text-slate-900">1. Pick a pending PO item</h2>
           <div className="relative w-full sm:ml-auto sm:max-w-sm">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -318,7 +318,7 @@ export const ProductionNewPage = () => {
       </section>
 
       {/* ---- form ---- */}
-      <section className="card p-4 space-y-4">
+      <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
         <h2 className="text-sm font-semibold text-slate-900">2. Production details</h2>
 
         {!selected && (
@@ -329,7 +329,7 @@ export const ProductionNewPage = () => {
 
         {selected && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-3 text-sm sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm sm:grid-cols-4">
               <Stat label="PO #" value={selected.poNumber} />
               <Stat label="Customer" value={selected.customerName} />
               <Stat label="Grade · Material" value={`${selected.grade} · ${selected.material}`} />
@@ -340,7 +340,7 @@ export const ProductionNewPage = () => {
               <Stat label="Remaining" value={String(selected.remainingPcs)} accent="primary" />
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Field label="Production Date">
                 <input className="input" type="date" value={prodDate} onChange={(e) => setProdDate(e.target.value)} />
               </Field>
@@ -395,7 +395,7 @@ export const ProductionNewPage = () => {
 
 const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
   <label className="block">
-    <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</span>
+    <span className="mb-1 block text-xs font-medium text-slate-600">{label}</span>
     {children}
   </label>
 );

@@ -89,39 +89,39 @@ export const ProductionListPage = () => {
   };
 
   return (
-    <div className="space-y-4 max-w-[1400px]">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+    <div className="space-y-4 sm:space-y-5 max-w-[1400px]">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
           <Factory className="h-5 w-5 text-brand-600" /> Production
         </h1>
         <div className="flex items-center gap-2">
           <button
             onClick={onExport}
             disabled={exporting || isLoading || !data?.items.length}
-            className="btn-ghost text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+            className="btn-ghost text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 flex-1 sm:flex-none justify-center"
             title="Download all matching rows as Excel"
           >
             {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
             <span className="hidden sm:inline">Excel</span>
           </button>
-          <Link to="/production/new" className="btn-primary">
+          <Link to="/production/new" className="btn-primary flex-1 sm:flex-none justify-center">
             <Plus className="h-4 w-4" /> Record<span className="hidden sm:inline"> Production</span>
           </Link>
         </div>
       </div>
 
       <div className="card overflow-hidden">
-        <div className="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
-          <div className="relative flex-1 max-w-md">
+        <div className="flex flex-col gap-2 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:gap-3">
+          <div className="relative flex-1 w-full sm:max-w-md">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
-              className="input pl-9"
+              className="input pl-9 w-full"
               placeholder="Search by PO#, customer, labour, measure, grade or material"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <div className="text-xs text-slate-500 ml-auto">
+          <div className="text-xs text-slate-500 sm:ml-auto shrink-0">
             {data ? `${data.total} record${data.total === 1 ? '' : 's'}` : ''}
           </div>
         </div>
