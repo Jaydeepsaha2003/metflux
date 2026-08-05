@@ -22,6 +22,15 @@ type FluxGroup = { grade: string; points: { flux: number; ateCm: number }[] };
 
 const gradeAppliesTo = (g: GradeRow, ct: CoreType) => !g.coreTypes || g.coreTypes.length === 0 || g.coreTypes.includes(ct);
 const todayISO = () => new Date().toISOString().slice(0, 10);
+const QUOTE_DRAFT_KEY = 'quotation_draft_new';
+
+/* Shape persisted to localStorage as an auto-draft (New quotation only). */
+type QuoteDraft = {
+  quotationNo: string; customerId: string; quotationDate: string; validUntil: string;
+  notes: string; terms: string;
+  bankName: string; bankBranch: string; bankAccountName: string; bankAccountNumber: string; bankIfsc: string;
+  items: QItem[];
+};
 const money0 = (n: number | undefined | null) => Math.round(Number(n) || 0).toLocaleString('en-IN');
 
 const coreBadge = (ct: CoreType) =>
@@ -169,6 +178,60 @@ export const QuotationNewPage = () => {
     setItems((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  /* ----- localStorage auto-draft: restore on mount, auto-save on change ----- *
+     Same behaviour as the Sales Order form. New quotations only — edit mode
+     loads the real record, so drafts are neither saved nor offered there. */
+  const [draftAvailable, setDraftAvailable] = useState(false);
+  const [draftData, setDraftData] = useState<QuoteDraft | null>(null);
+  useEffect(() => {
+    if (isEdit) return;
+    try {
+      const saved = localStorage.getItem(QUOTE_DRAFT_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved) as QuoteDraft;
+        if (parsed?.quotationNo || parsed?.customerId || (parsed?.items?.length ?? 0) > 0) {
+          setDraftData(parsed);
+          setDraftAvailable(true);
+        }
+      }
+    } catch { /* ignore malformed draft */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (isEdit) return; // never auto-draft while editing a saved quotation
+    if (!customerId && items.length === 0) return;
+    const id = setTimeout(() => {
+      const draft: QuoteDraft = {
+        quotationNo, customerId, quotationDate, validUntil, notes, terms,
+        bankName, bankBranch, bankAccountName, bankAccountNumber, bankIfsc, items,
+      };
+      localStorage.setItem(QUOTE_DRAFT_KEY, JSON.stringify(draft));
+    }, 1500);
+    return () => clearTimeout(id);
+  }, [isEdit, quotationNo, customerId, quotationDate, validUntil, notes, terms,
+      bankName, bankBranch, bankAccountName, bankAccountNumber, bankIfsc, items]);
+
+  const restoreDraft = () => {
+    const d = draftData;
+    if (!d) return;
+    setQuotationNo(d.quotationNo ?? '');
+    setCustomerId(d.customerId ?? '');
+    setQuotationDate(d.quotationDate || todayISO());
+    setValidUntil(d.validUntil ?? '');
+    setNotes(d.notes ?? '');
+    setTerms(d.terms ?? '');
+    setBankName(d.bankName ?? ''); setBankBranch(d.bankBranch ?? '');
+    setBankAccountName(d.bankAccountName ?? ''); setBankAccountNumber(d.bankAccountNumber ?? '');
+    setBankIfsc(d.bankIfsc ?? '');
+    setItems(d.items ?? []);
+    setBankTermsReady(true); // keep the prefill effect from clobbering restored bank/terms
+    setDraftAvailable(false);
+  };
+  const discardDraft = () => {
+    localStorage.removeItem(QUOTE_DRAFT_KEY);
+    setDraftAvailable(false);
+  };
+
   /* ----- dropdown data (same sources the SO form uses) ----- */
   const { data: customersResp } = useQuery({
     queryKey: ['customers', 'all'],
@@ -292,6 +355,7 @@ export const QuotationNewPage = () => {
         }),
       }),
     onSuccess: (res) => {
+      if (!isEdit) localStorage.removeItem(QUOTE_DRAFT_KEY);
       queryClient.invalidateQueries({ queryKey: ['quotations'] });
       queryClient.invalidateQueries({ queryKey: ['quotation-print', editId] });
       navigate(`/quotation/${isEdit ? editId : res.id}/print`);
@@ -315,6 +379,23 @@ export const QuotationNewPage = () => {
           <FileText className="h-5 w-5 text-brand-600" /> {isEdit ? 'Edit Quotation' : 'New Quotation'}
         </h1>
       </div>
+
+      {/* ============ DRAFT RESTORE BANNER ============ */}
+      {!isEdit && draftAvailable && draftData && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="text-sm text-amber-800">
+            <span className="font-semibold">Unsaved draft found</span>
+            {draftData.quotationNo && <span className="ml-2 font-mono text-amber-700">{draftData.quotationNo}</span>}
+            {(draftData.items?.length ?? 0) > 0 && (
+              <span className="ml-2 text-xs text-amber-600">({draftData.items.length} item{draftData.items.length !== 1 ? 's' : ''})</span>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={discardDraft} className="btn-ghost text-sm text-amber-700 hover:bg-amber-100">Discard</button>
+            <button type="button" onClick={restoreDraft} className="btn-primary border-amber-600 bg-amber-600 text-sm text-white hover:bg-amber-700">Restore draft</button>
+          </div>
+        </div>
+      )}
 
       {/* ============ HEADER ============ */}
       <section className="card p-4">
