@@ -453,6 +453,59 @@ router.post('/items/:id/cancel', requirePermission('add_po'), asyncHandler(async
   res.status(204).end();
 }));
 
+/* POST /api/po-orders/:id/preclose — close the remaining (un-produced) balance
+   across every active line of a PO in one go, so a partly-fulfilled order can be
+   marked complete without touching what was already produced/dispatched.
+   Each line is shrunk to what it has actually produced/dispatched (a fully
+   un-started line is cancelled) — the same rule as a single-line cancel. */
+router.post('/:id/preclose', requirePermission('add_po'), asyncHandler(async (req, res) => {
+  const po = await qOne('SELECT * FROM `PoOrder` WHERE `id` = ? AND `companyId` = ?', [req.params.id, req.tenant.companyId]);
+  if (!po) throw new AppError('Sales order not found', 404, 'NOT_FOUND');
+
+  const rows = await q(
+    `${itemRowSql} WHERE it.\`poOrderId\` = ? AND po.\`companyId\` = ? AND it.\`status\` = 'ACTIVE'`,
+    [po.id, req.tenant.companyId]
+  );
+
+  let itemsClosed = 0;
+  let pcsClosed = 0;
+  await txn(async (tx) => {
+    for (const row of rows) {
+      const produced   = Number(row.pcsProduced ?? 0);
+      const dispatched = Number(row.pcsDispatched ?? 0);
+      const processed  = Math.max(produced, dispatched);
+      const remaining  = row.pcs - processed;
+      if (remaining <= 0) continue; // already fully processed — nothing to close
+
+      if (processed === 0) {
+        await tx.update('PoOrderItem', row.id, { status: 'CANCELLED' });
+      } else {
+        const newTotalWeight = +(processed * row.weightPerPc).toFixed(3);
+        const derived = deriveRate({
+          rateBasis: row.rateBasis, rateValue: row.rateValue,
+          weightPerPc: row.weightPerPc, pcs: processed, totalWeight: newTotalWeight,
+        });
+        await tx.update('PoOrderItem', row.id, {
+          pcs: processed, totalWeight: newTotalWeight,
+          ratePerKg: derived.ratePerKg, ratePerPc: derived.ratePerPc, totalAmount: derived.totalAmount,
+        });
+      }
+      itemsClosed += 1;
+      pcsClosed   += remaining;
+    }
+  });
+
+  if (itemsClosed === 0) {
+    throw new AppError('Nothing left to preclose — this order is already fully produced.', 400, 'NOTHING_TO_PRECLOSE');
+  }
+
+  await logAudit(req, {
+    entity: 'PoOrder', entityId: po.id, action: 'UPDATE',
+    summary: `Preclosed ${po.poNumber} — closed ${pcsClosed} pending pc(s) across ${itemsClosed} line(s)`,
+  });
+  res.json({ itemsClosed, pcsClosed });
+}));
+
 /* GET /api/po-orders/summary */
 router.get('/summary', requirePermission('po_summary'), asyncHandler(async (req, res) => {
   const { page, pageSize, search, status } = z.object({
