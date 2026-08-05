@@ -149,16 +149,40 @@ router.post('/post', requireAnyPermission(...PERM), asyncHandler(async (req, res
     [companyId, side, normKey]
   ).catch(() => {});
 
+  /* Idempotency guard. The de-duplicated cash book (CashbookEntry) is the source
+     of truth for how much a party has actually paid. Cap each party's total
+     reconciliation to that figure minus what was already reconciled, so posting
+     a re-uploaded (cumulative) bank book can't apply the same money twice — the
+     bug that inflated paidAmount and marked invoices/bills wrongly PAID. Parties
+     with no cash-book row aren't capped (fallback), so installs that don't use
+     the cash book still reconcile. Reconciliation payments are method BANK/RECONCILE;
+     genuinely manual payments are left out of the "already reconciled" tally. */
+  const cashByKey = async (side) => new Map(
+    (await q("SELECT `normKey`, SUM(`amount`) t FROM `CashbookEntry` WHERE `companyId` = ? AND `side` = ? GROUP BY `normKey`", [companyId, side]))
+      .map((r) => [r.normKey, round2(Number(r.t))]));
+  const cashRecvByKey = await cashByKey('RECEIPT');
+  const priorRecvByCust = new Map(
+    (await q("SELECT `customerId` id, SUM(`amount`) t FROM `Payment` WHERE `companyId` = ? AND `method` IN ('BANK','RECONCILE') GROUP BY `customerId`", [companyId]))
+      .map((r) => [r.id, round2(Number(r.t))]));
+  const recvCapFor = (customerId) => {
+    const nm = custName.get(customerId);
+    const key = nm ? normName(nm) : null;
+    if (key == null || !cashRecvByKey.has(key)) return Infinity; // not in cash book → don't cap
+    return round2(Math.max(0, cashRecvByKey.get(key) - (priorRecvByCust.get(customerId) ?? 0)));
+  };
+
   // Receipts → customer sales invoices (FIFO).
   for (const e of receipts) {
     try {
+      const amount = round2(Math.min(round2(e.amount), recvCapFor(e.customerId)));
+      if (amount <= TOL) continue; // already fully reconciled from the cash book — skip (idempotent)
       const alloc = await txn(async (tx) => {
         const pay = await tx.insert('Payment', {
-          companyId, customerId: e.customerId, amount: round2(e.amount), allocatedAmount: 0,
+          companyId, customerId: e.customerId, amount, allocatedAmount: 0,
           paymentDate, method: 'BANK', reference: ref, notes: 'Receipts & Payments import',
           createdById: req.auth.userId,
         });
-        const a = await allocatePaymentFifo(tx, { companyId, customerId: e.customerId, paymentId: pay.id, amount: round2(e.amount) });
+        const a = await allocatePaymentFifo(tx, { companyId, customerId: e.customerId, paymentId: pay.id, amount });
         if (a > 0) await tx.update('Payment', pay.id, { allocatedAmount: a });
         return a;
       });
@@ -170,10 +194,21 @@ router.post('/post', requireAnyPermission(...PERM), asyncHandler(async (req, res
 
   // Payments → supplier purchase bills (FIFO). Re-derive live bills per supplier.
   const bySupplier = await loadOpenPayablesBySupplier(companyId);
+  // Same cash-book idempotency cap on the payable side (keyed by normalized name).
+  const cashPayByKey = await cashByKey('PAYMENT');
+  const priorPayByKey = new Map();
+  for (const r of await q("SELECT `supplierName` nm, SUM(`amount`) t FROM `SupplierPayment` WHERE `companyId` = ? AND `method` IN ('BANK','RECONCILE') GROUP BY `supplierName`", [companyId])) {
+    const k = normName(r.nm);
+    priorPayByKey.set(k, round2((priorPayByKey.get(k) ?? 0) + Number(r.t)));
+  }
+  const payCapFor = (supplierKey) => {
+    if (!cashPayByKey.has(supplierKey)) return Infinity; // not in cash book → don't cap
+    return round2(Math.max(0, cashPayByKey.get(supplierKey) - (priorPayByKey.get(supplierKey) ?? 0)));
+  };
   for (const e of payments) {
     const g = bySupplier.get(e.supplierKey);
     if (!g) { errors.push({ side: 'PAYMENT', ref: e.supplierKey, message: 'No open bills' }); continue; }
-    const amount = round2(Math.min(e.amount, g.pending));
+    const amount = round2(Math.min(e.amount, g.pending, payCapFor(e.supplierKey)));
     if (amount <= TOL) continue;
     try {
       const alloc = await txn(async (tx) => {
