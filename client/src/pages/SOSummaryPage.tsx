@@ -209,6 +209,9 @@ export const SOSummaryPage = () => {
         'Overproduced':  it.pcsOverproduced,
         'Dispatched':    it.pcsDispatched,
         'Pending':       it.pcsPending,
+        // Stage-wise shortfall against the ordered qty (never negative).
+        'Production Pending': Math.max(it.pcsOrdered - it.pcsProduced, 0),
+        'Dispatch Pending':   Math.max(it.pcsOrdered - it.pcsDispatched, 0),
         'Wt / pc':       it.weightPerPc,
         'Total Wt':      it.totalWeight,
         'Delivery Date': fmtDate(it.deliveryDate),
