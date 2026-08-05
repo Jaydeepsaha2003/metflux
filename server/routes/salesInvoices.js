@@ -244,6 +244,10 @@ router.post('/import', requireAnyPermission('view_sales_register', 'manage_invoi
 
 /* ---------- GET /summary — dashboard cards ---------- */
 router.get('/summary', requireAnyPermission('view_sales_register', 'manage_invoices'), asyncHandler(async (req, res) => {
+  // A credit note is any row flagged CREDIT_NOTE, or (for legacy rows with no
+  // docType) any row with a negative amount. Credit-note amounts are stored
+  // negative, so we flip the sign for a positive "Total Credit Notes" figure.
+  const IS_CN = "(`docType` = 'CREDIT_NOTE' OR (`docType` IS NULL AND `amount` < 0))";
   const row = await qOne(
     `SELECT
        COUNT(*) AS total,
@@ -251,16 +255,25 @@ router.get('/summary', requireAnyPermission('view_sales_register', 'manage_invoi
        COALESCE(SUM(CASE WHEN \`status\` <> 'PAID' AND \`dueDate\` IS NOT NULL AND \`dueDate\` < NOW()
                          THEN \`amount\` - \`paidAmount\` ELSE 0 END), 0) AS overdue,
        SUM(CASE WHEN \`status\` <> 'PAID' THEN 1 ELSE 0 END) AS openCount,
-       SUM(CASE WHEN \`customerId\` IS NULL OR \`dueDate\` IS NULL THEN 1 ELSE 0 END) AS attention
+       SUM(CASE WHEN \`customerId\` IS NULL OR \`dueDate\` IS NULL THEN 1 ELSE 0 END) AS attention,
+       COALESCE(SUM(CASE WHEN ${IS_CN} THEN 0 ELSE \`amount\` END), 0)                       AS totalSales,
+       COALESCE(SUM(CASE WHEN ${IS_CN} THEN 0 ELSE \`igst\` + \`cgst\` + \`sgst\` END), 0)    AS outputGst,
+       COALESCE(SUM(CASE WHEN ${IS_CN} THEN -\`amount\` ELSE 0 END), 0)                       AS creditNotes
      FROM \`SalesInvoice\` WHERE \`companyId\` = ?`,
     [req.tenant.companyId]
   );
+  const totalSales  = round2(Number(row?.totalSales ?? 0));
+  const creditNotes = round2(Number(row?.creditNotes ?? 0));
   res.json({
     totalInvoices: Number(row?.total ?? 0),
     outstanding: round2(Number(row?.outstanding ?? 0)),
     overdue: round2(Number(row?.overdue ?? 0)),
     openCount: Number(row?.openCount ?? 0),
     attention: Number(row?.attention ?? 0),
+    totalSales,
+    outputGst: round2(Number(row?.outputGst ?? 0)),
+    creditNotes,
+    netSales: round2(totalSales - creditNotes),
   });
 }));
 

@@ -24,7 +24,10 @@ type Invoice = {
   dueDate: string | null; status: 'UNPAID' | 'PARTIAL' | 'PAID'; daysOverdue: number | null; needsAttention: boolean;
 };
 type ListResp = { items: Invoice[]; total: number; page: number; pageSize: number; totals: { amount: number; paid: number; balance: number } };
-type Summary = { totalInvoices: number; outstanding: number; overdue: number; openCount: number; attention: number };
+type Summary = {
+  totalInvoices: number; outstanding: number; overdue: number; openCount: number; attention: number;
+  totalSales: number; outputGst: number; creditNotes: number; netSales: number;
+};
 type ImportResult = { imported: number; skippedDuplicates: number; datesFixed: number; cancelled: number; customersCreated: number; unmatchedCustomers: number; missingDueDays: number; totalInvoicesInFile: number; errors: { invoiceNumber: string; message: string }[] };
 
 const PAGE_SIZE = 25;
@@ -169,14 +172,10 @@ export const SalesInvoicesPage = () => {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card label="Outstanding" value={inr(summary?.outstanding ?? 0)} tone="brand" />
-        <Card label="Overdue" value={inr(summary?.overdue ?? 0)} tone={summary && summary.overdue > 0 ? 'danger' : 'muted'} />
-        <Card label="Open invoices" value={String(summary?.openCount ?? 0)} tone="muted" />
-        <Card
-          label="Needs attention" value={String(summary?.attention ?? 0)}
-          tone={summary && summary.attention > 0 ? 'warning' : 'muted'}
-          onClick={summary && summary.attention > 0 ? () => { setAttention(true); setStatus('ALL'); } : undefined}
-        />
+        <Card label="Total Sales" value={inr(summary?.totalSales ?? 0)} tone="brand" />
+        <Card label="Output GST" value={inr(summary?.outputGst ?? 0)} tone="muted" />
+        <Card label="Total Credit Notes" value={inr(summary?.creditNotes ?? 0)} tone={summary && summary.creditNotes > 0 ? 'warning' : 'muted'} />
+        <Card label="Net Sales" value={inr(summary?.netSales ?? 0)} tone="brand" />
       </div>
 
       {/* Due-invoices drill-down banner (from the "Invoices due today" reminder) */}
