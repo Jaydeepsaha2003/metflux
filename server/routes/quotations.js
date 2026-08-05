@@ -34,12 +34,14 @@ const itemSchema = z.object({
   ht: z.coerce.number().nonnegative().optional().default(0),
   builtup: z.coerce.number().nonnegative().optional().nullable(),
   weightPerPc: z.coerce.number().nonnegative().optional().default(0),
-  pcs: z.coerce.number().int().positive(),
+  // pcs / turns are whole numbers, but the entry field allows decimals and calc
+  // values can carry a rounding artifact — normalise by rounding rather than 400.
+  pcs: z.coerce.number().positive().transform((v) => Math.round(v)).pipe(z.number().int().positive()),
   totalWeight: z.coerce.number().nonnegative().optional().default(0),
   coreAc: z.coerce.number().nonnegative().optional().nullable(),
   coreMl: z.coerce.number().nonnegative().optional().nullable(),
   d13: z.coerce.number().nonnegative().optional().nullable(),
-  turns:       z.coerce.number().int().positive().optional().nullable(),
+  turns:       z.coerce.number().positive().transform((v) => Math.round(v)).optional().nullable(),
   flux:        z.coerce.number().positive().optional().nullable(),
   ateCm:       z.coerce.number().nonnegative().optional().nullable(),
   testVoltage: z.coerce.number().nonnegative().optional().nullable(),
