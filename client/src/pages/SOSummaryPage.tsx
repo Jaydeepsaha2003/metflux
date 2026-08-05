@@ -7,12 +7,13 @@ import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Search, Loader2, BarChart3, Eye, EyeOff, FileText, Activity,
-  Download, ChevronDown, ChevronRight, Pencil, Trash2, RotateCcw,
+  Download, ChevronDown, ChevronRight, Pencil, Trash2, RotateCcw, LockKeyhole,
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { Pagination } from '@/components/Pagination';
-import { downloadXlsx, todayStamp } from '@/lib/excel';
+import { todayStamp } from '@/lib/excel';
+import { downloadGroupedXlsx, type Cell } from '@/lib/xlsxGrouped';
 import { useHideCustomerNames } from '@/store/auth';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 
@@ -172,6 +173,22 @@ export const SOSummaryPage = () => {
     },
   });
 
+  /* Preclose a PO — close its remaining (un-produced) balance so the order is
+     marked complete without touching what's already produced/dispatched. */
+  const [precloseTarget, setPrecloseTarget] = useState<PoGroup | null>(null);
+  const preclose = useMutation({
+    mutationFn: (poOrderId: string) => api<{ itemsClosed: number; pcsClosed: number }>(`/po-orders/${poOrderId}/preclose`, { method: 'POST' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['po-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['po-items'] });
+      setPrecloseTarget(null);
+    },
+    onError: (e) => {
+      setPrecloseTarget(null);
+      setActionError(e instanceof ApiError ? e.message : 'Preclose failed');
+    },
+  });
+
   /* Restore cancelled item */
   const restoreItem = useMutation({
     mutationFn: (id: string) => api(`/po-orders/items/${id}/restore`, { method: 'POST' }),
@@ -186,7 +203,10 @@ export const SOSummaryPage = () => {
     },
   });
 
-  /* Export every matching SO item to Excel */
+  /* Export the currently-filtered SO items to a styled, PO-grouped workbook.
+     On the Active tab this pulls active items only (status follows the tab).
+     Detail rows are nested one Excel outline level under each PO summary row,
+     so the sheet can be grouped/ungrouped by PO with the +/- controls. */
   const [exporting, setExporting] = useState(false);
   const onExport = async () => {
     if (exporting) return;
@@ -195,35 +215,52 @@ export const SOSummaryPage = () => {
       const all = await api<{ items: SummaryItem[] }>(
         `/po-orders/summary?status=${status}&page=1&pageSize=10000${search ? `&search=${encodeURIComponent(search)}` : ''}`
       );
-      const rows = all.items.map((it) => ({
-        'SO Date':       fmtDate(it.orderDate),
-        'PO #':          it.poNumber,
-        'Customer Code': it.customerCode ?? '',
-        ...(hideNames ? {} : { 'Customer': it.customerName }),
-        'Type':          it.coreType,
-        'Grade':         it.grade,
-        'Material':      it.material,
-        'Measure':       it.measure,
-        'Ordered':       it.pcsOrdered,
-        'Produced':      it.pcsProduced,
-        'Overproduced':  it.pcsOverproduced,
-        'Dispatched':    it.pcsDispatched,
-        'Pending':       it.pcsPending,
-        // Production Pending = still to make (ordered - produced).
-        // Dispatch Pending  = made but not yet dispatched (produced - dispatched).
-        'Production Pending': Math.max(it.pcsOrdered - it.pcsProduced, 0),
-        'Dispatch Pending':   Math.max(it.pcsProduced - it.pcsDispatched, 0),
-        'Wt / pc':       it.weightPerPc,
-        'Total Wt':      it.totalWeight,
-        'Delivery Date': fmtDate(it.deliveryDate),
-        'Turns':         it.turns,
-        'Flux (T)':      it.flux,
-        'ATe/cm':        it.ateCm,
-        'V (Volts)':     it.testVoltage,
-        'Ie max (mA)':   it.testCurrent,
-        'Status':        it.status,
-      }));
-      downloadXlsx(`so-summary-${status.toLowerCase()}-${todayStamp()}`, 'SO Summary', rows);
+      const exportGroups = groupByPo(all.items);
+      const pend = (it: SummaryItem) => ({
+        prod: Math.max(it.pcsOrdered - it.pcsProduced, 0),   // still to make
+        disp: Math.max(it.pcsProduced - it.pcsDispatched, 0), // made, not dispatched
+      });
+
+      // One column spec drives header + PO-summary row + item detail row, so
+      // they always stay column-aligned. `group` cells that are item-specific
+      // are left blank on the summary row.
+      type Col = { h: string; g: (grp: PoGroup) => Cell; i: (it: SummaryItem) => Cell };
+      const cols: Col[] = [
+        { h: 'SO Date',   g: (grp) => fmtDate(grp.orderDate), i: (it) => fmtDate(it.orderDate) },
+        { h: 'PO #',      g: (grp) => grp.poNumber,           i: () => '' },
+        { h: 'Cust Code', g: (grp) => grp.customerCode ?? '', i: (it) => it.customerCode ?? '' },
+        ...(hideNames ? [] : [{ h: 'Customer', g: (grp: PoGroup) => grp.customerName, i: (it: SummaryItem) => it.customerName } as Col]),
+        { h: 'Type',      g: () => '',                        i: (it) => it.coreType },
+        { h: 'Grade',     g: () => '',                        i: (it) => it.grade },
+        { h: 'Material',  g: () => '',                        i: (it) => it.material },
+        { h: 'Measure',   g: () => '',                        i: (it) => it.measure },
+        { h: 'Ordered',      g: (grp) => grp.totalOrdered,      i: (it) => it.pcsOrdered },
+        { h: 'Produced',     g: (grp) => grp.totalProduced,     i: (it) => it.pcsProduced },
+        { h: 'Overproduced', g: (grp) => grp.totalOverproduced, i: (it) => it.pcsOverproduced },
+        { h: 'Dispatched',   g: (grp) => grp.totalDispatched,   i: (it) => it.pcsDispatched },
+        { h: 'Pending',      g: (grp) => grp.totalPending,      i: (it) => it.pcsPending },
+        { h: 'Production Pending', g: (grp) => grp.items.reduce((s, it) => s + pend(it).prod, 0), i: (it) => pend(it).prod },
+        { h: 'Dispatch Pending',   g: (grp) => grp.items.reduce((s, it) => s + pend(it).disp, 0), i: (it) => pend(it).disp },
+        { h: 'Wt / pc',     g: () => '',                       i: (it) => it.weightPerPc },
+        { h: 'Total Wt',    g: (grp) => +grp.items.reduce((s, it) => s + (it.totalWeight ?? 0), 0).toFixed(3), i: (it) => it.totalWeight },
+        { h: 'Delivery Date', g: (grp) => fmtDate(grp.items[0]?.deliveryDate), i: (it) => fmtDate(it.deliveryDate) },
+        { h: 'Turns',       g: () => '', i: (it) => it.turns },
+        { h: 'Flux (T)',    g: () => '', i: (it) => it.flux },
+        { h: 'ATe/cm',      g: () => '', i: (it) => it.ateCm },
+        { h: 'V (Volts)',   g: () => '', i: (it) => it.testVoltage },
+        { h: 'Ie max (mA)', g: () => '', i: (it) => it.testCurrent },
+        { h: 'Status',      g: () => '', i: (it) => it.status },
+      ];
+
+      downloadGroupedXlsx({
+        filename: `so-summary-${status.toLowerCase()}-${todayStamp()}`,
+        sheetName: 'SO Summary',
+        headers: cols.map((c) => c.h),
+        groups: exportGroups.map((grp) => ({
+          summary: cols.map((c) => c.g(grp)),
+          rows: grp.items.map((it) => cols.map((c) => c.i(it))),
+        })),
+      });
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : 'Export failed. Please try again.');
     } finally {
@@ -361,7 +398,18 @@ export const SOSummaryPage = () => {
                           {group.totalPending}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()} />
+                      <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+                        {status === 'ACTIVE' && group.totalPending > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setPrecloseTarget(group)}
+                            className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                            title={`Close the ${group.totalPending} pending pc(s) and complete this PO`}
+                          >
+                            <LockKeyhole className="h-3.5 w-3.5" /> Preclose
+                          </button>
+                        )}
+                      </td>
                     </tr>
 
                     {/* Expanded item rows */}
@@ -507,10 +555,19 @@ export const SOSummaryPage = () => {
                 </button>
                 {isPoOpen && (
                   <div className="border-t border-slate-200">
-                    <div className="flex items-center px-3 py-2 bg-slate-50">
+                    <div className="flex items-center justify-between px-3 py-2 bg-slate-50">
                       <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
                         {group.items.length} item{group.items.length !== 1 ? 's' : ''}
                       </span>
+                      {status === 'ACTIVE' && group.totalPending > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setPrecloseTarget(group)}
+                          className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                        >
+                          <LockKeyhole className="h-3.5 w-3.5" /> Preclose {group.totalPending}
+                        </button>
+                      )}
                     </div>
                     {group.items.map((it) => {
                       const isTestOpen = expandedItems.has(it.id);
@@ -620,6 +677,33 @@ export const SOSummaryPage = () => {
             <div className="font-medium text-slate-900">{restoreTarget.poNumber}</div>
             <div className="text-slate-600">{restoreTarget.grade} · {restoreTarget.material}</div>
             <div className="font-mono text-xs text-slate-700">{restoreTarget.measure}</div>
+          </div>
+        ) : null}
+      />
+
+      {/* Preclose confirmation */}
+      <ConfirmDialog
+        open={!!precloseTarget}
+        title="Preclose this sales order?"
+        tone="warning"
+        confirmLabel="Preclose PO"
+        cancelLabel="Cancel"
+        loading={preclose.isPending}
+        onConfirm={() => precloseTarget && preclose.mutate(precloseTarget.poOrderId)}
+        onCancel={() => setPrecloseTarget(null)}
+        message={precloseTarget ? (
+          <div className="space-y-2 text-sm">
+            <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs">
+              <div className="font-medium text-slate-900">{precloseTarget.poNumber}</div>
+              <div className="text-slate-600">
+                {hideNames ? (precloseTarget.customerCode ?? '—') : precloseTarget.customerName}
+              </div>
+            </div>
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              This closes the <strong>{precloseTarget.totalPending}</strong> pending pc(s) still to be produced and
+              marks the order complete. Already-produced / dispatched pieces are untouched. Lines with nothing
+              produced yet are cancelled.
+            </div>
           </div>
         ) : null}
       />
