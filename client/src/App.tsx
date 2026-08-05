@@ -60,6 +60,7 @@ const ProductionNewPage     = page(() => import('@/pages/ProductionNewPage'), 'P
 const ProductionEditPage    = page(() => import('@/pages/ProductionEditPage'), 'ProductionEditPage');
 const RejectionPage         = page(() => import('@/pages/RejectionPage'), 'RejectionPage');
 const JournalRegisterPage   = page(() => import('@/pages/JournalRegisterPage'), 'JournalRegisterPage');
+const PartyLedgerPage       = page(() => import('@/pages/PartyLedgerPage'), 'PartyLedgerPage');
 const NotificationsPage     = page(() => import('@/pages/NotificationsPage'), 'NotificationsPage');
 const DispatchListPage    = page(() => import('@/pages/DispatchListPage'), 'DispatchListPage');
 const DispatchNewPage     = page(() => import('@/pages/DispatchNewPage'), 'DispatchNewPage');
@@ -161,6 +162,7 @@ export const App = () => {
       <Route path="/accounts/receipts-payments" element={<ReceiptsPaymentsPage />} />
       <Route path="/accounts/cashbook-summary" element={<CashbookSummaryPage />} />
       <Route path="/accounts/journal" element={<JournalRegisterPage />} />
+      <Route path="/accounts/party-ledger" element={<PartyLedgerPage />} />
       <Route path="/notifications" element={<NotificationsPage />} />
       <Route path="/accounts/purchases"      element={<PurchasesPage />} />
       <Route path="/accounts/creditor-aging" element={<CreditorAgingPage />} />
