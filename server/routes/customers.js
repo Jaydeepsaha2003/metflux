@@ -312,10 +312,13 @@ router.patch('/:id', requireRole('STAFF'), asyncHandler(async (req, res) => {
 
   const updated = await update('Customer', id, data);
 
-  // Credit terms drive invoice due dates. When the terms are first set or
-  // changed, (re)link them to this customer's invoices so aging & reminders
-  // work immediately — no re-import needed. dueDate = invoiceDate + dueDays.
-  if (data.dueDays != null && data.dueDays !== existing.dueDays) {
+  // Credit terms drive invoice due dates. Recompute this customer's invoice due
+  // dates from the terms on EVERY save that carries a dueDays value — not only
+  // when the number changed. Otherwise re-saving unchanged terms never fixes
+  // invoices whose dueDate is stale/missing (e.g. imported after the terms were
+  // first set, or linked before a due date existed), which showed up as "the
+  // credit terms don't resync for this party". dueDate = invoiceDate + dueDays.
+  if (data.dueDays != null) {
     try {
       await q(
         'UPDATE `SalesInvoice` SET `dueDate` = DATE_ADD(`invoiceDate`, INTERVAL ? DAY) WHERE `companyId` = ? AND `customerId` = ?',
