@@ -10,7 +10,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeftRight, Loader2, Upload, CheckCircle2, ArrowDownToLine, ArrowUpFromLine,
   UserPlus, Truck, Tag, BarChart3, Search, ChevronLeft, ChevronRight, ListChecks, Download, Trash2,
-  NotebookPen, Plus,
+  NotebookPen, Plus, RefreshCw,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { readXlsxMatrix, downloadXlsx, todayStamp } from '@/lib/excel';
@@ -104,14 +104,27 @@ export const ReceiptsPaymentsPage = () => {
         method: 'POST',
         body: JSON.stringify({ paymentDate, reference: reference || null, ...body }),
       });
+      // Re-derive every invoice/bill paid amount from the (now-updated) bank book,
+      // FIFO across ALL current invoices. This makes the import idempotent and
+      // flows any advance/"On Account" credit onto newer invoices automatically.
+      await api('/receipts-payments/recompute', { method: 'POST' }).catch(() => {});
       return { store, post };
     },
     onSuccess: ({ store, post }) => {
       setResult(post); setStoreResult(store);
-      ['payments', 'sales-invoices', 'debtor-aging', 'creditor-aging', 'purchases', 'cashbook-summary', 'cashbook-entries', 'cashbook-unclassified', 'cashbook-bank-balance'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+      ['payments', 'sales-invoices', 'debtor-aging', 'creditor-aging', 'purchases', 'cashbook-summary', 'cashbook-entries', 'cashbook-unclassified', 'cashbook-bank-balance', 'party-ledger'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
       setPreview(null); setRows(null);
     },
     onError: (e) => setUploadErr(e instanceof Error ? e.message : 'Import failed — nothing was saved.'),
+  });
+
+  const recomputeMut = useMutation({
+    mutationFn: () => api<{ ok: boolean; receivables: { applied: number }; payables: { applied: number } }>('/receipts-payments/recompute', { method: 'POST' }),
+    onSuccess: (r) => {
+      ['payments', 'sales-invoices', 'debtor-aging', 'creditor-aging', 'purchases', 'cashbook-summary', 'cashbook-bank-balance', 'party-ledger'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+      setUploadErr(`Recomputed from the bank book — receivables ${inr(r.receivables.applied)}, payables ${inr(r.payables.applied)} applied. Advances now flow onto newer invoices.`);
+    },
+    onError: (e) => setUploadErr(e instanceof Error ? e.message : 'Recompute failed'),
   });
 
   const resetAll = useMutation({
@@ -176,6 +189,11 @@ export const ReceiptsPaymentsPage = () => {
           <Link to="/accounts/cashbook-summary" className="btn-ghost border border-slate-300 text-slate-600 hover:bg-slate-50 text-sm">
             <BarChart3 className="h-4 w-4" /> Cashbook Summary
           </Link>
+          <button onClick={() => recomputeMut.mutate()} disabled={recomputeMut.isPending}
+            className="btn-ghost border border-slate-300 text-brand-700 hover:bg-brand-50 text-sm"
+            title="Re-derive all customer/supplier balances from the bank book (applies advances to newer invoices)">
+            {recomputeMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Recompute
+          </button>
           <button onClick={onClearAll} disabled={resetAll.isPending} className="btn-ghost border border-slate-300 text-red-600 hover:bg-red-50 text-sm">
             {resetAll.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Clear all
           </button>

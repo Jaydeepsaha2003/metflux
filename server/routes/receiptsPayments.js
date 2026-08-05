@@ -18,6 +18,7 @@ import { round2, normName, allocatePaymentFifo } from '../lib/invoicing.js';
 import { allocateSupplierPaymentFifo } from '../lib/billsReconcile.js';
 import { parseBankBook } from '../lib/receiptsPayments.js';
 import { errMessage } from '../lib/importHelpers.js';
+import { rebuildCompanyReconciliation } from '../lib/reconcileRebuild.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -231,6 +232,17 @@ router.post('/post', requireAnyPermission(...PERM), asyncHandler(async (req, res
     allocatedReceipts: allocRecv, allocatedPayments: allocPay,
     errors: errors.slice(0, 100),
   });
+}));
+
+/* ---------- POST /recompute — re-derive all paid amounts from the bank book ----------
+   Rebuilds every invoice/bill paidAmount + status by FIFO-allocating each party's
+   TRUE cash-book total across ALL their current invoices, oldest first. Clears
+   stale "On Account" credits (an advance now flows onto newer invoices) and undoes
+   any earlier double-counting. Idempotent — safe to run any time, e.g. after new
+   invoices are imported or the bank book is re-uploaded. */
+router.post('/recompute', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
+  const summary = await rebuildCompanyReconciliation(req.tenant.companyId);
+  res.json({ ok: true, ...summary });
 }));
 
 export default router;
