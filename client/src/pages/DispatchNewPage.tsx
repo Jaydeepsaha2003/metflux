@@ -150,20 +150,25 @@ export const DispatchNewPage = () => {
   };
 
   return (
-    <div className="space-y-4 max-w-[1400px]">
+    <div className="space-y-5 max-w-[1400px]">
       <div className="flex items-center gap-3">
         <Link to="/dispatch" className="btn-ghost text-slate-600">
           <ArrowLeft className="h-4 w-4" /> Back
         </Link>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <Truck className="h-5 w-5 text-brand-600" /> New Dispatch
+        <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl">
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-50 text-brand-600">
+            <Truck className="h-4 w-4" />
+          </span>
+          New Dispatch
         </h1>
       </div>
 
       {/* Ready-to-dispatch items */}
-      <section className="card overflow-hidden">
-        <div className="flex flex-col gap-2 border-b border-slate-200 px-3 py-3 sm:flex-row sm:items-center sm:gap-3 sm:px-4">
-          <h2 className="text-sm font-semibold text-slate-900">1. Pick a ready item</h2>
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="flex flex-col gap-2 border-b border-slate-200 bg-slate-50/60 px-3 py-3 sm:flex-row sm:items-center sm:gap-3 sm:px-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <StepBadge>1</StepBadge> Pick a ready item
+          </h2>
           <div className="flex items-center gap-2 w-full sm:ml-auto sm:w-auto">
             <div className="relative flex-1 sm:w-80">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -189,7 +194,7 @@ export const DispatchNewPage = () => {
 
         {/* Mobile — card per ready item */}
         <div className="md:hidden divide-y divide-slate-100 max-h-[60vh] overflow-y-auto">
-          {isLoading && <div className="px-4 py-8 text-center text-slate-400 text-sm">Loading…</div>}
+          {isLoading && <div className="px-4 py-8 text-center text-slate-400 text-sm"><Loader2 className="mx-auto mb-1.5 h-4 w-4 animate-spin" /> Loading…</div>}
           {!isLoading && readyResp?.items.length === 0 && (
             <div className="px-4 py-8 text-center text-slate-400 text-sm">
               No items ready to dispatch — produce some stock first.
@@ -201,7 +206,7 @@ export const DispatchNewPage = () => {
               <div
                 key={it.id}
                 onClick={() => setSelected(it)}
-                className={cn('cursor-pointer px-3 py-2.5 transition-colors', isSel ? 'bg-brand-50' : 'hover:bg-slate-50/60')}
+                className={cn('cursor-pointer border-l-2 px-3 py-2.5 transition-colors', isSel ? 'border-l-brand-600 bg-brand-50/70' : 'border-l-transparent hover:bg-slate-50/60')}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -249,48 +254,48 @@ export const DispatchNewPage = () => {
 
         <div className="hidden md:block overflow-x-auto max-h-72">
           <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500">
+            <thead className="sticky top-0 z-10 border-b-2 border-slate-200 bg-slate-50 text-left text-[10.5px] uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-3 py-2 w-8"></th>
-                <th className="px-3 py-2">PO #</th>
-                <th className="px-3 py-2">Customer</th>
-                <th className="px-3 py-2">Due</th>
-                <th className="px-3 py-2">Type</th>
-                <th className="px-3 py-2">Grade</th>
-                <th className="px-3 py-2">Material</th>
-                <th className="px-3 py-2">Measure</th>
-                <th className="px-3 py-2 text-right">Ordered</th>
-                <th className="px-3 py-2 text-right">Produced</th>
-                <th className="px-3 py-2 text-right">Dispatched</th>
-                <th className="px-3 py-2 text-right">Ready</th>
-                <th className="px-3 py-2 text-right">Ready Amt</th>
+                <th className="px-3 py-2.5 w-8"></th>
+                <th className="px-3 py-2.5 font-semibold">PO #</th>
+                <th className="px-3 py-2.5 font-semibold">Customer</th>
+                <th className="px-3 py-2.5 font-semibold">Due</th>
+                <th className="px-3 py-2.5 font-semibold">Type</th>
+                <th className="px-3 py-2.5 font-semibold">Grade</th>
+                <th className="px-3 py-2.5 font-semibold">Material</th>
+                <th className="px-3 py-2.5 font-semibold">Measure</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Ordered</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Produced</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Dispatched</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Ready</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Ready Amt</th>
               </tr>
             </thead>
             <tbody>
               {isLoading && (
-                <tr><td colSpan={13} className="px-3 py-8 text-center text-slate-400">Loading…</td></tr>
+                <tr><td colSpan={13} className="px-3 py-8 text-center text-slate-400"><Loader2 className="mx-auto mb-1.5 h-4 w-4 animate-spin" /> Loading…</td></tr>
               )}
               {!isLoading && readyResp?.items.length === 0 && (
                 <tr><td colSpan={13} className="px-3 py-8 text-center text-slate-400">
                   No items ready to dispatch — produce some stock first.
                 </td></tr>
               )}
-              {readyResp?.items.map((it) => {
+              {readyResp?.items.map((it, idx) => {
                 const isSel = selected?.id === it.id;
                 return (
                   <tr
                     key={it.id}
                     onClick={() => setSelected(it)}
                     className={cn(
-                      'cursor-pointer border-t border-slate-100 transition',
-                      isSel ? 'bg-brand-50 hover:bg-brand-100' : 'hover:bg-slate-50/60'
+                      'cursor-pointer border-l-2 border-t border-slate-100 transition-colors',
+                      isSel ? 'border-l-brand-600 bg-brand-50/70 hover:bg-brand-50' : cn('border-l-transparent hover:bg-brand-50/40', idx % 2 === 1 && 'bg-slate-50/40')
                     )}
                   >
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2.5">
                       {isSel && <CheckCircle2 className="h-4 w-4 text-brand-600" />}
                     </td>
-                    <td className="px-3 py-2 font-mono text-xs">{it.poNumber}</td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2.5 font-mono text-xs">{it.poNumber}</td>
+                    <td className="px-3 py-2.5">
                       <div className="font-mono text-xs font-semibold text-brand-700">{it.customerCode ?? '—'}</div>
                       {!hideNames && (
                         <div className="text-[11px] text-slate-500 truncate max-w-[160px]" title={it.customerName}>
@@ -298,34 +303,34 @@ export const DispatchNewPage = () => {
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-slate-600 text-xs">{formatDate(it.deliveryDate)}</td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2.5 text-slate-600 text-xs">{formatDate(it.deliveryDate)}</td>
+                    <td className="px-3 py-2.5">
                       <span className={cn(
-                        'rounded-full px-2 py-0.5 text-[11px] font-medium',
-                        it.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
+                        'rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset',
+                        it.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-rose-50 text-rose-700 ring-rose-200'
                       )}>
                         {it.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
                       </span>
                     </td>
-                    <td className="px-3 py-2">{it.grade}</td>
-                    <td className="px-3 py-2">{it.material}</td>
-                    <td className="px-3 py-2 font-mono text-xs">{it.measure}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{it.orderedPcs}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-600">{it.producedPcs}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-500">{it.dispatchedPcs}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">
+                    <td className="px-3 py-2.5">{it.grade}</td>
+                    <td className="px-3 py-2.5">{it.material}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs">{it.measure}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{it.orderedPcs}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">{it.producedPcs}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-slate-500">{it.dispatchedPcs}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">
                       <div className="flex flex-col items-end gap-0.5">
-                        <span className="rounded-md bg-green-50 px-2 py-0.5 font-semibold text-green-800">
+                        <span className="rounded-md bg-green-50 px-2 py-0.5 font-semibold text-green-800 ring-1 ring-inset ring-green-200">
                           {it.readyPcs}
                         </span>
                         {it.excessPcs > 0 && (
-                          <span className="rounded-md bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700">
+                          <span className="rounded-md bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700 ring-1 ring-inset ring-orange-200">
                             +{it.excessPcs} excess
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums text-brand-700">
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums text-brand-700">
                       {it.readyAmount != null ? `₹${it.readyAmount.toFixed(2)}` : '—'}
                     </td>
                   </tr>
@@ -339,12 +344,13 @@ export const DispatchNewPage = () => {
       {/* Last-saved confirmation. Lives outside the `{selected && ...}` block so it
           stays visible after the form auto-resets on successful save. */}
       {createdId && (
-        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-sm font-medium text-green-800">
-            ✓ Dispatch saved — form is ready for the next entry.
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 shadow-sm">
+          <span className="flex items-center gap-2 text-sm font-medium text-green-800">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
+            Dispatch saved — form is ready for the next entry.
           </span>
           <div className="flex flex-wrap gap-2">
-            <Link to="/packing-list" state={{ dispatchIds: [createdId] }} className="btn-ghost text-sm border border-slate-300">
+            <Link to="/packing-list" state={{ dispatchIds: [createdId] }} className="btn-ghost text-sm border border-slate-300 bg-white">
               <FileText className="h-4 w-4" /> Create Packing List
             </Link>
             <Link to="/dispatch" className="btn-ghost text-sm">View All</Link>
@@ -356,18 +362,21 @@ export const DispatchNewPage = () => {
       )}
 
       {/* Dispatch form */}
-      <section className="card p-4 space-y-4">
-        <h2 className="text-sm font-semibold text-slate-900">2. Dispatch details</h2>
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 space-y-4">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <StepBadge>2</StepBadge> Dispatch details
+        </h2>
 
         {!selected && (
-          <div className="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+          <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/50 p-8 text-center text-sm text-slate-500">
+            <Truck className="mx-auto mb-2 h-6 w-6 text-slate-300" />
             Click a row above to select an item.
           </div>
         )}
 
         {selected && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-3 text-sm sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
               <Stat label="PO #" value={selected.poNumber} />
               <Stat
                 label="Customer"
@@ -383,7 +392,7 @@ export const DispatchNewPage = () => {
               <Stat label="Ready to Dispatch" value={String(selected.readyPcs)} accent="primary" />
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <div className="grid grid-cols-2 gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3.5 sm:grid-cols-3 lg:grid-cols-6">
               <Field label="Dispatch Date">
                 <input className="input" type="date" value={dispatchDate} onChange={(e) => setDispatchDate(e.target.value)} />
               </Field>
@@ -540,6 +549,12 @@ const StockInModal = ({ item, onClose, onDone }: { item: ReadyItem; onClose: () 
   );
 };
 
+const StepBadge = ({ children }: { children: React.ReactNode }) => (
+  <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-600 text-[11px] font-bold text-white">
+    {children}
+  </span>
+);
+
 const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
   <label className="block">
     <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</span>
@@ -547,15 +562,21 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
   </label>
 );
 
+// Accent-rail stat tile (matches the app's other summary strips) — the
+// "Ready to Dispatch" figure gets the brand rail so it reads as the headline.
 const Stat = ({
   label, value, mono, accent,
 }: { label: string; value: string; mono?: boolean; accent?: 'primary' }) => (
-  <div className="min-w-0">
-    <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">{label}</div>
+  <div className={cn(
+    'relative min-w-0 overflow-hidden rounded-lg border bg-white py-2 pl-3 pr-2.5',
+    accent === 'primary' ? 'border-brand-200' : 'border-slate-200'
+  )}>
+    <span className={cn('absolute inset-y-0 left-0 w-1', accent === 'primary' ? 'bg-brand-500' : 'bg-slate-300')} />
+    <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
     <div className={cn(
       'truncate text-sm tabular-nums',
       mono && 'font-mono',
-      accent === 'primary' ? 'font-semibold text-slate-900' : 'text-slate-700'
+      accent === 'primary' ? 'font-bold text-brand-700' : 'font-medium text-slate-700'
     )}>
       {value}
     </div>
