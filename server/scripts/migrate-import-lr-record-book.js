@@ -14,8 +14,8 @@ import 'dotenv/config';
 import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import { pool } from '../lib/db.js';
-import { resolveCompany, importRecordBookFile } from '../lib/lrRecordBookImport.js';
+import { pool, q } from '../lib/db.js';
+import { resolveCompany, importRecordBookFile, backfillDefaultTransporter } from '../lib/lrRecordBookImport.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -37,6 +37,14 @@ const main = async () => {
     const r = await importRecordBookFile(run.file, company.id, { dry: false });
     console.log(`[migrate] LR record-book (${company.name}): imported ${r.imported}, skipped ${r.skipped} duplicate(s)${r.errors ? `, ${r.errors} error(s)` : ''}.`);
     r.errorMessages.forEach((m) => console.log(`  ERROR ${m}`));
+  }
+
+  // Attach each company's current default transporter to any of its LRs that
+  // don't have one yet — covers rows imported before a default transporter
+  // existed (like the 75 above), or any manually-created LR left unset.
+  for (const co of await q('SELECT `id`,`name` FROM `Company`')) {
+    const n = await backfillDefaultTransporter(co.id);
+    if (n > 0) console.log(`[migrate] attached the default transporter to ${n} Lorry Receipt(s) for ${co.name}.`);
   }
 };
 

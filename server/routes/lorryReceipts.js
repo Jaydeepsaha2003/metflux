@@ -13,6 +13,7 @@ import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 import { logAudit } from '../lib/audit.js';
+import { backfillDefaultTransporter } from '../lib/lrRecordBookImport.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -107,6 +108,11 @@ router.post('/transporters', requirePermission('add_lr'), asyncHandler(async (re
   const data = transporterSchema.parse(req.body);
   if (data.isDefault) await q('UPDATE `LrTransporter` SET `isDefault` = 0 WHERE `companyId` = ?', [req.tenant.companyId]);
   const row = await insert('LrTransporter', { companyId: req.tenant.companyId, ...data, isDefault: data.isDefault ? 1 : 0 });
+  // Marking a default immediately attaches it to any LR that doesn't have a
+  // transporter yet (e.g. rows imported before a default existed), so the
+  // printed letterhead switches from the company name to the transporter
+  // right away — no redeploy needed.
+  if (data.isDefault) await backfillDefaultTransporter(req.tenant.companyId).catch(() => {});
   res.status(201).json(row);
 }));
 
@@ -116,6 +122,7 @@ router.put('/transporters/:id', requirePermission('add_lr'), asyncHandler(async 
   if (!existing) throw new AppError('Transporter not found', 404, 'NOT_FOUND');
   if (data.isDefault) await q('UPDATE `LrTransporter` SET `isDefault` = 0 WHERE `companyId` = ?', [req.tenant.companyId]);
   const row = await update('LrTransporter', existing.id, { ...data, isDefault: data.isDefault ? 1 : 0 });
+  if (data.isDefault) await backfillDefaultTransporter(req.tenant.companyId).catch(() => {});
   res.json(row);
 }));
 

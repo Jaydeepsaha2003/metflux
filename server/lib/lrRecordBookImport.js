@@ -50,6 +50,11 @@ export const resolveCompany = async (idOrNameFragment) => {
 export const importRecordBookFile = async (filePath, companyId, { dry = false } = {}) => {
   const wb = XLSX.readFile(filePath);
   const cid = companyId;
+  // Newly-imported LRs are attributed to the company's current default
+  // transporter (so the print letterhead shows the transporter, not the
+  // company) — falls back to null (→ company letterhead) if none is set yet.
+  const defaultTransporter = await qOne('SELECT `id` FROM `LrTransporter` WHERE `companyId` = ? AND `isDefault` = 1 LIMIT 1', [cid]).catch(() => null);
+  const transporterId = defaultTransporter?.id ?? null;
 
   // Party masters (address / mobile / gstin) keyed by normalized name.
   const masters = new Map();
@@ -109,7 +114,7 @@ export const importRecordBookFile = async (filePath, companyId, { dry = false } 
       await upsertParty(consigneeName);
       await insert('LorryReceipt', {
         id: newId(), companyId: cid, lrNo, lrDate,
-        transporterId: null,
+        transporterId,
         publicToken: newId().replace(/-/g, ''), // so the printed QR / e-copy link works
         consignorName, consignorAddress: cog.address ?? null, consignorGstin: cog.gstin ?? null, consignorMobile: cog.mobile ?? null,
         consigneeName, consigneeAddress: cee.address ?? null, consigneeGstin: cee.gstin ?? null, consigneeMobile: cee.mobile ?? null,
@@ -129,4 +134,19 @@ export const importRecordBookFile = async (filePath, companyId, { dry = false } 
   }
 
   return { imported, skipped, errors, errorMessages, samples };
+};
+
+/**
+ * Attach a company's current default transporter to any of its Lorry Receipts
+ * that don't have one yet (transporterId IS NULL) — so older imports (or any
+ * LR created before a default transporter existed) show the transporter
+ * letterhead instead of falling back to the company name. No-op if the
+ * company has no default transporter set. Safe to run repeatedly.
+ * @returns {Promise<number>} rows updated
+ */
+export const backfillDefaultTransporter = async (companyId) => {
+  const def = await qOne('SELECT `id` FROM `LrTransporter` WHERE `companyId` = ? AND `isDefault` = 1 LIMIT 1', [companyId]);
+  if (!def) return 0;
+  const result = await q('UPDATE `LorryReceipt` SET `transporterId` = ? WHERE `companyId` = ? AND `transporterId` IS NULL', [def.id, companyId]);
+  return result?.affectedRows ?? 0;
 };
