@@ -61,6 +61,9 @@ const ProductionEditPage    = page(() => import('@/pages/ProductionEditPage'), '
 const RejectionPage         = page(() => import('@/pages/RejectionPage'), 'RejectionPage');
 const JournalRegisterPage   = page(() => import('@/pages/JournalRegisterPage'), 'JournalRegisterPage');
 const PartyLedgerPage       = page(() => import('@/pages/PartyLedgerPage'), 'PartyLedgerPage');
+const LorryReceiptsPage     = page(() => import('@/pages/LorryReceiptsPage'), 'LorryReceiptsPage');
+const LorryReceiptNewPage   = page(() => import('@/pages/LorryReceiptNewPage'), 'LorryReceiptNewPage');
+const LorryReceiptPrintPage = page(() => import('@/pages/LorryReceiptPrintPage'), 'LorryReceiptPrintPage');
 const NotificationsPage     = page(() => import('@/pages/NotificationsPage'), 'NotificationsPage');
 const DispatchListPage    = page(() => import('@/pages/DispatchListPage'), 'DispatchListPage');
 const DispatchNewPage     = page(() => import('@/pages/DispatchNewPage'), 'DispatchNewPage');
@@ -163,6 +166,10 @@ export const App = () => {
       <Route path="/accounts/cashbook-summary" element={<CashbookSummaryPage />} />
       <Route path="/accounts/journal" element={<JournalRegisterPage />} />
       <Route path="/accounts/party-ledger" element={<PartyLedgerPage />} />
+      <Route path="/lr"            element={<LorryReceiptsPage />} />
+      <Route path="/lr/new"        element={<LorryReceiptNewPage />} />
+      <Route path="/lr/:id/edit"   element={<LorryReceiptNewPage />} />
+      <Route path="/lr/:id/print"  element={<LorryReceiptPrintPage />} />
       <Route path="/notifications" element={<NotificationsPage />} />
       <Route path="/accounts/purchases"      element={<PurchasesPage />} />
       <Route path="/accounts/creditor-aging" element={<CreditorAgingPage />} />

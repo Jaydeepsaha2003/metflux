@@ -10,6 +10,7 @@ export const PERMISSION_KEYS = [
   'view_testing',
   'add_customer', 'add_supplier', 'add_staff', 'add_material',
   'dispatch',
+  'view_lr', 'add_lr',
   'manage_returns',
   // Accounts — granular per page (manage_invoices kept as a legacy umbrella
   // that still passes server-side, but is no longer shown as a checkbox).
@@ -39,6 +40,8 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   add_staff:        'Manage Workers (Labours)',
   add_material:     'Manage Materials',
   dispatch:         'Dispatch & Packing List',
+  view_lr:          'View Lorry Receipts (LR)',
+  add_lr:           'Create / edit Lorry Receipts',
   manage_returns:   'Manage Returns',
   view_sales_register:   'Sales Register',
   view_debtor_aging:     'Amount Receivable + Reminders',
@@ -60,6 +63,7 @@ export const PERMISSION_GROUPS: { label: string; keys: PermissionKey[] }[] = [
   { label: 'Production',      keys: ['rec_production', 'modify_prod_qty'] },
   { label: 'Testing',         keys: ['view_testing'] },
   { label: 'Dispatch',        keys: ['dispatch'] },
+  { label: 'Lorry Receipts',  keys: ['view_lr', 'add_lr'] },
   { label: 'Returns',         keys: ['manage_returns'] },
   { label: 'Accounts', keys: ['view_sales_register', 'view_debtor_aging', 'receive_payments', 'view_purchase_register', 'view_creditor_aging'] },
   { label: 'Master Data',     keys: ['add_customer', 'add_supplier', 'add_staff', 'add_material'] },

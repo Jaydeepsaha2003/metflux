@@ -35,6 +35,9 @@ export const PERMISSION_KEYS = Object.freeze([
   'add_material',
   // Dispatch
   'dispatch',
+  // Lorry Receipts (transport consignment)
+  'view_lr',
+  'add_lr',
   // Returns
   'manage_returns',
   // Accounts — granular per page (manage_invoices kept as a legacy umbrella).
@@ -67,6 +70,8 @@ export const PERMISSION_LABELS = Object.freeze({
   add_staff:        'Manage Workers (Labours)',
   add_material:     'Manage Materials',
   dispatch:         'Dispatch & Packing List',
+  view_lr:          'View Lorry Receipts (LR)',
+  add_lr:           'Create / edit Lorry Receipts',
   manage_returns:   'Manage Returns',
   view_sales_register:   'Sales Register',
   view_debtor_aging:     'Amount Receivable + Reminders',

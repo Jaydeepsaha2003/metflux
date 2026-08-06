@@ -64,6 +64,13 @@ const NAV: NavItem[] = [
       { kind: 'leaf', to: '/dispatch/warehouse', label: 'Store / Warehouse', icon: Warehouse, perm: 'dispatch' },
     ],
   },
+  {
+    kind: 'group', key: 'lr', label: 'Lorry Receipt', icon: Truck,
+    children: [
+      { kind: 'leaf', to: '/lr/new', label: 'New LR',         icon: Plus,          perm: 'add_lr' },
+      { kind: 'leaf', to: '/lr',     label: 'LR Record Book', icon: ClipboardList, perm: 'view_lr', end: true },
+    ],
+  },
   { kind: 'leaf', to: '/returns', label: 'Return', icon: RotateCcw, perm: 'manage_returns' },
   {
     kind: 'group', key: 'accounts', label: 'Accounts', icon: Receipt,
