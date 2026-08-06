@@ -18,6 +18,10 @@ export const PERMISSION_KEYS = Object.freeze([
   'add_po',
   'view_po',
   'po_summary',
+  // Quotations (share the SO item model server-side, but get their own
+  // checkbox so granting one doesn't silently imply the other)
+  'add_quotation',
+  'view_quotation',
   // Supplier purchase orders
   'add_supplier_po',
   'view_supplier_po',
@@ -43,6 +47,7 @@ export const PERMISSION_KEYS = Object.freeze([
   // Accounts — granular per page (manage_invoices kept as a legacy umbrella).
   'view_sales_register',
   'view_debtor_aging',
+  'view_party_ledger',
   'receive_payments',
   'view_purchase_register',
   'view_creditor_aging',
@@ -59,6 +64,8 @@ export const PERMISSION_LABELS = Object.freeze({
   add_po:           'Add Sales Order',
   view_po:          'View Sales Orders',
   po_summary:       'View SO Summary',
+  add_quotation:    'Create / edit Quotations',
+  view_quotation:   'View Quotations',
   add_supplier_po:  'Create / edit Supplier PO',
   view_supplier_po: 'View Supplier POs',
   assign_work:      'Assign Work (Work Allotment)',
@@ -75,6 +82,7 @@ export const PERMISSION_LABELS = Object.freeze({
   manage_returns:   'Manage Returns',
   view_sales_register:   'Sales Register',
   view_debtor_aging:     'Amount Receivable + Reminders',
+  view_party_ledger:     'Party Ledger',
   receive_payments:      'Receive Payments / Receipts & Payments',
   view_purchase_register:'Purchase Register',
   view_creditor_aging:   'Amount Payable',

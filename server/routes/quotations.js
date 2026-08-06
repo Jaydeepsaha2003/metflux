@@ -7,7 +7,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { q, qOne, insert, update, txn, del } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
-import { requireAuth, requirePermission } from '../lib/auth.js';
+import { requireAuth, requireAnyPermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 import { logAudit } from '../lib/audit.js';
 import { notifyCompanyAdmins } from '../lib/push.js';
@@ -157,14 +157,14 @@ const loadItems = async (quotationId) => q(
 
 /* ---------- GET /quotations/next-number ---------- */
 /* Registered before /:id so "next-number" isn't captured as an id. */
-router.get('/next-number', requirePermission('view_po'), asyncHandler(async (req, res) => {
+router.get('/next-number', requireAnyPermission('view_quotation', 'view_po'), asyncHandler(async (req, res) => {
   const date = req.query.date ? new Date(String(req.query.date)) : new Date();
   const quotationNo = await nextQuotationNo(req.tenant.companyId, date, { q, qOne });
   res.json({ quotationNo });
 }));
 
 /* ---------- GET /quotations — list ---------- */
-router.get('/', requirePermission('view_po'), asyncHandler(async (req, res) => {
+router.get('/', requireAnyPermission('view_quotation', 'view_po'), asyncHandler(async (req, res) => {
   const { page, pageSize, search, status } = z.object({
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(500).default(20),
@@ -221,7 +221,7 @@ router.get('/', requirePermission('view_po'), asyncHandler(async (req, res) => {
 }));
 
 /* ---------- POST /quotations — create ---------- */
-router.post('/', requirePermission('add_po'), asyncHandler(async (req, res) => {
+router.post('/', requireAnyPermission('add_quotation', 'add_po'), asyncHandler(async (req, res) => {
   const data = createSchema.parse(req.body);
 
   const customer = await qOne(
@@ -297,7 +297,7 @@ router.post('/', requirePermission('add_po'), asyncHandler(async (req, res) => {
 }));
 
 /* ---------- GET /quotations/:id — detail (for edit + print) ---------- */
-router.get('/:id', requirePermission('view_po'), asyncHandler(async (req, res) => {
+router.get('/:id', requireAnyPermission('view_quotation', 'view_po'), asyncHandler(async (req, res) => {
   const quotation = await qOne(
     'SELECT * FROM `Quotation` WHERE `id` = ? AND `companyId` = ?',
     [req.params.id, req.tenant.companyId]
@@ -312,7 +312,7 @@ router.get('/:id', requirePermission('view_po'), asyncHandler(async (req, res) =
 /* Only OPEN quotations can be edited; a CONVERTED one is locked. Items are
    replaced wholesale (delete + re-insert) since a quotation is a standalone
    draft with no downstream references until converted. */
-router.put('/:id', requirePermission('add_po'), asyncHandler(async (req, res) => {
+router.put('/:id', requireAnyPermission('add_quotation', 'add_po'), asyncHandler(async (req, res) => {
   const data = createSchema.parse(req.body);
   const quotation = await qOne(
     'SELECT * FROM `Quotation` WHERE `id` = ? AND `companyId` = ?',
@@ -383,7 +383,7 @@ const headerUpdateSchema = z.object({
   terms:         z.string().max(4000).optional().nullable(),
 });
 
-router.patch('/:id', requirePermission('add_po'), asyncHandler(async (req, res) => {
+router.patch('/:id', requireAnyPermission('add_quotation', 'add_po'), asyncHandler(async (req, res) => {
   const data = headerUpdateSchema.parse(req.body);
   const quotation = await qOne(
     'SELECT * FROM `Quotation` WHERE `id` = ? AND `companyId` = ?',
@@ -433,7 +433,7 @@ const freePoNumber = async (tx, companyId, wanted) => {
   throw new AppError('Could not find a free Sales Order number — pass one explicitly', 409, 'PO_DUPLICATE');
 };
 
-router.post('/:id/convert', requirePermission('add_po'), asyncHandler(async (req, res) => {
+router.post('/:id/convert', requireAnyPermission('add_quotation', 'add_po'), asyncHandler(async (req, res) => {
   const data = convertSchema.parse(req.body ?? {});
   const quotation = await qOne(
     'SELECT * FROM `Quotation` WHERE `id` = ? AND `companyId` = ?',
@@ -501,7 +501,7 @@ router.post('/:id/convert', requirePermission('add_po'), asyncHandler(async (req
 }));
 
 /* ---------- DELETE /quotations/:id ---------- */
-router.delete('/:id', requirePermission('add_po'), asyncHandler(async (req, res) => {
+router.delete('/:id', requireAnyPermission('add_quotation', 'add_po'), asyncHandler(async (req, res) => {
   const quotation = await qOne(
     'SELECT * FROM `Quotation` WHERE `id` = ? AND `companyId` = ?',
     [req.params.id, req.tenant.companyId]

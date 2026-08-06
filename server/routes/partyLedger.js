@@ -15,7 +15,7 @@ import { round2, normName } from '../lib/invoicing.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
-const PERM = ['view_debtor_aging', 'view_creditor_aging', 'view_sales_register', 'view_purchase_register', 'receive_payments', 'manage_invoices'];
+const PERM = ['view_party_ledger', 'view_debtor_aging', 'view_creditor_aging', 'view_sales_register', 'view_purchase_register', 'receive_payments', 'manage_invoices'];
 
 /* Build the company's party map: normKey -> { name, isCustomer, isSupplier }.
    Display name prefers the Customer master, then Supplier, then a document name. */

@@ -4,6 +4,7 @@
 export const PERMISSION_KEYS = [
   'view_dashboard', 'view_analysis',
   'add_po', 'view_po', 'po_summary',
+  'add_quotation', 'view_quotation',
   'add_supplier_po', 'view_supplier_po',
   'assign_work',
   'rec_production', 'modify_prod_qty',
@@ -14,7 +15,7 @@ export const PERMISSION_KEYS = [
   'manage_returns',
   // Accounts — granular per page (manage_invoices kept as a legacy umbrella
   // that still passes server-side, but is no longer shown as a checkbox).
-  'view_sales_register', 'view_debtor_aging', 'receive_payments',
+  'view_sales_register', 'view_debtor_aging', 'view_party_ledger', 'receive_payments',
   'view_purchase_register', 'view_creditor_aging',
   'manage_invoices',
   'manage_users',
@@ -29,6 +30,8 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   add_po:           'Add Sales Order',
   view_po:          'View Sales Orders',
   po_summary:       'View SO Summary',
+  add_quotation:    'Create / edit Quotations',
+  view_quotation:   'View Quotations',
   add_supplier_po:  'Create / edit Supplier PO',
   view_supplier_po: 'View Supplier POs',
   assign_work:      'Assign Work (Work Allotment)',
@@ -45,6 +48,7 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   manage_returns:   'Manage Returns',
   view_sales_register:   'Sales Register',
   view_debtor_aging:     'Amount Receivable + Reminders',
+  view_party_ledger:     'Party Ledger',
   receive_payments:      'Receive Payments / Receipts & Payments',
   view_purchase_register:'Purchase Register',
   view_creditor_aging:   'Amount Payable',
@@ -57,7 +61,7 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
 // (manage_invoices is intentionally omitted — it stays valid but hidden.)
 export const PERMISSION_GROUPS: { label: string; keys: PermissionKey[] }[] = [
   { label: 'Overview',        keys: ['view_dashboard', 'view_analysis'] },
-  { label: 'Sales Orders',    keys: ['add_po', 'view_po', 'po_summary'] },
+  { label: 'Sales Orders',    keys: ['add_po', 'view_po', 'po_summary', 'add_quotation', 'view_quotation'] },
   { label: 'Supplier Orders', keys: ['add_supplier_po', 'view_supplier_po'] },
   { label: 'Work Allotment',  keys: ['assign_work'] },
   { label: 'Production',      keys: ['rec_production', 'modify_prod_qty'] },
@@ -65,7 +69,7 @@ export const PERMISSION_GROUPS: { label: string; keys: PermissionKey[] }[] = [
   { label: 'Dispatch',        keys: ['dispatch'] },
   { label: 'Lorry Receipts',  keys: ['view_lr', 'add_lr'] },
   { label: 'Returns',         keys: ['manage_returns'] },
-  { label: 'Accounts', keys: ['view_sales_register', 'view_debtor_aging', 'receive_payments', 'view_purchase_register', 'view_creditor_aging'] },
+  { label: 'Accounts', keys: ['view_sales_register', 'view_debtor_aging', 'view_party_ledger', 'receive_payments', 'view_purchase_register', 'view_creditor_aging'] },
   { label: 'Master Data',     keys: ['add_customer', 'add_supplier', 'add_staff', 'add_material'] },
   { label: 'Administration',  keys: ['manage_users', 'view_audit_log'] },
 ];
