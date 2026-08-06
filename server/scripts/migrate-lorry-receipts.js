@@ -9,6 +9,10 @@ const tableExists = async (t) => {
   const r = await qOne('SELECT COUNT(*) n FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?', [t]);
   return Number(r?.n ?? 0) > 0;
 };
+const columnExists = async (t, c) => {
+  const r = await qOne('SELECT COUNT(*) n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?', [t, c]);
+  return Number(r?.n ?? 0) > 0;
+};
 
 const main = async () => {
   if (!(await tableExists('LrParty'))) {
@@ -79,6 +83,33 @@ const main = async () => {
       ) DEFAULT CHARSET=utf8mb4`);
     console.log('[migrate] created LorryReceipt');
   } else console.log('[migrate] LorryReceipt exists — skipping');
+
+  if (!(await tableExists('LrTransporter'))) {
+    await pool.query(`
+      CREATE TABLE \`LrTransporter\` (
+        \`id\`        VARCHAR(191) NOT NULL,
+        \`companyId\` VARCHAR(191) NOT NULL,
+        \`name\`      VARCHAR(255) NOT NULL,
+        \`tagline\`   VARCHAR(255) NULL,
+        \`address\`   VARCHAR(500) NULL,
+        \`phone\`     VARCHAR(120) NULL,
+        \`email\`     VARCHAR(160) NULL,
+        \`gstin\`     VARCHAR(40)  NULL,
+        \`pan\`       VARCHAR(20)  NULL,
+        \`logo\`      LONGTEXT     NULL,
+        \`isDefault\` TINYINT(1)   NOT NULL DEFAULT 0,
+        \`createdAt\` DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        \`updatedAt\` DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        PRIMARY KEY (\`id\`),
+        INDEX \`LrTransporter_companyId_idx\` (\`companyId\`)
+      ) DEFAULT CHARSET=utf8mb4`);
+    console.log('[migrate] created LrTransporter');
+  } else console.log('[migrate] LrTransporter exists — skipping');
+
+  if (await tableExists('LorryReceipt') && !(await columnExists('LorryReceipt', 'transporterId'))) {
+    await pool.query('ALTER TABLE `LorryReceipt` ADD COLUMN `transporterId` VARCHAR(191) NULL');
+    console.log('[migrate] added LorryReceipt.transporterId');
+  }
 
   console.log('[migrate] done.');
 };

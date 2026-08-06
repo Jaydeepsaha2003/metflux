@@ -13,7 +13,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Printer, ArrowLeft, Pencil, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { type LorryReceipt, inrLR } from '@/lib/lr';
+import { type LorryReceipt, type LrTransporter, inrLR } from '@/lib/lr';
 
 type CompanyMe = {
   name: string; address: string | null; phone: string | null; whatsappNumber?: string | null;
@@ -55,6 +55,10 @@ export const LorryReceiptPrintPage = () => {
     queryKey: ['company-me'],
     queryFn: () => api<CompanyMe>('/companies/me'),
   });
+  const { data: transporters } = useQuery({
+    queryKey: ['lr-transporters'],
+    queryFn: () => api<{ items: LrTransporter[] }>('/lorry-receipts/transporters'),
+  });
 
   if (isLoading) {
     return <div className="card p-10 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-slate-400" /></div>;
@@ -62,6 +66,33 @@ export const LorryReceiptPrintPage = () => {
   if (!lr) {
     return <div className="card p-10 text-center text-slate-400">Lorry Receipt not found.</div>;
   }
+
+  // Letterhead source: the LR's chosen transporter → the default transporter →
+  // fall back to the active company. `head` is a normalised shape either way.
+  const list = transporters?.items ?? [];
+  const picked =
+    list.find((t) => t.id === lr.transporterId) ??
+    list.find((t) => !!t.isDefault) ??
+    null;
+  const head = picked
+    ? {
+        name: picked.name,
+        tagline: picked.tagline ?? undefined,
+        address: picked.address ?? undefined,
+        phone: picked.phone ?? undefined,
+        email: picked.email ?? undefined,
+        gstin: picked.gstin ?? undefined,
+        logo: picked.logo ?? undefined,
+      }
+    : {
+        name: company?.name ?? 'Transporter Name',
+        tagline: undefined as string | undefined,
+        address: company?.address ?? undefined,
+        phone: company?.phone ?? undefined,
+        email: company?.email ?? undefined,
+        gstin: company?.gstNumber ?? undefined,
+        logo: company?.logoUrl ?? undefined,
+      };
 
   const freightBase = (Number(lr.chargedWt) || 0) * (Number(lr.rate) || 0);
   const payMode = lr.paymentMode;
@@ -110,15 +141,17 @@ export const LorryReceiptPrintPage = () => {
           <div className="flex items-stretch border-b border-slate-800">
             <div className="flex-1 px-3 py-2 border-r border-slate-800 min-w-0">
               <div className="flex items-start gap-3">
-                {company?.logoUrl && (
-                  <img src={company.logoUrl} alt={company.name} className="h-12 w-auto max-w-[120px] object-contain shrink-0" />
+                {head.logo && (
+                  <img src={head.logo} alt={head.name} className="h-12 w-auto max-w-[120px] object-contain shrink-0" />
                 )}
                 <div className="min-w-0">
-                  <div className="text-lg font-black uppercase tracking-wide leading-tight">{company?.name ?? 'Transporter Name'}</div>
-                  {company?.address && <div className="text-[11px] text-slate-700 leading-snug whitespace-pre-line">{company.address}</div>}
+                  <div className="text-lg font-black uppercase tracking-wide leading-tight">{head.name}</div>
+                  {head.tagline && <div className="text-[11px] text-slate-600 italic leading-snug">{head.tagline}</div>}
+                  {head.address && <div className="text-[11px] text-slate-700 leading-snug whitespace-pre-line">{head.address}</div>}
                   <div className="text-[11px] text-slate-700 leading-snug">
-                    {company?.phone && <span>Phone: {company.phone}&nbsp;&nbsp;</span>}
-                    {company?.gstNumber && <span>GSTIN: <span className="font-mono">{company.gstNumber}</span></span>}
+                    {head.phone && <span>Phone: {head.phone}&nbsp;&nbsp;</span>}
+                    {head.email && <span>Email: {head.email}&nbsp;&nbsp;</span>}
+                    {head.gstin && <span>GSTIN: <span className="font-mono">{head.gstin}</span></span>}
                   </div>
                 </div>
               </div>
@@ -268,7 +301,7 @@ export const LorryReceiptPrintPage = () => {
               <div className="border-t border-slate-400 pt-1 text-slate-600">Receiver's Signature</div>
             </div>
             <div className="px-3 py-3 text-right">
-              <div className="font-semibold uppercase mb-8">For {company?.name ?? 'Transporter'}</div>
+              <div className="font-semibold uppercase mb-8">For {head.name}</div>
               <div className="border-t border-slate-400 pt-1 text-slate-600">Authorised Signatory</div>
             </div>
           </div>

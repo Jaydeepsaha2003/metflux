@@ -1,10 +1,17 @@
 // Lorry Receipt (transport consignment) shared types + freight calculation.
 export type PaymentMode = 'PAID' | 'TO-PAY' | 'TBB';
 
+export type LrTransporter = {
+  id: string; name: string; tagline: string | null; address: string | null;
+  phone: string | null; email: string | null; gstin: string | null; pan: string | null;
+  logo: string | null; isDefault: number | boolean;
+};
+
 export type LorryReceipt = {
   id: string;
   lrNo: string;
   lrDate: string;
+  transporterId: string | null;
   consignorName: string; consignorAddress: string | null; consignorGstin: string | null; consignorMobile: string | null;
   consigneeName: string; consigneeAddress: string | null; consigneeGstin: string | null; consigneeMobile: string | null;
   fromLoc: string | null; toLoc: string | null;

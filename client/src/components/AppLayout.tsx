@@ -69,6 +69,7 @@ const NAV: NavItem[] = [
     children: [
       { kind: 'leaf', to: '/lr/new', label: 'New LR',         icon: Plus,          perm: 'add_lr' },
       { kind: 'leaf', to: '/lr',     label: 'LR Record Book', icon: ClipboardList, perm: 'view_lr', end: true },
+      { kind: 'leaf', to: '/lr/settings', label: 'Settings',  icon: SettingsIcon,  perm: 'add_lr' },
     ],
   },
   { kind: 'leaf', to: '/returns', label: 'Return', icon: RotateCcw, perm: 'manage_returns' },

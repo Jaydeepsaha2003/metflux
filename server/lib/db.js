@@ -74,6 +74,7 @@ const TABLES_WITH_UPDATED_AT = new Set([
   'Quotation',
   'LrParty',
   'LorryReceipt',
+  'LrTransporter',
 ]);
 
 const pickConn = (override) => override ?? pool;

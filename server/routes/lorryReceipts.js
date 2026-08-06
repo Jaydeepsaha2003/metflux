@@ -61,6 +61,47 @@ router.post('/parties', requirePermission('add_lr'), asyncHandler(async (req, re
   res.status(201).json(row);
 }));
 
+/* ---------- transporter master (LR letterhead: name, contact, logo) ---------- */
+const transporterSchema = z.object({
+  name:    z.string().trim().min(1).max(255),
+  tagline: z.string().trim().max(255).optional().nullable(),
+  address: z.string().trim().max(500).optional().nullable(),
+  phone:   z.string().trim().max(120).optional().nullable(),
+  email:   z.string().trim().max(160).optional().nullable(),
+  gstin:   z.string().trim().max(40).optional().nullable(),
+  pan:     z.string().trim().max(20).optional().nullable(),
+  logo:    z.string().max(3_000_000).optional().nullable(), // data-URL
+  isDefault: z.coerce.boolean().optional().default(false),
+});
+
+router.get('/transporters', requirePermission('view_lr'), asyncHandler(async (req, res) => {
+  const rows = await q('SELECT * FROM `LrTransporter` WHERE `companyId` = ? ORDER BY `isDefault` DESC, `name` ASC', [req.tenant.companyId]);
+  res.json({ items: rows });
+}));
+
+router.post('/transporters', requirePermission('add_lr'), asyncHandler(async (req, res) => {
+  const data = transporterSchema.parse(req.body);
+  if (data.isDefault) await q('UPDATE `LrTransporter` SET `isDefault` = 0 WHERE `companyId` = ?', [req.tenant.companyId]);
+  const row = await insert('LrTransporter', { companyId: req.tenant.companyId, ...data, isDefault: data.isDefault ? 1 : 0 });
+  res.status(201).json(row);
+}));
+
+router.put('/transporters/:id', requirePermission('add_lr'), asyncHandler(async (req, res) => {
+  const data = transporterSchema.parse(req.body);
+  const existing = await qOne('SELECT `id` FROM `LrTransporter` WHERE `id` = ? AND `companyId` = ?', [req.params.id, req.tenant.companyId]);
+  if (!existing) throw new AppError('Transporter not found', 404, 'NOT_FOUND');
+  if (data.isDefault) await q('UPDATE `LrTransporter` SET `isDefault` = 0 WHERE `companyId` = ?', [req.tenant.companyId]);
+  const row = await update('LrTransporter', existing.id, { ...data, isDefault: data.isDefault ? 1 : 0 });
+  res.json(row);
+}));
+
+router.delete('/transporters/:id', requirePermission('add_lr'), asyncHandler(async (req, res) => {
+  const existing = await qOne('SELECT `id` FROM `LrTransporter` WHERE `id` = ? AND `companyId` = ?', [req.params.id, req.tenant.companyId]);
+  if (!existing) throw new AppError('Transporter not found', 404, 'NOT_FOUND');
+  await del('LrTransporter', existing.id);
+  res.status(204).end();
+}));
+
 /* ---------- LR record book ---------- */
 router.get('/next-number', requirePermission('add_lr'), asyncHandler(async (req, res) => {
   res.json({ lrNo: await nextLrNo(req.tenant.companyId) });
@@ -96,6 +137,7 @@ router.get('/:id', requirePermission('view_lr'), asyncHandler(async (req, res) =
 const lrSchema = z.object({
   lrNo:   z.string().trim().max(60).optional(),
   lrDate: z.coerce.date(),
+  transporterId: z.string().trim().max(191).optional().nullable(),
   consignorName: z.string().trim().min(1).max(255),
   consignorAddress: z.string().trim().max(500).optional().nullable(),
   consignorGstin: z.string().trim().max(40).optional().nullable(),
@@ -133,6 +175,7 @@ const buildRow = (data, extra = {}) => {
   const { riskFovAmount, totalValue } = computeTotal(data);
   return {
     lrDate: data.lrDate,
+    transporterId: data.transporterId ?? null,
     consignorName: data.consignorName, consignorAddress: data.consignorAddress ?? null, consignorGstin: data.consignorGstin ?? null, consignorMobile: data.consignorMobile ?? null,
     consigneeName: data.consigneeName, consigneeAddress: data.consigneeAddress ?? null, consigneeGstin: data.consigneeGstin ?? null, consigneeMobile: data.consigneeMobile ?? null,
     fromLoc: data.fromLoc ?? null, toLoc: data.toLoc ?? null,
