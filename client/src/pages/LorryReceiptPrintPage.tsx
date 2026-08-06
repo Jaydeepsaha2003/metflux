@@ -9,12 +9,15 @@
 //
 // Company source mirrors QuotationPrintPage: api<CompanyMe>('/companies/me').
 // Print via window.print(); toolbar hidden on print.
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Printer, ArrowLeft, Pencil, Loader2 } from 'lucide-react';
+import { Printer, Download, ArrowLeft, Pencil, Loader2 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import QRCode from 'qrcode';
 import { api } from '@/lib/api';
 import { type LorryReceipt, type LrTransporter, inrLR } from '@/lib/lr';
+import { downloadLrPdf, printLrPdf, type LrPdf } from '@/lib/reportPdf';
 
 type CompanyMe = {
   name: string; address: string | null; phone: string | null; whatsappNumber?: string | null;
@@ -60,6 +63,8 @@ export const LorryReceiptPrintPage = () => {
     queryKey: ['lr-transporters'],
     queryFn: () => api<{ items: LrTransporter[] }>('/lorry-receipts/transporters'),
   });
+  const [busy, setBusy] = useState<'download' | 'print' | null>(null);
+  const [pdfErr, setPdfErr] = useState('');
 
   if (isLoading) {
     return <div className="card p-10 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-slate-400" /></div>;
@@ -105,6 +110,60 @@ export const LorryReceiptPrintPage = () => {
     : payMode === 'TO-PAY' ? 'border-amber-600 text-amber-700 bg-amber-50'
     : 'border-slate-600 text-slate-700 bg-slate-50';
 
+  // Same charge rows shown on-screen (ChargeRow below) — Freight always,
+  // the rest only when non-zero — reused for the downloadable PDF.
+  const chargeRows: { label: string; hint?: string; value: number }[] = [
+    { label: 'Freight', hint: `${inrLR(lr.chargedWt)} × ${inrLR(lr.rate)}`, value: freightBase },
+  ];
+  if (lr.stCh) chargeRows.push({ label: 'ST Charge', value: lr.stCh });
+  if (lr.hamali) chargeRows.push({ label: 'Hamali', value: lr.hamali });
+  if (lr.otherCh) chargeRows.push({ label: 'Other', value: lr.otherCh });
+  if (lr.ddCh) chargeRows.push({ label: 'D/D Charge', value: lr.ddCh });
+  if (lr.riskFovAmount) chargeRows.push({ label: 'Risk/FOV', hint: lr.riskFovPct ? `@ ${lr.riskFovPct}%` : undefined, value: lr.riskFovAmount });
+
+  // Filename mirrors the app's convention (illegal characters → "-") plus the
+  // party name, e.g. "LR-BL-0073-WELLMAN POWER PVT LTD.pdf".
+  const sanitize = (s: string) => s.replace(/[\\/:*?"<>|]/g, '-').trim();
+  const fileName = () => `LR-${sanitize(lr.lrNo || 'Draft')}-${sanitize(lr.consigneeName || 'Party')}`;
+
+  const buildPdfData = async (): Promise<LrPdf> => {
+    const qrDataUrl = ecopyUrl
+      ? await QRCode.toDataURL(ecopyUrl, { width: 240, margin: 0, color: { dark: '#0f172a', light: '#ffffff' } })
+      : undefined;
+    return {
+      copyLabel: 'Consignor Copy',
+      head: { name: head.name, tagline: head.tagline, address: head.address, phone: head.phone, email: head.email, gstin: head.gstin, logo: head.logo ?? undefined },
+      lrNo: lr.lrNo, lrDate: fmtDate(lr.lrDate), paymentMode: payMode,
+      consignor: { name: lr.consignorName, address: lr.consignorAddress ?? undefined, gstin: lr.consignorGstin ?? undefined, mobile: lr.consignorMobile ?? undefined },
+      consignee: { name: lr.consigneeName, address: lr.consigneeAddress ?? undefined, gstin: lr.consigneeGstin ?? undefined, mobile: lr.consigneeMobile ?? undefined },
+      fromLoc: lr.fromLoc ?? '', toLoc: lr.toLoc ?? '', modeOfDispatch: lr.modeOfDispatch ?? '', vehNo: lr.vehNo ?? '',
+      goods: { packages: String(lr.packages), packMethod: lr.packMethod ?? '', particular: lr.particular ?? '', actualWt: inrLR(lr.actualWt), chargedWt: inrLR(lr.chargedWt) },
+      charges: chargeRows.map((c) => ({ label: c.label, hint: c.hint, value: inrLR(c.value) })),
+      total: `₹${inrLR(lr.totalValue)}`,
+      documents: {
+        invNo: [lr.invNo, lr.invDate ? fmtDate(lr.invDate) : ''].filter(Boolean).join(' · '),
+        ewayBillNo: lr.ewayBillNo ?? '', valueDeclare: `₹${inrLR(lr.valueDeclare)}`,
+      },
+      remark: lr.remark ?? undefined,
+      qrDataUrl,
+    };
+  };
+
+  const onDownload = async () => {
+    setPdfErr(''); setBusy('download');
+    try { await downloadLrPdf(await buildPdfData(), `${fileName()}.pdf`); }
+    catch (e) { setPdfErr(e instanceof Error ? e.message : 'Failed to generate the PDF'); }
+    finally { setBusy(null); }
+  };
+  // Prints the actual generated PDF (not the HTML page) — guarantees exact A4
+  // layout and has no browser header/footer to worry about.
+  const onPrint = async () => {
+    setPdfErr(''); setBusy('print');
+    try { await printLrPdf(await buildPdfData()); }
+    catch (e) { setPdfErr(e instanceof Error ? e.message : 'Failed to open the print dialog'); }
+    finally { setBusy(null); }
+  };
+
   return (
     <div className="space-y-4">
       {/* Print rules: hide the toolbar, drop shadow/margins so only the note prints.
@@ -131,11 +190,17 @@ export const LorryReceiptPrintPage = () => {
           <Link to={`/lr/${id}/edit`} className="btn-ghost text-slate-600 hover:bg-slate-100">
             <Pencil className="h-4 w-4" /> Edit
           </Link>
-          <button type="button" onClick={() => window.print()} className="btn-primary">
-            <Printer className="h-4 w-4" /> Print / Save PDF
+          <button type="button" onClick={onPrint} disabled={busy !== null} className="btn-ghost border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-50">
+            {busy === 'print' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />} Print
+          </button>
+          <button type="button" onClick={onDownload} disabled={busy !== null} className="btn-primary disabled:opacity-50">
+            {busy === 'download' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Download PDF
           </button>
         </div>
       </div>
+      {pdfErr && (
+        <div className="lr-toolbar max-w-[820px] mx-auto rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 print:hidden">{pdfErr}</div>
+      )}
 
       {/* ── Printable consignment note ── */}
       <div className="lr-sheet bg-white text-slate-900 max-w-[820px] mx-auto shadow-md print:shadow-none text-[12px]">

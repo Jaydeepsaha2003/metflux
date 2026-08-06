@@ -2,10 +2,13 @@
 // printed LR. Reached at /lr/view/:token OUTSIDE the auth guard. Because it is a
 // public page, data is fetched with a PLAIN fetch (never the authed api() helper,
 // which can redirect on 401) — mirroring CustomerPortalPage's approach.
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, AlertCircle, Printer, Truck, MapPin, Phone, Mail } from 'lucide-react';
+import { Loader2, AlertCircle, Printer, Download, Truck, MapPin, Phone, Mail } from 'lucide-react';
+import QRCode from 'qrcode';
 import { type LorryReceipt, inrLR } from '@/lib/lr';
+import { downloadLrPdf, type LrPdf } from '@/lib/reportPdf';
 
 /* ── API shape ──────────────────────────────────────────────── */
 type Transporter = {
@@ -95,6 +98,8 @@ export const LrPublicViewPage = () => {
     retry: false,
     staleTime: 5 * 60_000,
   });
+  const [busy, setBusy] = useState(false);
+  const [pdfErr, setPdfErr] = useState('');
 
   if (isLoading) {
     return (
@@ -134,6 +139,52 @@ export const LrPublicViewPage = () => {
   const stamp = PAY_STAMP[lr.paymentMode] ?? PAY_STAMP.TBB;
   const freightBase = Number(lr.chargedWt || 0) * Number(lr.rate || 0);
 
+  // Same charge rows shown below (ChargeRow) — reused for the downloadable PDF.
+  const chargeRows: { label: string; hint?: string; value: number }[] = [
+    { label: 'Freight', hint: `${inrLR(lr.chargedWt)} × ${inrLR(lr.rate)}`, value: freightBase },
+  ];
+  if (lr.stCh) chargeRows.push({ label: 'ST Charge', value: lr.stCh });
+  if (lr.hamali) chargeRows.push({ label: 'Hamali', value: lr.hamali });
+  if (lr.otherCh) chargeRows.push({ label: 'Other', value: lr.otherCh });
+  if (lr.ddCh) chargeRows.push({ label: 'D/D Charge', value: lr.ddCh });
+  if (lr.riskFovAmount) chargeRows.push({ label: 'Risk/FOV', hint: lr.riskFovPct ? `@ ${lr.riskFovPct}%` : undefined, value: lr.riskFovAmount });
+
+  // Filename mirrors the app's convention: "LR-<lrNo>-<party name>.pdf".
+  const sanitize = (s: string) => s.replace(/[\\/:*?"<>|]/g, '-').trim();
+  const fileName = () => `LR-${sanitize(lr.lrNo || 'Draft')}-${sanitize(lr.consigneeName || 'Party')}`;
+
+  const onDownload = async () => {
+    setPdfErr(''); setBusy(true);
+    try {
+      const ecopyUrl = lr.publicToken ? `${window.location.origin}/s/admin/lr/view/${lr.publicToken}` : '';
+      const qrDataUrl = ecopyUrl
+        ? await QRCode.toDataURL(ecopyUrl, { width: 240, margin: 0, color: { dark: '#0f172a', light: '#ffffff' } })
+        : undefined;
+      const data: LrPdf = {
+        copyLabel: 'e-Copy',
+        head: { name: head.name, tagline: head.tagline ?? undefined, address: head.address ?? undefined, phone: head.phone ?? undefined, email: head.email ?? undefined, gstin: head.gstin ?? undefined, logo: head.logo ?? undefined },
+        lrNo: lr.lrNo, lrDate: fmtDate(lr.lrDate), paymentMode: lr.paymentMode,
+        consignor: { name: lr.consignorName, address: lr.consignorAddress ?? undefined, gstin: lr.consignorGstin ?? undefined, mobile: lr.consignorMobile ?? undefined },
+        consignee: { name: lr.consigneeName, address: lr.consigneeAddress ?? undefined, gstin: lr.consigneeGstin ?? undefined, mobile: lr.consigneeMobile ?? undefined },
+        fromLoc: lr.fromLoc ?? '', toLoc: lr.toLoc ?? '', modeOfDispatch: lr.modeOfDispatch ?? '', vehNo: lr.vehNo ?? '',
+        goods: { packages: String(lr.packages), packMethod: lr.packMethod ?? '', particular: lr.particular ?? '', actualWt: inrLR(lr.actualWt), chargedWt: inrLR(lr.chargedWt) },
+        charges: chargeRows.map((c) => ({ label: c.label, hint: c.hint, value: inrLR(c.value) })),
+        total: `₹${inrLR(lr.totalValue)}`,
+        documents: {
+          invNo: [lr.invNo, lr.invDate ? fmtDate(lr.invDate) : ''].filter(Boolean).join(' · '),
+          ewayBillNo: lr.ewayBillNo ?? '', valueDeclare: `₹${inrLR(lr.valueDeclare)}`,
+        },
+        remark: lr.remark ?? undefined,
+        qrDataUrl,
+      };
+      await downloadLrPdf(data, `${fileName()}.pdf`);
+    } catch (e) {
+      setPdfErr(e instanceof Error ? e.message : 'Failed to generate the PDF');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-100">
       {/* @page margin is 0 on purpose — with any margin set, the browser draws its
@@ -147,17 +198,29 @@ export const LrPublicViewPage = () => {
       }`}</style>
 
       <div className="mx-auto max-w-[720px] p-3 sm:p-5 print:max-w-none print:p-[10mm]">
-        {/* Print / download button (hidden on print). */}
-        <div className="mb-3 flex justify-end print:hidden">
+        {/* Print / download buttons (hidden on print). */}
+        <div className="mb-3 flex justify-end gap-2 print:hidden">
           <button
             type="button"
             onClick={() => window.print()}
-            className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-700"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
           >
             <Printer className="h-4 w-4" />
-            Download / Print
+            Print
+          </button>
+          <button
+            type="button"
+            onClick={onDownload}
+            disabled={busy}
+            className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-700 disabled:opacity-50"
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            Download PDF
           </button>
         </div>
+        {pdfErr && (
+          <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 print:hidden">{pdfErr}</div>
+        )}
 
         {/* Document */}
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm print:border-0 print:shadow-none">

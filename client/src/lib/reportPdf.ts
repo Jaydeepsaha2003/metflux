@@ -572,6 +572,164 @@ rightStack.push({
   };
 };
 
+/* ── Lorry Receipt (transport consignment note) ─────────────────
+   Neutral bordered "Tally-style" grid (not brand-tinted) — this is a
+   transport industry document, not a company-branded one, and the
+   transporter usually has its own identity/logo already in the letterhead. */
+export type LrPdf = {
+  copyLabel: string;
+  head: { name: string; tagline?: string; address?: string; phone?: string; email?: string; gstin?: string; logo?: string };
+  lrNo: string; lrDate: string; paymentMode: string;
+  consignor: { name: string; address?: string; gstin?: string; mobile?: string };
+  consignee: { name: string; address?: string; gstin?: string; mobile?: string };
+  fromLoc: string; toLoc: string; modeOfDispatch: string; vehNo: string;
+  goods: { packages: string; packMethod: string; particular: string; actualWt: string; chargedWt: string };
+  charges: Array<{ label: string; hint?: string; value: string }>;
+  total: string;
+  documents: { invNo: string; ewayBillNo: string; valueDeclare: string };
+  remark?: string;
+  qrDataUrl?: string;
+};
+
+const buildLrDoc = (d: LrPdf) => {
+  const NAVY = '#1e293b';
+  const boxLayout = { hLineWidth: () => 1, vLineWidth: () => 1, hLineColor: () => NAVY, vLineColor: () => NAVY, paddingLeft: () => 8, paddingRight: () => 8, paddingTop: () => 5, paddingBottom: () => 5 };
+  const gridLayout = { hLineWidth: () => 0.5, vLineWidth: () => 0.5, hLineColor: () => LIGHT, vLineColor: () => LIGHT, paddingLeft: () => 4, paddingRight: () => 4, paddingTop: () => 3, paddingBottom: () => 3 };
+  const lbl = (t: string) => ({ text: t.toUpperCase(), fontSize: 7, bold: true, color: GREY, characterSpacing: 0.4 });
+  const box = (widths: any[], body: any[][], layout: any = boxLayout) => ({ table: { widths, body }, layout });
+
+  const content: any[] = [];
+
+  // Copy label
+  content.push(box(['*'], [[{ text: d.copyLabel.toUpperCase(), alignment: 'right', fontSize: 8, bold: true, color: GREY, characterSpacing: 1 }]]));
+
+  // Letterhead + LR title box
+  const infoStack: any[] = [{ text: d.head.name.toUpperCase(), bold: true, fontSize: 14, color: INK, characterSpacing: 0.3 }];
+  if (d.head.tagline) infoStack.push({ text: d.head.tagline, italics: true, fontSize: 8.5, color: GREY, margin: [0, 1, 0, 0] });
+  if (d.head.address) infoStack.push({ text: d.head.address.replace(/\n+/g, ', '), fontSize: 8.5, color: GREY, margin: [0, 1, 0, 0] });
+  const contact = [d.head.phone && `Phone: ${d.head.phone}`, d.head.email && `Email: ${d.head.email}`].filter(Boolean).join('   ');
+  if (contact) infoStack.push({ text: contact, fontSize: 8.5, color: GREY, margin: [0, 1, 0, 0] });
+  if (d.head.gstin) infoStack.push({ text: `GSTIN: ${d.head.gstin}`, fontSize: 8.5, color: GREY, margin: [0, 1, 0, 0] });
+  const leftCell: any = d.head.logo
+    ? { columns: [{ image: d.head.logo, width: 46, fit: [46, 46] }, { width: '*', stack: infoStack, margin: [8, 0, 0, 0] }] }
+    : { stack: infoStack };
+
+  const stampColor = d.paymentMode === 'PAID' ? '#047857' : d.paymentMode === 'TO-PAY' ? '#b45309' : '#334155';
+  const stampBg = d.paymentMode === 'PAID' ? '#ecfdf5' : d.paymentMode === 'TO-PAY' ? '#fffbeb' : '#f1f5f9';
+  const rightCell: any = {
+    stack: [
+      {
+        table: { widths: ['*'], body: [[{ text: 'LORRY RECEIPT', alignment: 'center', color: WHITE, bold: true, fontSize: 11, characterSpacing: 1.5, fillColor: NAVY, margin: [0, 4, 0, 4] }]] },
+        layout: { hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => 0, paddingRight: () => 0, paddingTop: () => 0, paddingBottom: () => 0 },
+      },
+      {
+        table: { widths: ['*', '*'], body: [[
+          { stack: [lbl('LR No.'), { text: d.lrNo, bold: true, fontSize: 11, margin: [0, 1, 0, 0] }] },
+          { stack: [lbl('Date'), { text: d.lrDate, bold: true, fontSize: 10, margin: [0, 1, 0, 0] }] },
+        ]] },
+        layout: gridLayout,
+      },
+      {
+        table: { widths: ['*'], body: [[{ text: d.paymentMode, alignment: 'center', bold: true, fontSize: 10, color: stampColor, fillColor: stampBg, characterSpacing: 1, margin: [0, 4, 0, 4] }]] },
+        layout: { hLineWidth: (i: number) => (i === 0 ? 0.5 : 0), vLineWidth: () => 0.5, hLineColor: () => LIGHT, vLineColor: () => LIGHT, paddingLeft: () => 0, paddingRight: () => 0, paddingTop: () => 0, paddingBottom: () => 0 },
+      },
+    ],
+  };
+  content.push(box(['*', 190], [[leftCell, rightCell]]));
+
+  // Consignor / Consignee
+  const partyStack = (name: string, p: LrPdf['consignor']) => ({
+    stack: [
+      { text: name, fontSize: 7, bold: true, color: GREY, characterSpacing: 0.6 },
+      { text: p.name, bold: true, fontSize: 10, margin: [0, 1, 0, 0] },
+      ...(p.address ? [{ text: p.address, fontSize: 8.5, color: GREY, margin: [0, 1, 0, 0] }] : []),
+      ...(p.gstin ? [{ text: `GSTIN: ${p.gstin}`, fontSize: 8.5, color: GREY, margin: [0, 1, 0, 0] }] : []),
+      ...(p.mobile ? [{ text: `Mobile: ${p.mobile}`, fontSize: 8.5, color: GREY, margin: [0, 1, 0, 0] }] : []),
+    ],
+  });
+  content.push(box(['*', '*'], [[partyStack('CONSIGNOR', d.consignor), partyStack('CONSIGNEE', d.consignee)]]));
+
+  // From / To / Mode / Vehicle
+  const meta = (l: string, v: string) => ({ stack: [lbl(l), { text: v || '—', bold: true, fontSize: 9.5, margin: [0, 1, 0, 0] }] });
+  content.push(box(['*', '*', '*', '*'], [[meta('From', d.fromLoc), meta('To', d.toLoc), meta('Mode of Dispatch', d.modeOfDispatch), meta('Vehicle No.', d.vehNo)]]));
+
+  // Goods (left) + Charges (right)
+  const th = (t: string, align: any = 'left') => ({ text: t.toUpperCase(), bold: true, fontSize: 7, color: GREY, alignment: align, fillColor: '#f1f5f9' });
+  const goodsCell = {
+    table: {
+      widths: [28, 58, '*', 50, 56],
+      body: [
+        [th('Pkgs', 'center'), th('Method'), th('Particulars'), th('Actual Wt.', 'right'), th('Charged Wt.', 'right')],
+        [
+          { text: d.goods.packages, alignment: 'center', fontSize: 9 },
+          { text: d.goods.packMethod || '—', fontSize: 9 },
+          { text: d.goods.particular || '—', fontSize: 9 },
+          { text: d.goods.actualWt, alignment: 'right', fontSize: 9 },
+          { text: d.goods.chargedWt, alignment: 'right', fontSize: 9 },
+        ],
+      ],
+    },
+    layout: gridLayout,
+  };
+  const chargeRows = d.charges.map((c) => [
+    { text: c.hint ? `${c.label}  ${c.hint}` : c.label, fontSize: 8.5, color: GREY },
+    { text: c.value, alignment: 'right', fontSize: 9 },
+  ]);
+  const chargesCell = {
+    table: {
+      widths: ['*', 55],
+      body: [
+        [th('Charges'), th('Amount', 'right')],
+        ...chargeRows,
+        [
+          { text: 'TOTAL', bold: true, fontSize: 9, color: WHITE, fillColor: NAVY, margin: [2, 3, 2, 3] },
+          { text: d.total, bold: true, fontSize: 10, color: WHITE, fillColor: NAVY, alignment: 'right', margin: [2, 3, 2, 3] },
+        ],
+      ],
+    },
+    layout: gridLayout,
+  };
+  content.push(box(['64%', '36%'], [[goodsCell, chargesCell]]));
+
+  // Documents
+  content.push(box(['*', '*', '*'], [[
+    { stack: [lbl('Invoice No.'), { text: d.documents.invNo || '—', bold: true, fontSize: 9.5, margin: [0, 1, 0, 0] }] },
+    { stack: [lbl('E-Way Bill No.'), { text: d.documents.ewayBillNo || '—', bold: true, fontSize: 9.5, margin: [0, 1, 0, 0] }] },
+    { stack: [lbl('Value Declared'), { text: d.documents.valueDeclare, bold: true, fontSize: 9.5, margin: [0, 1, 0, 0] }] },
+  ]]));
+
+  // Remark (only when present, matching the on-screen preview)
+  if (d.remark) {
+    content.push(box(['*'], [[{ text: [{ text: 'REMARK: ', bold: true, fontSize: 8, color: GREY }, { text: d.remark, fontSize: 9 }] }]]));
+  }
+
+  // Footer: risk note + signature | QR e-copy | "For <transporter>" + signature
+  const sigLine = (t: string) => ({ stack: [
+    { text: ' ', margin: [0, 14, 0, 0] },
+    { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 150, y2: 0, lineWidth: 0.5, lineColor: GREY }] },
+    { text: t, fontSize: 7.5, color: GREY, margin: [0, 2, 0, 0] },
+  ] });
+  const footerCells: any[] = [
+    { stack: [{ text: "Goods carried at owner's risk.", italics: true, fontSize: 7.5, color: GREY }, sigLine("Receiver's Signature")] },
+    d.qrDataUrl
+      ? { stack: [{ image: d.qrDataUrl, width: 58, alignment: 'center' }, { text: 'Scan for e-copy & details', fontSize: 6.5, color: GREY, alignment: 'center', margin: [0, 2, 0, 0] }] }
+      : { text: '' },
+    { stack: [
+      { text: `For ${d.head.name}`, bold: true, fontSize: 9, alignment: 'right' },
+      { text: ' ', margin: [0, 14, 0, 0] },
+      { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 150, y2: 0, lineWidth: 0.5, lineColor: GREY }], alignment: 'right' },
+      { text: 'Authorised Signatory', fontSize: 7.5, color: GREY, alignment: 'right', margin: [0, 2, 0, 0] },
+    ] },
+  ];
+  content.push(box(['*', 70, '*'], [footerCells]));
+
+  return {
+    pageSize: 'A4', pageMargins: [24, 24, 24, 28],
+    defaultStyle: { font: 'Montserrat', fontSize: 9, color: INK, lineHeight: 1.15 },
+    content,
+  };
+};
+
 /* ── Public API ──────────────────────────────────────────────── */
 export const downloadQuotationPdf = async (data: QuotationPdf, filename: string) => {
   const pdfMake = await loadPdfMake();
@@ -596,4 +754,19 @@ export const downloadTestingReportPdf = async (data: TestingReportPdf, filename:
 export const testingReportPdfBlob = async (data: TestingReportPdf): Promise<Blob> => {
   const pdfMake = await loadPdfMake();
   return new Promise((resolve) => pdfMake.createPdf(buildTestingReportDoc(data)).getBlob(resolve));
+};
+export const downloadLrPdf = async (data: LrPdf, filename: string) => {
+  const pdfMake = await loadPdfMake();
+  pdfMake.createPdf(buildLrDoc(data)).download(filename);
+};
+export const lrPdfBlob = async (data: LrPdf): Promise<Blob> => {
+  const pdfMake = await loadPdfMake();
+  return new Promise((resolve) => pdfMake.createPdf(buildLrDoc(data)).getBlob(resolve));
+};
+// Opens the browser's native print dialog on the actual generated PDF (not the
+// HTML page) — guarantees the exact A4 vector layout prints, and sidesteps the
+// page-header/footer issue entirely since there's no HTML document being printed.
+export const printLrPdf = async (data: LrPdf) => {
+  const pdfMake = await loadPdfMake();
+  pdfMake.createPdf(buildLrDoc(data)).print();
 };
