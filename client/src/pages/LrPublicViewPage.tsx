@@ -136,13 +136,17 @@ export const LrPublicViewPage = () => {
 
   return (
     <div className="min-h-screen bg-slate-100">
-      {/* Strip page margins so the sheet prints cleanly on its own. */}
+      {/* @page margin is 0 on purpose — with any margin set, the browser draws its
+          own header/footer (date, title, URL, page count) into that space. Zero
+          margin leaves no room for it, so it disappears without the visitor having
+          to untick "Headers and footers" in the print dialog. The visual margin is
+          recreated as padding on the content wrapper instead (print:p-[10mm]). */}
       <style>{`@media print {
-        @page { margin: 10mm; }
-        html, body { background: #fff !important; }
+        @page { margin: 0; }
+        html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
       }`}</style>
 
-      <div className="mx-auto max-w-[720px] p-3 sm:p-5">
+      <div className="mx-auto max-w-[720px] p-3 sm:p-5 print:max-w-none print:p-[10mm]">
         {/* Print / download button (hidden on print). */}
         <div className="mb-3 flex justify-end print:hidden">
           <button

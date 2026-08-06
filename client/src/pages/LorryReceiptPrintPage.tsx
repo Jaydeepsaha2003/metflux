@@ -107,13 +107,19 @@ export const LorryReceiptPrintPage = () => {
 
   return (
     <div className="space-y-4">
-      {/* Print rules: hide the toolbar, drop shadow/margins so only the note prints. */}
+      {/* Print rules: hide the toolbar, drop shadow/margins so only the note prints.
+          @page margin is 0 on purpose — with any margin set, Chrome renders its own
+          header/footer (date, title, URL, page count) into that space. Zero margin
+          leaves it no room to draw them, so they disappear automatically without the
+          user having to untick "Headers and footers" in the print dialog. The visual
+          margin is recreated as padding on .lr-sheet instead. */}
       <style>{`
         @media print {
-          @page { size: A4; margin: 10mm; }
+          @page { size: A4; margin: 0; }
+          html, body { margin: 0 !important; padding: 0 !important; }
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           .lr-toolbar { display: none !important; }
-          .lr-sheet { box-shadow: none !important; margin: 0 !important; }
+          .lr-sheet { box-shadow: none !important; margin: 0 !important; padding: 10mm !important; max-width: none !important; width: 100% !important; }
         }
       `}</style>
 
