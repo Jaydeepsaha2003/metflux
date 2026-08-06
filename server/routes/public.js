@@ -7,9 +7,24 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { insert, qOne } from '../lib/db.js';
-import { asyncHandler } from '../lib/errors.js';
+import { asyncHandler, AppError } from '../lib/errors.js';
 
 const router = Router();
+
+/* GET /api/public/lr/:token — the scannable LR e-copy (no login). Returns the
+   Lorry Receipt plus its transporter letterhead + the issuing company header. */
+router.get('/lr/:token', asyncHandler(async (req, res) => {
+  const token = String(req.params.token || '').trim();
+  if (!token) throw new AppError('Not found', 404, 'NOT_FOUND');
+  const lr = await qOne('SELECT * FROM `LorryReceipt` WHERE `publicToken` = ?', [token]).catch(() => null);
+  if (!lr) throw new AppError('Lorry Receipt not found', 404, 'NOT_FOUND');
+  const transporter = lr.transporterId
+    ? await qOne('SELECT `name`,`tagline`,`address`,`phone`,`email`,`gstin`,`logo` FROM `LrTransporter` WHERE `id` = ?', [lr.transporterId]).catch(() => null)
+    : await qOne('SELECT `name`,`tagline`,`address`,`phone`,`email`,`gstin`,`logo` FROM `LrTransporter` WHERE `companyId` = ? AND `isDefault` = 1', [lr.companyId]).catch(() => null);
+  const company = await qOne('SELECT `name`,`address`,`phone`,`gstNumber`,`logoUrl` FROM `Company` WHERE `id` = ?', [lr.companyId]).catch(() => null);
+  delete lr.createdById; delete lr.companyId;
+  res.json({ lr, transporter, company });
+}));
 
 /* GET /api/public/app-branding — global webapp logo (data URL) for the login
    page + favicon. Unauthenticated; tolerates the table not existing yet. */

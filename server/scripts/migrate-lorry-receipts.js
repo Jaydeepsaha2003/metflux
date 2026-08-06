@@ -111,6 +111,19 @@ const main = async () => {
     console.log('[migrate] added LorryReceipt.transporterId');
   }
 
+  // Public share token for the QR e-copy (scannable, no login). Backfill existing.
+  if (await tableExists('LorryReceipt') && !(await columnExists('LorryReceipt', 'publicToken'))) {
+    await pool.query('ALTER TABLE `LorryReceipt` ADD COLUMN `publicToken` VARCHAR(64) NULL');
+    await pool.query('CREATE UNIQUE INDEX `LorryReceipt_publicToken_uq` ON `LorryReceipt` (`publicToken`)');
+    console.log('[migrate] added LorryReceipt.publicToken');
+  }
+  const missing = await pool.query("SELECT `id` FROM `LorryReceipt` WHERE `publicToken` IS NULL OR `publicToken` = ''").then(([r]) => r).catch(() => []);
+  for (const row of missing) {
+    const tok = (await import('crypto')).randomUUID().replace(/-/g, '');
+    await pool.query('UPDATE `LorryReceipt` SET `publicToken` = ? WHERE `id` = ?', [tok, row.id]);
+  }
+  if (missing.length) console.log(`[migrate] backfilled ${missing.length} public token(s)`);
+
   console.log('[migrate] done.');
 };
 

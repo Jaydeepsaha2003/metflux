@@ -82,3 +82,59 @@ export const downloadGroupedXlsx = (opts: {
   XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
   XLSX.writeFile(wb, filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`);
 };
+
+/** Flat (non-grouped) styled export — Calibri, bold banded header, borders,
+ *  auto-ish column widths. For a plain "one row per record" download that
+ *  still looks properly formatted (not the default SheetJS lookalike). */
+export const downloadStyledXlsx = (opts: {
+  filename: string;
+  sheetName: string;
+  headers: string[];
+  rows: Cell[][];
+  headerHex?: string;
+}) => {
+  const { filename, sheetName, headers, rows } = opts;
+  const headerFill = (opts.headerHex ?? '1F2937').replace('#', '').toUpperCase();
+
+  const aoa: Cell[][] = [headers, ...rows];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+  const thin = { style: 'thin', color: { rgb: 'D9D9D9' } };
+  const border = { top: thin, bottom: thin, left: thin, right: thin };
+
+  for (let R = range.s.r; R <= range.e.r; R++) {
+    for (let C = range.s.c; C <= range.e.c; C++) {
+      const addr = XLSX.utils.encode_cell({ r: R, c: C });
+      const cell = ws[addr] || (ws[addr] = { t: 's', v: '' });
+      const numeric = typeof cell.v === 'number';
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const style: any = {
+        font: { name: CALIBRI, sz: 10 },
+        alignment: { vertical: 'center', horizontal: numeric ? 'right' : 'left' },
+        border,
+      };
+      if (R === 0) {
+        style.font = { name: CALIBRI, sz: 10, bold: true, color: { rgb: 'FFFFFF' } };
+        style.fill = { fgColor: { rgb: headerFill } };
+        style.alignment = { vertical: 'center', horizontal: 'center', wrapText: true };
+      } else if (R % 2 === 0) {
+        style.fill = { fgColor: { rgb: 'F8FAFC' } };
+      }
+      cell.s = style;
+    }
+  }
+
+  ws['!cols'] = headers.map((h, C) => {
+    let w = String(h).length;
+    for (let R = 1; R <= range.e.r; R++) {
+      const v = ws[XLSX.utils.encode_cell({ r: R, c: C })]?.v;
+      if (v != null) w = Math.max(w, String(v).length);
+    }
+    return { wch: Math.min(Math.max(w + 2, 8), 42) };
+  });
+  ws['!rows'] = [{ hpt: 20 }];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
+  XLSX.writeFile(wb, filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`);
+};

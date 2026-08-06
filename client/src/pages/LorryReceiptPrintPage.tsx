@@ -12,6 +12,7 @@
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Printer, ArrowLeft, Pencil, Loader2 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { api } from '@/lib/api';
 import { type LorryReceipt, type LrTransporter, inrLR } from '@/lib/lr';
 
@@ -96,6 +97,8 @@ export const LorryReceiptPrintPage = () => {
 
   const freightBase = (Number(lr.chargedWt) || 0) * (Number(lr.rate) || 0);
   const payMode = lr.paymentMode;
+  // Scannable e-copy URL (public, no login) — encoded in the QR on the LR.
+  const ecopyUrl = lr.publicToken ? `${window.location.origin}/s/admin/lr/view/${lr.publicToken}` : '';
   // Colour the payment stamp: amber for TO-PAY, green for PAID, slate for TBB.
   const stampCls =
     payMode === 'PAID' ? 'border-emerald-600 text-emerald-700 bg-emerald-50'
@@ -294,11 +297,17 @@ export const LorryReceiptPrintPage = () => {
             </div>
           )}
 
-          {/* Footer: risk note + signatures */}
-          <div className="grid grid-cols-2 text-[11px]">
+          {/* Footer: risk note + QR e-copy + signatures */}
+          <div className="grid grid-cols-[1fr,auto,1fr] text-[11px]">
             <div className="px-3 py-3 border-r border-slate-800">
               <div className="text-[10px] text-slate-500 italic mb-8">Goods carried at owner's risk.</div>
               <div className="border-t border-slate-400 pt-1 text-slate-600">Receiver's Signature</div>
+            </div>
+            <div className="flex flex-col items-center justify-center gap-1 border-r border-slate-800 px-3 py-2">
+              {ecopyUrl
+                ? <QRCodeSVG value={ecopyUrl} size={78} level="M" />
+                : <div className="h-[78px] w-[78px] bg-slate-100" />}
+              <div className="text-center text-[8px] uppercase tracking-wide text-slate-500 leading-tight">Scan for e-copy<br />&amp; details</div>
             </div>
             <div className="px-3 py-3 text-right">
               <div className="font-semibold uppercase mb-8">For {head.name}</div>

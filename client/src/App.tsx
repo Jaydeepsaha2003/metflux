@@ -65,6 +65,7 @@ const LorryReceiptsPage     = page(() => import('@/pages/LorryReceiptsPage'), 'L
 const LorryReceiptNewPage   = page(() => import('@/pages/LorryReceiptNewPage'), 'LorryReceiptNewPage');
 const LorryReceiptPrintPage = page(() => import('@/pages/LorryReceiptPrintPage'), 'LorryReceiptPrintPage');
 const LrSettingsPage        = page(() => import('@/pages/LrSettingsPage'), 'LrSettingsPage');
+const LrPublicViewPage      = page(() => import('@/pages/LrPublicViewPage'), 'LrPublicViewPage');
 const NotificationsPage     = page(() => import('@/pages/NotificationsPage'), 'NotificationsPage');
 const DispatchListPage    = page(() => import('@/pages/DispatchListPage'), 'DispatchListPage');
 const DispatchNewPage     = page(() => import('@/pages/DispatchNewPage'), 'DispatchNewPage');
@@ -106,6 +107,7 @@ export const App = () => {
   <Routes>
     <Route path="/login"            element={<AuthPage />} />
     <Route path="/portal/:token"   element={<CustomerPortalPage />} />
+    <Route path="/lr/view/:token"  element={<LrPublicViewPage />} />
     <Route
       element={
         <RequireAuth>

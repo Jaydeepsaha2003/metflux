@@ -21,10 +21,12 @@ export type LorryReceipt = {
   invNo: string | null; invDate: string | null; ewayBillNo: string | null;
   modeOfDispatch: string | null; paymentMode: PaymentMode; valueDeclare: number;
   vehNo: string | null; dispatchDate: string | null; amountRec: number; remark: string | null;
+  publicToken: string | null;
   createdAt: string;
 };
 
 export type LrParty = { id: string; name: string; address: string | null; mobile: string | null; gstin: string | null };
+export type PartyOption = { name: string; source: string; address: string | null; gstin: string | null; mobile: string | null };
 
 /** Freight = charged-weight × rate + fixed heads + risk (a % of declared value). */
 export const computeFreight = (d: {

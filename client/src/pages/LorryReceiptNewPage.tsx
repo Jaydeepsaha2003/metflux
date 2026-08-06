@@ -17,7 +17,7 @@ import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import {
-  type LorryReceipt, type LrParty, type LrTransporter, type PaymentMode,
+  type LorryReceipt, type PartyOption, type LrTransporter, type PaymentMode,
   computeFreight, PAY_MODES, inrLR,
 } from '@/lib/lr';
 
@@ -115,12 +115,14 @@ export const LorryReceiptNewPage = () => {
   const [error, setError] = useState('');
 
   /* ----- party master (consignor + consignee autocomplete) ----- */
+  // Consignor/consignee options = your companies + customers + suppliers + saved
+  // LR parties (combined, de-duplicated). Selecting one fills address/GSTIN/mobile.
   const { data: partiesResp } = useQuery({
-    queryKey: ['lorry-receipts', 'parties'],
-    queryFn: () => api<{ items: LrParty[] }>('/lorry-receipts/parties'),
+    queryKey: ['lorry-receipts', 'party-options'],
+    queryFn: () => api<{ items: PartyOption[] }>('/lorry-receipts/party-options'),
   });
   const parties = partiesResp?.items ?? [];
-  const partyOptions = useMemo(() => parties.map((p) => ({ value: p.name, label: p.name })), [parties]);
+  const partyOptions = useMemo(() => parties.map((p) => ({ value: p.name, label: `${p.name}  ·  ${p.source}` })), [parties]);
 
   /* ----- transporter master (header selector) ----- */
   const { data: transportersResp } = useQuery({

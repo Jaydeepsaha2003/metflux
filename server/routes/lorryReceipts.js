@@ -61,6 +61,30 @@ router.post('/parties', requirePermission('add_lr'), asyncHandler(async (req, re
   res.status(201).json(row);
 }));
 
+/* ---------- combined party options for consignor/consignee pickers ----------
+   Lists the user's own companies + this company's customers + suppliers + any
+   saved LR parties, de-duplicated by normalized name, each with address/GSTIN/
+   mobile so selecting one fills the LR. */
+router.get('/party-options', requirePermission('view_lr'), asyncHandler(async (req, res) => {
+  const cid = req.tenant.companyId;
+  const byKey = new Map();
+  const add = (name, source, address, gstin, mobile, rank) => {
+    const nm = String(name ?? '').trim(); if (!nm) return;
+    const k = nm.toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim(); if (!k) return;
+    const cur = byKey.get(k);
+    if (!cur || rank > cur._rank) {
+      byKey.set(k, { name: nm, source, address: address ?? cur?.address ?? null, gstin: gstin ?? cur?.gstin ?? null, mobile: mobile ?? cur?.mobile ?? null, _rank: rank });
+    }
+  };
+  // Companies (the user's own — often the consignor), highest priority for detail.
+  for (const r of await q('SELECT `name`,`address`,`gstNumber`,`phone` FROM `Company`')) add(r.name, 'Company', r.address, r.gstNumber, r.phone, 4);
+  for (const r of await q('SELECT `name`,`address`,`gstNumber`,`phone` FROM `Customer` WHERE `companyId` = ?', [cid])) add(r.name, 'Customer', r.address, r.gstNumber, r.phone, 3);
+  for (const r of await q('SELECT `name`,`address`,`gstNumber`,`phone` FROM `Supplier` WHERE `companyId` = ?', [cid])) add(r.name, 'Supplier', r.address, r.gstNumber, r.phone, 2);
+  for (const r of await q('SELECT `name`,`address`,`gstin`,`mobile` FROM `LrParty` WHERE `companyId` = ?', [cid])) add(r.name, 'LR Party', r.address, r.gstin, r.mobile, 1);
+  const items = [...byKey.values()].map(({ _rank, ...p }) => p).sort((a, b) => a.name.localeCompare(b.name));
+  res.json({ items });
+}));
+
 /* ---------- transporter master (LR letterhead: name, contact, logo) ---------- */
 const transporterSchema = z.object({
   name:    z.string().trim().min(1).max(255),
@@ -189,14 +213,40 @@ const buildRow = (data, extra = {}) => {
   };
 };
 
+const publicToken = () => newId().replace(/-/g, '');
+
 router.post('/', requirePermission('add_lr'), asyncHandler(async (req, res) => {
   const data = lrSchema.parse(req.body);
   const lrNo = (data.lrNo || '').trim() || await nextLrNo(req.tenant.companyId);
   const clash = await qOne('SELECT `id` FROM `LorryReceipt` WHERE `companyId` = ? AND `lrNo` = ?', [req.tenant.companyId, lrNo]);
   if (clash) throw new AppError('That LR number already exists', 400, 'DUPLICATE_LR');
-  const row = await insert('LorryReceipt', buildRow(data, { id: newId(), companyId: req.tenant.companyId, lrNo, createdById: req.auth.userId }));
+  const row = await insert('LorryReceipt', buildRow(data, { id: newId(), companyId: req.tenant.companyId, lrNo, publicToken: publicToken(), createdById: req.auth.userId }));
   await logAudit(req, { entity: 'LorryReceipt', entityId: row.id, action: 'CREATE', summary: `LR ${lrNo} · ${data.consignorName} → ${data.consigneeName}` });
   res.status(201).json(row);
+}));
+
+/* ---------- POST /import — bulk import parsed Record-Book rows (dedup by lrNo) ---------- */
+router.post('/import', requirePermission('add_lr'), asyncHandler(async (req, res) => {
+  const { rows } = z.object({ rows: z.array(lrSchema).max(20000) }).parse(req.body);
+  const cid = req.tenant.companyId;
+  const existing = new Set((await q('SELECT `lrNo` FROM `LorryReceipt` WHERE `companyId` = ?', [cid])).map((r) => r.lrNo));
+  let imported = 0, skipped = 0; const errors = [];
+  for (const data of rows) {
+    const lrNo = (data.lrNo || '').trim();
+    if (!lrNo) { errors.push('Row missing LR No'); continue; }
+    if (existing.has(lrNo)) { skipped++; continue; }
+    try {
+      await insert('LorryReceipt', buildRow(data, { id: newId(), companyId: cid, lrNo, publicToken: publicToken(), createdById: req.auth.userId }));
+      existing.add(lrNo); imported++;
+      // Upsert consignor/consignee into the LR party master.
+      for (const [nm, addr, gst, mob] of [[data.consignorName, data.consignorAddress, data.consignorGstin, data.consignorMobile], [data.consigneeName, data.consigneeAddress, data.consigneeGstin, data.consigneeMobile]]) {
+        if (!nm) continue;
+        const p = await qOne('SELECT `id` FROM `LrParty` WHERE `companyId` = ? AND `name` = ?', [cid, nm]);
+        if (!p) await insert('LrParty', { companyId: cid, name: nm, address: addr ?? null, gstin: gst ?? null, mobile: mob ?? null }).catch(() => {});
+      }
+    } catch (e) { errors.push(`${lrNo}: ${e.message}`); }
+  }
+  res.json({ imported, skipped, errors: errors.slice(0, 50) });
 }));
 
 router.put('/:id', requirePermission('add_lr'), asyncHandler(async (req, res) => {
