@@ -23,6 +23,12 @@ import {
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const dateStr = (v: string | null | undefined) => (v ? String(v).slice(0, 10) : '');
+const normDispatchMode = (v: string | null | undefined) => {
+  const s = String(v ?? '').toUpperCase();
+  if (s.includes('AIR')) return 'BY AIR';
+  if (s.includes('TRAIN') || s.includes('RAIL')) return 'BY TRAIN';
+  return 'BY ROAD';
+};
 
 /* ----- section card (coloured left accent bar + icon chip per section) ----- */
 type Accent = 'brand' | 'indigo' | 'teal' | 'amber' | 'emerald' | 'slate';
@@ -179,7 +185,9 @@ export const LorryReceiptNewPage = () => {
     setLrNo(existing.lrNo ?? '');
     setLrDate(dateStr(existing.lrDate) || todayISO());
     setPaymentMode(existing.paymentMode ?? 'TO-PAY');
-    setModeOfDispatch(existing.modeOfDispatch ?? 'BY ROAD');
+    // Older/imported rows may carry free-text (e.g. "By road."); normalise to
+    // one of the three dropdown options so the select always shows a real value.
+    setModeOfDispatch(normDispatchMode(existing.modeOfDispatch));
     setTransporterId(existing.transporterId ?? '');
     setConsignorName(existing.consignorName ?? '');
     setConsignorAddress(existing.consignorAddress ?? '');
@@ -364,7 +372,11 @@ export const LorryReceiptNewPage = () => {
           </label>
           <label className="block">
             <span className={label}>Mode of Dispatch</span>
-            <input className="input" value={modeOfDispatch} onChange={(e) => setModeOfDispatch(e.target.value)} placeholder="BY ROAD" />
+            <select className="input" value={modeOfDispatch} onChange={(e) => setModeOfDispatch(e.target.value)}>
+              <option value="BY ROAD">By Road</option>
+              <option value="BY AIR">By Air</option>
+              <option value="BY TRAIN">By Train</option>
+            </select>
           </label>
         </div>
       </SectionCard>
