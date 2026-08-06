@@ -593,8 +593,8 @@ export type LrPdf = {
 
 const buildLrDoc = (d: LrPdf) => {
   const NAVY = '#1e293b';
-  const boxLayout = { hLineWidth: () => 1, vLineWidth: () => 1, hLineColor: () => NAVY, vLineColor: () => NAVY, paddingLeft: () => 8, paddingRight: () => 8, paddingTop: () => 5, paddingBottom: () => 5 };
-  const gridLayout = { hLineWidth: () => 0.5, vLineWidth: () => 0.5, hLineColor: () => LIGHT, vLineColor: () => LIGHT, paddingLeft: () => 4, paddingRight: () => 4, paddingTop: () => 3, paddingBottom: () => 3 };
+  const boxLayout = { hLineWidth: () => 1, vLineWidth: () => 1, hLineColor: () => NAVY, vLineColor: () => NAVY, paddingLeft: () => 8, paddingRight: () => 8, paddingTop: () => 7, paddingBottom: () => 7 };
+  const gridLayout = { hLineWidth: () => 0.5, vLineWidth: () => 0.5, hLineColor: () => LIGHT, vLineColor: () => LIGHT, paddingLeft: () => 5, paddingRight: () => 5, paddingTop: () => 4.5, paddingBottom: () => 4.5 };
   const lbl = (t: string) => ({ text: t.toUpperCase(), fontSize: 7, bold: true, color: GREY, characterSpacing: 0.4 });
   const box = (widths: any[], body: any[][], layout: any = boxLayout) => ({ table: { widths, body }, layout });
 
@@ -605,11 +605,11 @@ const buildLrDoc = (d: LrPdf) => {
 
   // Letterhead + LR title box
   const infoStack: any[] = [{ text: d.head.name.toUpperCase(), bold: true, fontSize: 14, color: INK, characterSpacing: 0.3 }];
-  if (d.head.tagline) infoStack.push({ text: d.head.tagline, italics: true, fontSize: 8.5, color: GREY, margin: [0, 1, 0, 0] });
-  if (d.head.address) infoStack.push({ text: d.head.address.replace(/\n+/g, ', '), fontSize: 8.5, color: GREY, margin: [0, 1, 0, 0] });
+  if (d.head.tagline) infoStack.push({ text: d.head.tagline, italics: true, fontSize: 8.5, color: GREY, margin: [0, 2, 0, 0] });
+  if (d.head.address) infoStack.push({ text: d.head.address.replace(/\n+/g, ', '), fontSize: 8.5, color: GREY, margin: [0, 2, 0, 0] });
   const contact = [d.head.phone && `Phone: ${d.head.phone}`, d.head.email && `Email: ${d.head.email}`].filter(Boolean).join('   ');
-  if (contact) infoStack.push({ text: contact, fontSize: 8.5, color: GREY, margin: [0, 1, 0, 0] });
-  if (d.head.gstin) infoStack.push({ text: `GSTIN: ${d.head.gstin}`, fontSize: 8.5, color: GREY, margin: [0, 1, 0, 0] });
+  if (contact) infoStack.push({ text: contact, fontSize: 8.5, color: GREY, margin: [0, 2, 0, 0] });
+  if (d.head.gstin) infoStack.push({ text: `GSTIN: ${d.head.gstin}`, fontSize: 8.5, color: GREY, margin: [0, 2, 0, 0] });
   const leftCell: any = d.head.logo
     ? { columns: [{ image: d.head.logo, width: 46, fit: [46, 46] }, { width: '*', stack: infoStack, margin: [8, 0, 0, 0] }] }
     : { stack: infoStack };
@@ -619,18 +619,18 @@ const buildLrDoc = (d: LrPdf) => {
   const rightCell: any = {
     stack: [
       {
-        table: { widths: ['*'], body: [[{ text: 'LORRY RECEIPT', alignment: 'center', color: WHITE, bold: true, fontSize: 11, characterSpacing: 1.5, fillColor: NAVY, margin: [0, 4, 0, 4] }]] },
+        table: { widths: ['*'], body: [[{ text: 'LORRY RECEIPT', alignment: 'center', color: WHITE, bold: true, fontSize: 11, characterSpacing: 1.5, fillColor: NAVY, margin: [0, 5, 0, 5] }]] },
         layout: { hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => 0, paddingRight: () => 0, paddingTop: () => 0, paddingBottom: () => 0 },
       },
       {
         table: { widths: ['*', '*'], body: [[
-          { stack: [lbl('LR No.'), { text: d.lrNo, bold: true, fontSize: 11, margin: [0, 1, 0, 0] }] },
-          { stack: [lbl('Date'), { text: d.lrDate, bold: true, fontSize: 10, margin: [0, 1, 0, 0] }] },
+          { stack: [lbl('LR No.'), { text: d.lrNo, bold: true, fontSize: 11, margin: [0, 2, 0, 0] }] },
+          { stack: [lbl('Date'), { text: d.lrDate, bold: true, fontSize: 10, margin: [0, 2, 0, 0] }] },
         ]] },
         layout: gridLayout,
       },
       {
-        table: { widths: ['*'], body: [[{ text: d.paymentMode, alignment: 'center', bold: true, fontSize: 10, color: stampColor, fillColor: stampBg, characterSpacing: 1, margin: [0, 4, 0, 4] }]] },
+        table: { widths: ['*'], body: [[{ text: d.paymentMode, alignment: 'center', bold: true, fontSize: 10, color: stampColor, fillColor: stampBg, characterSpacing: 1, margin: [0, 5, 0, 5] }]] },
         layout: { hLineWidth: (i: number) => (i === 0 ? 0.5 : 0), vLineWidth: () => 0.5, hLineColor: () => LIGHT, vLineColor: () => LIGHT, paddingLeft: () => 0, paddingRight: () => 0, paddingTop: () => 0, paddingBottom: () => 0 },
       },
     ],
@@ -641,16 +641,16 @@ const buildLrDoc = (d: LrPdf) => {
   const partyStack = (name: string, p: LrPdf['consignor']) => ({
     stack: [
       { text: name, fontSize: 7, bold: true, color: GREY, characterSpacing: 0.6 },
-      { text: p.name, bold: true, fontSize: 10, margin: [0, 1, 0, 0] },
-      ...(p.address ? [{ text: p.address, fontSize: 8.5, color: GREY, margin: [0, 1, 0, 0] }] : []),
-      ...(p.gstin ? [{ text: `GSTIN: ${p.gstin}`, fontSize: 8.5, color: GREY, margin: [0, 1, 0, 0] }] : []),
-      ...(p.mobile ? [{ text: `Mobile: ${p.mobile}`, fontSize: 8.5, color: GREY, margin: [0, 1, 0, 0] }] : []),
+      { text: p.name, bold: true, fontSize: 10, margin: [0, 2, 0, 0] },
+      ...(p.address ? [{ text: p.address, fontSize: 8.5, color: GREY, margin: [0, 2, 0, 0] }] : []),
+      ...(p.gstin ? [{ text: `GSTIN: ${p.gstin}`, fontSize: 8.5, color: GREY, margin: [0, 2, 0, 0] }] : []),
+      ...(p.mobile ? [{ text: `Mobile: ${p.mobile}`, fontSize: 8.5, color: GREY, margin: [0, 2, 0, 0] }] : []),
     ],
   });
   content.push(box(['*', '*'], [[partyStack('CONSIGNOR', d.consignor), partyStack('CONSIGNEE', d.consignee)]]));
 
   // From / To / Mode / Vehicle
-  const meta = (l: string, v: string) => ({ stack: [lbl(l), { text: v || '—', bold: true, fontSize: 9.5, margin: [0, 1, 0, 0] }] });
+  const meta = (l: string, v: string) => ({ stack: [lbl(l), { text: v || '—', bold: true, fontSize: 9.5, margin: [0, 2, 0, 0] }] });
   content.push(box(['*', '*', '*', '*'], [[meta('From', d.fromLoc), meta('To', d.toLoc), meta('Mode of Dispatch', d.modeOfDispatch), meta('Vehicle No.', d.vehNo)]]));
 
   // Goods (left) + Charges (right)
@@ -693,9 +693,9 @@ const buildLrDoc = (d: LrPdf) => {
 
   // Documents
   content.push(box(['*', '*', '*'], [[
-    { stack: [lbl('Invoice No.'), { text: d.documents.invNo || '—', bold: true, fontSize: 9.5, margin: [0, 1, 0, 0] }] },
-    { stack: [lbl('E-Way Bill No.'), { text: d.documents.ewayBillNo || '—', bold: true, fontSize: 9.5, margin: [0, 1, 0, 0] }] },
-    { stack: [lbl('Value Declared'), { text: d.documents.valueDeclare, bold: true, fontSize: 9.5, margin: [0, 1, 0, 0] }] },
+    { stack: [lbl('Invoice No.'), { text: d.documents.invNo || '—', bold: true, fontSize: 9.5, margin: [0, 2, 0, 0] }] },
+    { stack: [lbl('E-Way Bill No.'), { text: d.documents.ewayBillNo || '—', bold: true, fontSize: 9.5, margin: [0, 2, 0, 0] }] },
+    { stack: [lbl('Value Declared'), { text: d.documents.valueDeclare, bold: true, fontSize: 9.5, margin: [0, 2, 0, 0] }] },
   ]]));
 
   // Remark (only when present, matching the on-screen preview)
@@ -705,27 +705,27 @@ const buildLrDoc = (d: LrPdf) => {
 
   // Footer: risk note + signature | QR e-copy | "For <transporter>" + signature
   const sigLine = (t: string) => ({ stack: [
-    { text: ' ', margin: [0, 14, 0, 0] },
+    { text: ' ', margin: [0, 20, 0, 0] },
     { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 150, y2: 0, lineWidth: 0.5, lineColor: GREY }] },
-    { text: t, fontSize: 7.5, color: GREY, margin: [0, 2, 0, 0] },
+    { text: t, fontSize: 7.5, color: GREY, margin: [0, 3, 0, 0] },
   ] });
   const footerCells: any[] = [
     { stack: [{ text: "Goods carried at owner's risk.", italics: true, fontSize: 7.5, color: GREY }, sigLine("Receiver's Signature")] },
     d.qrDataUrl
-      ? { stack: [{ image: d.qrDataUrl, width: 58, alignment: 'center' }, { text: 'Scan for e-copy & details', fontSize: 6.5, color: GREY, alignment: 'center', margin: [0, 2, 0, 0] }] }
+      ? { stack: [{ image: d.qrDataUrl, width: 58, alignment: 'center' }, { text: 'Scan for e-copy & details', fontSize: 6.5, color: GREY, alignment: 'center', margin: [0, 3, 0, 0] }] }
       : { text: '' },
     { stack: [
       { text: `For ${d.head.name}`, bold: true, fontSize: 9, alignment: 'right' },
-      { text: ' ', margin: [0, 14, 0, 0] },
+      { text: ' ', margin: [0, 20, 0, 0] },
       { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 150, y2: 0, lineWidth: 0.5, lineColor: GREY }], alignment: 'right' },
-      { text: 'Authorised Signatory', fontSize: 7.5, color: GREY, alignment: 'right', margin: [0, 2, 0, 0] },
+      { text: 'Authorised Signatory', fontSize: 7.5, color: GREY, alignment: 'right', margin: [0, 3, 0, 0] },
     ] },
   ];
   content.push(box(['*', 70, '*'], [footerCells]));
 
   return {
-    pageSize: 'A4', pageMargins: [24, 24, 24, 28],
-    defaultStyle: { font: 'Montserrat', fontSize: 9, color: INK, lineHeight: 1.15 },
+    pageSize: 'A4', pageMargins: [24, 26, 24, 30],
+    defaultStyle: { font: 'Montserrat', fontSize: 9, color: INK, lineHeight: 1.2 },
     content,
   };
 };

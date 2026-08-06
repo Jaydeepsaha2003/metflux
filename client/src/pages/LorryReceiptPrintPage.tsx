@@ -207,22 +207,22 @@ export const LorryReceiptPrintPage = () => {
         <div className="border border-slate-800">
 
           {/* Copy label */}
-          <div className="border-b border-slate-800 px-3 py-0.5 text-right text-[10px] uppercase tracking-widest text-slate-500 font-semibold">
+          <div className="border-b border-slate-800 px-3 py-1 text-right text-[10px] uppercase tracking-widest text-slate-500 font-semibold">
             Consignor Copy
           </div>
 
           {/* Top band: transporter header + LR title box */}
           <div className="flex items-stretch border-b border-slate-800">
-            <div className="flex-1 px-3 py-2 border-r border-slate-800 min-w-0">
+            <div className="flex-1 px-3 py-3 border-r border-slate-800 min-w-0">
               <div className="flex items-start gap-3">
                 {head.logo && (
                   <img src={head.logo} alt={head.name} className="h-12 w-auto max-w-[120px] object-contain shrink-0" />
                 )}
                 <div className="min-w-0">
                   <div className="text-lg font-black uppercase tracking-wide leading-tight">{head.name}</div>
-                  {head.tagline && <div className="text-[11px] text-slate-600 italic leading-snug">{head.tagline}</div>}
-                  {head.address && <div className="text-[11px] text-slate-700 leading-snug whitespace-pre-line">{head.address}</div>}
-                  <div className="text-[11px] text-slate-700 leading-snug">
+                  {head.tagline && <div className="mt-0.5 text-[11px] text-slate-600 italic leading-snug">{head.tagline}</div>}
+                  {head.address && <div className="mt-0.5 text-[11px] text-slate-700 leading-snug whitespace-pre-line">{head.address}</div>}
+                  <div className="mt-0.5 text-[11px] text-slate-700 leading-snug">
                     {head.phone && <span>Phone: {head.phone}&nbsp;&nbsp;</span>}
                     {head.email && <span>Email: {head.email}&nbsp;&nbsp;</span>}
                     {head.gstin && <span>GSTIN: <span className="font-mono">{head.gstin}</span></span>}
@@ -231,20 +231,20 @@ export const LorryReceiptPrintPage = () => {
               </div>
             </div>
             <div className="w-[240px] shrink-0 flex flex-col">
-              <div className="bg-slate-800 text-white text-center py-1 text-sm font-extrabold uppercase tracking-[0.2em]">
+              <div className="bg-slate-800 text-white text-center py-1.5 text-sm font-extrabold uppercase tracking-[0.2em]">
                 Lorry Receipt
               </div>
               <div className="flex-1 grid grid-cols-2 text-[11px]">
-                <div className="px-2 py-1 border-r border-b border-slate-800">
+                <div className="px-2 py-1.5 border-r border-b border-slate-800">
                   <div className="uppercase text-[9px] tracking-wide text-slate-500 font-semibold">LR No.</div>
-                  <div className="font-bold text-[13px]">{lr.lrNo}</div>
+                  <div className="mt-0.5 font-bold text-[13px]">{lr.lrNo}</div>
                 </div>
-                <div className="px-2 py-1 border-b border-slate-800">
+                <div className="px-2 py-1.5 border-b border-slate-800">
                   <div className="uppercase text-[9px] tracking-wide text-slate-500 font-semibold">Date</div>
-                  <div className="font-semibold">{fmtDate(lr.lrDate)}</div>
+                  <div className="mt-0.5 font-semibold">{fmtDate(lr.lrDate)}</div>
                 </div>
-                <div className="col-span-2 px-2 py-1.5 grid place-items-center">
-                  <span className={`inline-block rounded-full border-2 px-4 py-0.5 text-[12px] font-black uppercase tracking-widest ${stampCls}`}>
+                <div className="col-span-2 px-2 py-2 grid place-items-center">
+                  <span className={`inline-block rounded-full border-2 px-4 py-1 text-[12px] font-black uppercase tracking-widest ${stampCls}`}>
                     {payMode}
                   </span>
                 </div>
@@ -254,20 +254,20 @@ export const LorryReceiptPrintPage = () => {
 
           {/* Consignor / Consignee */}
           <div className="grid grid-cols-2 border-b border-slate-800">
-            <div className="px-3 py-2 border-r border-slate-800">
-              <div className="uppercase text-[9px] tracking-widest text-slate-500 font-bold mb-0.5">Consignor</div>
+            <div className="px-3 py-3 border-r border-slate-800">
+              <div className="uppercase text-[9px] tracking-widest text-slate-500 font-bold mb-1">Consignor</div>
               <div className="font-bold">{lr.consignorName}</div>
-              {lr.consignorAddress && <div className="text-slate-700 whitespace-pre-line leading-snug">{lr.consignorAddress}</div>}
-              <div className="text-slate-700 leading-snug">
+              {lr.consignorAddress && <div className="mt-0.5 text-slate-700 whitespace-pre-line leading-snug">{lr.consignorAddress}</div>}
+              <div className="mt-0.5 text-slate-700 leading-snug">
                 {lr.consignorGstin && <div>GSTIN: <span className="font-mono">{lr.consignorGstin}</span></div>}
                 {lr.consignorMobile && <div>Mobile: {lr.consignorMobile}</div>}
               </div>
             </div>
-            <div className="px-3 py-2">
-              <div className="uppercase text-[9px] tracking-widest text-slate-500 font-bold mb-0.5">Consignee</div>
+            <div className="px-3 py-3">
+              <div className="uppercase text-[9px] tracking-widest text-slate-500 font-bold mb-1">Consignee</div>
               <div className="font-bold">{lr.consigneeName}</div>
-              {lr.consigneeAddress && <div className="text-slate-700 whitespace-pre-line leading-snug">{lr.consigneeAddress}</div>}
-              <div className="text-slate-700 leading-snug">
+              {lr.consigneeAddress && <div className="mt-0.5 text-slate-700 whitespace-pre-line leading-snug">{lr.consigneeAddress}</div>}
+              <div className="mt-0.5 text-slate-700 leading-snug">
                 {lr.consigneeGstin && <div>GSTIN: <span className="font-mono">{lr.consigneeGstin}</span></div>}
                 {lr.consigneeMobile && <div>Mobile: {lr.consigneeMobile}</div>}
               </div>
@@ -276,21 +276,21 @@ export const LorryReceiptPrintPage = () => {
 
           {/* From / To / Dispatch / Vehicle */}
           <div className="grid grid-cols-4 border-b border-slate-800 text-[11px]">
-            <div className="px-3 py-1.5 border-r border-slate-800">
+            <div className="px-3 py-2 border-r border-slate-800">
               <div className="uppercase text-[9px] tracking-wide text-slate-500 font-semibold">From</div>
-              <div className="font-semibold">{lr.fromLoc || '—'}</div>
+              <div className="mt-0.5 font-semibold">{lr.fromLoc || '—'}</div>
             </div>
-            <div className="px-3 py-1.5 border-r border-slate-800">
+            <div className="px-3 py-2 border-r border-slate-800">
               <div className="uppercase text-[9px] tracking-wide text-slate-500 font-semibold">To</div>
-              <div className="font-semibold">{lr.toLoc || '—'}</div>
+              <div className="mt-0.5 font-semibold">{lr.toLoc || '—'}</div>
             </div>
-            <div className="px-3 py-1.5 border-r border-slate-800">
+            <div className="px-3 py-2 border-r border-slate-800">
               <div className="uppercase text-[9px] tracking-wide text-slate-500 font-semibold">Mode of Dispatch</div>
-              <div className="font-semibold">{lr.modeOfDispatch || '—'}</div>
+              <div className="mt-0.5 font-semibold">{lr.modeOfDispatch || '—'}</div>
             </div>
-            <div className="px-3 py-1.5">
+            <div className="px-3 py-2">
               <div className="uppercase text-[9px] tracking-wide text-slate-500 font-semibold">Vehicle No.</div>
-              <div className="font-semibold font-mono">{lr.vehNo || '—'}</div>
+              <div className="mt-0.5 font-semibold font-mono">{lr.vehNo || '—'}</div>
             </div>
           </div>
 
@@ -301,20 +301,20 @@ export const LorryReceiptPrintPage = () => {
               <table className="w-full border-collapse text-[11px]">
                 <thead>
                   <tr className="bg-slate-100 border-b border-slate-800">
-                    <th className="px-2 py-1 border-r border-slate-800 text-center font-bold uppercase text-[9px] tracking-wide">No. of Pkgs.</th>
-                    <th className="px-2 py-1 border-r border-slate-800 text-left font-bold uppercase text-[9px] tracking-wide">Method of Packing</th>
-                    <th className="px-2 py-1 border-r border-slate-800 text-left font-bold uppercase text-[9px] tracking-wide">Particulars</th>
-                    <th className="px-2 py-1 border-r border-slate-800 text-right font-bold uppercase text-[9px] tracking-wide">Actual Wt.</th>
-                    <th className="px-2 py-1 text-right font-bold uppercase text-[9px] tracking-wide">Charged Wt.</th>
+                    <th className="px-2 py-1.5 border-r border-slate-800 text-center font-bold uppercase text-[9px] tracking-wide">No. of Pkgs.</th>
+                    <th className="px-2 py-1.5 border-r border-slate-800 text-left font-bold uppercase text-[9px] tracking-wide">Method of Packing</th>
+                    <th className="px-2 py-1.5 border-r border-slate-800 text-left font-bold uppercase text-[9px] tracking-wide">Particulars</th>
+                    <th className="px-2 py-1.5 border-r border-slate-800 text-right font-bold uppercase text-[9px] tracking-wide">Actual Wt.</th>
+                    <th className="px-2 py-1.5 text-right font-bold uppercase text-[9px] tracking-wide">Charged Wt.</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr className="align-top">
-                    <td className="px-2 py-2 border-r border-slate-300 text-center tabular-nums" style={{ fontVariantNumeric: 'tabular-nums' }}>{lr.packages}</td>
-                    <td className="px-2 py-2 border-r border-slate-300">{lr.packMethod || '—'}</td>
-                    <td className="px-2 py-2 border-r border-slate-300 whitespace-pre-line">{lr.particular || '—'}</td>
-                    <td className="px-2 py-2 border-r border-slate-300 text-right tabular-nums" style={{ fontVariantNumeric: 'tabular-nums' }}>{inrLR(lr.actualWt)}</td>
-                    <td className="px-2 py-2 text-right tabular-nums" style={{ fontVariantNumeric: 'tabular-nums' }}>{inrLR(lr.chargedWt)}</td>
+                    <td className="px-2 py-3 border-r border-slate-300 text-center tabular-nums" style={{ fontVariantNumeric: 'tabular-nums' }}>{lr.packages}</td>
+                    <td className="px-2 py-3 border-r border-slate-300">{lr.packMethod || '—'}</td>
+                    <td className="px-2 py-3 border-r border-slate-300 whitespace-pre-line">{lr.particular || '—'}</td>
+                    <td className="px-2 py-3 border-r border-slate-300 text-right tabular-nums" style={{ fontVariantNumeric: 'tabular-nums' }}>{inrLR(lr.actualWt)}</td>
+                    <td className="px-2 py-3 text-right tabular-nums" style={{ fontVariantNumeric: 'tabular-nums' }}>{inrLR(lr.chargedWt)}</td>
                   </tr>
                 </tbody>
               </table>
@@ -324,8 +324,8 @@ export const LorryReceiptPrintPage = () => {
               <table className="w-full border-collapse text-[11px]">
                 <thead>
                   <tr className="bg-slate-100 border-b border-slate-800">
-                    <th className="px-2 py-1 border-r border-slate-300 text-left font-bold uppercase text-[9px] tracking-wide">Charges</th>
-                    <th className="px-2 py-1 text-right font-bold uppercase text-[9px] tracking-wide">Amount</th>
+                    <th className="px-2 py-1.5 border-r border-slate-300 text-left font-bold uppercase text-[9px] tracking-wide">Charges</th>
+                    <th className="px-2 py-1.5 text-right font-bold uppercase text-[9px] tracking-wide">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -336,8 +336,8 @@ export const LorryReceiptPrintPage = () => {
                   <ChargeRow label="D/D Charge" value={lr.ddCh} />
                   <ChargeRow label="Risk/FOV" hint={lr.riskFovPct ? `@ ${lr.riskFovPct}%` : undefined} value={lr.riskFovAmount} />
                   <tr className="bg-slate-800 text-white">
-                    <td className="px-2 py-1.5 border-r border-slate-600 font-bold uppercase text-[10px] tracking-wide">Total</td>
-                    <td className="px-2 py-1.5 text-right font-black tabular-nums" style={{ fontVariantNumeric: 'tabular-nums' }}>₹{inrLR(lr.totalValue)}</td>
+                    <td className="px-2 py-2 border-r border-slate-600 font-bold uppercase text-[10px] tracking-wide">Total</td>
+                    <td className="px-2 py-2 text-right font-black tabular-nums" style={{ fontVariantNumeric: 'tabular-nums' }}>₹{inrLR(lr.totalValue)}</td>
                   </tr>
                 </tbody>
               </table>
@@ -346,23 +346,23 @@ export const LorryReceiptPrintPage = () => {
 
           {/* Documents row */}
           <div className="grid grid-cols-3 border-b border-slate-800 text-[11px]">
-            <div className="px-3 py-1.5 border-r border-slate-800">
+            <div className="px-3 py-2 border-r border-slate-800">
               <div className="uppercase text-[9px] tracking-wide text-slate-500 font-semibold">Invoice No.</div>
-              <div className="font-semibold">{lr.invNo || '—'}{lr.invDate ? ` · ${fmtDate(lr.invDate)}` : ''}</div>
+              <div className="mt-0.5 font-semibold">{lr.invNo || '—'}{lr.invDate ? ` · ${fmtDate(lr.invDate)}` : ''}</div>
             </div>
-            <div className="px-3 py-1.5 border-r border-slate-800">
+            <div className="px-3 py-2 border-r border-slate-800">
               <div className="uppercase text-[9px] tracking-wide text-slate-500 font-semibold">E-Way Bill No.</div>
-              <div className="font-semibold font-mono">{lr.ewayBillNo || '—'}</div>
+              <div className="mt-0.5 font-semibold font-mono">{lr.ewayBillNo || '—'}</div>
             </div>
-            <div className="px-3 py-1.5">
+            <div className="px-3 py-2">
               <div className="uppercase text-[9px] tracking-wide text-slate-500 font-semibold">Value Declared</div>
-              <div className="font-semibold tabular-nums" style={{ fontVariantNumeric: 'tabular-nums' }}>₹{inrLR(lr.valueDeclare)}</div>
+              <div className="mt-0.5 font-semibold tabular-nums" style={{ fontVariantNumeric: 'tabular-nums' }}>₹{inrLR(lr.valueDeclare)}</div>
             </div>
           </div>
 
           {/* Remark */}
           {lr.remark && (
-            <div className="px-3 py-1.5 border-b border-slate-800 text-[11px]">
+            <div className="px-3 py-2 border-b border-slate-800 text-[11px]">
               <span className="uppercase text-[9px] tracking-wide text-slate-500 font-semibold">Remark: </span>
               <span className="whitespace-pre-line">{lr.remark}</span>
             </div>
@@ -370,18 +370,18 @@ export const LorryReceiptPrintPage = () => {
 
           {/* Footer: risk note + QR e-copy + signatures */}
           <div className="grid grid-cols-[1fr,auto,1fr] text-[11px]">
-            <div className="px-3 py-3 border-r border-slate-800">
-              <div className="text-[10px] text-slate-500 italic mb-8">Goods carried at owner's risk.</div>
+            <div className="px-3 py-4 border-r border-slate-800">
+              <div className="text-[10px] text-slate-500 italic mb-10">Goods carried at owner's risk.</div>
               <div className="border-t border-slate-400 pt-1 text-slate-600">Receiver's Signature</div>
             </div>
-            <div className="flex flex-col items-center justify-center gap-1 border-r border-slate-800 px-3 py-2">
+            <div className="flex flex-col items-center justify-center gap-1.5 border-r border-slate-800 px-3 py-3">
               {ecopyUrl
                 ? <QRCodeSVG value={ecopyUrl} size={78} level="M" />
                 : <div className="h-[78px] w-[78px] bg-slate-100" />}
               <div className="text-center text-[8px] uppercase tracking-wide text-slate-500 leading-tight">Scan for e-copy<br />&amp; details</div>
             </div>
-            <div className="px-3 py-3 text-right">
-              <div className="font-semibold uppercase mb-8">For {head.name}</div>
+            <div className="px-3 py-4 text-right">
+              <div className="font-semibold uppercase mb-10">For {head.name}</div>
               <div className="border-t border-slate-400 pt-1 text-slate-600">Authorised Signatory</div>
             </div>
           </div>
