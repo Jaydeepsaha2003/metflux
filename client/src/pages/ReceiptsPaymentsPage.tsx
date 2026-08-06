@@ -176,30 +176,34 @@ export const ReceiptsPaymentsPage = () => {
 
   return (
     <div className="max-w-full space-y-4 text-[13px]">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-lg font-bold tracking-tight">
-            <ArrowLeftRight className="h-5 w-5 text-brand-600" /> Receipts &amp; Payments
-          </h1>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Upload the bank/cash book once — receipts settle customer invoices, payments settle supplier bills (FIFO). Tag other heads for the summary.
-          </p>
+      {/* ── Brand header band (follows the active company's brand colour) ── */}
+      <div className="flex flex-col gap-3 rounded-xl bg-brand-600 px-4 py-3.5 text-white shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <span className="grid h-9 w-9 place-items-center rounded-lg bg-white/15 ring-1 ring-white/20">
+            <ArrowLeftRight className="h-5 w-5" />
+          </span>
+          <div>
+            <h1 className="text-base font-bold leading-tight tracking-wide sm:text-lg">Receipts &amp; Payments</h1>
+            <p className="text-[11px] text-white/75">
+              Upload the bank/cash book once — receipts settle invoices, payments settle bills (FIFO). Tag other heads for the summary.
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Link to="/accounts/cashbook-summary" className="btn-ghost border border-slate-300 text-slate-600 hover:bg-slate-50 text-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link to="/accounts/cashbook-summary" className="inline-flex items-center gap-2 rounded-lg border border-white/25 bg-white/15 px-3 py-2 text-sm font-semibold text-white hover:bg-white/25">
             <BarChart3 className="h-4 w-4" /> Cashbook Summary
           </Link>
           <button onClick={() => recomputeMut.mutate()} disabled={recomputeMut.isPending}
-            className="btn-ghost border border-slate-300 text-brand-700 hover:bg-brand-50 text-sm"
+            className="inline-flex items-center gap-2 rounded-lg border border-white/25 bg-white/15 px-3 py-2 text-sm font-semibold text-white hover:bg-white/25 disabled:opacity-50"
             title="Re-derive all customer/supplier balances from the bank book (applies advances to newer invoices)">
             {recomputeMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Recompute
           </button>
-          <button onClick={onClearAll} disabled={resetAll.isPending} className="btn-ghost border border-slate-300 text-red-600 hover:bg-red-50 text-sm">
+          <button onClick={onClearAll} disabled={resetAll.isPending} className="inline-flex items-center gap-2 rounded-lg border border-white/25 bg-white/15 px-3 py-2 text-sm font-semibold text-white hover:bg-white/25 disabled:opacity-50">
             {resetAll.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Clear all
           </button>
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
-          <button onClick={() => fileRef.current?.click()} disabled={uploading} className="btn-primary text-sm">
+          <button onClick={() => fileRef.current?.click()} disabled={uploading} className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-white/90 disabled:opacity-50">
             {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
             Upload Register
           </button>
@@ -207,30 +211,31 @@ export const ReceiptsPaymentsPage = () => {
       </div>
 
       {/* Balance in bank — net of the whole stored cash/bank book */}
-      <div className="flex flex-wrap items-stretch gap-3">
-        <div className="flex flex-1 min-w-[220px] items-center justify-between rounded-xl border border-brand-200 bg-brand-50 px-4 py-3">
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-brand-700">Balance in bank</div>
-            <div className="mt-0.5 text-[11px] text-slate-500">Total receipts − total payments (whole book)</div>
-          </div>
-          <div className={cn('text-2xl font-bold tabular-nums', (bank?.net ?? 0) >= 0 ? 'text-brand-700' : 'text-red-600')}>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm lg:col-span-2">
+          <span className="absolute inset-y-0 left-0 w-1 bg-brand-500" />
+          <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Balance in bank</div>
+          <div className={cn('mt-1 text-lg font-bold tabular-nums', (bank?.net ?? 0) >= 0 ? 'text-brand-700' : 'text-red-600')}>
             {inr(bank?.net ?? 0)}
           </div>
+          <div className="mt-0.5 text-[11px] text-slate-400">Total receipts − total payments (whole book)</div>
         </div>
-        <div className="flex min-w-[140px] flex-col justify-center rounded-xl border border-slate-200 bg-white px-4 py-3">
-          <div className="text-[11px] font-medium text-slate-500">Total receipts</div>
-          <div className="text-sm font-semibold tabular-nums text-emerald-700">{inr(bank?.receipts ?? 0)}</div>
+        <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
+          <span className="absolute inset-y-0 left-0 w-1 bg-emerald-500" />
+          <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Total receipts</div>
+          <div className="mt-1 text-lg font-bold tabular-nums text-emerald-700">{inr(bank?.receipts ?? 0)}</div>
         </div>
-        <div className="flex min-w-[140px] flex-col justify-center rounded-xl border border-slate-200 bg-white px-4 py-3">
-          <div className="text-[11px] font-medium text-slate-500">Total payments</div>
-          <div className="text-sm font-semibold tabular-nums text-slate-700">{inr(bank?.payments ?? 0)}</div>
+        <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
+          <span className="absolute inset-y-0 left-0 w-1 bg-slate-300" />
+          <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Total payments</div>
+          <div className="mt-1 text-lg font-bold tabular-nums text-slate-700">{inr(bank?.payments ?? 0)}</div>
         </div>
       </div>
 
-      {uploadErr && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{uploadErr}</div>}
+      {uploadErr && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-sm">{uploadErr}</div>}
 
       {result && (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 shadow-sm">
           <div className="flex items-center gap-2 font-medium">
             <CheckCircle2 className="h-4 w-4" />
             Imported. Posted {result.receipts} receipt{result.receipts !== 1 ? 's' : ''} ({inr(result.allocatedReceipts)}) and {result.payments} payment{result.payments !== 1 ? 's' : ''} ({inr(result.allocatedPayments)}).
@@ -266,7 +271,7 @@ export const ReceiptsPaymentsPage = () => {
             Totals cover the whole book. Only <b>{inr(sum?.receiptApply ?? 0)}</b> receipts + <b>{inr(sum?.paymentApply ?? 0)}</b> payments auto-settle open invoices/bills now (see “Will apply”); the rest are stored and can be tagged in the Cashbook Summary.
           </p>
 
-          <div className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-end sm:justify-between sm:p-5">
             <div className="grid grid-cols-2 gap-3 sm:flex sm:items-end sm:gap-4">
               <label className="block">
                 <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Post date</span>
@@ -413,18 +418,18 @@ const SuspenseEntrySection = () => {
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-xs whitespace-nowrap">
-            <thead><tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-              <th className="px-3 py-1.5 text-left">Voucher</th>
-              <th className="px-3 py-1.5 text-left">Date</th>
-              <th className="px-3 py-1.5 text-left">Account</th>
-              <th className="px-3 py-1.5 text-right">Debit</th>
-              <th className="px-3 py-1.5 text-right">Credit</th>
-              <th className="px-3 py-1.5 text-left">Narration</th>
-              <th className="w-8 px-2 py-1.5" />
+            <thead><tr className="border-b-2 border-slate-300 bg-slate-100 text-[10.5px] uppercase tracking-wide text-slate-500">
+              <th className="px-3 py-2 text-left font-semibold">Voucher</th>
+              <th className="px-3 py-2 text-left font-semibold">Date</th>
+              <th className="px-3 py-2 text-left font-semibold">Account</th>
+              <th className="px-3 py-2 text-right font-semibold">Debit</th>
+              <th className="px-3 py-2 text-right font-semibold">Credit</th>
+              <th className="px-3 py-2 text-left font-semibold">Narration</th>
+              <th className="w-8 px-2 py-2" />
             </tr></thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody>
               {items.map((v) => (
-                <tr key={v.id} className="hover:bg-slate-50/60">
+                <tr key={v.id} className="border-b border-slate-100 odd:bg-white even:bg-slate-50/40 hover:bg-brand-50/40">
                   <td className="px-3 py-1 font-mono text-[11px] font-semibold text-brand-700">{v.voucherNo}</td>
                   <td className="px-3 py-1 text-slate-600">{fmtD(v.entryDate)}</td>
                   <td className="px-3 py-1 font-medium">{v.account}</td>
@@ -590,20 +595,20 @@ const EntriesSection = () => {
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-xs whitespace-nowrap">
-            <thead><tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <th className="w-9 px-3 py-1.5 text-center">
+            <thead><tr className="border-b-2 border-slate-300 bg-slate-100 text-[10.5px] uppercase tracking-wide text-slate-500">
+              <th className="w-9 px-3 py-2 text-center">
                 <input type="checkbox" checked={pageAllSelected} onChange={togglePage} className="rounded border-slate-300 text-brand-600 focus:ring-brand-500" title="Select all on this page" />
               </th>
-              <th className="px-3 py-1.5 text-left">Date</th>
-              <th className="px-3 py-1.5 text-left">Party</th>
-              <th className="px-3 py-1.5 text-left">Side</th>
-              <th className="px-3 py-1.5 text-left">Type / Category</th>
-              <th className="px-3 py-1.5 text-right">Amount</th>
-              <th className="px-3 py-1.5 text-center">Allocated</th>
+              <th className="px-3 py-2 text-left font-semibold">Date</th>
+              <th className="px-3 py-2 text-left font-semibold">Party</th>
+              <th className="px-3 py-2 text-left font-semibold">Side</th>
+              <th className="px-3 py-2 text-left font-semibold">Type / Category</th>
+              <th className="px-3 py-2 text-right font-semibold">Amount</th>
+              <th className="px-3 py-2 text-center font-semibold">Allocated</th>
             </tr></thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody>
               {items.map((e) => (
-                <tr key={e.id} className={cn('hover:bg-slate-50/60', sel.has(e.id) && 'bg-brand-50/40')}>
+                <tr key={e.id} className={cn('border-b border-slate-100 odd:bg-white even:bg-slate-50/40 hover:bg-brand-50/40', sel.has(e.id) && 'bg-brand-50/40')}>
                   <td className="px-3 py-1.5 text-center">
                     <input type="checkbox" checked={sel.has(e.id)} onChange={() => toggleRow(e.id)} className="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
                   </td>
@@ -671,15 +676,15 @@ const ClassifySection = ({ rows, companyId, onChanged }: { rows: Unmatched[]; co
       {err && <div className="mx-4 mb-2 rounded border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700">{err}</div>}
       <div className="overflow-x-auto">
         <table className="w-full text-xs whitespace-nowrap">
-          <thead><tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            <th className="px-4 py-1.5 text-left">Party</th><th className="px-4 py-1.5 text-left">Side</th>
-            <th className="px-4 py-1.5 text-right">Amount</th><th className="px-4 py-1.5 text-left">Classify as</th>
+          <thead><tr className="border-b-2 border-slate-300 bg-slate-100 text-[10.5px] uppercase tracking-wide text-slate-500">
+            <th className="px-4 py-2 text-left font-semibold">Party</th><th className="px-4 py-2 text-left font-semibold">Side</th>
+            <th className="px-4 py-2 text-right font-semibold">Amount</th><th className="px-4 py-2 text-left font-semibold">Classify as</th>
           </tr></thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody>
             {rows.map((u, i) => {
               const isBusy = busy === u.name;
               return (
-                <tr key={i}>
+                <tr key={i} className="border-b border-slate-100 odd:bg-white even:bg-slate-50/40 hover:bg-brand-50/40">
                   <td className="px-4 py-1.5 font-medium">{u.name}</td>
                   <td className="px-4 py-1.5 text-slate-500">{u.side === 'RECEIPT' ? 'Receipt' : 'Payment'}</td>
                   <td className="px-4 py-1.5 text-right tabular-nums">{inr(u.amount)}</td>
@@ -730,16 +735,16 @@ const SideTable = ({ title, icon, rows, pendingLabel }: { title: string; icon: R
     ) : (
       <div className="overflow-x-auto">
         <table className="w-full text-xs whitespace-nowrap">
-          <thead><tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            <th className="px-3 py-1.5 w-10"></th>
-            <th className="px-4 py-1.5 text-left">Party</th>
-            <th className="px-4 py-1.5 text-right">In file</th>
-            <th className="px-4 py-1.5 text-right">{pendingLabel}</th>
-            <th className="px-4 py-1.5 text-right">Will apply</th>
+          <thead><tr className="border-b-2 border-slate-300 bg-slate-100 text-[10.5px] uppercase tracking-wide text-slate-500">
+            <th className="px-3 py-2 w-10"></th>
+            <th className="px-4 py-2 text-left font-semibold">Party</th>
+            <th className="px-4 py-2 text-right font-semibold">In file</th>
+            <th className="px-4 py-2 text-right font-semibold">{pendingLabel}</th>
+            <th className="px-4 py-2 text-right font-semibold">Will apply</th>
           </tr></thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody>
             {rows.map((r) => (
-              <tr key={r.id} className={cn(r.willApply <= 0 && 'opacity-60')}>
+              <tr key={r.id} className={cn('border-b border-slate-100 odd:bg-white even:bg-slate-50/40 hover:bg-brand-50/40', r.willApply <= 0 && 'opacity-60')}>
                 <td className="px-3 py-1.5 text-center">
                   <input type="checkbox" checked={r.on} disabled={r.willApply <= 0} onChange={r.toggle}
                     className="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
@@ -760,9 +765,15 @@ const SideTable = ({ title, icon, rows, pendingLabel }: { title: string; icon: R
 );
 
 const Stat = ({ label, value, tone }: { label: string; value: string; tone?: 'emerald' | 'amber' | 'red' | 'brand' }) => (
-  <div className="card p-3">
-    <div className="text-[11px] uppercase tracking-wide text-slate-500">{label}</div>
-    <div className={cn('mt-0.5 text-lg font-bold tabular-nums',
+  <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
+    <span className={cn('absolute inset-y-0 left-0 w-1',
+      tone === 'emerald' ? 'bg-emerald-500' :
+      tone === 'amber' ? 'bg-amber-500' :
+      tone === 'red' ? 'bg-red-500' :
+      tone === 'brand' ? 'bg-brand-500' : 'bg-slate-300',
+    )} />
+    <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
+    <div className={cn('mt-1 text-lg font-bold tabular-nums',
       tone === 'emerald' && 'text-emerald-600',
       tone === 'amber' && 'text-amber-600',
       tone === 'red' && 'text-red-600',

@@ -108,27 +108,31 @@ export const CashbookSummaryPage = () => {
   };
 
   return (
-    <div className="space-y-5 max-w-full">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight">
-            <BarChart3 className="h-5 w-5 text-brand-600" /> Cashbook Summary
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">Receipts vs payments from your imported bank/cash book, grouped by category or account.</p>
+    <div className="space-y-4 max-w-full sm:space-y-5">
+      {/* ── Brand header band (follows the active company's brand colour) ── */}
+      <div className="flex flex-col gap-3 rounded-xl bg-brand-600 px-4 py-3.5 text-white shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <span className="grid h-9 w-9 place-items-center rounded-lg bg-white/15 ring-1 ring-white/20">
+            <BarChart3 className="h-5 w-5" />
+          </span>
+          <div>
+            <h1 className="text-base font-bold leading-tight tracking-wide sm:text-lg">Cashbook Summary</h1>
+            <p className="text-[11px] text-white/75">Receipts vs payments from your imported bank/cash book, grouped by category or account.</p>
+          </div>
         </div>
         {tab === 'overview' && (
-          <button onClick={exportExcel} className="btn-ghost border border-slate-300 text-emerald-700 hover:bg-emerald-50 text-sm shrink-0">
+          <button onClick={exportExcel} className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-white/25 bg-white/15 px-3 py-2 text-sm font-semibold text-white hover:bg-white/25 sm:w-auto">
             <Download className="h-4 w-4" /> Export Excel
           </button>
         )}
       </div>
 
       {/* Tabs */}
-      <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+      <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
         {(['overview', 'transactions', 'manage'] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)}
-            className={cn('rounded-md px-4 py-1.5 text-sm font-medium capitalize transition',
-              tab === t ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900')}>
+            className={cn('rounded-md px-4 py-1.5 text-sm font-semibold capitalize transition',
+              tab === t ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-600 hover:text-slate-900')}>
             {t}
           </button>
         ))}
@@ -151,7 +155,7 @@ export const CashbookSummaryPage = () => {
       )}
 
       {/* Controls */}
-      <div className="card space-y-3 p-4">
+      <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex flex-wrap items-end gap-3">
             <label className="block">
@@ -171,11 +175,11 @@ export const CashbookSummaryPage = () => {
               </div>
             </label>
           </div>
-          <div className="inline-flex self-start rounded-lg border border-slate-200 bg-slate-50 p-0.5 sm:self-end">
+          <div className="inline-flex self-start rounded-lg bg-slate-100 p-0.5 sm:self-end">
             {(['category', 'account'] as const).map((g) => (
               <button key={g} onClick={() => setGroupBy(g)}
-                className={cn('rounded-md px-3.5 py-1.5 text-sm font-medium transition',
-                  groupBy === g ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900')}>
+                className={cn('rounded-md px-3.5 py-1.5 text-sm font-semibold transition',
+                  groupBy === g ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-600 hover:text-slate-900')}>
                 {g === 'category' ? 'Category-wise' : 'Account-wise'}
               </button>
             ))}
@@ -208,7 +212,7 @@ export const CashbookSummaryPage = () => {
       )}
 
       {/* Summary table */}
-      <div className="card overflow-hidden">
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         {isLoading ? (
           <div className="py-12 text-center text-slate-400"><Loader2 className="mx-auto h-5 w-5 animate-spin" /></div>
         ) : error ? (
@@ -219,20 +223,20 @@ export const CashbookSummaryPage = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm whitespace-nowrap">
-              <thead><tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <th className="cursor-pointer select-none px-4 py-3 text-left hover:text-slate-700" onClick={() => sortBy('key')}>{groupBy === 'account' ? 'Account' : 'Category'}{sortIcon('key')}</th>
-                {groupBy === 'account' && <th className="px-4 py-3 text-left">Category</th>}
-                <th className="cursor-pointer select-none px-4 py-3 text-right hover:text-slate-700" onClick={() => sortBy('receipts')}>Receipts{sortIcon('receipts')}</th>
-                <th className="cursor-pointer select-none px-4 py-3 text-right hover:text-slate-700" onClick={() => sortBy('payments')}>Payments{sortIcon('payments')}</th>
-                <th className="cursor-pointer select-none px-4 py-3 text-right hover:text-slate-700" onClick={() => sortBy('net')}>Net{sortIcon('net')}</th>
-                <th className="cursor-pointer select-none px-4 py-3 text-right hover:text-slate-700" onClick={() => sortBy('count')}>Entries{sortIcon('count')}</th>
+            <table className="w-full text-[13px] whitespace-nowrap">
+              <thead><tr className="border-b-2 border-slate-300 bg-slate-100 text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">
+                <th className="cursor-pointer select-none px-3 py-2 text-left hover:text-slate-700" onClick={() => sortBy('key')}>{groupBy === 'account' ? 'Account' : 'Category'}{sortIcon('key')}</th>
+                {groupBy === 'account' && <th className="px-3 py-2 text-left">Category</th>}
+                <th className="cursor-pointer select-none px-3 py-2 text-right hover:text-slate-700" onClick={() => sortBy('receipts')}>Receipts{sortIcon('receipts')}</th>
+                <th className="cursor-pointer select-none px-3 py-2 text-right hover:text-slate-700" onClick={() => sortBy('payments')}>Payments{sortIcon('payments')}</th>
+                <th className="cursor-pointer select-none px-3 py-2 text-right hover:text-slate-700" onClick={() => sortBy('net')}>Net{sortIcon('net')}</th>
+                <th className="cursor-pointer select-none px-3 py-2 text-right hover:text-slate-700" onClick={() => sortBy('count')}>Entries{sortIcon('count')}</th>
               </tr></thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody>
                 {items.map((it) => (
-                  <tr key={it.key} className={cn('hover:bg-slate-50/60', groupBy === 'account' && 'cursor-pointer')}
+                  <tr key={it.key} className={cn('border-b border-slate-100 odd:bg-white even:bg-slate-50/40 hover:bg-brand-50/40', groupBy === 'account' && 'cursor-pointer')}
                     onClick={groupBy === 'account' ? () => setLedgerName(it.key) : undefined}>
-                    <td className="px-4 py-2.5 font-medium">
+                    <td className="px-3 py-1.5 font-medium">
                       {groupBy === 'account' && <span className="mr-1 text-brand-500">›</span>}
                       {it.key}
                       {groupBy === 'category' && (
@@ -241,22 +245,22 @@ export const CashbookSummaryPage = () => {
                         </span>
                       )}
                     </td>
-                    {groupBy === 'account' && <td className="px-4 py-2.5 text-slate-500">{it.category}</td>}
-                    <td className="px-4 py-2.5 text-right tabular-nums text-emerald-700">{it.receipts ? inr(it.receipts) : '—'}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{it.payments ? inr(it.payments) : '—'}</td>
-                    <td className={cn('px-4 py-2.5 text-right tabular-nums font-semibold', it.net >= 0 ? 'text-emerald-700' : 'text-red-600')}>{inr(it.net)}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-500">{it.count}</td>
+                    {groupBy === 'account' && <td className="px-3 py-1.5 text-slate-500">{it.category}</td>}
+                    <td className="px-3 py-1.5 text-right tabular-nums text-emerald-700">{it.receipts ? inr(it.receipts) : '—'}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-700">{it.payments ? inr(it.payments) : '—'}</td>
+                    <td className={cn('px-3 py-1.5 text-right tabular-nums font-semibold', it.net >= 0 ? 'text-emerald-700' : 'text-red-600')}>{inr(it.net)}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-500">{it.count}</td>
                   </tr>
                 ))}
               </tbody>
               {shownTotals && (
                 <tfoot>
-                  <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold">
-                    <td className="px-4 py-2.5" colSpan={groupBy === 'account' ? 2 : 1}>{filtered ? 'Total (filtered)' : 'Total'}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-emerald-700">{inr(shownTotals.receipts)}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">{inr(shownTotals.payments)}</td>
-                    <td className={cn('px-4 py-2.5 text-right tabular-nums', shownTotals.net >= 0 ? 'text-emerald-700' : 'text-red-600')}>{inr(shownTotals.net)}</td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-500">{shownTotals.count}</td>
+                  <tr className="border-t-2 border-slate-300 bg-slate-100 font-bold text-slate-800">
+                    <td className="px-3 py-2.5" colSpan={groupBy === 'account' ? 2 : 1}>{filtered ? 'Total (filtered)' : 'Total'}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-emerald-700">{inr(shownTotals.receipts)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-slate-700">{inr(shownTotals.payments)}</td>
+                    <td className={cn('px-3 py-2.5 text-right tabular-nums', shownTotals.net >= 0 ? 'text-emerald-700' : 'text-red-600')}>{inr(shownTotals.net)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-slate-500">{shownTotals.count}</td>
                   </tr>
                 </tfoot>
               )}
@@ -272,8 +276,8 @@ export const CashbookSummaryPage = () => {
         <DuplicatesSection />
         {/* Saved "Other" account heads */}
         {otherHeads.length > 0 && (
-          <div className="card overflow-hidden">
-            <div className="flex flex-col gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex flex-col gap-2 border-b-2 border-slate-300 bg-slate-100 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
                 <Tag className="h-4 w-4" /> Saved account heads (Other)
                 <span className="font-normal text-slate-400">({filteredHeads.length}{filteredHeads.length !== otherHeads.length ? ` / ${otherHeads.length}` : ''})</span>
@@ -370,7 +374,7 @@ const TransactionsView = () => {
   return (
     <div className="space-y-4">
       {/* Filters */}
-      <div className="card space-y-3 p-4">
+      <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="flex flex-wrap items-end gap-3">
           <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">From</span>
             <input type="date" className="input" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} /></label>
@@ -396,8 +400,8 @@ const TransactionsView = () => {
         </div>
       </div>
 
-      <div className="card overflow-hidden">
-        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-sm">
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b-2 border-slate-300 bg-slate-100 px-4 py-2.5 text-sm">
           <span className="font-semibold text-slate-700">{total} transaction{total === 1 ? '' : 's'}{data?.capped ? ' (first 8000)' : ''}</span>
           <span className="tabular-nums text-slate-500">Total: <b className="text-slate-800">{inr(sum)}</b></span>
         </div>
@@ -407,22 +411,22 @@ const TransactionsView = () => {
           <div className="py-12 text-center text-sm text-slate-400">No transactions for these filters.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm whitespace-nowrap">
-              <thead><tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <th className="cursor-pointer select-none px-4 py-3 text-left hover:text-slate-700" onClick={() => sortBy('date')}>Date{icon('date')}</th>
-                <th className="cursor-pointer select-none px-4 py-3 text-left hover:text-slate-700" onClick={() => sortBy('type')}>Type{icon('type')}</th>
-                <th className="cursor-pointer select-none px-4 py-3 text-left hover:text-slate-700" onClick={() => sortBy('party')}>Party{icon('party')}</th>
-                <th className="px-4 py-3 text-left">Ref</th>
-                <th className="cursor-pointer select-none px-4 py-3 text-right hover:text-slate-700" onClick={() => sortBy('amount')}>Amount{icon('amount')}</th>
+            <table className="w-full text-[13px] whitespace-nowrap">
+              <thead><tr className="border-b-2 border-slate-300 bg-slate-100 text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">
+                <th className="cursor-pointer select-none px-3 py-2 text-left hover:text-slate-700" onClick={() => sortBy('date')}>Date{icon('date')}</th>
+                <th className="cursor-pointer select-none px-3 py-2 text-left hover:text-slate-700" onClick={() => sortBy('type')}>Type{icon('type')}</th>
+                <th className="cursor-pointer select-none px-3 py-2 text-left hover:text-slate-700" onClick={() => sortBy('party')}>Party{icon('party')}</th>
+                <th className="px-3 py-2 text-left">Ref</th>
+                <th className="cursor-pointer select-none px-3 py-2 text-right hover:text-slate-700" onClick={() => sortBy('amount')}>Amount{icon('amount')}</th>
               </tr></thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody>
                 {rows.map((r, i) => (
-                  <tr key={i} className="hover:bg-slate-50/60">
-                    <td className="px-4 py-2 text-slate-600">{r.date ? new Date(r.date).toLocaleDateString('en-GB') : '—'}</td>
-                    <td className="px-4 py-2"><span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', TXN_TONE[r.type] ?? 'bg-slate-100 text-slate-600')}>{TXN_LABEL[r.type] ?? r.type}</span></td>
-                    <td className="px-4 py-2 font-medium">{r.party}</td>
-                    <td className="px-4 py-2 font-mono text-xs text-slate-500">{r.ref || '—'}</td>
-                    <td className="px-4 py-2 text-right tabular-nums font-semibold">{inr(r.amount)}</td>
+                  <tr key={i} className="border-b border-slate-100 odd:bg-white even:bg-slate-50/40 hover:bg-brand-50/40">
+                    <td className="px-3 py-1.5 text-slate-600">{r.date ? new Date(r.date).toLocaleDateString('en-GB') : '—'}</td>
+                    <td className="px-3 py-1.5"><span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', TXN_TONE[r.type] ?? 'bg-slate-100 text-slate-600')}>{TXN_LABEL[r.type] ?? r.type}</span></td>
+                    <td className="px-3 py-1.5 font-medium">{r.party}</td>
+                    <td className="px-3 py-1.5 font-mono text-xs text-slate-500">{r.ref || '—'}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums font-semibold">{inr(r.amount)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -483,8 +487,8 @@ const UnclassifiedSection = () => {
   if (!items.length) return null;
 
   return (
-    <div className="card overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-slate-200 bg-amber-50/60 px-4 py-2.5 text-sm font-semibold text-amber-800">
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex items-center gap-2 border-b-2 border-amber-200 bg-amber-50/60 px-4 py-2.5 text-sm font-semibold text-amber-800">
         <Tag className="h-4 w-4" /> Unclassified heads ({items.length})
       </div>
       <div className="px-4 py-2 text-xs text-slate-500">
@@ -492,24 +496,24 @@ const UnclassifiedSection = () => {
       </div>
       {note && <div className="mx-4 mb-2 rounded border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-700">{note}</div>}
       <div className="overflow-x-auto">
-        <table className="w-full text-sm whitespace-nowrap">
-          <thead><tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            <th className="px-4 py-2.5 text-left">Party</th>
-            <th className="px-4 py-2.5 text-right">Receipts</th>
-            <th className="px-4 py-2.5 text-right">Payments</th>
-            <th className="px-4 py-2.5 text-right">Unposted</th>
-            <th className="px-4 py-2.5 text-left">Classify as</th>
+        <table className="w-full text-[13px] whitespace-nowrap">
+          <thead><tr className="border-b-2 border-slate-300 bg-slate-100 text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">
+            <th className="px-3 py-2 text-left">Party</th>
+            <th className="px-3 py-2 text-right">Receipts</th>
+            <th className="px-3 py-2 text-right">Payments</th>
+            <th className="px-3 py-2 text-right">Unposted</th>
+            <th className="px-3 py-2 text-left">Classify as</th>
           </tr></thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody>
             {items.map((u) => {
               const isBusy = busy === u.name;
               return (
-                <tr key={u.normKey}>
-                  <td className="px-4 py-2 font-medium">{u.name}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-slate-600">{u.receiptTotal ? inr(u.receiptTotal) : '—'}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-slate-600">{u.paymentTotal ? inr(u.paymentTotal) : '—'}</td>
-                  <td className="px-4 py-2 text-right tabular-nums font-semibold">{inr(u.unpostedReceipt + u.unpostedPayment)}</td>
-                  <td className="px-4 py-2">
+                <tr key={u.normKey} className="border-b border-slate-100 odd:bg-white even:bg-slate-50/40 hover:bg-brand-50/40">
+                  <td className="px-3 py-1.5 font-medium">{u.name}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{u.receiptTotal ? inr(u.receiptTotal) : '—'}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{u.paymentTotal ? inr(u.paymentTotal) : '—'}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums font-semibold">{inr(u.unpostedReceipt + u.unpostedPayment)}</td>
+                  <td className="px-3 py-1.5">
                     {otherFor === u.name ? (
                       <div className="flex items-center gap-1.5">
                         <input autoFocus className="input h-8 w-40" placeholder="Category e.g. Salary" value={cat}
@@ -612,8 +616,8 @@ const DuplicatesSection = () => {
   if (!items.length) return null;
 
   return (
-    <div className="card overflow-hidden">
-      <div className="flex flex-col gap-2 border-b border-amber-200 bg-amber-50/60 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-2 border-b-2 border-amber-200 bg-amber-50/60 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2 text-sm font-semibold text-amber-800">
           <Copy className="h-4 w-4" /> Possible duplicates ({data?.groups}) · {data?.totalExtra} extra row{(data?.totalExtra ?? 0) === 1 ? '' : 's'}
         </div>
@@ -622,19 +626,19 @@ const DuplicatesSection = () => {
         </button>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm whitespace-nowrap">
-          <thead><tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            <th className="px-4 py-2.5 text-left">Party</th><th className="px-4 py-2.5 text-left">Side</th>
-            <th className="px-4 py-2.5 text-left">Date</th><th className="px-4 py-2.5 text-right">Amount</th><th className="px-4 py-2.5 text-right">Copies</th>
+        <table className="w-full text-[13px] whitespace-nowrap">
+          <thead><tr className="border-b-2 border-slate-300 bg-slate-100 text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">
+            <th className="px-3 py-2 text-left">Party</th><th className="px-3 py-2 text-left">Side</th>
+            <th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2 text-right">Amount</th><th className="px-3 py-2 text-right">Copies</th>
           </tr></thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody>
             {items.slice(0, 100).map((d, i) => (
-              <tr key={i}>
-                <td className="px-4 py-2 font-medium">{d.account}</td>
-                <td className="px-4 py-2 text-slate-500">{d.side === 'RECEIPT' ? 'Receipt' : 'Payment'}</td>
-                <td className="px-4 py-2 text-slate-600">{d.date ? new Date(d.date).toLocaleDateString('en-GB') : '—'}</td>
-                <td className="px-4 py-2 text-right tabular-nums">{inr(d.amount)}</td>
-                <td className="px-4 py-2 text-right tabular-nums font-semibold text-amber-700">{d.count}</td>
+              <tr key={i} className="border-b border-slate-100 odd:bg-white even:bg-slate-50/40 hover:bg-brand-50/40">
+                <td className="px-3 py-1.5 font-medium">{d.account}</td>
+                <td className="px-3 py-1.5 text-slate-500">{d.side === 'RECEIPT' ? 'Receipt' : 'Payment'}</td>
+                <td className="px-3 py-1.5 text-slate-600">{d.date ? new Date(d.date).toLocaleDateString('en-GB') : '—'}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums">{inr(d.amount)}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-amber-700">{d.count}</td>
               </tr>
             ))}
           </tbody>
@@ -720,17 +724,17 @@ const AccountLedgerModal = ({ name, onClose }: { name: string; onClose: () => vo
           ) : !items.length ? (
             <div className="py-12 text-center text-sm text-slate-400">No transactions for this account.</div>
           ) : (
-            <table className="w-full text-sm whitespace-nowrap">
-              <thead className="sticky top-0"><tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <th className="px-3 py-2.5 text-left">Date</th><th className="px-3 py-2.5 text-left">Particulars</th>
-                <th className="px-3 py-2.5 text-left">Vch</th>
-                <th className="px-3 py-2.5 text-right">Debit</th><th className="px-3 py-2.5 text-right">Credit</th>
-                <th className="px-3 py-2.5 text-right">Balance</th><th className="w-8 px-2 py-2.5" />
+            <table className="w-full text-[13px] whitespace-nowrap">
+              <thead className="sticky top-0"><tr className="border-b-2 border-slate-300 bg-slate-100 text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">
+                <th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2 text-left">Particulars</th>
+                <th className="px-3 py-2 text-left">Vch</th>
+                <th className="px-3 py-2 text-right">Debit</th><th className="px-3 py-2 text-right">Credit</th>
+                <th className="px-3 py-2 text-right">Balance</th><th className="w-8 px-2 py-2" />
               </tr></thead>
-              <tbody className="divide-y divide-slate-100">
-                <tr className="bg-slate-50/40 text-slate-500"><td className="px-3 py-1.5" colSpan={5}>Opening Balance</td><td className="px-3 py-1.5 text-right tabular-nums">0.00 Dr</td><td /></tr>
+              <tbody>
+                <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-500"><td className="px-3 py-1.5" colSpan={5}>Opening Balance</td><td className="px-3 py-1.5 text-right tabular-nums">0.00 Dr</td><td /></tr>
                 {items.map((r, i) => (
-                  <tr key={i} className="hover:bg-slate-50/60">
+                  <tr key={i} className="border-b border-slate-100 odd:bg-white even:bg-slate-50/40 hover:bg-brand-50/40">
                     <td className="px-3 py-2 text-slate-600">{dmy(r.date)}</td>
                     <td className="px-3 py-2"><span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', TXN_TONE[r.type] ?? 'bg-slate-100 text-slate-600')}>{TXN_LABEL[r.type] ?? r.type}</span></td>
                     <td className="px-3 py-2 font-mono text-xs text-slate-500">{r.ref || '—'}</td>
@@ -745,7 +749,7 @@ const AccountLedgerModal = ({ name, onClose }: { name: string; onClose: () => vo
               </tbody>
               {t && (
                 <tfoot className="sticky bottom-0">
-                  <tr className="border-t-2 border-slate-300 bg-slate-50 font-semibold">
+                  <tr className="border-t-2 border-slate-300 bg-slate-100 font-bold text-slate-800">
                     <td className="px-3 py-2" colSpan={3}>Total</td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-800">{inr(t.totalDebit)}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-slate-800">{inr(t.totalCredit)}</td>
@@ -764,12 +768,16 @@ const AccountLedgerModal = ({ name, onClose }: { name: string; onClose: () => vo
 };
 
 const Stat = ({ label, value, tone }: { label: string; value: string; tone?: 'emerald' | 'brand' | 'red' }) => (
-  <div className="card p-3">
-    <div className="text-[11px] uppercase tracking-wide text-slate-500">{label}</div>
-    <div className={cn('mt-0.5 text-xl font-bold tabular-nums',
+  <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
+    <span className={cn('absolute inset-y-0 left-0 w-1',
+      tone === 'emerald' ? 'bg-emerald-500' : tone === 'brand' ? 'bg-brand-500' : tone === 'red' ? 'bg-amber-500' : 'bg-slate-300',
+    )} />
+    <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
+    <div className={cn('mt-1 text-lg font-bold tabular-nums',
       tone === 'emerald' && 'text-emerald-600',
       tone === 'brand' && 'text-brand-700',
       tone === 'red' && 'text-red-600',
+      !tone && 'text-slate-700',
     )}>{value}</div>
   </div>
 );
