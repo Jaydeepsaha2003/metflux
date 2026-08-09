@@ -23,10 +23,12 @@ const PAGE_SIZE = 20;
 export const UsersListPage = () => {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
+  const changePageSize = (n: number) => { setPageSize(n); setPage(1); };
   useEffect(() => { setPage(1); }, [search]);
   const { data, isLoading } = useQuery({
-    queryKey: ['users', search, page],
-    queryFn: () => api<ListResp>(`/users?search=${encodeURIComponent(search)}&page=${page}&pageSize=${PAGE_SIZE}`),
+    queryKey: ['users', search, page, pageSize],
+    queryFn: () => api<ListResp>(`/users?search=${encodeURIComponent(search)}&page=${page}&pageSize=${pageSize}`),
   });
 
   return (
@@ -126,7 +128,7 @@ export const UsersListPage = () => {
           </tbody>
         </table>
         {data && (
-          <Pagination page={page} pageSize={PAGE_SIZE} total={data.total} onPageChange={setPage} />
+          <Pagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} onPageSizeChange={changePageSize} />
         )}
       </div>
     </div>

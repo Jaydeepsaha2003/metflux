@@ -81,6 +81,8 @@ export const POManagePage = () => {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<'ACTIVE' | 'CANCELLED' | 'ALL'>('ACTIVE');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
+  const changePageSize = (n: number) => { setPageSize(n); setPage(1); };
   useEffect(() => { setPage(1); }, [search, status]);
   const queryClient = useQueryClient();
 
@@ -90,9 +92,9 @@ export const POManagePage = () => {
   const [errorMsg, setErrorMsg]           = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['po-items', search, status, page],
+    queryKey: ['po-items', search, status, page, pageSize],
     queryFn: () =>
-      api<ListResp>(`/po-orders/items?search=${encodeURIComponent(search)}&status=${status}&page=${page}&pageSize=${PAGE_SIZE}`),
+      api<ListResp>(`/po-orders/items?search=${encodeURIComponent(search)}&status=${status}&page=${page}&pageSize=${pageSize}`),
   });
 
   const groups = useMemo(() => groupByPo(data?.items ?? []), [data]);
@@ -345,7 +347,7 @@ export const POManagePage = () => {
             </table>
           </div>
           {data && (
-            <Pagination page={page} pageSize={PAGE_SIZE} total={data.total} onPageChange={setPage} />
+            <Pagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} onPageSizeChange={changePageSize} />
           )}
         </div>
       )}
@@ -477,7 +479,7 @@ export const POManagePage = () => {
           })}
           {data && (
             <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-              <Pagination page={page} pageSize={PAGE_SIZE} total={data.total} onPageChange={setPage} />
+              <Pagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} onPageSizeChange={changePageSize} />
             </div>
           )}
         </div>

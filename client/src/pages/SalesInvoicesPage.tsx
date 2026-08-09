@@ -30,7 +30,7 @@ type Summary = {
 };
 type ImportResult = { imported: number; skippedDuplicates: number; datesFixed: number; cancelled: number; customersCreated: number; unmatchedCustomers: number; missingDueDays: number; totalInvoicesInFile: number; errors: { invoiceNumber: string; message: string }[] };
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 20;
 type StatusFilter = 'ALL' | 'UNPAID' | 'PARTIAL' | 'PAID' | 'OVERDUE';
 type DocFilter = 'ALL' | 'INVOICE' | 'CREDIT_NOTE';
 
@@ -56,6 +56,8 @@ export const SalesInvoicesPage = () => {
   const [docType, setDocType] = useState<DocFilter>('ALL');
   const [attention, setAttention] = useState(false);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
+  const changePageSize = (n: number) => { setPageSize(n); setPage(1); };
   // `?due=today|overdue` deep-link from the "Invoices due today" reminder — shows
   // just those invoices, highlighted. Cleared by the banner's dismiss button.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -81,9 +83,9 @@ export const SalesInvoicesPage = () => {
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['sales-invoices', search, status, attention, docType, page, due],
+    queryKey: ['sales-invoices', search, status, attention, docType, page, pageSize, due],
     queryFn: () => api<ListResp>(
-      `/sales-invoices?status=${status}&filter=${attention ? 'ATTENTION' : 'ALL'}&docType=${docType}&page=${page}&pageSize=${PAGE_SIZE}${search ? `&search=${encodeURIComponent(search)}` : ''}${due ? `&due=${due}` : ''}`
+      `/sales-invoices?status=${status}&filter=${attention ? 'ATTENTION' : 'ALL'}&docType=${docType}&page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}${due ? `&due=${due}` : ''}`
     ),
   });
 
@@ -375,7 +377,7 @@ export const SalesInvoicesPage = () => {
             </table>
           </div>
         )}
-        {data && <Pagination page={page} pageSize={PAGE_SIZE} total={data.total} onPageChange={setPage} />}
+        {data && <Pagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} onPageSizeChange={changePageSize} />}
       </div>
 
       {error && <Dialog title="Upload problem" tone="danger" onClose={() => setError(null)}><p className="text-sm text-slate-600">{error}</p></Dialog>}

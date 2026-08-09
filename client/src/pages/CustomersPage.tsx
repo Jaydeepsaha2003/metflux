@@ -32,6 +32,8 @@ const PAGE_SIZE = 20;
 export const CustomersPage = () => {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
+  const changePageSize = (n: number) => { setPageSize(n); setPage(1); };
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const qc = useQueryClient();
 
@@ -96,8 +98,8 @@ export const CustomersPage = () => {
   // would show because the result count usually shrinks.
   useEffect(() => { setPage(1); }, [search]);
   const { data, isLoading } = useQuery({
-    queryKey: ['customers', search, page],
-    queryFn: () => api<ListResp>(`/customers?search=${encodeURIComponent(search)}&page=${page}&pageSize=${PAGE_SIZE}`),
+    queryKey: ['customers', search, page, pageSize],
+    queryFn: () => api<ListResp>(`/customers?search=${encodeURIComponent(search)}&page=${page}&pageSize=${pageSize}`),
   });
 
   const shareWhatsapp = async (c: Customer) => {
@@ -299,9 +301,10 @@ export const CustomersPage = () => {
         {data && (
           <Pagination
             page={page}
-            pageSize={PAGE_SIZE}
+            pageSize={pageSize}
             total={data.total}
             onPageChange={setPage}
+            onPageSizeChange={changePageSize}
           />
         )}
       </div>

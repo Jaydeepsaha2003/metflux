@@ -41,14 +41,16 @@ const PAGE_SIZE = 20;
 export const ProductionListPage = () => {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
+  const changePageSize = (n: number) => { setPageSize(n); setPage(1); };
   useEffect(() => { setPage(1); }, [search]);
   const queryClient = useQueryClient();
   const { confirm, alert, confirmDialog } = useConfirm();
   const hideNames = useHideCustomerNames();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['production', search, page],
-    queryFn: () => api<ListResp>(`/production?search=${encodeURIComponent(search)}&page=${page}&pageSize=${PAGE_SIZE}`),
+    queryKey: ['production', search, page, pageSize],
+    queryFn: () => api<ListResp>(`/production?search=${encodeURIComponent(search)}&page=${page}&pageSize=${pageSize}`),
   });
 
   const remove = useMutation({
@@ -291,7 +293,7 @@ export const ProductionListPage = () => {
         </div>
 
         {data && (
-          <Pagination page={page} pageSize={PAGE_SIZE} total={data.total} onPageChange={setPage} />
+          <Pagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} onPageSizeChange={changePageSize} />
         )}
       </div>
       {confirmDialog}

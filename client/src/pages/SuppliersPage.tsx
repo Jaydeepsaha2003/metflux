@@ -25,11 +25,13 @@ const PAGE_SIZE = 20;
 export const SuppliersPage = () => {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
+  const changePageSize = (n: number) => { setPageSize(n); setPage(1); };
   const qc = useQueryClient();
   useEffect(() => { setPage(1); }, [search]);
   const { data, isLoading } = useQuery({
-    queryKey: ['suppliers', search, page],
-    queryFn: () => api<ListResp>(`/suppliers?search=${encodeURIComponent(search)}&page=${page}&pageSize=${PAGE_SIZE}`),
+    queryKey: ['suppliers', search, page, pageSize],
+    queryFn: () => api<ListResp>(`/suppliers?search=${encodeURIComponent(search)}&page=${page}&pageSize=${pageSize}`),
   });
 
   const bulkConfig: BulkExcelConfig = {
@@ -142,7 +144,7 @@ export const SuppliersPage = () => {
           </table>
         </div>
         {data && (
-          <Pagination page={page} pageSize={PAGE_SIZE} total={data.total} onPageChange={setPage} />
+          <Pagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} onPageSizeChange={changePageSize} />
         )}
       </div>
     </div>

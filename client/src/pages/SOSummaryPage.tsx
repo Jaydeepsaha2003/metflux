@@ -128,16 +128,18 @@ export const SOSummaryPage = () => {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set()); // item test panels
   const [expandedPos, setExpandedPos] = useState<Set<string>>(new Set());     // PO groups
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
+  const changePageSize = (n: number) => { setPageSize(n); setPage(1); };
   const [deleteTarget, setDeleteTarget] = useState<SummaryItem | null>(null);
   const [restoreTarget, setRestoreTarget] = useState<SummaryItem | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   useEffect(() => { setPage(1); }, [search, status]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['po-summary', search, status, page],
+    queryKey: ['po-summary', search, status, page, pageSize],
     queryFn: () =>
       api<{ items: SummaryItem[]; total: number; aggregates: Aggregates }>(
-        `/po-orders/summary?status=${status}&page=${page}&pageSize=${PAGE_SIZE}${search ? `&search=${encodeURIComponent(search)}` : ''}`
+        `/po-orders/summary?status=${status}&page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}`
       ),
   });
 
@@ -505,7 +507,7 @@ export const SOSummaryPage = () => {
             </tbody>
           </table>
           {data && (
-            <Pagination page={page} pageSize={PAGE_SIZE} total={data.total} onPageChange={setPage} />
+            <Pagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} onPageSizeChange={changePageSize} />
           )}
         </div>
       )}
@@ -632,7 +634,7 @@ export const SOSummaryPage = () => {
           })}
           {data && (
             <div className="card overflow-hidden">
-              <Pagination page={page} pageSize={PAGE_SIZE} total={data.total} onPageChange={setPage} />
+              <Pagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} onPageSizeChange={changePageSize} />
             </div>
           )}
         </div>

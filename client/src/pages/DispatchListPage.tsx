@@ -40,13 +40,15 @@ export const DispatchListPage = () => {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<'date' | 'customer'>('date');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
+  const changePageSize = (n: number) => { setPageSize(n); setPage(1); };
   useEffect(() => { setPage(1); }, [search, sort]);
   const queryClient = useQueryClient();
   const hideNames = useHideCustomerNames();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['dispatch', search, page, sort],
-    queryFn: () => api<ListResp>(`/dispatch?search=${encodeURIComponent(search)}&page=${page}&pageSize=${PAGE_SIZE}&sort=${sort}`),
+    queryKey: ['dispatch', search, page, pageSize, sort],
+    queryFn: () => api<ListResp>(`/dispatch?search=${encodeURIComponent(search)}&page=${page}&pageSize=${pageSize}&sort=${sort}`),
   });
 
   const remove = useMutation({
@@ -197,7 +199,7 @@ export const DispatchListPage = () => {
           </table>
         </div>
         {data && (
-          <Pagination page={page} pageSize={PAGE_SIZE} total={data.total} onPageChange={setPage} />
+          <Pagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} onPageSizeChange={changePageSize} />
         )}
       </div>
       {confirmDialog}

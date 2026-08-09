@@ -71,15 +71,17 @@ export const LorryReceiptsPage = () => {
   const { confirm, confirmDialog } = useConfirm();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
+  const changePageSize = (n: number) => { setPageSize(n); setPage(1); };
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<'export' | 'import' | null>(null);
   const [banner, setBanner] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['lorry-receipts', page, search],
+    queryKey: ['lorry-receipts', page, pageSize, search],
     queryFn: () =>
       api<{ items: LorryReceipt[]; total: number; page: number; pageSize: number }>(
-        `/lorry-receipts?page=${page}&pageSize=${PAGE_SIZE}${search ? `&search=${encodeURIComponent(search)}` : ''}`,
+        `/lorry-receipts?page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}`,
       ),
   });
   const rows = data?.items ?? [];
@@ -279,7 +281,7 @@ export const LorryReceiptsPage = () => {
                 ))}
               </tbody>
             </table>
-            <Pagination page={page} pageSize={PAGE_SIZE} total={data?.total ?? 0} onPageChange={setPage} />
+            <Pagination page={page} pageSize={pageSize} total={data?.total ?? 0} onPageChange={setPage} onPageSizeChange={changePageSize} />
           </div>
 
           {/* Mobile stacked cards */}
@@ -321,7 +323,7 @@ export const LorryReceiptsPage = () => {
                 </div>
               </div>
             ))}
-            <Pagination page={page} pageSize={PAGE_SIZE} total={data?.total ?? 0} onPageChange={setPage} />
+            <Pagination page={page} pageSize={pageSize} total={data?.total ?? 0} onPageChange={setPage} onPageSizeChange={changePageSize} />
           </div>
         </>
       )}

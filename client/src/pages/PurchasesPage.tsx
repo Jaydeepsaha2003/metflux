@@ -22,7 +22,7 @@ type Summary = { total: number; totalAmount: number; gst: number; tds: number; d
 type ImportResult = { imported: number; skippedDuplicates: number; debitNotes: number; cancelled: number; totalInFile: number; errors: { invoiceNumber: string; message: string }[] };
 
 type DocFilter = 'ALL' | 'INVOICE' | 'DEBIT_NOTE';
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 20;
 
 const inr = (n: number) => '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const fmtDate = (iso: string | null) => {
@@ -37,6 +37,8 @@ export const PurchasesPage = () => {
   const [search, setSearch] = useState('');
   const [docType, setDocType] = useState<DocFilter>('ALL');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
+  const changePageSize = (n: number) => { setPageSize(n); setPage(1); };
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [allMatching, setAllMatching] = useState(false);
   useEffect(() => { setPage(1); setSelected(new Set()); setAllMatching(false); }, [search, docType]);
@@ -48,8 +50,8 @@ export const PurchasesPage = () => {
 
   const { data: summary } = useQuery({ queryKey: ['purchase-summary'], queryFn: () => api<Summary>('/purchases/summary') });
   const { data, isLoading } = useQuery({
-    queryKey: ['purchases', search, docType, page],
-    queryFn: () => api<ListResp>(`/purchases?docType=${docType}&page=${page}&pageSize=${PAGE_SIZE}${search ? `&search=${encodeURIComponent(search)}` : ''}`),
+    queryKey: ['purchases', search, docType, page, pageSize],
+    queryFn: () => api<ListResp>(`/purchases?docType=${docType}&page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}`),
   });
 
   const refresh = () => { qc.invalidateQueries({ queryKey: ['purchases'] }); qc.invalidateQueries({ queryKey: ['purchase-summary'] }); };
@@ -224,7 +226,7 @@ export const PurchasesPage = () => {
             </table>
           </div>
         )}
-        {data && <Pagination page={page} pageSize={PAGE_SIZE} total={data.total} onPageChange={setPage} />}
+        {data && <Pagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} onPageSizeChange={changePageSize} />}
       </div>
 
       {error && <Dialog title="Upload problem" tone="danger" onClose={() => setError(null)}><p className="text-sm text-slate-600">{error}</p></Dialog>}

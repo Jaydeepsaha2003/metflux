@@ -66,13 +66,15 @@ export const ReturnsListPage = () => {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<'ALL' | ReturnStatus>('ALL');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
+  const changePageSize = (n: number) => { setPageSize(n); setPage(1); };
   useEffect(() => { setPage(1); }, [search, status]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['returns', search, status, page],
+    queryKey: ['returns', search, status, page, pageSize],
     queryFn: () =>
       api<{ items: ReturnRow[]; total: number }>(
-        `/returns?status=${status}&page=${page}&pageSize=${PAGE_SIZE}${search ? `&search=${encodeURIComponent(search)}` : ''}`,
+        `/returns?status=${status}&page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}`,
       ),
   });
 
@@ -286,7 +288,7 @@ export const ReturnsListPage = () => {
           </>
         )}
         {data && (
-          <Pagination page={page} pageSize={PAGE_SIZE} total={data.total} onPageChange={setPage} />
+          <Pagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} onPageSizeChange={changePageSize} />
         )}
       </div>
       {confirmDialog}
