@@ -321,23 +321,27 @@ router.get('/aging', requireAnyPermission('view_creditor_aging', 'manage_invoice
 
 /* ---------- GET / — paginated list ---------- */
 const listFilters = (query) => {
-  const { search, docType } = query;
+  const { search, docType, from, to } = query;
   let where = '`companyId` = ?';
   const params = [];
   if (docType && docType !== 'ALL') { where += ' AND `docType` = ?'; params.push(docType); }
+  if (from) { where += ' AND DATE(`invoiceDate`) >= ?'; params.push(from); }
+  if (to) { where += ' AND DATE(`invoiceDate`) <= ?'; params.push(to); }
   if (search) { const like = `%${search}%`; where += ' AND (`invoiceNumber` LIKE ? OR `supplierName` LIKE ? OR `gstin` LIKE ?)'; params.push(like, like, like); }
   return { where, params };
 };
 
 router.get('/', requireAnyPermission('view_purchase_register', 'manage_invoices'), asyncHandler(async (req, res) => {
-  const { page, pageSize, search, docType } = z.object({
+  const { page, pageSize, search, docType, from, to } = z.object({
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(10000).default(50),
     search: z.string().trim().max(120).optional(),
     docType: z.enum(['ALL', 'INVOICE', 'DEBIT_NOTE']).default('ALL'),
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   }).parse(req.query);
   const skip = (page - 1) * pageSize;
-  const { where, params } = listFilters({ search, docType });
+  const { where, params } = listFilters({ search, docType, from, to });
   const full = [req.tenant.companyId, ...params];
 
   const [rows, totalRow, agg] = await Promise.all([
@@ -360,6 +364,8 @@ router.post('/bulk-delete', requireAnyPermission('view_purchase_register', 'mana
     all: z.boolean().optional(),
     search: z.string().trim().max(120).optional(),
     docType: z.enum(['ALL', 'INVOICE', 'DEBIT_NOTE']).default('ALL'),
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   }).parse(req.body);
 
   let ids = [];

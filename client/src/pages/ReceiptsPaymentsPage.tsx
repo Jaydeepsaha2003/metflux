@@ -18,6 +18,7 @@ import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
 import { useAuthStore, activeMembership } from '@/store/auth';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { DateRangeFilter } from '@/components/DateRangeFilter';
 
 type ReceiptItem = { customerId: string; name: string; code?: string; amount: number; systemPending: number; willApply: number };
 type PaymentItem = { supplierKey: string; name: string; amount: number; systemPending: number; willApply: number };
@@ -571,10 +572,10 @@ const EntriesSection = () => {
 
       {/* Filters */}
       <div className="grid grid-cols-2 gap-2 border-b border-slate-100 p-3 sm:grid-cols-3 lg:grid-cols-6">
-        <label className="block"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">From</span>
-          <input type="date" className="input h-9" value={from} onChange={(e) => reset(() => setFrom(e.target.value))} /></label>
-        <label className="block"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">To</span>
-          <input type="date" className="input h-9" value={to} onChange={(e) => reset(() => setTo(e.target.value))} /></label>
+        <div className="col-span-2 block">
+          <span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Date range</span>
+          <DateRangeFilter from={from} to={to} onChange={(f, t) => reset(() => { setFrom(f); setTo(t); })} label="Filter entries by date" />
+        </div>
         <label className="block"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Side</span>
           <select className="input h-9" value={side} onChange={(e) => reset(() => setSide(e.target.value))}>
             <option value="ALL">All</option><option value="RECEIPT">Receipts</option><option value="PAYMENT">Payments</option>

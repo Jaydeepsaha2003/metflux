@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { BarChart3, Loader2, Trash2, Tag, UserPlus, Truck, Download, Copy, Pencil, Save, X, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { DateRangeFilter } from '@/components/DateRangeFilter';
 import { downloadXlsx, todayStamp } from '@/lib/excel';
 import { useConfirm } from '@/hooks/useConfirm';
 import { useAuthStore, activeMembership } from '@/store/auth';
@@ -158,14 +159,10 @@ export const CashbookSummaryPage = () => {
       <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex flex-wrap items-end gap-3">
-            <label className="block">
-              <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">From</span>
-              <input type="date" className="input" value={from} onChange={(e) => setFrom(e.target.value)} />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">To</span>
-              <input type="date" className="input" value={to} onChange={(e) => setTo(e.target.value)} />
-            </label>
+            <div className="block">
+              <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Date range</span>
+              <DateRangeFilter from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} label="Filter summary by date" />
+            </div>
             <label className="block flex-1 min-w-[180px]">
               <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Filter {groupBy === 'account' ? 'account' : 'category'}</span>
               <div className="relative">
@@ -376,10 +373,8 @@ const TransactionsView = () => {
       {/* Filters */}
       <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="flex flex-wrap items-end gap-3">
-          <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">From</span>
-            <input type="date" className="input" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} /></label>
-          <label className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">To</span>
-            <input type="date" className="input" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} /></label>
+          <div className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Date range</span>
+            <DateRangeFilter from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); setPage(1); }} label="Filter transactions by date" /></div>
           <label className="block flex-1 min-w-[180px]"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Search party</span>
             <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input className="input pl-9" placeholder="Party name…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} /></div></label>

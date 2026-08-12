@@ -468,7 +468,7 @@ router.get('/aging', requireAnyPermission('view_debtor_aging', 'manage_invoices'
 
 /* ---------- GET / — paginated list ---------- */
 router.get('/', requireAnyPermission('view_sales_register', 'manage_invoices'), asyncHandler(async (req, res) => {
-  const { page, pageSize, search, status, filter, docType, due } = z.object({
+  const { page, pageSize, search, status, filter, docType, due, from, to } = z.object({
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(10000).default(50),
     search: z.string().trim().max(120).optional(),
@@ -478,6 +478,8 @@ router.get('/', requireAnyPermission('view_sales_register', 'manage_invoices'), 
     // `due=today` — unpaid invoices whose due date is today (the "Invoices due
     // today" reminder deep-links here). `due=overdue` — due today or earlier.
     due: z.enum(['today', 'overdue']).optional(),
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   }).parse(req.query);
   const skip = (page - 1) * pageSize;
 
@@ -489,6 +491,8 @@ router.get('/', requireAnyPermission('view_sales_register', 'manage_invoices'), 
   else if (status !== 'ALL') { where += ' AND si.`status` = ?'; params.push(status); }
   if (filter === 'ATTENTION') where += ' AND (si.`customerId` IS NULL OR si.`dueDate` IS NULL)';
   if (docType !== 'ALL') { where += ' AND si.`docType` = ?'; params.push(docType); }
+  if (from) { where += ' AND DATE(si.`invoiceDate`) >= ?'; params.push(from); }
+  if (to) { where += ' AND DATE(si.`invoiceDate`) <= ?'; params.push(to); }
   if (search) { const like = `%${search}%`; where += ' AND (si.`invoiceNumber` LIKE ? OR si.`customerName` LIKE ?)'; params.push(like, like); }
 
   const base = `FROM \`SalesInvoice\` si LEFT JOIN \`Customer\` c ON c.\`id\` = si.\`customerId\` WHERE ${where}`;
@@ -560,6 +564,8 @@ router.post('/bulk-delete', requireAnyPermission('view_sales_register', 'manage_
     search: z.string().trim().max(120).optional(),
     filter: z.enum(['ALL', 'ATTENTION']).default('ALL'),
     docType: z.enum(['ALL', 'INVOICE', 'CREDIT_NOTE']).default('ALL'),
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   }).parse(req.body);
 
   // Resolve the target invoice ids, always re-scoped to the active company.
@@ -571,6 +577,8 @@ router.post('/bulk-delete', requireAnyPermission('view_sales_register', 'manage_
     else if (body.status !== 'ALL') { where += ' AND si.`status` = ?'; params.push(body.status); }
     if (body.filter === 'ATTENTION') where += ' AND (si.`customerId` IS NULL OR si.`dueDate` IS NULL)';
     if (body.docType !== 'ALL') { where += ' AND si.`docType` = ?'; params.push(body.docType); }
+    if (body.from) { where += ' AND DATE(si.`invoiceDate`) >= ?'; params.push(body.from); }
+    if (body.to) { where += ' AND DATE(si.`invoiceDate`) <= ?'; params.push(body.to); }
     if (body.search) { const like = `%${body.search}%`; where += ' AND (si.`invoiceNumber` LIKE ? OR si.`customerName` LIKE ?)'; params.push(like, like); }
     const rows = await q(`SELECT si.\`id\` FROM \`SalesInvoice\` si WHERE ${where}`, params);
     ids = rows.map((r) => r.id);

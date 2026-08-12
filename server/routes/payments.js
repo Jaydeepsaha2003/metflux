@@ -140,9 +140,15 @@ router.get('/outstanding/:customerId', requireAnyPermission('receive_payments', 
 
 /* ---------- GET / — payment history with allocations ---------- */
 router.get('/', requireAnyPermission('receive_payments', 'manage_invoices'), asyncHandler(async (req, res) => {
-  const { search } = z.object({ search: z.string().trim().max(120).optional() }).parse(req.query);
+  const { search, from, to } = z.object({
+    search: z.string().trim().max(120).optional(),
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  }).parse(req.query);
   let where = 'p.`companyId` = ?';
   const params = [req.tenant.companyId];
+  if (from) { where += ' AND DATE(p.`paymentDate`) >= ?'; params.push(from); }
+  if (to) { where += ' AND DATE(p.`paymentDate`) <= ?'; params.push(to); }
   if (search) { const like = `%${search}%`; where += ' AND (p.`customerName` LIKE ? OR p.`reference` LIKE ?)'; params.push(like, like); }
 
   const payments = await q(

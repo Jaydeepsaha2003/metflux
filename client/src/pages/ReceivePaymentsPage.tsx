@@ -10,6 +10,7 @@ import {
 import { api, ApiError } from '@/lib/api';
 import { downloadXlsx, readXlsx } from '@/lib/excel';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { DateRangeFilter } from '@/components/DateRangeFilter';
 import { useConfirm } from '@/hooks/useConfirm';
 
 type OpenInvoice = { id: string; invoiceNumber: string; invoiceDate: string; dueDate: string | null; balance: number };
@@ -64,9 +65,13 @@ export const ReceivePaymentsPage = () => {
     enabled: !!customerId,
   });
 
+  const [historyFrom, setHistoryFrom] = useState('');
+  const [historyTo, setHistoryTo] = useState('');
   const { data: history } = useQuery({
-    queryKey: ['payments'],
-    queryFn: () => api<{ items: Payment[] }>('/payments'),
+    queryKey: ['payments', historyFrom, historyTo],
+    queryFn: () => api<{ items: Payment[] }>(
+      `/payments${historyFrom || historyTo ? `?${[historyFrom && `from=${historyFrom}`, historyTo && `to=${historyTo}`].filter(Boolean).join('&')}` : ''}`
+    ),
   });
 
   const refresh = () => {
@@ -320,7 +325,10 @@ export const ReceivePaymentsPage = () => {
 
       {/* Payment history */}
       <div className="card overflow-hidden">
-        <div className="border-b border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">Payment history</div>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
+          <span className="text-sm font-semibold text-slate-700">Payment history</span>
+          <DateRangeFilter from={historyFrom} to={historyTo} onChange={(f, t) => { setHistoryFrom(f); setHistoryTo(t); }} label="Filter payment history by date" />
+        </div>
         {!history ? (
           <div className="py-10 text-center text-slate-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
         ) : !history.items.length ? (

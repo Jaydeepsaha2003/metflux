@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { BookText, Loader2, Upload, Search, Download, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { DateRangeFilter } from '@/components/DateRangeFilter';
 import { readXlsxMatrix, downloadXlsx, todayStamp } from '@/lib/excel';
 import { useConfirm } from '@/hooks/useConfirm';
 
@@ -109,10 +110,10 @@ export const JournalRegisterPage = () => {
       {/* Filters + totals strip */}
       <div className="card flex flex-col gap-3 p-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="grid grid-cols-2 gap-2 sm:flex sm:items-end sm:gap-3">
-          <label className="block"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">From</span>
-            <input type="date" className="input h-8 text-xs" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
-          <label className="block"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">To</span>
-            <input type="date" className="input h-8 text-xs" value={to} onChange={(e) => setTo(e.target.value)} /></label>
+          <div className="col-span-2 block sm:col-span-1">
+            <span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Date range</span>
+            <DateRangeFilter from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} label="Filter journal by date" />
+          </div>
           <label className="col-span-2 block sm:w-64"><span className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-500">Search account / voucher</span>
             <div className="relative"><Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
               <input className="input h-8 pl-8 text-xs" placeholder="Account or Vch no…" value={search} onChange={(e) => setSearch(e.target.value)} /></div></label>

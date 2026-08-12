@@ -12,6 +12,7 @@ import { readXlsxMatrix } from '@/lib/excel';
 import { cn } from '@/lib/cn';
 import { Pagination } from '@/components/Pagination';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { DateRangeFilter } from '@/components/DateRangeFilter';
 import { useConfirm } from '@/hooks/useConfirm';
 import { useHideCustomerNames } from '@/store/auth';
 
@@ -55,6 +56,8 @@ export const SalesInvoicesPage = () => {
   const [status, setStatus] = useState<StatusFilter>('ALL');
   const [docType, setDocType] = useState<DocFilter>('ALL');
   const [attention, setAttention] = useState(false);
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const changePageSize = (n: number) => { setPageSize(n); setPage(1); };
@@ -69,7 +72,7 @@ export const SalesInvoicesPage = () => {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [allMatching, setAllMatching] = useState(false);
   // Changing the filter invalidates any selection — start fresh.
-  useEffect(() => { setPage(1); setSelected(new Set()); setAllMatching(false); }, [search, status, attention, docType, due]);
+  useEffect(() => { setPage(1); setSelected(new Set()); setAllMatching(false); }, [search, status, attention, docType, due, from, to]);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -83,9 +86,9 @@ export const SalesInvoicesPage = () => {
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['sales-invoices', search, status, attention, docType, page, pageSize, due],
+    queryKey: ['sales-invoices', search, status, attention, docType, page, pageSize, due, from, to],
     queryFn: () => api<ListResp>(
-      `/sales-invoices?status=${status}&filter=${attention ? 'ATTENTION' : 'ALL'}&docType=${docType}&page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}${due ? `&due=${due}` : ''}`
+      `/sales-invoices?status=${status}&filter=${attention ? 'ATTENTION' : 'ALL'}&docType=${docType}&page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}${due ? `&due=${due}` : ''}${from ? `&from=${from}` : ''}${to ? `&to=${to}` : ''}`
     ),
   });
 
@@ -120,7 +123,7 @@ export const SalesInvoicesPage = () => {
   const clearSelection = () => { setSelected(new Set()); setAllMatching(false); };
 
   const bulkDel = useMutation({
-    mutationFn: (payload: { ids?: string[]; all?: boolean; status?: StatusFilter; search?: string; filter?: 'ALL' | 'ATTENTION'; docType?: DocFilter }) =>
+    mutationFn: (payload: { ids?: string[]; all?: boolean; status?: StatusFilter; search?: string; filter?: 'ALL' | 'ATTENTION'; docType?: DocFilter; from?: string; to?: string }) =>
       api<{ deleted: number }>('/sales-invoices/bulk-delete', { method: 'POST', json: payload }),
     onSuccess: () => { clearSelection(); refresh(); },
     onError: (e) => setError(e instanceof ApiError ? e.message : 'Bulk delete failed'),
@@ -154,7 +157,7 @@ export const SalesInvoicesPage = () => {
       tone: 'danger', confirmLabel: `Delete ${selectionCount}`,
     });
     if (!ok) return;
-    if (allMatching) bulkDel.mutate({ all: true, status, search: search || undefined, filter: attention ? 'ATTENTION' : 'ALL', docType });
+    if (allMatching) bulkDel.mutate({ all: true, status, search: search || undefined, filter: attention ? 'ATTENTION' : 'ALL', docType, from: from || undefined, to: to || undefined });
     else bulkDel.mutate({ ids: [...selected] });
   };
 
@@ -224,6 +227,8 @@ export const SalesInvoicesPage = () => {
             {d === 'ALL' ? 'All docs' : d === 'INVOICE' ? 'Invoices' : 'Credit notes'}
           </button>
         ))}
+        <span className="mx-1 hidden h-4 w-px bg-slate-200 sm:inline-block" />
+        <DateRangeFilter from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} label="Filter invoices by date" />
       </div>
 
       {/* Bulk-selection toolbar */}

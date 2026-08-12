@@ -8,6 +8,7 @@ import { api, ApiError } from '@/lib/api';
 import { readXlsxMatrix } from '@/lib/excel';
 import { cn } from '@/lib/cn';
 import { Pagination } from '@/components/Pagination';
+import { DateRangeFilter } from '@/components/DateRangeFilter';
 import { useConfirm } from '@/hooks/useConfirm';
 
 type Purchase = {
@@ -36,12 +37,14 @@ export const PurchasesPage = () => {
   const { confirm, confirmDialog } = useConfirm();
   const [search, setSearch] = useState('');
   const [docType, setDocType] = useState<DocFilter>('ALL');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const changePageSize = (n: number) => { setPageSize(n); setPage(1); };
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [allMatching, setAllMatching] = useState(false);
-  useEffect(() => { setPage(1); setSelected(new Set()); setAllMatching(false); }, [search, docType]);
+  useEffect(() => { setPage(1); setSelected(new Set()); setAllMatching(false); }, [search, docType, from, to]);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -50,8 +53,8 @@ export const PurchasesPage = () => {
 
   const { data: summary } = useQuery({ queryKey: ['purchase-summary'], queryFn: () => api<Summary>('/purchases/summary') });
   const { data, isLoading } = useQuery({
-    queryKey: ['purchases', search, docType, page, pageSize],
-    queryFn: () => api<ListResp>(`/purchases?docType=${docType}&page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}`),
+    queryKey: ['purchases', search, docType, page, pageSize, from, to],
+    queryFn: () => api<ListResp>(`/purchases?docType=${docType}&page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}${from ? `&from=${from}` : ''}${to ? `&to=${to}` : ''}`),
   });
 
   const refresh = () => { qc.invalidateQueries({ queryKey: ['purchases'] }); qc.invalidateQueries({ queryKey: ['purchase-summary'] }); };
@@ -92,7 +95,7 @@ export const PurchasesPage = () => {
     if (!selCount) return;
     const ok = await confirm({ title: 'Delete purchase rows?', message: <>Delete <strong>{selCount}</strong> row{selCount === 1 ? '' : 's'}? This cannot be undone.</>, tone: 'danger', confirmLabel: `Delete ${selCount}` });
     if (!ok) return;
-    if (allMatching) bulkDel.mutate({ all: true, docType, search: search || undefined });
+    if (allMatching) bulkDel.mutate({ all: true, docType, search: search || undefined, from: from || undefined, to: to || undefined });
     else bulkDel.mutate({ ids: [...selected] });
   };
 
@@ -128,6 +131,8 @@ export const PurchasesPage = () => {
             {d === 'ALL' ? 'All' : d === 'INVOICE' ? 'Bills' : 'Debit notes'}
           </button>
         ))}
+        <span className="mx-1 hidden h-4 w-px bg-slate-200 sm:inline-block" />
+        <DateRangeFilter from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} label="Filter bills by date" />
       </div>
 
       {/* Selection toolbar */}

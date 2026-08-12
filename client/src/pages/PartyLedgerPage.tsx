@@ -7,6 +7,7 @@ import { BookOpen, Download, Loader2, Calendar, User2, ArrowUpRight, ArrowDownRi
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { DateRangeFilter } from '@/components/DateRangeFilter';
 import { downloadXlsx, todayStamp } from '@/lib/excel';
 
 type Party = { key: string; name: string; isCustomer: boolean; isSupplier: boolean; balance: number };
@@ -100,14 +101,10 @@ export const PartyLedgerPage = () => {
             <span className="mb-1 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500"><User2 className="h-3.5 w-3.5" /> Party</span>
             <SearchableSelect value={partyKey} onChange={setPartyKey} options={options} placeholder="Search a customer or supplier…" />
           </label>
-          <label className="block">
-            <span className="mb-1 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500"><Calendar className="h-3.5 w-3.5" /> From</span>
-            <input type="date" className="input w-full" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </label>
-          <label className="block">
-            <span className="mb-1 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500"><Calendar className="h-3.5 w-3.5" /> To</span>
-            <input type="date" className="input w-full" value={to} onChange={(e) => setTo(e.target.value)} />
-          </label>
+          <div className="block lg:col-span-2">
+            <span className="mb-1 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500"><Calendar className="h-3.5 w-3.5" /> Date range</span>
+            <DateRangeFilter from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} label="Filter ledger by date" className="w-full" />
+          </div>
         </div>
       </div>
 
