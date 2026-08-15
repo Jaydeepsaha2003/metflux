@@ -70,6 +70,8 @@ const runInvoiceDueReminder = async (localDate) => {
   for (const c of companies) {
     let sales = { n: 0, amt: 0 };
     let purch = { n: 0, amt: 0 };
+    let overdue = { n: 0, amt: 0 };
+    let worst = [];
     try {
       const r = await qOne(
         `SELECT COUNT(*) AS n, COALESCE(SUM(\`amount\` - \`paidAmount\`), 0) AS amt
@@ -79,6 +81,27 @@ const runInvoiceDueReminder = async (localDate) => {
         [c.id, localDate]
       );
       sales = { n: Number(r?.n ?? 0), amt: Number(r?.amt ?? 0) };
+      // Anything already past its due date. Matching only DATE(dueDate)=today
+      // meant a bill was mentioned once, on its due date, and never again —
+      // so the invoices that most need chasing were the silent ones.
+      const o = await qOne(
+        `SELECT COUNT(*) AS n, COALESCE(SUM(\`amount\` - \`paidAmount\`), 0) AS amt
+           FROM \`SalesInvoice\`
+          WHERE \`companyId\` = ? AND \`status\` <> 'PAID'
+            AND \`dueDate\` IS NOT NULL AND DATE(\`dueDate\`) < ?`,
+        [c.id, localDate]
+      );
+      overdue = { n: Number(o?.n ?? 0), amt: Number(o?.amt ?? 0) };
+      // Name the worst debtors — an aggregate can't be acted on.
+      worst = await q(
+        `SELECT \`customerName\` nm, COALESCE(SUM(\`amount\` - \`paidAmount\`), 0) amt,
+                MAX(DATEDIFF(?, \`dueDate\`)) days
+           FROM \`SalesInvoice\`
+          WHERE \`companyId\` = ? AND \`status\` <> 'PAID'
+            AND \`dueDate\` IS NOT NULL AND DATE(\`dueDate\`) < ?
+          GROUP BY \`customerName\` ORDER BY amt DESC LIMIT 3`,
+        [localDate, c.id, localDate]
+      );
     } catch { /* table may be absent */ }
     try {
       const r = await qOne(
@@ -91,15 +114,22 @@ const runInvoiceDueReminder = async (localDate) => {
       purch = { n: Number(r?.n ?? 0), amt: Number(r?.amt ?? 0) };
     } catch { /* dueDate/table may be absent */ }
 
-    if (sales.n + purch.n === 0) continue;
+    if (sales.n + purch.n + overdue.n === 0) continue;
     const parts = [];
-    if (sales.n) parts.push(`${sales.n} sales (${inr(sales.amt)}) to collect`);
+    if (overdue.n) parts.push(`${overdue.n} OVERDUE (${inr(overdue.amt)})`);
+    if (sales.n) parts.push(`${sales.n} due today (${inr(sales.amt)})`);
     if (purch.n) parts.push(`${purch.n} purchase (${inr(purch.amt)}) to pay`);
+    // Who to chase, longest-overdue amount first.
+    if (worst.length) {
+      parts.push(worst.map((w) => `${w.nm} ${inr(Number(w.amt))} (${Number(w.days)}d)`).join(', '));
+    }
     await notifyCompanyAdmins(c.id, {
       type: 'DUE',
-      title: 'Invoices due today',
+      // Overdue is the more urgent fact, so it leads.
+      title: overdue.n ? `${overdue.n} invoice${overdue.n === 1 ? '' : 's'} overdue — ${inr(overdue.amt)}` : 'Invoices due today',
       body: parts.join(' · '),
-      url: sales.n ? '/s/admin/sales-invoices?due=today' : '/s/admin/accounts/creditor-aging',
+      url: overdue.n ? '/s/admin/sales-invoices?due=overdue'
+        : sales.n ? '/s/admin/sales-invoices?due=today' : '/s/admin/accounts/creditor-aging',
       tag: 'invoice-due',
     }).catch(() => {});
   }
