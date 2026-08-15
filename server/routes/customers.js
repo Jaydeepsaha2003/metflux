@@ -455,6 +455,56 @@ router.get('/:id/deletable', asyncHandler(async (req, res) => {
   res.json({ deletable: blockers.length === 0, blockers, counts });
 }));
 
+/* POST /:id/convert-to-expense — reclassify a head that was never a customer.
+   Salary, rent, freight and the like get tagged "Customer" on the Unclassified
+   screen during a bank-book import; with no sales invoices to net against, a
+   payment to them then surfaces on Amount Receivable as "Advance / On account".
+   This removes the Customer record AND remembers the head as an expense
+   category, so the Cashbook Summary groups it correctly and the next import
+   doesn't ask again. Blocked if anything sales-side references the customer —
+   a sale can't become an expense. */
+router.post('/:id/convert-to-expense', requireRole('MANAGER'), asyncHandler(async (req, res) => {
+  const { id } = idParam.parse(req.params);
+  const { category } = z.object({
+    category: z.string().trim().min(1).max(120).default('Expense'),
+  }).parse(req.body ?? {});
+  const companyId = req.tenant.companyId;
+  const cust = await findOwned(req, id);
+  if (!cust) throw new AppError('Customer not found', 404, 'NOT_FOUND');
+
+  const counts = await countCustomerRefs(id);
+  const blockers = customerBlockers(counts);
+  if (blockers.length) {
+    throw new AppError(
+      `${cust.name} still has ${blockers.join(', ')}. An expense head can't carry sales transactions — clear or reassign those first.`,
+      409, 'CUSTOMER_IN_USE', { blockers, counts }
+    );
+  }
+
+  const normKey = normName(cust.name);
+  if (!normKey) throw new AppError('Invalid customer name', 400, 'BAD_NAME');
+
+  const head = await txn(async (tx) => {
+    const existing = await tx.qOne(
+      'SELECT `id` FROM `AccountHead` WHERE `companyId` = ? AND `normKey` = ?', [companyId, normKey]
+    );
+    if (existing) {
+      await tx.q(
+        "UPDATE `AccountHead` SET `name` = ?, `type` = 'OTHER', `category` = ?, `updatedAt` = CURRENT_TIMESTAMP(3) WHERE `id` = ?",
+        [cust.name, category, existing.id]
+      );
+    } else {
+      await tx.insert('AccountHead', {
+        companyId, name: cust.name, normKey, type: 'OTHER', category,
+      });
+    }
+    await tx.q('DELETE FROM `Customer` WHERE `id` = ?', [id]);
+    return { name: cust.name, category };
+  });
+
+  res.json({ ok: true, ...head });
+}));
+
 /* POST /:id/convert-to-supplier — reclassify a mistakenly-created customer as a
    supplier. Carries over all details; BLOCKS if the customer has any sales
    transactions so nothing financial is ever silently reinterpreted. */

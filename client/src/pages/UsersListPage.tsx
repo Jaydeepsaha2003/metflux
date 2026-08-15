@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { Plus, Search, ShieldCheck, UserCog, Building2 } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Plus, Search, ShieldCheck, UserCog, Building2, Trash2, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useAuthStore } from '@/store/auth';
+import { useConfirm } from '@/hooks/useConfirm';
 import { cn } from '@/lib/cn';
 import { Pagination } from '@/components/Pagination';
 
@@ -26,6 +28,43 @@ export const UsersListPage = () => {
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const changePageSize = (n: number) => { setPageSize(n); setPage(1); };
   useEffect(() => { setPage(1); }, [search]);
+  const qc = useQueryClient();
+  const { confirm, alert, confirmDialog } = useConfirm();
+  const meId = useAuthStore((st) => st.user?.id);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const removeUser = useMutation({
+    mutationFn: (id: string) => api(`/users/${id}/permanent`, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+  });
+
+  // Ask first: `createdById` has no cascade, so anyone who has actually done
+  // work must be disabled rather than deleted, or their records lose an author.
+  const onDelete = async (u: UserRow) => {
+    setBusyId(u.id);
+    try {
+      const chk = await api<{ deletable: boolean; blockers: string[] }>(`/users/${u.id}/deletable`);
+      if (!chk.deletable) {
+        await alert({
+          title: 'Can’t delete this user',
+          message: (
+            <>
+              <strong>{u.name}</strong> has created {chk.blockers.join(', ')}. Deleting the account would leave those records
+              without an author, so <strong>disable</strong> it instead — they keep their access removed but the history stays intact.
+            </>
+          ),
+          tone: 'warning',
+        });
+        return;
+      }
+      const ok = await confirm({
+        title: 'Delete user?',
+        message: <>Permanently delete <strong>{u.name}</strong> (@{u.username})? They have created nothing, so no records are affected. Their sessions and memberships go with them. This cannot be undone.</>,
+        tone: 'danger', confirmLabel: 'Delete',
+      });
+      if (ok) removeUser.mutate(u.id);
+    } finally { setBusyId(null); }
+  };
   const { data, isLoading } = useQuery({
     queryKey: ['users', search, page, pageSize],
     queryFn: () => api<ListResp>(`/users?search=${encodeURIComponent(search)}&page=${page}&pageSize=${pageSize}`),
@@ -119,9 +158,21 @@ export const UsersListPage = () => {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <Link to={`/settings/users/${u.id}`} className="btn-ghost text-brand-700 hover:bg-brand-50">
-                    <UserCog className="h-4 w-4" />
-                  </Link>
+                  <div className="inline-flex items-center gap-1">
+                    <Link to={`/settings/users/${u.id}`} className="btn-ghost text-brand-700 hover:bg-brand-50" title="Edit user">
+                      <UserCog className="h-4 w-4" />
+                    </Link>
+                    {u.id !== meId && (
+                      <button
+                        onClick={() => onDelete(u)}
+                        disabled={busyId === u.id || removeUser.isPending}
+                        className="btn-ghost text-red-600 hover:bg-red-50 disabled:opacity-40"
+                        title="Delete user (only if they've created nothing)"
+                      >
+                        {busyId === u.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -131,6 +182,7 @@ export const UsersListPage = () => {
           <Pagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} onPageSizeChange={changePageSize} />
         )}
       </div>
+      {confirmDialog}
     </div>
   );
 };

@@ -12,6 +12,7 @@ import {
   effectivePermissions,
 } from '../lib/permissions.js';
 import { ROLES } from '../lib/constants.js';
+import { countUserRefs, userBlockers, USER_OWNED_TABLES } from '../lib/userRefs.js';
 
 const router = Router();
 router.use(requireAuth, requirePermission('manage_users'));
@@ -285,6 +286,47 @@ router.delete('/:id', asyncHandler(async (req, res) => {
   }
   await update('User', req.params.id, { isActive: false });
   await q('UPDATE `RefreshToken` SET `revokedAt` = ? WHERE `userId` = ? AND `revokedAt` IS NULL', [new Date(), req.params.id]);
+  res.status(204).end();
+}));
+
+/* GET /:id/deletable — can this account be removed outright, or only disabled? */
+router.get('/:id/deletable', asyncHandler(async (req, res) => {
+  if (!(await userIsVisible(req, req.params.id))) throw new AppError('User not found', 404, 'NOT_FOUND');
+  const counts = await countUserRefs(req.params.id);
+  const blockers = userBlockers(counts);
+  res.json({ deletable: blockers.length === 0 && req.params.id !== req.auth.userId, blockers, counts });
+}));
+
+/* DELETE /:id/permanent — remove the account for good.
+   Only when they've created nothing: `createdById` has no cascade, so deleting
+   an active user would orphan every record they made. Anyone who has done work
+   should be deactivated (DELETE /:id) instead, which keeps the trail intact. */
+router.delete('/:id/permanent', asyncHandler(async (req, res) => {
+  if (req.params.id === req.auth.userId) throw new AppError('You cannot delete yourself', 400, 'SELF_DELETE');
+  if (!(await userIsVisible(req, req.params.id))) throw new AppError('User not found', 404, 'NOT_FOUND');
+
+  const target = await qOne('SELECT `id`, `username`, `isPlatformAdmin` FROM `User` WHERE `id` = ?', [req.params.id]);
+  if (target?.isPlatformAdmin && !req.auth.isPlatformAdmin) {
+    throw new AppError('Only a platform admin can remove another platform admin.', 403, 'FORBIDDEN');
+  }
+
+  const counts = await countUserRefs(req.params.id);
+  const blockers = userBlockers(counts);
+  if (blockers.length) {
+    throw new AppError(
+      `${target?.username ?? 'This user'} has created ${blockers.join(', ')}. Disable the account instead so those records keep their author.`,
+      409, 'USER_IN_USE', { blockers, counts }
+    );
+  }
+
+  await txn(async (tx) => {
+    // Rows belonging to the account itself — sessions, memberships, their own
+    // notifications and audit trail — go with it.
+    for (const t of USER_OWNED_TABLES) {
+      await tx.q(`DELETE FROM \`${t}\` WHERE \`userId\` = ?`, [req.params.id]).catch(() => {});
+    }
+    await tx.q('DELETE FROM `User` WHERE `id` = ?', [req.params.id]);
+  });
   res.status(204).end();
 }));
 

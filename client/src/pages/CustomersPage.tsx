@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, MessageCircle, Plus, Pencil, Building2, Link2, Check, Trash2, Loader2 } from 'lucide-react';
+import { Search, MessageCircle, Plus, Pencil, Building2, Link2, Check, Trash2, Loader2, Tag } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useConfirm } from '@/hooks/useConfirm';
 import { cn } from '@/lib/cn';
@@ -45,6 +45,50 @@ export const CustomersPage = () => {
     mutationFn: (id: string) => api(`/customers/${id}`, { method: 'DELETE' }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['customers'] }),
   });
+
+  const toExpense = useMutation({
+    mutationFn: ({ id, category }: { id: string; category: string }) =>
+      api(`/customers/${id}/convert-to-expense`, { method: 'POST', json: { category } }),
+    onSuccess: () => ['customers', 'debtor-aging', 'account-heads', 'cashbook-summary', 'non-customers']
+      .forEach((k) => qc.invalidateQueries({ queryKey: [k] })),
+  });
+
+  // For heads that were never customers at all (salary, rent, freight). Removes
+  // the customer record AND remembers the head under an expense category, so the
+  // Cashbook Summary groups it properly and the next import doesn't re-ask.
+  const onConvertToExpense = async (c: { id: string; name: string }) => {
+    setDeletingId(c.id);
+    try {
+      const chk = await api<{ deletable: boolean; blockers: string[] }>(`/customers/${c.id}/deletable`);
+      if (!chk.deletable) {
+        await alert({
+          title: 'Can’t convert this customer',
+          message: <><strong>{c.name}</strong> still has {chk.blockers.join(', ')}. A sale can’t become an expense — clear or reassign those first.</>,
+          tone: 'warning',
+        });
+        return;
+      }
+      const category = window.prompt(
+        `Expense category for "${c.name}"
+
+e.g. Salary, Rent, Freight, Bank Charges`, 'Expense',
+      );
+      if (category === null) return;
+      const ok = await confirm({
+        title: 'Convert to expense head?',
+        message: (
+          <>
+            Treat <strong>{c.name}</strong> as the expense category <strong>{category.trim() || 'Expense'}</strong> instead of a customer.
+            <br /><br />
+            They stop appearing on Amount Receivable, their bank entries group under that category in the Cashbook Summary,
+            and future imports recognise them automatically.
+          </>
+        ),
+        tone: 'warning', confirmLabel: 'Convert',
+      });
+      if (ok) toExpense.mutate({ id: c.id, category: category.trim() || 'Expense' });
+    } finally { setDeletingId(null); }
+  };
 
   // Ask the server what's referencing this customer BEFORE prompting, so the
   // dialog can state the reason rather than failing after the user commits.
@@ -269,6 +313,14 @@ export const CustomersPage = () => {
                             <Pencil className="h-4 w-4" />
                           </Link>
                           <button
+                            onClick={() => onConvertToExpense(c)}
+                            disabled={deletingId === c.id || toExpense.isPending}
+                            className="btn-ghost text-amber-600 hover:bg-amber-50 disabled:opacity-40"
+                            title="Not a customer — convert to an expense head (salary, rent, freight…)"
+                          >
+                            <Tag className="h-4 w-4" />
+                          </button>
+                          <button
                             onClick={() => onDelete(c)}
                             disabled={deletingId === c.id || removeCustomer.isPending}
                             className="btn-ghost text-red-600 hover:bg-red-50 disabled:opacity-40"
@@ -300,6 +352,14 @@ export const CustomersPage = () => {
                       >
                         <Pencil className="h-3.5 w-3.5" /> Edit
                       </Link>
+                      <button
+                        onClick={() => onConvertToExpense(c)}
+                        disabled={deletingId === c.id || toExpense.isPending}
+                        className="inline-flex items-center rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-amber-600 active:bg-amber-50 disabled:opacity-40"
+                        aria-label={`Convert ${c.name} to an expense head`}
+                      >
+                        <Tag className="h-3.5 w-3.5" />
+                      </button>
                       <button
                         onClick={() => onDelete(c)}
                         disabled={deletingId === c.id || removeCustomer.isPending}
