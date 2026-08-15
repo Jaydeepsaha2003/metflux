@@ -82,9 +82,24 @@ export const loadPartyBalances = async (companyId) => {
   return byNk;
 };
 
-/** What the app would show this party on a given side, 0 when they don't belong there. */
+/** What Amount Receivable / Amount Payable would actually SHOW for this party.
+ *  A net that lands on the other side is not a negative balance here — those
+ *  reports drop anyone who nets to zero-or-below (`if (c.total <= 0.01)`), since
+ *  a supplier we owe belongs on Payable, not as a negative Receivable. Mirroring
+ *  that keeps a reconciliation comparing like with like; without it the system
+ *  column shows negatives the report never displays, and a statement that
+ *  rightly omits the party looks like a discrepancy. */
 export const sideBalance = (p, side) => {
   if (!p) return 0;
-  if (side === 'RECEIVABLE') return p.isCustomer ? p.netReceivable : 0;
-  return p.isSupplier ? p.netPayable : 0;
+  const raw = side === 'RECEIVABLE'
+    ? (p.isCustomer ? p.netReceivable : 0)
+    : (p.isSupplier ? p.netPayable : 0);
+  return raw > 0.01 ? raw : 0;
+};
+
+/** True when the party's balance sits on the OTHER side — worth saying so
+ *  rather than silently showing nothing. */
+export const belongsToOtherSide = (p, side) => {
+  if (!p) return false;
+  return side === 'RECEIVABLE' ? p.netPayable > 0.01 : p.netReceivable > 0.01;
 };

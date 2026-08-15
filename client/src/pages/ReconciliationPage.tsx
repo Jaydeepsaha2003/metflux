@@ -17,9 +17,15 @@ import { cn } from '@/lib/cn';
 import { Panel, Th, StatStrip, num } from '@/components/tally';
 
 type Status = 'MATCH' | 'DIFFERS' | 'MISSING_IN_SYSTEM' | 'MISSING_IN_FILE';
+type Hint = {
+  kind: 'OTHER_SIDE' | 'NEAR_MATCH' | 'NO_RECORD';
+  text: string;
+  near?: { name: string; score: number; balance: number; otherSide: boolean };
+};
 type Row = {
   name: string; systemName: string | null;
   fileBalance: number; systemBalance: number; difference: number; status: Status;
+  hint?: Hint | null;
 };
 type Side = {
   asOn: string | null;
@@ -205,7 +211,16 @@ const SideReport = ({ title, side, tone }: { title: string; side: Side; tone: 'e
               {rows.map((r, i) => (
                 <tr key={`${r.name}-${i}`} className={cn('border-b border-slate-100 hover:bg-brand-50/40',
                   r.status === 'DIFFERS' && 'bg-red-50/40')}>
-                  <td className="max-w-[320px] truncate px-2 py-1 font-medium text-slate-800" title={r.name}>{r.name}</td>
+                  <td className="max-w-[340px] px-2 py-1">
+                    <div className="truncate font-medium text-slate-800" title={r.name}>{r.name}</div>
+                    {r.hint && (
+                      <div className={cn('truncate text-[10.5px]',
+                        r.hint.kind === 'NEAR_MATCH' ? 'text-amber-700' : 'text-slate-400')} title={r.hint.text}>
+                        {r.hint.kind === 'NEAR_MATCH' ? '↳ ' : ''}{r.hint.text}
+                        {r.hint.near && r.hint.near.balance > 0 && <> · carries {num(r.hint.near.balance)}</>}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-2 py-1">
                     <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-medium ring-1', STATUS_META[r.status].cls)}
                       title={STATUS_META[r.status].hint}>
@@ -232,6 +247,13 @@ const SideReport = ({ title, side, tone }: { title: string; side: Side; tone: 'e
         <Link to="/accounts/purchases" className="font-semibold text-brand-700 underline">Purchase</Link> register).{' '}
         <b>Not in file</b> — this system carries a balance the statement omits. Open a party in the{' '}
         <Link to="/accounts/party-ledger" className="font-semibold text-brand-700 underline">Party Ledger</Link> to see how its figure was built.
+        <div className="mt-1.5 border-t border-slate-200 pt-1.5">
+          <b className="text-slate-600">Working order:</b>{' '}
+          <b>1.</b> Fix the <span className="text-amber-700">↳ possibly the same party</span> rows first — those are one party under two
+          spellings, so both sides are wrong until they're merged.{' '}
+          <b>2.</b> Then “No invoices imported” rows — re-upload the register that should contain them.{' '}
+          <b>3.</b> Only then chase what's left; genuine differences are usually a missing receipt or an unrecorded credit note.
+        </div>
       </div>
     </Panel>
   );
