@@ -185,3 +185,25 @@ export const allocatePaymentManual = async (db, { companyId, customerId, payment
   }
   return allocated;
 };
+
+/* ── Register column resolution ──────────────────────────────────────────────
+ * Picking the amount column by "first header containing 'amount'" is wrong on a
+ * real Indian register: `Sale Amount | Taxable Amount | IGST | CGST | SGST |
+ * Total Amount` matches "Sale Amount", storing the PRE-TAX value as the invoice
+ * total, so the register never ties to the file. Prefer an explicit total, then
+ * a bare "amount", and never fall back onto a qualified one.                  */
+const QUALIFIED_AMOUNT = /taxable|sale|purc|other|tax|igst|cgst|sgst|cess|discount|round|freight|tds|advance|balance|paid|due/;
+
+export const pickAmountColumn = (header) => {
+  const h = header.map((x) => String(x ?? '').toLowerCase().trim());
+  const exact = ['total amount', 'invoice amount', 'bill amount', 'net amount', 'gross amount', 'grand total'];
+  for (const k of exact) { const i = h.findIndex((c) => c.includes(k)); if (i >= 0) return i; }
+  // A bare "amount"/"value"/"total" that isn't really a component column.
+  for (const k of ['amount', 'value', 'total']) {
+    const i = h.findIndex((c) => c.includes(k) && !QUALIFIED_AMOUNT.test(c));
+    if (i >= 0) return i;
+  }
+  // Last resort: any amount-ish column at all, so a sparse sheet still imports.
+  for (const k of ['amount', 'value', 'total']) { const i = h.findIndex((c) => c.includes(k)); if (i >= 0) return i; }
+  return -1;
+};

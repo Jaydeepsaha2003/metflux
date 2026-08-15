@@ -14,6 +14,7 @@ import { Pagination } from '@/components/Pagination';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { DateRangeFilter } from '@/components/DateRangeFilter';
 import { useConfirm } from '@/hooks/useConfirm';
+import { ImportCheck, type ImportFileCheck } from '@/components/ImportCheck';
 import { useHideCustomerNames } from '@/store/auth';
 
 type Invoice = {
@@ -29,7 +30,7 @@ type Summary = {
   totalInvoices: number; outstanding: number; overdue: number; openCount: number; attention: number;
   totalSales: number; outputGst: number; creditNotes: number; netSales: number;
 };
-type ImportResult = { imported: number; skippedDuplicates: number; datesFixed: number; cancelled: number; customersCreated: number; unmatchedCustomers: number; missingDueDays: number; totalInvoicesInFile: number; errors: { invoiceNumber: string; message: string }[] };
+type ImportResult = { fileCheck?: ImportFileCheck; imported: number; skippedDuplicates: number; datesFixed: number; cancelled: number; customersCreated: number; unmatchedCustomers: number; missingDueDays: number; totalInvoicesInFile: number; errors: { invoiceNumber: string; message: string }[] };
 
 const PAGE_SIZE = 20;
 type StatusFilter = 'ALL' | 'UNPAID' | 'PARTIAL' | 'PAID' | 'OVERDUE';
@@ -419,6 +420,9 @@ export const SalesInvoicesPage = () => {
 
       {importResult && (
         <Dialog title="Vouchers imported" tone="ok" onClose={() => setImportResult(null)}>
+          {/* Prove the read before the counts — a register that doesn't tie out
+              is the thing worth seeing first. */}
+          <div className="mb-2"><ImportCheck check={importResult.fileCheck} /></div>
           <div className="space-y-2 text-sm">
             <Row k="Invoices imported" v={importResult.imported} tone="ok" />
             <Row k="Dates corrected" v={importResult.datesFixed} tone={importResult.datesFixed ? 'ok' : 'muted'} />

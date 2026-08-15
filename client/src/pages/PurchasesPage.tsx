@@ -10,6 +10,7 @@ import { cn } from '@/lib/cn';
 import { Pagination } from '@/components/Pagination';
 import { DateRangeFilter } from '@/components/DateRangeFilter';
 import { useConfirm } from '@/hooks/useConfirm';
+import { ImportCheck, type ImportFileCheck } from '@/components/ImportCheck';
 
 type Purchase = {
   id: string; invoiceNumber: string; invoiceDate: string;
@@ -20,7 +21,7 @@ type Purchase = {
 };
 type ListResp = { items: Purchase[]; total: number; page: number; pageSize: number; totals: { amount: number; tds: number; gst: number } };
 type Summary = { total: number; totalAmount: number; gst: number; tds: number; debitNotes: number };
-type ImportResult = { imported: number; skippedDuplicates: number; debitNotes: number; cancelled: number; totalInFile: number; errors: { invoiceNumber: string; message: string }[] };
+type ImportResult = { fileCheck?: ImportFileCheck; imported: number; skippedDuplicates: number; debitNotes: number; cancelled: number; totalInFile: number; errors: { invoiceNumber: string; message: string }[] };
 
 type DocFilter = 'ALL' | 'INVOICE' | 'DEBIT_NOTE';
 const PAGE_SIZE = 20;
@@ -270,6 +271,9 @@ export const PurchasesPage = () => {
       {error && <Dialog title="Upload problem" tone="danger" onClose={() => setError(null)}><p className="text-sm text-slate-600">{error}</p></Dialog>}
       {importResult && (
         <Dialog title="Purchase register imported" tone="ok" onClose={() => setImportResult(null)}>
+          {/* Prove the read before the counts — a register that doesn't tie out
+              is the thing worth seeing first. */}
+          <div className="mb-2"><ImportCheck check={importResult.fileCheck} /></div>
           <div className="space-y-1.5 text-sm">
             <Row k="Entries imported" v={importResult.imported} tone="ok" />
             <Row k="Debit notes" v={importResult.debitNotes} tone={importResult.debitNotes ? 'warning' : 'muted'} />

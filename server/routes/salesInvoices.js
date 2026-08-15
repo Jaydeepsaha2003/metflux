@@ -8,7 +8,7 @@ import { q, qOne, insert, update, txn } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission, requireAnyPermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
-import { round2, parseAmount, normName, addDays, inferDateOrder, parseDateWith, isCancelledName } from '../lib/invoicing.js';
+import { round2, parseAmount, normName, addDays, inferDateOrder, parseDateWith, isCancelledName, pickAmountColumn } from '../lib/invoicing.js';
 import { createCustomerRecord } from '../lib/customers.js';
 
 const router = Router();
@@ -74,7 +74,9 @@ router.post('/import', requireAnyPermission('view_sales_register', 'manage_invoi
   const cVch  = findCol('vch', 'bill', 'voucher', 'invoice');
   const cPart = findCol('particular', 'party', 'customer', 'account');
   const cItem = findCol('item', 'description', 'detail');
-  const cAmt  = findCol('amount', 'value', 'total');
+  // NOT findCol('amount') — on a real register that matches "Sale Amount" (the
+  // pre-tax value) before "Total Amount", so the register would never tie out.
+  const cAmt  = pickAmountColumn(header);
   if (cVch < 0 || cAmt < 0) {
     throw new AppError('The sheet needs a Vch/Bill No column and an Amount column.', 400, 'BAD_HEADER');
   }
@@ -105,6 +107,7 @@ router.post('/import', requireAnyPermission('view_sales_register', 'manage_invoi
   // Group line items into invoices. A row with a Vch No starts a new invoice;
   // blank-Vch rows that still carry an item are continuation lines we sum in.
   const invoices = [];
+  let statedTotal = null;
   let cur = null;
   for (let i = headerIdx + 1; i < matrix.length; i++) {
     const r = matrix[i];
@@ -113,7 +116,12 @@ router.post('/import', requireAnyPermission('view_sales_register', 'manage_invoi
     const part = cPart >= 0 ? (r[cPart] ?? '').trim() : '';
     const item = cItem >= 0 ? (r[cItem] ?? '').trim() : '';
     const amt  = parseAmount(r[cAmt]);
-    if (isTotalsRow(r, vch)) { cur = null; continue; }
+    if (isTotalsRow(r, vch)) {
+      // The register states its own grand total — keep it to prove the import.
+      const stated = parseAmount(cell(r, cAmt));
+      if (stated) statedTotal = stated;
+      cur = null; continue;
+    }
     if (vch) {
       cur = {
         invoiceNumber: vch, dateStr: date, customerName: part,
@@ -237,7 +245,26 @@ router.post('/import', requireAnyPermission('view_sales_register', 'manage_invoi
     }
   }
 
+  const parsedTotal = round2(invoices.reduce((s2, i) => s2 + (Number(i.amount) || 0), 0));
+  const fileCheck = {
+    // Which column each figure came from — so a misread sheet is visible, not silent.
+    columns: {
+      amount: cAmt >= 0 ? matrix[headerIdx][cAmt] : null,
+      taxable: cTaxable >= 0 ? matrix[headerIdx][cTaxable] : null,
+      date: cDate >= 0 ? matrix[headerIdx][cDate] : null,
+      voucher: cVch >= 0 ? matrix[headerIdx][cVch] : null,
+      party: cPart >= 0 ? matrix[headerIdx][cPart] : null,
+    },
+    dateOrder,
+    rowsInFile: invoices.length,
+    parsedTotal,
+    statedTotal: statedTotal == null ? null : round2(statedTotal),
+    difference: statedTotal == null ? null : round2(parsedTotal - statedTotal),
+    matches: statedTotal == null ? null : Math.abs(parsedTotal - statedTotal) <= 1,
+  };
+
   res.json({
+    fileCheck,
     imported, skippedDuplicates, datesFixed, cancelled, customersCreated, unmatchedCustomers, missingDueDays,
     totalInvoicesInFile: invoices.length,
     errors: errors.slice(0, 100),

@@ -8,7 +8,7 @@ import { q, qOne, insert, update, txn } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission, requireAnyPermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
-import { round2, parseAmount, inferDateOrder, parseDateWith, isCancelledName, normName } from '../lib/invoicing.js';
+import { round2, parseAmount, inferDateOrder, parseDateWith, isCancelledName, normName, pickAmountColumn } from '../lib/invoicing.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -52,7 +52,9 @@ router.post('/import', requireAnyPermission('view_purchase_register', 'manage_in
   const cAcct    = findCol('account', 'party', 'supplier', 'particular', 'name');
   const cGstin   = findCol('gstin', 'tin');
   const cType    = findCol('type');
-  const cTotal   = findCol('total amount', 'total');
+  // Prefer an explicit total over any component column ("Purchase Amount",
+  // "Taxable Amount"…), so the register ties to the file.
+  const cTotal   = pickAmountColumn(header);
   const cPurc    = findCol('purc', 'purchase');
   const cTaxable = findCol('taxable');
   const cIgst    = findCol('igst');
@@ -70,10 +72,17 @@ router.post('/import', requireAnyPermission('view_purchase_register', 'manage_in
   };
 
   const invoices = [];
+  let statedTotal = null;
   for (let i = headerIdx + 1; i < matrix.length; i++) {
     const r = matrix[i];
     const vch = cell(r, cVch);
-    if (isTotalsRow(r, vch) || !vch) continue;
+    if (isTotalsRow(r, vch)) {
+      // The register states its own grand total — keep it to prove the import.
+      const stated = parseAmount(cell(r, cTotal));
+      if (stated) statedTotal = stated;
+      continue;
+    }
+    if (!vch) continue;
     invoices.push({
       invoiceNumber: vch,
       dateStr: cell(r, cDate),
@@ -161,7 +170,23 @@ router.post('/import', requireAnyPermission('view_purchase_register', 'manage_in
     }
   }
 
-  res.json({ imported, skippedDuplicates, datesFixed, debitNotes, cancelled, totalInFile: invoices.length, errors: errors.slice(0, 100) });
+  const parsedTotal = round2(invoices.reduce((s2, i) => s2 + (Number(i.amount) || 0), 0));
+  const fileCheck = {
+    columns: {
+      amount: cTotal >= 0 ? matrix[headerIdx][cTotal] : null,
+      taxable: cTaxable >= 0 ? matrix[headerIdx][cTaxable] : null,
+      date: cDate >= 0 ? matrix[headerIdx][cDate] : null,
+      voucher: cVch >= 0 ? matrix[headerIdx][cVch] : null,
+      party: cAcct >= 0 ? matrix[headerIdx][cAcct] : null,
+    },
+    dateOrder,
+    rowsInFile: invoices.length,
+    parsedTotal,
+    statedTotal: statedTotal == null ? null : round2(statedTotal),
+    difference: statedTotal == null ? null : round2(parsedTotal - statedTotal),
+    matches: statedTotal == null ? null : Math.abs(parsedTotal - statedTotal) <= 1,
+  };
+  res.json({ fileCheck, imported, skippedDuplicates, datesFixed, debitNotes, cancelled, totalInFile: invoices.length, errors: errors.slice(0, 100) });
 }));
 
 /* ---------- GET /summary ---------- */
