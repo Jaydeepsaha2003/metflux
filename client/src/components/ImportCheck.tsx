@@ -16,14 +16,24 @@ export type ImportFileCheck = {
   statedTotal: number | null;
   difference: number | null;
   matches: boolean | null;
+  taxableTotal?: number;
+  taxTotal?: number;
+  componentsTotal?: number;
+  componentGap?: number;
+  /** Does the chosen amount column equal taxable + tax? null = no tax columns. */
+  reconcilesWithTax?: boolean | null;
 };
 
 const inr = (n: number) => '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export const ImportCheck = ({ check }: { check?: ImportFileCheck | null }) => {
   if (!check) return null;
-  const ok = check.matches === true;
-  const bad = check.matches === false;
+  // Two independent tests: the file's own total, and whether the column we chose
+  // actually equals taxable + tax. The second is what catches a pre-tax column,
+  // which the first cannot — it would sum the wrong column correctly.
+  const taxBad = check.reconcilesWithTax === false;
+  const ok = check.matches === true && !taxBad;
+  const bad = check.matches === false || taxBad;
 
   return (
     <div className={cn('rounded-lg border px-3 py-2 text-xs',
@@ -44,6 +54,15 @@ export const ImportCheck = ({ check }: { check?: ImportFileCheck | null }) => {
         )}
       </div>
 
+      {check.reconcilesWithTax != null && (
+        <div className={cn('mt-1 font-mono tabular-nums', taxBad && 'font-bold')}>
+          Taxable {inr(check.taxableTotal ?? 0)} + tax {inr(check.taxTotal ?? 0)} = {inr(check.componentsTotal ?? 0)}
+          {taxBad
+            ? <span className="font-sans"> — does NOT match the amount column (off by {inr(Math.abs(check.componentGap ?? 0))})</span>
+            : <span className="font-sans"> ✓ matches the amount column</span>}
+        </div>
+      )}
+
       {/* Naming the source column turns a silent misread into an obvious one. */}
       <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 opacity-80">
         <span>Amount ← <b>{check.columns.amount ?? '—'}</b></span>
@@ -52,11 +71,16 @@ export const ImportCheck = ({ check }: { check?: ImportFileCheck | null }) => {
         <span>Party ← <b>{check.columns.party ?? '—'}</b></span>
       </div>
 
-      {bad && (
+      {taxBad && (
         <div className="mt-1 font-sans">
-          Check the <b>Amount</b> column named above is the one you expect — if it's a component such as “Sale Amount”
-          or “Taxable Amount”, the register will read short by the tax. Otherwise the file may be missing rows or carry a
-          total that excludes credit notes.
+          <b>Amount ← “{check.columns.amount}”</b> doesn't equal taxable + tax, so it is probably a pre-tax column.
+          The register would read short by the GST. Re-export with the tax-inclusive total (usually “Total Amount”).
+        </div>
+      )}
+      {check.matches === false && !taxBad && (
+        <div className="mt-1 font-sans">
+          The rows read don't add up to the file's own total — the file may be missing rows, or its total may exclude
+          credit notes.
         </div>
       )}
       {check.statedTotal == null && (

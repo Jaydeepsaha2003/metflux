@@ -171,6 +171,21 @@ router.post('/import', requireAnyPermission('view_purchase_register', 'manage_in
   }
 
   const parsedTotal = round2(invoices.reduce((s2, i) => s2 + (Number(i.amount) || 0), 0));
+  // Cross-check the CHOSEN amount column against the tax breakdown. Comparing it
+  // only to the file's own total is circular — a wrong column is summed
+  // correctly and still "ties out". Taxable + IGST + CGST + SGST + other must
+  // land on it; a pre-tax column (e.g. "Sale Amount") will not. Tolerance is a
+  // rupee per row, since registers round each invoice total to whole rupees.
+  const comp = invoices.reduce((a, i) => ({
+    taxable: a.taxable + (Number(i.taxableAmount) || 0),
+    tax: a.tax + (Number(i.igst) || 0) + (Number(i.cgst) || 0) + (Number(i.sgst) || 0),
+    other: a.other + (Number(i.otherAmount ?? i.tds) || 0),
+  }), { taxable: 0, tax: 0, other: 0 });
+  const componentsTotal = round2(comp.taxable + comp.tax + comp.other);
+  const hasComponents = comp.taxable !== 0 || comp.tax !== 0;
+  const componentGap = round2(parsedTotal - componentsTotal);
+  const reconcilesWithTax = !hasComponents ? null
+    : Math.abs(componentGap) <= Math.max(invoices.length, 5);
   const fileCheck = {
     columns: {
       amount: cTotal >= 0 ? matrix[headerIdx][cTotal] : null,
@@ -185,6 +200,11 @@ router.post('/import', requireAnyPermission('view_purchase_register', 'manage_in
     statedTotal: statedTotal == null ? null : round2(statedTotal),
     difference: statedTotal == null ? null : round2(parsedTotal - statedTotal),
     matches: statedTotal == null ? null : Math.abs(parsedTotal - statedTotal) <= 1,
+    taxableTotal: round2(comp.taxable),
+    taxTotal: round2(comp.tax),
+    componentsTotal,
+    componentGap,
+    reconcilesWithTax,
   };
   res.json({ fileCheck, imported, skippedDuplicates, datesFixed, debitNotes, cancelled, totalInFile: invoices.length, errors: errors.slice(0, 100) });
 }));
