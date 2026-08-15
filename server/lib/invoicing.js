@@ -14,9 +14,29 @@ export const invoiceStatus = (amount, paid) => {
 };
 
 /** Parse "8,775.00" / "₹ 1,234" → number. Returns 0 when not a number. */
+/** Money out of a spreadsheet cell → Number (0 when genuinely unreadable).
+ *  Real exports write the same figure many ways, and anything this misreads is
+ *  silently dropped from an import, so it is deliberately permissive:
+ *    "1,234.56"  "Rs. 1,234.56"  "₹1234.56"  "1,234.56 Dr"  → 1234.56
+ *    "(2,500.00)"  "-2500"  "2500-"  "2,500.00 Cr"          → -2500
+ *  Dr/Cr is a side annotation, not a sign — the caller decides what a negative
+ *  means in its column, so Cr is NOT treated as negative here. */
 export const parseAmount = (v) => {
-  const n = Number(String(v ?? '').replace(/[,\s₹]/g, ''));
-  return Number.isFinite(n) ? n : 0;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  let s = String(v ?? '').trim();
+  if (!s) return 0;
+  let neg = false;
+  if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1).trim(); }   // (1,234.56)
+  s = s.replace(/^(?:rs\.?|inr|₹|\$)\s*/i, '');                        // leading currency
+  s = s.replace(/\s*(?:dr|cr)\.?$/i, '');                              // trailing Dr/Cr
+  s = s.replace(/[,\s₹]/g, '');
+  if (s.endsWith('-')) { neg = true; s = s.slice(0, -1); }             // "5000-"
+  if (s.startsWith('-')) { neg = true; s = s.slice(1); }
+  if (s.startsWith('+')) s = s.slice(1);
+  if (!/^\d*\.?\d+$/.test(s)) return 0;
+  const n = Number(s);
+  if (!Number.isFinite(n)) return 0;
+  return neg ? -n : n;
 };
 
 /** Parse a M/D/YY or D-M-YYYY style date → UTC Date (midnight), or null.

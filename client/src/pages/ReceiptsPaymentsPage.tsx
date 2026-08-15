@@ -14,7 +14,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Loader2, Upload, CheckCircle2, ArrowDownToLine, UserPlus, Truck, Tag, BarChart3,
   Search, ChevronLeft, ChevronRight, Download, Trash2, NotebookPen, Plus, RefreshCw,
-  Landmark, Pencil, Star, Wallet, BookOpen,
+  Landmark, Pencil, Star, Wallet, BookOpen, AlertTriangle,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { readXlsxMatrix, downloadXlsx, todayStamp } from '@/lib/excel';
@@ -28,11 +28,26 @@ import { BankAccountDialog, type BankAccount } from '@/components/BankAccountDia
 type ReceiptItem = { customerId: string; name: string; code?: string; amount: number; systemPending: number; willApply: number };
 type PaymentItem = { supplierKey: string; name: string; amount: number; systemPending: number; willApply: number };
 type Unmatched = { side: 'RECEIPT' | 'PAYMENT'; name: string; amount: number };
+type FileCheck = {
+  entryCount: number;
+  receiptTotal: number;
+  paymentTotal: number;
+  undated: number;
+  skipped: { balanceRows: number; cancelled: number; unreadableAmount: number };
+  balance: null | {
+    statedOpening: number | null;
+    statedClosing: number;
+    computedClosing: number;
+    difference: number;
+    matches: boolean;
+  };
+};
 type Preview = {
   asOn: string | null;
   receipts: ReceiptItem[];
   payments: PaymentItem[];
   unmatched: Unmatched[];
+  fileCheck?: FileCheck;
   summary: {
     receiptCount: number; paymentCount: number; unmatchedCount: number;
     receiptTotal: number; paymentTotal: number;
@@ -439,6 +454,7 @@ export const ReceiptsPaymentsPage = () => {
               title={<><ArrowDownToLine className="h-3.5 w-3.5" /> Import preview → {importTarget.name}</>}
               right={<span className="text-[10.5px] text-slate-500">{preview.asOn ? `Statement as on ${preview.asOn}` : 'Whole statement'}</span>}
             >
+              <FileCheckPanel check={preview.fileCheck} />
               <div className="grid grid-cols-2 gap-px bg-slate-200 sm:grid-cols-4">
                 {[
                   { l: 'Receipts in file', v: num(fileReceiptTotal), c: 'text-emerald-700' },
@@ -522,6 +538,66 @@ export const ReceiptsPaymentsPage = () => {
 
       <BankAccountDialog open={dlgOpen} editing={editing} onClose={() => setDlgOpen(false)} onSaved={(id) => setBankId(id)} />
       {confirmDialog}
+    </div>
+  );
+};
+
+/* ── Import self-check ─────────────────────────────────────────────────────────
+   Proves the file was read faithfully BEFORE anything is written: the rows we
+   took, plus the statement's own opening balance, must land on the statement's
+   own closing figure. Anything skipped is stated rather than swallowed. */
+const FileCheckPanel = ({ check }: { check?: FileCheck }) => {
+  if (!check) return null;
+  const b = check.balance;
+  const sk = check.skipped;
+  const skippedNote = [
+    sk.balanceRows ? `${sk.balanceRows} balance/total line${sk.balanceRows === 1 ? '' : 's'}` : '',
+    sk.cancelled ? `${sk.cancelled} cancelled` : '',
+    sk.unreadableAmount ? `${sk.unreadableAmount} with an unreadable amount` : '',
+    check.undated ? `${check.undated} with no date` : '',
+  ].filter(Boolean).join(' · ');
+
+  const tone = !b ? 'slate' : b.matches ? 'emerald' : 'red';
+  const cls = {
+    emerald: 'border-emerald-300 bg-emerald-50 text-emerald-900',
+    red: 'border-red-300 bg-red-50 text-red-900',
+    slate: 'border-slate-200 bg-slate-50 text-slate-700',
+  }[tone];
+
+  return (
+    <div className={cn('border-b px-3 py-2 text-[11px]', cls)}>
+      <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider">
+        {b
+          ? b.matches
+            ? <><CheckCircle2 className="h-3.5 w-3.5" /> Statement verified — the figures tie out</>
+            : <><AlertTriangle className="h-3.5 w-3.5" /> Statement does not tie out — check before importing</>
+          : <>Read {check.entryCount} transaction{check.entryCount === 1 ? '' : 's'} from the file</>}
+      </div>
+
+      {b && (
+        <div className="mt-1 font-mono tabular-nums">
+          {b.statedOpening != null && <>Opening {num(b.statedOpening)} </>}
+          + Receipts {num(check.receiptTotal)} − Payments {num(check.paymentTotal)} = <b>{num(b.computedClosing)}</b>
+          {' vs '}statement closing <b>{num(b.statedClosing)}</b>
+          {!b.matches && <span className="font-sans font-bold"> · off by {num(Math.abs(b.difference))}</span>}
+        </div>
+      )}
+
+      {!b && (
+        <div className="mt-1 font-mono tabular-nums">
+          Receipts {num(check.receiptTotal)} · Payments {num(check.paymentTotal)}
+          <span className="ml-2 font-sans text-slate-500">(no closing-balance line in the file to verify against)</span>
+        </div>
+      )}
+
+      {skippedNote && <div className="mt-1 opacity-80">Skipped: {skippedNote}.</div>}
+
+      {b && !b.matches && (
+        <div className="mt-1 font-sans">
+          Usually a row the file writes in an unusual way, or a missing page. Importing anyway will leave this
+          bank's closing balance off by the same amount.
+        </div>
+      )}
     </div>
   );
 };

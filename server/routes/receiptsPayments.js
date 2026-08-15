@@ -49,7 +49,7 @@ const loadOpenPayablesBySupplier = async (companyId) => {
 /* ---------- POST /preview — parse, match, compute; write nothing ---------- */
 router.post('/preview', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
   const { rows } = z.object({ rows: z.array(z.array(z.any())).max(50000) }).parse(req.body);
-  const { entries, asOn } = parseBankBook(rows);
+  const { entries, asOn, skipped, undated, receiptTotal, paymentTotal, check } = parseBankBook(rows);
   const companyId = req.tenant.companyId;
 
   // --- Customer side (receipts) ---
@@ -111,6 +111,15 @@ router.post('/preview', requireAnyPermission(...PERM), asyncHandler(async (req, 
     receipts: receiptItems,
     payments: paymentItems,
     unmatched: [...unmatchedAgg.values()],
+    // How the file itself was read: what was skipped, and whether the rows we
+    // took add up to the statement's own closing figure. Lets the UI prove the
+    // import is faithful BEFORE anything is written.
+    fileCheck: {
+      entryCount: entries.length,
+      receiptTotal, paymentTotal,
+      skipped, undated,
+      balance: check,
+    },
     summary: {
       receiptCount: receiptItems.length,
       paymentCount: paymentItems.length,
