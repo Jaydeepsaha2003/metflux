@@ -27,6 +27,8 @@ type ConfirmOpts = {
   cancelLabel?: string;
   /** When true, the cancel button is hidden — use for plain "OK" notifications. */
   alertOnly?: boolean;
+  /** Require the user to type this exact text before Confirm unlocks. */
+  challenge?: string;
 };
 
 export const useConfirm = () => {
@@ -54,6 +56,7 @@ export const useConfirm = () => {
       confirmLabel={opts?.confirmLabel}
       cancelLabel={opts?.cancelLabel}
       alertOnly={opts?.alertOnly}
+      challenge={opts?.challenge}
       onConfirm={() => close(true)}
       onCancel={() => close(false)}
     />

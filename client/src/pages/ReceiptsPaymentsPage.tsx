@@ -229,9 +229,18 @@ export const ReceiptsPaymentsPage = () => {
   });
 
   const onClearAll = async () => {
+    const entries = banks?.totals.entryCount ?? 0;
     const ok = await confirm({
       title: 'Clear the whole cash book?',
-      message: <>This deletes every cashbook-imported receipt &amp; payment <strong>across all bank accounts</strong> (reversing their invoice settlements) and clears the stored cashbook, so you can re-upload cleanly. Bank accounts themselves and manual Receive-Payments are kept. This can't be undone.</>,
+      message: (
+        <>
+          This deletes <strong>all {entries.toLocaleString('en-IN')}</strong> cashbook entr{entries === 1 ? 'y' : 'ies'} <strong>across every bank account</strong>,
+          reverses the invoice settlements they created, and clears the stored cashbook so you can re-upload cleanly.
+          Bank accounts themselves and manual Receive-Payments are kept. <strong>This cannot be undone.</strong>
+        </>
+      ),
+      // Typing it out makes an irreversible wipe impossible to trigger by a stray click.
+      challenge: 'CLEAR BOOK',
       confirmLabel: 'Clear all', tone: 'danger',
     });
     if (ok) resetAll.mutate();

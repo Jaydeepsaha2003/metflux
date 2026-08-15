@@ -61,6 +61,7 @@ const ProductionEditPage    = page(() => import('@/pages/ProductionEditPage'), '
 const RejectionPage         = page(() => import('@/pages/RejectionPage'), 'RejectionPage');
 const JournalRegisterPage   = page(() => import('@/pages/JournalRegisterPage'), 'JournalRegisterPage');
 const PartyLedgerPage       = page(() => import('@/pages/PartyLedgerPage'), 'PartyLedgerPage');
+const ReconciliationPage    = page(() => import('@/pages/ReconciliationPage'), 'ReconciliationPage');
 const LorryReceiptsPage     = page(() => import('@/pages/LorryReceiptsPage'), 'LorryReceiptsPage');
 const LorryReceiptNewPage   = page(() => import('@/pages/LorryReceiptNewPage'), 'LorryReceiptNewPage');
 const LorryReceiptPrintPage = page(() => import('@/pages/LorryReceiptPrintPage'), 'LorryReceiptPrintPage');
@@ -169,6 +170,7 @@ export const App = () => {
       <Route path="/accounts/cashbook-summary" element={<CashbookSummaryPage />} />
       <Route path="/accounts/journal" element={<JournalRegisterPage />} />
       <Route path="/accounts/party-ledger" element={<PartyLedgerPage />} />
+      <Route path="/accounts/reconciliation" element={<ReconciliationPage />} />
       <Route path="/lr"            element={<LorryReceiptsPage />} />
       <Route path="/lr/settings"   element={<LrSettingsPage />} />
       <Route path="/lr/new"        element={<LorryReceiptNewPage />} />

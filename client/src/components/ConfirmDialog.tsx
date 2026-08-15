@@ -3,7 +3,7 @@
 // that accepts either a string or rich JSX (so callers can render breakdowns,
 // lists, etc). Use `tone="danger"` for destructive actions, `"warning"` for
 // reversible-but-careful actions, `"info"` for plain confirmations.
-import { ReactNode, useEffect } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { AlertTriangle, Info, OctagonAlert, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
@@ -19,6 +19,9 @@ type Props = {
   loading?: boolean;
   /** When true the cancel button is hidden — use this for "alert" style notifications. */
   alertOnly?: boolean;
+  /** Require the user to type this exact text before Confirm unlocks. Use for
+   *  irreversible bulk destruction, so it can't be triggered by a stray click. */
+  challenge?: string;
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -32,9 +35,12 @@ const TONE: Record<ConfirmTone, { icon: typeof AlertTriangle; ring: string; bg: 
 export const ConfirmDialog = ({
   open, title, message,
   confirmLabel = 'Confirm', cancelLabel = 'Cancel',
-  tone = 'warning', loading, alertOnly,
+  tone = 'warning', loading, alertOnly, challenge,
   onConfirm, onCancel,
 }: Props) => {
+  const [typed, setTyped] = useState('');
+  useEffect(() => { setTyped(''); }, [open, challenge]);
+
   // Close on Esc unless we're mid-action.
   useEffect(() => {
     if (!open) return;
@@ -77,6 +83,23 @@ export const ConfirmDialog = ({
               </button>
             </div>
             {message && <div className="mt-1.5 text-sm text-slate-600 leading-relaxed">{message}</div>}
+
+            {challenge && (
+              <label className="mt-3 block">
+                <span className="mb-1 block text-xs text-slate-600">
+                  Type <b className="select-all rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[13px] tracking-wide text-slate-800">{challenge}</b> to confirm
+                </span>
+                <input
+                  autoFocus
+                  value={typed}
+                  onChange={(e) => setTyped(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && typed.trim() === challenge && !loading) onConfirm(); }}
+                  placeholder={challenge}
+                  aria-label={`Type ${challenge} to confirm`}
+                  className="h-9 w-full rounded-lg border border-slate-300 px-2.5 font-mono text-sm tracking-wide outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
+                />
+              </label>
+            )}
           </div>
         </div>
 
@@ -96,7 +119,7 @@ export const ConfirmDialog = ({
               'inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed',
               t.btn,
             )}
-            disabled={loading}
+            disabled={loading || (!!challenge && typed.trim() !== challenge)}
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             {confirmLabel}
