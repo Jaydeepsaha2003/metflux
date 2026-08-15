@@ -187,13 +187,25 @@ router.delete('/journal/:id', requireAnyPermission(...PERM), asyncHandler(async 
 
 /* ---------- Store the uploaded cashbook (for the summary) ---------- */
 
-// Replaces any existing entries whose date falls inside the uploaded file's
-// date span, then inserts every parsed row. Idempotent per period.
+// Inserts every parsed row against ONE bank account. The unique dedupe index
+// covers (date, side, party, amount, vch, bankAccountId), so re-importing the
+// same statement is a no-op, while the same transaction can legitimately exist
+// under two different bank accounts.
 router.post('/store', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
-  const { rows } = z.object({ rows: z.array(z.array(z.any())).max(50000) }).parse(req.body);
+  const { rows, bankAccountId } = z.object({
+    rows: z.array(z.array(z.any())).max(50000),
+    bankAccountId: z.string().min(1).optional(),
+  }).parse(req.body);
   const { entries } = parseBankBook(rows);
   const companyId = req.tenant.companyId;
-  if (!entries.length) return res.json({ stored: 0 });
+  if (!entries.length) return res.json({ stored: 0, skipped: 0 });
+
+  // Resolve the target account: the one asked for, else the company default.
+  // A statement must land somewhere specific, so this is required.
+  const bank = bankAccountId
+    ? await qOne('SELECT `id` FROM `BankAccount` WHERE `id` = ? AND `companyId` = ?', [bankAccountId, companyId])
+    : await qOne('SELECT `id` FROM `BankAccount` WHERE `companyId` = ? ORDER BY `isDefault` DESC, `sortOrder` ASC, `createdAt` ASC LIMIT 1', [companyId]);
+  if (!bank) throw new AppError('Pick a bank account to import this statement into.', 400, 'NO_BANK_ACCOUNT');
 
   const times = entries.map((e) => e.date).filter(Boolean).map((d) => +d);
   const max = times.length ? new Date(Math.max(...times)) : new Date();
@@ -204,18 +216,18 @@ router.post('/store', requireAnyPermission(...PERM), asyncHandler(async (req, re
   const CHUNK = 400;
   for (let i = 0; i < entries.length; i += CHUNK) {
     const slice = entries.slice(i, i + CHUNK);
-    const placeholders = slice.map(() => '(?,?,?,?,?,?,?,?)').join(',');
+    const placeholders = slice.map(() => '(?,?,?,?,?,?,?,?,?)').join(',');
     const params = [];
     for (const e of slice) {
-      params.push(newId(), companyId, e.date ?? max, e.side, e.account.slice(0, 200), normName(e.account).slice(0, 200), round2(e.amount), (e.vch || '').slice(0, 80));
+      params.push(newId(), companyId, e.date ?? max, e.side, e.account.slice(0, 200), normName(e.account).slice(0, 200), round2(e.amount), (e.vch || '').slice(0, 80), bank.id);
     }
     const r = await q(
-      'INSERT IGNORE INTO `CashbookEntry` (`id`,`companyId`,`entryDate`,`side`,`account`,`normKey`,`amount`,`vch`) VALUES ' + placeholders,
+      'INSERT IGNORE INTO `CashbookEntry` (`id`,`companyId`,`entryDate`,`side`,`account`,`normKey`,`amount`,`vch`,`bankAccountId`) VALUES ' + placeholders,
       params
     );
     stored += r?.affectedRows ?? 0;
   }
-  res.json({ stored, skipped: entries.length - stored });
+  res.json({ stored, skipped: entries.length - stored, bankAccountId: bank.id });
 }));
 
 /* ---------- Summary ---------- */
@@ -263,7 +275,7 @@ router.get('/summary', requireAnyPermission(...PERM), asyncHandler(async (req, r
 
 /* ---------- Entries list (filterable) ---------- */
 router.get('/entries', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
-  const { from, to, side, type, search, page, pageSize, all } = z.object({
+  const { from, to, side, type, search, page, pageSize, all, bankAccountId } = z.object({
     from: z.string().optional(),
     to: z.string().optional(),
     side: z.enum(['ALL', 'RECEIPT', 'PAYMENT']).default('ALL'),
@@ -272,26 +284,31 @@ router.get('/entries', requireAnyPermission(...PERM), asyncHandler(async (req, r
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(200).default(50),
     all: z.enum(['1']).optional(), // return every matching row (for export)
+    bankAccountId: z.string().min(1).optional(), // omit = every account
   }).parse(req.query);
   const companyId = req.tenant.companyId;
 
-  const where = ['`companyId` = ?'];
+  const where = ['e.`companyId` = ?'];
   const params = [companyId];
-  if (from) { where.push('`entryDate` >= ?'); params.push(new Date(from)); }
-  if (to) { where.push('`entryDate` <= ?'); params.push(new Date(new Date(to).getTime() + 86400000 - 1)); }
-  if (side !== 'ALL') { where.push('`side` = ?'); params.push(side); }
-  if (search) { where.push('`account` LIKE ?'); params.push(`%${search}%`); }
+  if (from) { where.push('e.`entryDate` >= ?'); params.push(new Date(from)); }
+  if (to) { where.push('e.`entryDate` <= ?'); params.push(new Date(new Date(to).getTime() + 86400000 - 1)); }
+  if (side !== 'ALL') { where.push('e.`side` = ?'); params.push(side); }
+  if (search) { where.push('e.`account` LIKE ?'); params.push(`%${search}%`); }
+  if (bankAccountId) { where.push('e.`bankAccountId` = ?'); params.push(bankAccountId); }
 
   const rows = await q(
-    `SELECT \`id\`, \`entryDate\`, \`side\`, \`account\`, \`amount\`, \`vch\`, \`postedAt\`
-       FROM \`CashbookEntry\` WHERE ${where.join(' AND ')}
-      ORDER BY \`entryDate\` DESC, \`createdAt\` DESC`,
+    `SELECT e.\`id\`, e.\`entryDate\`, e.\`side\`, e.\`account\`, e.\`amount\`, e.\`vch\`, e.\`postedAt\`,
+            e.\`bankAccountId\`, b.\`name\` AS bankName
+       FROM \`CashbookEntry\` e
+       LEFT JOIN \`BankAccount\` b ON b.\`id\` = e.\`bankAccountId\`
+      WHERE ${where.join(' AND ')}
+      ORDER BY e.\`entryDate\` DESC, e.\`createdAt\` DESC`,
     params
   );
   const classify = await buildClassifier(companyId);
   let items = rows.map((r) => {
     const c = classify(r.account);
-    return { id: r.id, entryDate: r.entryDate, side: r.side, account: r.account, amount: Number(r.amount), vch: r.vch, posted: !!r.postedAt, type: c.type, category: c.category };
+    return { id: r.id, entryDate: r.entryDate, side: r.side, account: r.account, amount: Number(r.amount), vch: r.vch, posted: !!r.postedAt, type: c.type, category: c.category, bankAccountId: r.bankAccountId ?? null, bankName: r.bankName ?? null };
   });
   if (type !== 'ALL') items = items.filter((i) => i.type === type);
 
@@ -385,7 +402,11 @@ router.get('/transactions', requireAnyPermission(...PERM), asyncHandler(async (r
 
 /* ---------- Overview totals (Sales / Purchase / Receipts / Payments / notes) ---------- */
 router.get('/overview', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
-  const { from, to } = z.object({ from: z.string().optional(), to: z.string().optional() }).parse(req.query);
+  const { from, to, bankAccountId } = z.object({
+    from: z.string().optional(),
+    to: z.string().optional(),
+    bankAccountId: z.string().min(1).optional(), // cash-side only — omit = every account
+  }).parse(req.query);
   const companyId = req.tenant.companyId;
   const clause = (col) => {
     let s = ''; const p = [];
@@ -405,25 +426,35 @@ router.get('/overview', requireAnyPermission(...PERM), asyncHandler(async (req, 
     purchase = round2(Number(r?.p ?? 0)); debitNote = round2(Number(r?.dn ?? 0));
   } catch { /* table absent */ }
   try {
-    const r = await qOne(`SELECT COALESCE(SUM(CASE WHEN \`side\`='RECEIPT' THEN \`amount\` ELSE 0 END),0) rc, COALESCE(SUM(CASE WHEN \`side\`='PAYMENT' THEN \`amount\` ELSE 0 END),0) py FROM \`CashbookEntry\` WHERE \`companyId\`=?${cb.s}`, [companyId, ...cb.p]);
+    const bankClause = bankAccountId ? ' AND `bankAccountId` = ?' : '';
+    const bankParam = bankAccountId ? [bankAccountId] : [];
+    const r = await qOne(`SELECT COALESCE(SUM(CASE WHEN \`side\`='RECEIPT' THEN \`amount\` ELSE 0 END),0) rc, COALESCE(SUM(CASE WHEN \`side\`='PAYMENT' THEN \`amount\` ELSE 0 END),0) py FROM \`CashbookEntry\` WHERE \`companyId\`=?${cb.s}${bankClause}`, [companyId, ...cb.p, ...bankParam]);
     receipts = round2(Number(r?.rc ?? 0)); payments = round2(Number(r?.py ?? 0));
   } catch { /* table absent */ }
   res.json({ sales, purchase, receipts, payments, creditNote, debitNote, net: round2(receipts - payments) });
 }));
 
 /* ---------- Duplicate detection + removal (same party+side+date+amount) ---------- */
-// A duplicate is the SAME party + side + date + amount + voucher. Different
-// voucher/bill numbers are treated as separate genuine transactions.
+// A duplicate is the SAME party + side + date + amount + voucher WITHIN ONE bank
+// account. The identical transaction appearing in two different accounts is a
+// genuine pair (e.g. a transfer, or the same party paid from two banks), so
+// bankAccountId is part of the grouping — matching the stored dedupeKey.
+// Different voucher/bill numbers are treated as separate genuine transactions.
 router.get('/duplicates', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
   const companyId = req.tenant.companyId;
   const rows = await q(
-    `SELECT MIN(\`account\`) AS account, \`side\`, DATE(\`entryDate\`) AS d, \`amount\`, \`vch\`, COUNT(*) AS c
-       FROM \`CashbookEntry\` WHERE \`companyId\` = ?
-      GROUP BY \`normKey\`, \`side\`, DATE(\`entryDate\`), \`amount\`, COALESCE(\`vch\`,'')
-      HAVING COUNT(*) > 1 ORDER BY COUNT(*) DESC, \`amount\` DESC`,
+    // `vch` is grouped as COALESCE(...), so it must be selected as an aggregate
+    // to satisfy ONLY_FULL_GROUP_BY (on by default from MySQL 8).
+    `SELECT MIN(e.\`account\`) AS account, e.\`side\`, DATE(e.\`entryDate\`) AS d, e.\`amount\`, MIN(e.\`vch\`) AS vch,
+            COUNT(*) AS c, MIN(b.\`name\`) AS bankName
+       FROM \`CashbookEntry\` e
+       LEFT JOIN \`BankAccount\` b ON b.\`id\` = e.\`bankAccountId\`
+      WHERE e.\`companyId\` = ?
+      GROUP BY e.\`normKey\`, e.\`side\`, DATE(e.\`entryDate\`), e.\`amount\`, COALESCE(e.\`vch\`,''), COALESCE(e.\`bankAccountId\`,'')
+      HAVING COUNT(*) > 1 ORDER BY COUNT(*) DESC, e.\`amount\` DESC`,
     [companyId]
   );
-  const items = rows.map((g) => ({ account: g.account, side: g.side, date: g.d, amount: Number(g.amount), vch: g.vch, count: Number(g.c), extra: Number(g.c) - 1 }));
+  const items = rows.map((g) => ({ account: g.account, side: g.side, date: g.d, amount: Number(g.amount), vch: g.vch, bankName: g.bankName ?? null, count: Number(g.c), extra: Number(g.c) - 1 }));
   res.json({ items, groups: items.length, totalExtra: items.reduce((s, g) => s + g.extra, 0) });
 }));
 
@@ -433,7 +464,10 @@ router.post('/dedupe', requireAnyPermission(...PERM), asyncHandler(async (req, r
     'DELETE c1 FROM `CashbookEntry` c1 JOIN `CashbookEntry` c2 ' +
     'ON c1.`companyId` = c2.`companyId` AND c1.`normKey` = c2.`normKey` AND c1.`side` = c2.`side` ' +
     "AND DATE(c1.`entryDate`) = DATE(c2.`entryDate`) AND c1.`amount` = c2.`amount` " +
-    "AND COALESCE(c1.`vch`,'') = COALESCE(c2.`vch`,'') AND c1.`id` > c2.`id` " +
+    "AND COALESCE(c1.`vch`,'') = COALESCE(c2.`vch`,'') " +
+    // Same bank only — never collapse a legitimate cross-account pair.
+    "AND COALESCE(c1.`bankAccountId`,'') = COALESCE(c2.`bankAccountId`,'') " +
+    'AND c1.`id` > c2.`id` ' +
     'WHERE c1.`companyId` = ?',
     [companyId]
   );
