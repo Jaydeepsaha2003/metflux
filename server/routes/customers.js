@@ -5,6 +5,7 @@ import { q, qOne, insert, update, del, txn } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requireRole, hashPassword } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
+import { countCustomerRefs, customerBlockers } from '../lib/customerRefs.js';
 import { importBody, cellPick, numOpt, rowIsBlank, errMessage } from '../lib/importHelpers.js';
 import { derivePortalPassword, uniqueShortCode } from '../lib/portal.js';
 import { normName } from '../lib/invoicing.js';
@@ -428,11 +429,30 @@ router.post('/import', requireRole('STAFF'), asyncHandler(async (req, res) => {
 }));
 
 // DELETE /api/customers/:id — managers and up
+// Refuses while anything still points at the customer, naming exactly what, so
+// nothing is orphaned and the caller gets a readable reason instead of an FK error.
 router.delete('/:id', requireRole('MANAGER'), asyncHandler(async (req, res) => {
   const { id } = idParam.parse(req.params);
-  await findOwned(req, id);
+  const cust = await findOwned(req, id);
+  const counts = await countCustomerRefs(id);
+  const blockers = customerBlockers(counts);
+  if (blockers.length) {
+    throw new AppError(
+      `${cust?.name ?? 'This customer'} still has ${blockers.join(', ')}. Delete or reassign those first.`,
+      409, 'CUSTOMER_IN_USE', { blockers, counts }
+    );
+  }
   await del('Customer', id);
   res.status(204).end();
+}));
+
+/* GET /:id/deletable — what (if anything) is blocking deletion. */
+router.get('/:id/deletable', asyncHandler(async (req, res) => {
+  const { id } = idParam.parse(req.params);
+  await findOwned(req, id);
+  const counts = await countCustomerRefs(id);
+  const blockers = customerBlockers(counts);
+  res.json({ deletable: blockers.length === 0, blockers, counts });
 }));
 
 /* POST /:id/convert-to-supplier — reclassify a mistakenly-created customer as a

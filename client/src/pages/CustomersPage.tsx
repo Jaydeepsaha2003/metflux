@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search, MessageCircle, Plus, Pencil, Building2, Link2, Check } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Search, MessageCircle, Plus, Pencil, Building2, Link2, Check, Trash2, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/hooks/useConfirm';
 import { cn } from '@/lib/cn';
 import { Pagination } from '@/components/Pagination';
 import { BulkExcel, type BulkExcelConfig } from '@/components/BulkExcel';
@@ -34,8 +35,39 @@ export const CustomersPage = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const changePageSize = (n: number) => { setPageSize(n); setPage(1); };
+  const { confirm, alert, confirmDialog } = useConfirm();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const qc = useQueryClient();
+
+  const removeCustomer = useMutation({
+    mutationFn: (id: string) => api(`/customers/${id}`, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['customers'] }),
+  });
+
+  // Ask the server what's referencing this customer BEFORE prompting, so the
+  // dialog can state the reason rather than failing after the user commits.
+  const onDelete = async (c: { id: string; name: string }) => {
+    setDeletingId(c.id);
+    try {
+      const chk = await api<{ deletable: boolean; blockers: string[] }>(`/customers/${c.id}/deletable`);
+      if (!chk.deletable) {
+        await alert({
+          title: 'Can’t delete this customer',
+          message: <><strong>{c.name}</strong> still has {chk.blockers.join(', ')}. Delete or reassign those first, so nothing is left orphaned.</>,
+          tone: 'warning',
+        });
+        return;
+      }
+      const ok = await confirm({
+        title: 'Delete customer?',
+        message: <>Delete <strong>{c.name}</strong>? Nothing references them, so no invoices, orders or payments are affected. This cannot be undone.</>,
+        tone: 'danger', confirmLabel: 'Delete',
+      });
+      if (ok) removeCustomer.mutate(c.id);
+    } finally { setDeletingId(null); }
+  };
 
   // Build the ready-to-send message a customer receives: greeting, the short
   // portal link, and — while they're still on the auto-generated password —
@@ -236,6 +268,14 @@ export const CustomersPage = () => {
                           <Link to={`/customers/${c.id}`} className="btn-ghost text-brand-700 hover:bg-brand-50" title="Edit customer">
                             <Pencil className="h-4 w-4" />
                           </Link>
+                          <button
+                            onClick={() => onDelete(c)}
+                            disabled={deletingId === c.id || removeCustomer.isPending}
+                            className="btn-ghost text-red-600 hover:bg-red-50 disabled:opacity-40"
+                            title="Delete customer (only if nothing references them)"
+                          >
+                            {deletingId === c.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -253,12 +293,22 @@ export const CustomersPage = () => {
                       <div className="font-medium text-slate-900 truncate">{hideNames ? '••••••' : c.name}</div>
                       <div className="mt-0.5 font-mono text-xs font-semibold text-brand-700">{c.customerCode}</div>
                     </div>
-                    <Link
-                      to={`/customers/${c.id}`}
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-brand-700 active:bg-brand-50"
-                    >
-                      <Pencil className="h-3.5 w-3.5" /> Edit
-                    </Link>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <Link
+                        to={`/customers/${c.id}`}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-brand-700 active:bg-brand-50"
+                      >
+                        <Pencil className="h-3.5 w-3.5" /> Edit
+                      </Link>
+                      <button
+                        onClick={() => onDelete(c)}
+                        disabled={deletingId === c.id || removeCustomer.isPending}
+                        className="inline-flex items-center rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-red-600 active:bg-red-50 disabled:opacity-40"
+                        aria-label={`Delete ${c.name}`}
+                      >
+                        {deletingId === c.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
                   </div>
 
                   <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
@@ -308,6 +358,7 @@ export const CustomersPage = () => {
           />
         )}
       </div>
+      {confirmDialog}
     </div>
   );
 };

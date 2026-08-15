@@ -5,7 +5,7 @@ import { Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Clock, Loader2, MessageCircle, ChevronDown, ChevronRight, AlertTriangle, Wallet, ImageDown, Mail, X, CheckCircle2, Download,
+  Clock, Loader2, MessageCircle, ChevronDown, ChevronRight, AlertTriangle, Wallet, ImageDown, Mail, X, CheckCircle2, Download, UserX,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
@@ -13,6 +13,7 @@ import { normalisePhone } from '@/lib/share';
 import { makeStatementImageBlob, makeStatementPdfBlob, shareOrDownloadImage, type StatementBill, type StatementInput } from '@/lib/agingImage';
 import { buildStatementXlsxBlob, buildStatementHtml, blobToBase64 } from '@/lib/statement';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { NonCustomerCleanup } from '@/components/NonCustomerCleanup';
 import { useHideCustomerNames } from '@/store/auth';
 import { downloadXlsx, todayStamp } from '@/lib/excel';
 
@@ -48,6 +49,7 @@ export const DebtorAgingPage = () => {
   const hideNames = useHideCustomerNames();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [filterKey, setFilterKey] = useState('');
+  const [cleanupOpen, setCleanupOpen] = useState(false);
   const [imaging, setImaging] = useState<string | null>(null);
   const [emailFor, setEmailFor] = useState<AgingCustomer | null>(null);
 
@@ -176,6 +178,7 @@ export const DebtorAgingPage = () => {
 
   return (
     <div className="space-y-5">
+      <NonCustomerCleanup open={cleanupOpen} onClose={() => setCleanupOpen(false)} />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <Clock className="h-5 w-5 text-brand-600" /> Amount Receivable
@@ -189,6 +192,13 @@ export const DebtorAgingPage = () => {
               placeholder="Search customer…"
             />
           </div>
+          <button
+            onClick={() => setCleanupOpen(true)}
+            className="btn-ghost shrink-0 border border-slate-300 text-slate-600 hover:bg-slate-50"
+            title="Remove parties that were tagged as customers by mistake (salary heads, suppliers) and are showing as Advance / On account"
+          >
+            <UserX className="h-4 w-4" /> <span className="hidden sm:inline">Cleanup</span>
+          </button>
           <button
             onClick={exportExcel}
             disabled={!shownCustomers.length}
