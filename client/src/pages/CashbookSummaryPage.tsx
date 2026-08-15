@@ -41,13 +41,23 @@ export const CashbookSummaryPage = () => {
   const [mgCat, setMgCat] = useState('');
   const [sort, setSort] = useState<{ key: 'key' | 'receipts' | 'payments' | 'net' | 'count'; dir: 'asc' | 'desc' }>({ key: 'net', dir: 'desc' });
   const sortBy = (key: typeof sort.key) => setSort((s) => ({ key, dir: s.key === key && s.dir === 'desc' ? 'asc' : 'desc' }));
+  // '' = every bank account.
+  const [bankId, setBankId] = useState('');
+
+  const { data: bankResp } = useQuery({
+    queryKey: ['bank-accounts'],
+    queryFn: () => api<{ items: { id: string; name: string }[] }>('/bank-accounts'),
+  });
+  const banks = bankResp?.items ?? [];
+  const bankLabel = bankId ? (banks.find((b) => b.id === bankId)?.name ?? null) : (banks.length > 1 ? 'All accounts' : null);
 
   const qs = new URLSearchParams({ groupBy });
   if (from) qs.set('from', from);
   if (to) qs.set('to', to);
+  if (bankId) qs.set('bankAccountId', bankId);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['cashbook-summary', groupBy, from, to],
+    queryKey: ['cashbook-summary', groupBy, from, to, bankId],
     queryFn: () => api<Summary>(`/cashbook/summary?${qs.toString()}`),
   });
   const { data: headsData } = useQuery({
@@ -55,8 +65,12 @@ export const CashbookSummaryPage = () => {
     queryFn: () => api<{ heads: Head[]; categories: string[] }>('/cashbook/account-heads'),
   });
   const { data: overview } = useQuery({
-    queryKey: ['cashbook-overview', from, to],
-    queryFn: () => { const q = new URLSearchParams(); if (from) q.set('from', from); if (to) q.set('to', to); return api<Overview>(`/cashbook/overview?${q.toString()}`); },
+    queryKey: ['cashbook-overview', from, to, bankId],
+    queryFn: () => {
+      const q = new URLSearchParams();
+      if (from) q.set('from', from); if (to) q.set('to', to); if (bankId) q.set('bankAccountId', bankId);
+      return api<Overview>(`/cashbook/overview?${q.toString()}`);
+    },
   });
 
   const delHead = useMutation({
@@ -109,37 +123,57 @@ export const CashbookSummaryPage = () => {
   };
 
   return (
-    <div className="space-y-4 max-w-full sm:space-y-5">
-      {/* ── Brand header band (follows the active company's brand colour) ── */}
-      <div className="flex flex-col gap-3 rounded-xl bg-brand-600 px-4 py-3.5 text-white shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-white/15 ring-1 ring-white/20">
-            <BarChart3 className="h-5 w-5" />
+    <div className="max-w-full space-y-3 text-[13px]">
+      {/* ── Title bar ── */}
+      <div className="flex flex-col gap-2 rounded border border-brand-700 bg-brand-600 px-3 py-2 text-white sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2.5">
+          <span className="grid h-8 w-8 place-items-center rounded bg-white/15 ring-1 ring-white/25">
+            <BarChart3 className="h-4 w-4" />
           </span>
           <div>
-            <h1 className="text-base font-bold leading-tight tracking-wide sm:text-lg">Cashbook Summary</h1>
-            <p className="text-[11px] text-white/75">Receipts vs payments from your imported bank/cash book, grouped by category or account.</p>
+            <h1 className="text-sm font-bold uppercase tracking-wider sm:text-base">Cashbook Summary</h1>
+            <p className="text-[10.5px] text-white/75">Receipts vs payments from the imported bank book, grouped by category or account</p>
           </div>
         </div>
-        {tab === 'overview' && (
-          <button onClick={exportExcel} className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-white/25 bg-white/15 px-3 py-2 text-sm font-semibold text-white hover:bg-white/25 sm:w-auto">
-            <Download className="h-4 w-4" /> Export Excel
-          </button>
+        <div className="flex items-center gap-3">
+          {bankLabel && (
+            <div className="text-right">
+              <div className="text-[9.5px] font-semibold uppercase tracking-wider text-white/60">Viewing</div>
+              <div className="font-mono text-xs font-bold">{bankLabel}</div>
+            </div>
+          )}
+          {tab === 'overview' && (
+            <button onClick={exportExcel} className="inline-flex items-center gap-1.5 rounded border border-white/25 bg-white/15 px-2.5 py-1.5 text-[11px] font-semibold hover:bg-white/25">
+              <Download className="h-3.5 w-3.5" /> Excel
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Tabs + bank scope */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex rounded border border-slate-300 bg-white p-0.5">
+          {(['overview', 'transactions', 'manage'] as const).map((t) => (
+            <button key={t} onClick={() => setTab(t)}
+              className={cn('rounded-sm px-4 py-1 text-[11px] font-bold uppercase tracking-wider transition',
+                tab === t ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-100')}>
+              {t}
+            </button>
+          ))}
+        </div>
+        {tab !== 'manage' && banks.length > 1 && (
+          <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            Bank
+            <select value={bankId} onChange={(e) => setBankId(e.target.value)}
+              className="h-8 rounded border border-slate-300 bg-white px-2 text-xs font-normal normal-case tracking-normal text-slate-700">
+              <option value="">All accounts</option>
+              {banks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          </label>
         )}
       </div>
 
-      {/* Tabs */}
-      <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
-        {(['overview', 'transactions', 'manage'] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)}
-            className={cn('rounded-md px-4 py-1.5 text-sm font-semibold capitalize transition',
-              tab === t ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-600 hover:text-slate-900')}>
-            {t}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'transactions' && <TransactionsView />}
+      {tab === 'transactions' && <TransactionsView bankId={bankId} />}
 
       {tab === 'overview' && <>
       {/* Overview — Sales / Purchase / Receipts / Payments / notes / Net */}
@@ -156,7 +190,7 @@ export const CashbookSummaryPage = () => {
       )}
 
       {/* Controls */}
-      <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="space-y-2 rounded border border-slate-300 bg-white p-2.5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex flex-wrap items-end gap-3">
             <div className="block">
@@ -220,8 +254,8 @@ export const CashbookSummaryPage = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-[13px] whitespace-nowrap">
-              <thead><tr className="border-b-2 border-slate-300 bg-slate-100 text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">
+            <table className="w-full border-collapse text-xs whitespace-nowrap">
+              <thead><tr className="border-b-2 border-slate-300 bg-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                 <th className="cursor-pointer select-none px-3 py-2 text-left hover:text-slate-700" onClick={() => sortBy('key')}>{groupBy === 'account' ? 'Account' : 'Category'}{sortIcon('key')}</th>
                 {groupBy === 'account' && <th className="px-3 py-2 text-left">Category</th>}
                 <th className="cursor-pointer select-none px-3 py-2 text-right hover:text-slate-700" onClick={() => sortBy('receipts')}>Receipts{sortIcon('receipts')}</th>
@@ -324,7 +358,7 @@ const TXN_TYPES: { key: string; label: string; tone: string }[] = [
 const TXN_LABEL: Record<string, string> = Object.fromEntries(TXN_TYPES.map((t) => [t.key, t.label]));
 const TXN_TONE: Record<string, string> = Object.fromEntries(TXN_TYPES.map((t) => [t.key, t.tone]));
 
-const TransactionsView = () => {
+const TransactionsView = ({ bankId }: { bankId: string }) => {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [search, setSearch] = useState('');
@@ -338,9 +372,10 @@ const TransactionsView = () => {
   if (to) qs.set('to', to);
   if (search.trim()) qs.set('search', search.trim());
   if (sel.size) qs.set('types', [...sel].join(','));
+  if (bankId) qs.set('bankAccountId', bankId);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['cashbook-transactions', from, to, search, [...sel].sort().join(','), page],
+    queryKey: ['cashbook-transactions', from, to, search, [...sel].sort().join(','), page, bankId],
     queryFn: () => api<{ items: Txn[]; total: number; capped: boolean }>(`/cashbook/transactions?${qs.toString()}`),
   });
 
@@ -371,7 +406,7 @@ const TransactionsView = () => {
   return (
     <div className="space-y-4">
       {/* Filters */}
-      <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="space-y-2 rounded border border-slate-300 bg-white p-2.5">
         <div className="flex flex-wrap items-end gap-3">
           <div className="block"><span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">Date range</span>
             <DateRangeFilter from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); setPage(1); }} label="Filter transactions by date" /></div>
@@ -406,8 +441,8 @@ const TransactionsView = () => {
           <div className="py-12 text-center text-sm text-slate-400">No transactions for these filters.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-[13px] whitespace-nowrap">
-              <thead><tr className="border-b-2 border-slate-300 bg-slate-100 text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">
+            <table className="w-full border-collapse text-xs whitespace-nowrap">
+              <thead><tr className="border-b-2 border-slate-300 bg-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                 <th className="cursor-pointer select-none px-3 py-2 text-left hover:text-slate-700" onClick={() => sortBy('date')}>Date{icon('date')}</th>
                 <th className="cursor-pointer select-none px-3 py-2 text-left hover:text-slate-700" onClick={() => sortBy('type')}>Type{icon('type')}</th>
                 <th className="cursor-pointer select-none px-3 py-2 text-left hover:text-slate-700" onClick={() => sortBy('party')}>Party{icon('party')}</th>
@@ -491,8 +526,8 @@ const UnclassifiedSection = () => {
       </div>
       {note && <div className="mx-4 mb-2 rounded border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-700">{note}</div>}
       <div className="overflow-x-auto">
-        <table className="w-full text-[13px] whitespace-nowrap">
-          <thead><tr className="border-b-2 border-slate-300 bg-slate-100 text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">
+        <table className="w-full border-collapse text-xs whitespace-nowrap">
+          <thead><tr className="border-b-2 border-slate-300 bg-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-500">
             <th className="px-3 py-2 text-left">Party</th>
             <th className="px-3 py-2 text-right">Receipts</th>
             <th className="px-3 py-2 text-right">Payments</th>
@@ -621,8 +656,8 @@ const DuplicatesSection = () => {
         </button>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-[13px] whitespace-nowrap">
-          <thead><tr className="border-b-2 border-slate-300 bg-slate-100 text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">
+        <table className="w-full border-collapse text-xs whitespace-nowrap">
+          <thead><tr className="border-b-2 border-slate-300 bg-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-500">
             <th className="px-3 py-2 text-left">Party</th><th className="px-3 py-2 text-left">Side</th>
             <th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2 text-right">Amount</th><th className="px-3 py-2 text-right">Copies</th>
           </tr></thead>
@@ -719,8 +754,8 @@ const AccountLedgerModal = ({ name, onClose }: { name: string; onClose: () => vo
           ) : !items.length ? (
             <div className="py-12 text-center text-sm text-slate-400">No transactions for this account.</div>
           ) : (
-            <table className="w-full text-[13px] whitespace-nowrap">
-              <thead className="sticky top-0"><tr className="border-b-2 border-slate-300 bg-slate-100 text-[10.5px] font-semibold uppercase tracking-wide text-slate-500">
+            <table className="w-full border-collapse text-xs whitespace-nowrap">
+              <thead className="sticky top-0"><tr className="border-b-2 border-slate-300 bg-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                 <th className="px-3 py-2 text-left">Date</th><th className="px-3 py-2 text-left">Particulars</th>
                 <th className="px-3 py-2 text-left">Vch</th>
                 <th className="px-3 py-2 text-right">Debit</th><th className="px-3 py-2 text-right">Credit</th>
@@ -763,12 +798,12 @@ const AccountLedgerModal = ({ name, onClose }: { name: string; onClose: () => vo
 };
 
 const Stat = ({ label, value, tone }: { label: string; value: string; tone?: 'emerald' | 'brand' | 'red' }) => (
-  <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
-    <span className={cn('absolute inset-y-0 left-0 w-1',
+  <div className="relative overflow-hidden rounded border border-slate-300 bg-white px-3 py-1.5">
+    <span className={cn('absolute inset-y-0 left-0 w-0.5',
       tone === 'emerald' ? 'bg-emerald-500' : tone === 'brand' ? 'bg-brand-500' : tone === 'red' ? 'bg-amber-500' : 'bg-slate-300',
     )} />
-    <div className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
-    <div className={cn('mt-1 text-lg font-bold tabular-nums',
+    <div className="text-[9.5px] font-semibold uppercase tracking-wider text-slate-400">{label}</div>
+    <div className={cn('mt-0.5 font-mono text-sm font-bold tabular-nums',
       tone === 'emerald' && 'text-emerald-600',
       tone === 'brand' && 'text-brand-700',
       tone === 'red' && 'text-red-600',

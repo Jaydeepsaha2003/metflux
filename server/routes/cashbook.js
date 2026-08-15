@@ -233,16 +233,18 @@ router.post('/store', requireAnyPermission(...PERM), asyncHandler(async (req, re
 /* ---------- Summary ---------- */
 
 router.get('/summary', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
-  const { from, to, groupBy } = z.object({
+  const { from, to, groupBy, bankAccountId } = z.object({
     from: z.string().optional(),
     to: z.string().optional(),
     groupBy: z.enum(['account', 'category']).default('category'),
+    bankAccountId: z.string().min(1).optional(), // omit = every account
   }).parse(req.query);
 
   const where = ['`companyId` = ?'];
   const params = [req.tenant.companyId];
   if (from) { where.push('`entryDate` >= ?'); params.push(new Date(from)); }
   if (to) { where.push('`entryDate` <= ?'); params.push(new Date(new Date(to).getTime() + 86400000 - 1)); }
+  if (bankAccountId) { where.push('`bankAccountId` = ?'); params.push(bankAccountId); }
 
   const rows = await q(
     `SELECT \`entryDate\`, \`side\`, \`account\`, \`amount\` FROM \`CashbookEntry\` WHERE ${where.join(' AND ')}`,
@@ -360,13 +362,19 @@ router.post('/reset', requireAnyPermission(...PERM), asyncHandler(async (req, re
 
 /* ---------- Unified transactions — Sales / Purchase / notes / Receipts / Payments ---------- */
 router.get('/transactions', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
-  const { from, to, types, search } = z.object({
+  const { from, to, types, search, bankAccountId } = z.object({
     from: z.string().optional(), to: z.string().optional(),
     types: z.string().optional(), search: z.string().trim().max(120).optional(),
+    // Only the receipt/payment leg lives in a bank account; sales and purchase
+    // invoices have no bank, so selecting one narrows this feed to cash rows.
+    bankAccountId: z.string().min(1).optional(),
   }).parse(req.query);
   const companyId = req.tenant.companyId;
   const want = types ? new Set(types.split(',')) : null;
-  const on = (t) => !want || want.has(t);
+  // Sales/purchase invoices carry no bank account, so once one is selected only
+  // the cash legs can honestly be shown — otherwise the feed would mix filtered
+  // and unfiltered sources and the totals would mislead.
+  const on = (t) => (!bankAccountId || t === 'RECEIPT' || t === 'PAYMENT') && (!want || want.has(t));
   const like = search ? `%${search}%` : null;
   const dc = (col) => { let s = ''; const p = []; if (from) { s += ` AND ${col} >= ?`; p.push(new Date(from)); } if (to) { s += ` AND ${col} <= ?`; p.push(new Date(new Date(to).getTime() + 86400000 - 1)); } return { s, p }; };
   const out = [];
@@ -391,6 +399,7 @@ router.get('/transactions', requireAnyPermission(...PERM), asyncHandler(async (r
     try {
       const d = dc('`entryDate`');
       const p = [companyId, ...d.p]; let sql = "SELECT `entryDate` dt, `account` party, `side`, `amount` amt, `vch` ref FROM `CashbookEntry` WHERE `companyId` = ?" + d.s;
+      if (bankAccountId) { sql += ' AND `bankAccountId` = ?'; p.push(bankAccountId); }
       if (like) { sql += ' AND `account` LIKE ?'; p.push(like); }
       for (const r of await q(sql, p)) { const t = r.side === 'RECEIPT' ? 'RECEIPT' : 'PAYMENT'; if (on(t)) out.push({ date: r.dt, type: t, party: r.party, ref: r.ref, amount: Number(r.amt) }); }
     } catch { /* table absent */ }
