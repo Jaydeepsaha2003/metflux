@@ -4,7 +4,7 @@
 // debit note. Re-importing the same file is idempotent (unique Vch/Bill No).
 import { Router } from 'express';
 import { z } from 'zod';
-import { q, qOne, insert } from '../lib/db.js';
+import { q, qOne, insert, update } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission, requireAnyPermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
@@ -92,11 +92,13 @@ router.post('/import', requireAnyPermission('view_purchase_register', 'manage_in
   }
 
   // Decide the date order once for the whole file (this register is day-first).
-  const dateOrder = inferDateOrder(invoices.map((i) => i.dateStr));
+  // Registers here are day-first; without this an all-ambiguous file (every day
+  // <= 12) would be read month-first and land every bill in the wrong month.
+  const dateOrder = inferDateOrder(invoices.map((i) => i.dateStr), 'DMY');
 
-  const existingRows = await q('SELECT `id`, `invoiceNumber` FROM `PurchaseInvoice` WHERE `companyId` = ?', [req.tenant.companyId]);
-  const existingByNum = new Map(existingRows.map((r) => [r.invoiceNumber, r.id]));
-  let imported = 0, skippedDuplicates = 0, debitNotes = 0, cancelled = 0;
+  const existingRows = await q('SELECT `id`, `invoiceNumber`, `invoiceDate` FROM `PurchaseInvoice` WHERE `companyId` = ?', [req.tenant.companyId]);
+  const existingByNum = new Map(existingRows.map((r) => [r.invoiceNumber, r]));
+  let imported = 0, skippedDuplicates = 0, debitNotes = 0, cancelled = 0, datesFixed = 0;
   const errors = [];
   const seen = new Set();
 
@@ -107,14 +109,32 @@ router.post('/import', requireAnyPermission('view_purchase_register', 'manage_in
 
       // Cancelled voucher → skip, and remove it if a prior import saved it.
       if (isCancelledName(inv.supplierName)) {
-        const id = existingByNum.get(inv.invoiceNumber);
-        if (id) await q('DELETE FROM `PurchaseInvoice` WHERE `id` = ?', [id]);
+        const prior = existingByNum.get(inv.invoiceNumber);
+        if (prior) await q('DELETE FROM `PurchaseInvoice` WHERE `id` = ?', [prior.id]);
         cancelled++;
         continue;
       }
 
-      if (existingByNum.has(inv.invoiceNumber)) { skippedDuplicates++; continue; }
       const date = parseDateWith(inv.dateStr, dateOrder);
+
+      // Already imported → don't re-insert, but correct its date if it changed,
+      // so re-uploading a register repairs rows saved under a misread format
+      // (matches how the sales register behaves).
+      const prior = existingByNum.get(inv.invoiceNumber);
+      if (prior) {
+        if (date) {
+          const cur = prior.invoiceDate ? new Date(prior.invoiceDate) : null;
+          if (!cur || cur.getTime() !== date.getTime()) {
+            const patch = { invoiceDate: date };
+            const due = inv.dueStr ? parseDateWith(inv.dueStr, dateOrder) : null;
+            if (due) patch.dueDate = due;
+            await update('PurchaseInvoice', prior.id, patch);
+            datesFixed++;
+          } else { skippedDuplicates++; }
+        } else { skippedDuplicates++; }
+        continue;
+      }
+
       if (!date) { errors.push({ invoiceNumber: inv.invoiceNumber, message: `Unreadable date "${inv.dateStr || '(blank)'}"` }); continue; }
       const dueDate = inv.dueStr ? parseDateWith(inv.dueStr, dateOrder) : null;
       const docType = round2(inv.amount) < 0 ? 'DEBIT_NOTE' : 'INVOICE';
@@ -141,7 +161,7 @@ router.post('/import', requireAnyPermission('view_purchase_register', 'manage_in
     }
   }
 
-  res.json({ imported, skippedDuplicates, debitNotes, cancelled, totalInFile: invoices.length, errors: errors.slice(0, 100) });
+  res.json({ imported, skippedDuplicates, datesFixed, debitNotes, cancelled, totalInFile: invoices.length, errors: errors.slice(0, 100) });
 }));
 
 /* ---------- GET /summary ---------- */
@@ -345,7 +365,7 @@ router.get('/', requireAnyPermission('view_purchase_register', 'manage_invoices'
   const full = [req.tenant.companyId, ...params];
 
   const [rows, totalRow, agg] = await Promise.all([
-    q(`SELECT * FROM \`PurchaseInvoice\` WHERE ${where} ORDER BY \`invoiceDate\` DESC, \`createdAt\` DESC LIMIT ? OFFSET ?`, [...full, pageSize, skip]),
+    q(`SELECT * FROM \`PurchaseInvoice\` WHERE ${where} ORDER BY \`invoiceDate\` DESC, \`invoiceNumber\` DESC, \`createdAt\` DESC LIMIT ? OFFSET ?`, [...full, pageSize, skip]),
     qOne(`SELECT COUNT(*) n FROM \`PurchaseInvoice\` WHERE ${where}`, full),
     qOne(`SELECT COALESCE(SUM(\`amount\`),0) amt, COALESCE(SUM(\`tds\`),0) tds, COALESCE(SUM(\`igst\`+\`cgst\`+\`sgst\`),0) gst FROM \`PurchaseInvoice\` WHERE ${where}`, full),
   ]);

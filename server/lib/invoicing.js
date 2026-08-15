@@ -55,7 +55,10 @@ export const parseDMY = (s) => {
  *  common in Indian exports like "15-04-2025") or month-first (M/D/Y, Tally's
  *  voucher export). Uses any unambiguous value (a component > 12) to decide;
  *  when everything is ambiguous, '-' leans day-first and '/' month-first. */
-export const inferDateOrder = (strings) => {
+/** @param fallback order to assume when NOTHING in the data proves it. Indian
+ *  registers (Sales/Purchase, cash book) are day-first and must pass 'DMY';
+ *  reading 01/08/2026 as 8 Jan instead of 1 Aug scatters a whole register. */
+export const inferDateOrder = (strings, fallback = null) => {
   let dayFirst = 0, monthFirst = 0, slash = 0, dash = 0;
   for (const s of strings) {
     const m = /^(\d{1,2})([/\-.])(\d{1,2})[/\-.](\d{2,4})$/.exec(String(s ?? '').trim());
@@ -68,6 +71,8 @@ export const inferDateOrder = (strings) => {
   if (dayFirst && !monthFirst) return 'DMY';
   if (monthFirst && !dayFirst) return 'MDY';
   if (dayFirst || monthFirst) return dayFirst >= monthFirst ? 'DMY' : 'MDY';
+  // Nothing in the file settles it — honour the caller's known format.
+  if (fallback) return fallback;
   return dash > slash ? 'DMY' : 'MDY';
 };
 

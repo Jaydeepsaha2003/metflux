@@ -148,7 +148,9 @@ router.post('/import', requireAnyPermission('view_sales_register', 'manage_invoi
   // Decide the date order once for the file — the register mixes month-first
   // invoices (4/1/25 = 1 Apr) with day-first credit notes (13-06-2025 = 13 Jun);
   // an unambiguous component (>12) still wins per row.
-  const dateOrder = inferDateOrder(invoices.map((inv) => inv.dateStr));
+  // Registers here are day-first; without this an all-ambiguous file (every day
+  // <= 12) would be read month-first and land every invoice in the wrong month.
+  const dateOrder = inferDateOrder(invoices.map((inv) => inv.dateStr), 'DMY');
 
   let imported = 0, skippedDuplicates = 0, datesFixed = 0, cancelled = 0, customersCreated = 0, unmatchedCustomers = 0, missingDueDays = 0;
   const errors = [];
@@ -498,7 +500,7 @@ router.get('/', requireAnyPermission('view_sales_register', 'manage_invoices'), 
   const base = `FROM \`SalesInvoice\` si LEFT JOIN \`Customer\` c ON c.\`id\` = si.\`customerId\` WHERE ${where}`;
   const [rows, totalRow, agg] = await Promise.all([
     q(`SELECT si.*, c.\`customerCode\` AS customerCode, c.\`phone\` AS customerPhone ${base}
-        ORDER BY si.\`invoiceDate\` DESC, si.\`createdAt\` DESC LIMIT ? OFFSET ?`, [...params, pageSize, skip]),
+        ORDER BY si.\`invoiceDate\` DESC, si.\`invoiceNumber\` DESC, si.\`createdAt\` DESC LIMIT ? OFFSET ?`, [...params, pageSize, skip]),
     qOne(`SELECT COUNT(*) AS n ${base}`, params),
     qOne(`SELECT COALESCE(SUM(si.\`amount\`),0) AS amt, COALESCE(SUM(si.\`paidAmount\`),0) AS paid ${base}`, params),
   ]);
