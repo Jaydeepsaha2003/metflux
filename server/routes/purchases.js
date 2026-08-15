@@ -4,7 +4,7 @@
 // debit note. Re-importing the same file is idempotent (unique Vch/Bill No).
 import { Router } from 'express';
 import { z } from 'zod';
-import { q, qOne, insert, update } from '../lib/db.js';
+import { q, qOne, insert, update, txn } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission, requireAnyPermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
@@ -402,12 +402,29 @@ router.post('/bulk-delete', requireAnyPermission('view_purchase_register', 'mana
   }
   if (!ids.length) return res.json({ deleted: 0 });
 
+  // Deleting a bill must also give back whatever a supplier payment had
+  // allocated to it, or the payment keeps claiming to be spent against a bill
+  // that no longer exists. Mirrors the sales-invoice side.
   const CHUNK = 500;
-  for (let i = 0; i < ids.length; i += CHUNK) {
-    const batch = ids.slice(i, i + CHUNK);
-    const ph = batch.map(() => '?').join(',');
-    await q(`DELETE FROM \`PurchaseInvoice\` WHERE \`companyId\` = ? AND \`id\` IN (${ph})`, [req.tenant.companyId, ...batch]);
-  }
+  await txn(async (tx) => {
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const batch = ids.slice(i, i + CHUNK);
+      const ph = batch.map(() => '?').join(',');
+      const allocs = await tx.q(
+        `SELECT \`supplierPaymentId\`, COALESCE(SUM(\`amount\`), 0) AS amt
+           FROM \`SupplierPaymentAllocation\` WHERE \`purchaseInvoiceId\` IN (${ph}) GROUP BY \`supplierPaymentId\``,
+        batch
+      ).catch(() => []);
+      for (const a of allocs) {
+        await tx.q(
+          'UPDATE `SupplierPayment` SET `allocatedAmount` = GREATEST(0, ROUND(`allocatedAmount` - ?, 2)) WHERE `id` = ?',
+          [Number(a.amt) || 0, a.supplierPaymentId]
+        );
+      }
+      await tx.q(`DELETE FROM \`SupplierPaymentAllocation\` WHERE \`purchaseInvoiceId\` IN (${ph})`, batch).catch(() => {});
+      await tx.q(`DELETE FROM \`PurchaseInvoice\` WHERE \`companyId\` = ? AND \`id\` IN (${ph})`, [req.tenant.companyId, ...batch]);
+    }
+  });
   res.json({ deleted: ids.length });
 }));
 
@@ -415,7 +432,15 @@ router.post('/bulk-delete', requireAnyPermission('view_purchase_register', 'mana
 router.delete('/:id', requireAnyPermission('view_purchase_register', 'manage_invoices'), asyncHandler(async (req, res) => {
   const row = await qOne('SELECT `id` FROM `PurchaseInvoice` WHERE `id` = ? AND `companyId` = ?', [req.params.id, req.tenant.companyId]);
   if (!row) throw new AppError('Purchase entry not found', 404, 'NOT_FOUND');
-  await q('DELETE FROM `PurchaseInvoice` WHERE `id` = ?', [row.id]);
+  await txn(async (tx) => {
+    const allocs = await tx.q('SELECT * FROM `SupplierPaymentAllocation` WHERE `purchaseInvoiceId` = ?', [row.id]).catch(() => []);
+    for (const a of allocs) {
+      const pay = await tx.qOne('SELECT * FROM `SupplierPayment` WHERE `id` = ?', [a.supplierPaymentId]);
+      if (pay) await tx.update('SupplierPayment', pay.id, { allocatedAmount: Math.max(0, round2(Number(pay.allocatedAmount) - Number(a.amount))) });
+    }
+    await tx.q('DELETE FROM `SupplierPaymentAllocation` WHERE `purchaseInvoiceId` = ?', [row.id]).catch(() => {});
+    await tx.q('DELETE FROM `PurchaseInvoice` WHERE `id` = ?', [row.id]);
+  });
   res.status(204).end();
 }));
 

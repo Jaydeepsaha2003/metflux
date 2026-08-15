@@ -57,7 +57,11 @@ export const PurchasesPage = () => {
     queryFn: () => api<ListResp>(`/purchases?docType=${docType}&page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}${from ? `&from=${from}` : ''}${to ? `&to=${to}` : ''}`),
   });
 
-  const refresh = () => { qc.invalidateQueries({ queryKey: ['purchases'] }); qc.invalidateQueries({ queryKey: ['purchase-summary'] }); };
+  const refresh = () => {
+    ['purchases', 'purchase-summary', 'creditor-aging', 'debtor-aging',
+     'party-ledger', 'cashbook-summary', 'cashbook-overview']
+      .forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+  };
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -99,6 +103,28 @@ export const PurchasesPage = () => {
     else bulkDel.mutate({ ids: [...selected] });
   };
 
+  // Empty the whole register, ignoring the active filters — the point is a clean
+  // slate to re-import onto, not "delete what I'm looking at".
+  const grandTotal = summary?.total ?? 0;
+  const deleteEverything = async () => {
+    if (!grandTotal) return;
+    const ok = await confirm({
+      title: 'Delete every purchase entry?',
+      message: (
+        <>
+          This permanently deletes <strong>all {grandTotal.toLocaleString('en-IN')}</strong> purchase entr{grandTotal === 1 ? 'y' : 'ies'} for this
+          company — <strong>ignoring the filters above</strong> — and releases any supplier payments allocated to them.
+          Amount Payable and the Party Ledger will change. <strong>This cannot be undone.</strong>
+          <br /><br />
+          Use this when you want to re-upload the register cleanly.
+        </>
+      ),
+      challenge: 'DELETE ALL',
+      tone: 'danger', confirmLabel: 'Delete all',
+    });
+    if (ok) bulkDel.mutate({ all: true });
+  };
+
   const totals = data?.totals;
 
   return (
@@ -106,9 +132,16 @@ export const PurchasesPage = () => {
       <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={onFile} className="hidden" />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight"><ShoppingCart className="h-5 w-5 text-brand-600" /> Purchase Register</h1>
-        <button onClick={() => fileRef.current?.click()} disabled={uploading} className="btn-primary">
-          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Upload Purchase Register
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={deleteEverything} disabled={bulkDel.isPending || !grandTotal}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-40"
+            title="Delete every purchase entry so the register can be re-uploaded cleanly">
+            {bulkDel.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Delete all
+          </button>
+          <button onClick={() => fileRef.current?.click()} disabled={uploading} className="btn-primary">
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Upload Purchase Register
+          </button>
+        </div>
       </div>
 
       {/* Summary cards */}

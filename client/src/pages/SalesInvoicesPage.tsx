@@ -93,8 +93,9 @@ export const SalesInvoicesPage = () => {
   });
 
   const refresh = () => {
-    qc.invalidateQueries({ queryKey: ['sales-invoices'] });
-    qc.invalidateQueries({ queryKey: ['sales-invoice-summary'] });
+    ['sales-invoices', 'sales-invoice-summary', 'debtor-aging', 'creditor-aging',
+     'party-ledger', 'payments', 'cashbook-summary', 'cashbook-overview']
+      .forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
   };
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -149,6 +150,28 @@ export const SalesInvoicesPage = () => {
     });
   };
 
+  // Empty the whole register, ignoring the active filters — the point is a clean
+  // slate to re-import onto, not "delete what I'm looking at".
+  const grandTotal = summary?.totalInvoices ?? 0;
+  const deleteEverything = async () => {
+    if (!grandTotal) return;
+    const ok = await confirm({
+      title: 'Delete every sales invoice?',
+      message: (
+        <>
+          This permanently deletes <strong>all {grandTotal.toLocaleString('en-IN')}</strong> sales invoice{grandTotal === 1 ? '' : 's'} and credit
+          note{grandTotal === 1 ? '' : 's'} for this company — <strong>ignoring the filters above</strong> — and unallocates every payment applied
+          to them. Amount Receivable, reminders and the Party Ledger will change. <strong>This cannot be undone.</strong>
+          <br /><br />
+          Use this when you want to re-upload the register cleanly.
+        </>
+      ),
+      challenge: 'DELETE ALL',
+      tone: 'danger', confirmLabel: 'Delete all',
+    });
+    if (ok) bulkDel.mutate({ all: true });
+  };
+
   const doBulkDelete = async () => {
     if (!selectionCount) return;
     const ok = await confirm({
@@ -169,10 +192,17 @@ export const SalesInvoicesPage = () => {
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <Receipt className="h-5 w-5 text-brand-600" /> Sales Register
         </h1>
-        <button onClick={() => fileRef.current?.click()} disabled={uploading} className="btn-primary">
-          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-          Upload Sales Register (Excel)
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={deleteEverything} disabled={bulkDel.isPending || !grandTotal}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-40"
+            title="Delete every sales invoice so the register can be re-uploaded cleanly">
+            {bulkDel.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Delete all
+          </button>
+          <button onClick={() => fileRef.current?.click()} disabled={uploading} className="btn-primary">
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            Upload Sales Register (Excel)
+          </button>
+        </div>
       </div>
 
       {/* Summary cards */}
