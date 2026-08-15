@@ -12,13 +12,13 @@
 // reason, never silently skipped.
 import { Router } from 'express';
 import { z } from 'zod';
-import { q, qOne, del } from '../lib/db.js';
+import { q, qOne, txn } from '../lib/db.js';
 import { asyncHandler } from '../lib/errors.js';
 import { requireAuth, requireAnyPermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 import { round2, normName } from '../lib/invoicing.js';
 import { loadPartyBalances, sideBalance } from '../lib/partyBalances.js';
-import { countCustomerRefs as countRefs, customerBlockers as blockersOf } from '../lib/customerRefs.js';
+import { countCustomerRefs as countRefs, customerBlockers as blockersOf, deleteDerivedCustomerPayments } from '../lib/customerRefs.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -91,7 +91,10 @@ router.post('/non-customers/delete', requireAnyPermission(...PERM), asyncHandler
     const counts = await countRefs(c.id);
     const blockers = blockersOf(counts);
     if (blockers.length) { skipped.push({ id, name: c.name, reason: `still has ${blockers.join(', ')}` }); continue; }
-    await del('Customer', c.id);
+    await txn(async (tx) => {
+      await deleteDerivedCustomerPayments(tx, c.id);
+      await tx.q('DELETE FROM `Customer` WHERE `id` = ?', [c.id]);
+    });
     deleted++;
   }
   res.json({ deleted, skipped });

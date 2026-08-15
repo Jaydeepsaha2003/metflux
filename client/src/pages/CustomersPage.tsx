@@ -95,7 +95,7 @@ e.g. Salary, Rent, Freight, Bank Charges`, 'Expense',
   const onDelete = async (c: { id: string; name: string }) => {
     setDeletingId(c.id);
     try {
-      const chk = await api<{ deletable: boolean; blockers: string[] }>(`/customers/${c.id}/deletable`);
+      const chk = await api<{ deletable: boolean; blockers: string[]; counts?: { derivedPayments?: number } }>(`/customers/${c.id}/deletable`);
       if (!chk.deletable) {
         await alert({
           title: 'Can’t delete this customer',
@@ -106,7 +106,17 @@ e.g. Salary, Rent, Freight, Bank Charges`, 'Expense',
       }
       const ok = await confirm({
         title: 'Delete customer?',
-        message: <>Delete <strong>{c.name}</strong>? Nothing references them, so no invoices, orders or payments are affected. This cannot be undone.</>,
+        message: (
+          <>
+            Delete <strong>{c.name}</strong>? Nothing you entered references them, so no invoices or orders are affected.
+            {!!chk.counts?.derivedPayments && (
+              <> The {chk.counts.derivedPayments} payment{chk.counts.derivedPayments === 1 ? '' : 's'} the cash-book
+              reconciliation generated for them {chk.counts.derivedPayments === 1 ? 'is' : 'are'} removed too — those are
+              rebuilt from the bank book each time you Recompute.</>
+            )}
+            {' '}This cannot be undone.
+          </>
+        ),
         tone: 'danger', confirmLabel: 'Delete',
       });
       if (ok) removeCustomer.mutate(c.id);

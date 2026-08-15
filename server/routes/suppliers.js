@@ -7,7 +7,7 @@ import { q, qOne, txn, update } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission, requireRole } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
-import { countSupplierRefs, supplierBlockers } from '../lib/supplierRefs.js';
+import { countSupplierRefs, supplierBlockers, deleteDerivedSupplierPayments } from '../lib/supplierRefs.js';
 import { importBody, cellPick, numOpt, rowIsBlank, errMessage } from '../lib/importHelpers.js';
 import { normName } from '../lib/invoicing.js';
 
@@ -261,6 +261,7 @@ router.delete('/:id', requirePermission('add_supplier'), asyncHandler(async (req
   }
 
   await txn(async (tx) => {
+    await deleteDerivedSupplierPayments(tx, companyId, sup?.name ?? '');
     await tx.q('DELETE FROM `SupplierMembership` WHERE `supplierId` = ? AND `companyId` = ?', [id, companyId]);
     const left = await tx.q('SELECT `companyId` FROM `SupplierMembership` WHERE `supplierId` = ?', [id]);
     if (!left.length) await tx.q('DELETE FROM `Supplier` WHERE `id` = ?', [id]);

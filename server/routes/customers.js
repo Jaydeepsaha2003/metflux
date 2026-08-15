@@ -5,7 +5,7 @@ import { q, qOne, insert, update, del, txn } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requireRole, hashPassword } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
-import { countCustomerRefs, customerBlockers } from '../lib/customerRefs.js';
+import { countCustomerRefs, customerBlockers, deleteDerivedCustomerPayments } from '../lib/customerRefs.js';
 import { importBody, cellPick, numOpt, rowIsBlank, errMessage } from '../lib/importHelpers.js';
 import { derivePortalPassword, uniqueShortCode } from '../lib/portal.js';
 import { normName } from '../lib/invoicing.js';
@@ -442,7 +442,12 @@ router.delete('/:id', requireRole('MANAGER'), asyncHandler(async (req, res) => {
       409, 'CUSTOMER_IN_USE', { blockers, counts }
     );
   }
-  await del('Customer', id);
+  await txn(async (tx) => {
+    // Sweep the cash-book's own unallocated payments for this party — they are
+    // derived state, not records anyone entered.
+    await deleteDerivedCustomerPayments(tx, id);
+    await tx.q('DELETE FROM `Customer` WHERE `id` = ?', [id]);
+  });
   res.status(204).end();
 }));
 
@@ -498,6 +503,7 @@ router.post('/:id/convert-to-expense', requireRole('MANAGER'), asyncHandler(asyn
         companyId, name: cust.name, normKey, type: 'OTHER', category,
       });
     }
+    await deleteDerivedCustomerPayments(tx, id);
     await tx.q('DELETE FROM `Customer` WHERE `id` = ?', [id]);
     return { name: cust.name, category };
   });

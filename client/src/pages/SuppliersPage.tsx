@@ -42,7 +42,7 @@ export const SuppliersPage = () => {
   const onDelete = async (sup: { id: string; name: string }) => {
     setDeletingId(sup.id);
     try {
-      const chk = await api<{ deletable: boolean; blockers: string[]; otherCompanies: number }>(`/suppliers/${sup.id}/deletable`);
+      const chk = await api<{ deletable: boolean; blockers: string[]; otherCompanies: number; counts?: { derivedPayments?: number } }>(`/suppliers/${sup.id}/deletable`);
       if (!chk.deletable) {
         await alert({
           title: 'Can’t delete this supplier',
@@ -55,7 +55,11 @@ export const SuppliersPage = () => {
         title: 'Delete supplier?',
         message: (
           <>
-            Remove <strong>{sup.name}</strong> from this company? Nothing references them, so no bills, orders or payments are affected.
+            Remove <strong>{sup.name}</strong> from this company? Nothing you entered references them, so no bills or orders are affected.
+            {!!chk.counts?.derivedPayments && (
+              <> The {chk.counts.derivedPayments} payment{chk.counts.derivedPayments === 1 ? '' : 's'} the cash-book
+              reconciliation generated for them {chk.counts.derivedPayments === 1 ? 'is' : 'are'} removed too.</>
+            )}
             {chk.otherCompanies > 0
               ? <> They stay available to {chk.otherCompanies} other compan{chk.otherCompanies === 1 ? 'y' : 'ies'} that also use them.</>
               : <> This cannot be undone.</>}
