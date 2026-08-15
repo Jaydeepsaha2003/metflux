@@ -7,6 +7,7 @@ import { q, qOne, txn, update } from '../lib/db.js';
 import { AppError, asyncHandler } from '../lib/errors.js';
 import { requireAuth, requirePermission, requireRole } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
+import { countSupplierRefs, supplierBlockers } from '../lib/supplierRefs.js';
 import { importBody, cellPick, numOpt, rowIsBlank, errMessage } from '../lib/importHelpers.js';
 import { normName } from '../lib/invoicing.js';
 
@@ -240,15 +241,42 @@ router.post('/import', requirePermission('add_supplier'), asyncHandler(async (re
 }));
 
 /* DELETE /:id — removes the supplier and all its memberships */
+// Refuses while any purchase transaction still points at the supplier, naming
+// exactly what. A Supplier row is shared between companies, so this drops only
+// THIS company's membership; the row itself goes only once nobody else uses it.
 router.delete('/:id', requirePermission('add_supplier'), asyncHandler(async (req, res) => {
   const { id } = idParam.parse(req.params);
-  const sm = await isSupplierInTenant(id, req.tenant.companyId);
+  const companyId = req.tenant.companyId;
+  const sm = await isSupplierInTenant(id, companyId);
   if (!sm) throw new AppError('Supplier not found', 404, 'NOT_FOUND');
+  const sup = await qOne('SELECT `id`, `name` FROM `Supplier` WHERE `id` = ?', [id]);
+
+  const counts = await countSupplierRefs(id, companyId, sup?.name ?? '');
+  const blockers = supplierBlockers(counts);
+  if (blockers.length) {
+    throw new AppError(
+      `${sup?.name ?? 'This supplier'} still has ${blockers.join(', ')}. Delete or reassign those first.`,
+      409, 'SUPPLIER_IN_USE', { blockers, counts }
+    );
+  }
+
   await txn(async (tx) => {
-    await tx.q('DELETE FROM `SupplierMembership` WHERE `supplierId` = ?', [id]);
-    await tx.q('DELETE FROM `Supplier` WHERE `id` = ?', [id]);
+    await tx.q('DELETE FROM `SupplierMembership` WHERE `supplierId` = ? AND `companyId` = ?', [id, companyId]);
+    const left = await tx.q('SELECT `companyId` FROM `SupplierMembership` WHERE `supplierId` = ?', [id]);
+    if (!left.length) await tx.q('DELETE FROM `Supplier` WHERE `id` = ?', [id]);
   });
-  res.status(204).end();
+  res.json({ removedFromCompany: true, stillUsedByOtherCompanies: counts.otherCompanies });
+}));
+
+/* GET /:id/deletable — what (if anything) is blocking removal. */
+router.get('/:id/deletable', asyncHandler(async (req, res) => {
+  const { id } = idParam.parse(req.params);
+  const companyId = req.tenant.companyId;
+  if (!(await isSupplierInTenant(id, companyId))) throw new AppError('Supplier not found', 404, 'NOT_FOUND');
+  const sup = await qOne('SELECT `name` FROM `Supplier` WHERE `id` = ?', [id]);
+  const counts = await countSupplierRefs(id, companyId, sup?.name ?? '');
+  const blockers = supplierBlockers(counts);
+  res.json({ deletable: blockers.length === 0, blockers, counts, otherCompanies: counts.otherCompanies });
 }));
 
 /* POST /:id/convert-to-customer — reclassify a mistakenly-created supplier as a

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search, Plus, Pencil, Truck } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Search, Plus, Pencil, Truck, Trash2, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/hooks/useConfirm';
 import { Pagination } from '@/components/Pagination';
 import { BulkExcel, type BulkExcelConfig } from '@/components/BulkExcel';
 
@@ -28,6 +29,43 @@ export const SuppliersPage = () => {
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const changePageSize = (n: number) => { setPageSize(n); setPage(1); };
   const qc = useQueryClient();
+  const { confirm, alert, confirmDialog } = useConfirm();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const removeSupplier = useMutation({
+    mutationFn: (id: string) => api(`/suppliers/${id}`, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['suppliers'] }),
+  });
+
+  // Ask the server what's referencing this supplier BEFORE prompting, so the
+  // dialog states the reason instead of failing after the user commits.
+  const onDelete = async (sup: { id: string; name: string }) => {
+    setDeletingId(sup.id);
+    try {
+      const chk = await api<{ deletable: boolean; blockers: string[]; otherCompanies: number }>(`/suppliers/${sup.id}/deletable`);
+      if (!chk.deletable) {
+        await alert({
+          title: 'Can’t delete this supplier',
+          message: <><strong>{sup.name}</strong> still has {chk.blockers.join(', ')}. Delete or reassign those first, so nothing is left orphaned.</>,
+          tone: 'warning',
+        });
+        return;
+      }
+      const ok = await confirm({
+        title: 'Delete supplier?',
+        message: (
+          <>
+            Remove <strong>{sup.name}</strong> from this company? Nothing references them, so no bills, orders or payments are affected.
+            {chk.otherCompanies > 0
+              ? <> They stay available to {chk.otherCompanies} other compan{chk.otherCompanies === 1 ? 'y' : 'ies'} that also use them.</>
+              : <> This cannot be undone.</>}
+          </>
+        ),
+        tone: 'danger', confirmLabel: 'Delete',
+      });
+      if (ok) removeSupplier.mutate(sup.id);
+    } finally { setDeletingId(null); }
+  };
   useEffect(() => { setPage(1); }, [search]);
   const { data, isLoading } = useQuery({
     queryKey: ['suppliers', search, page, pageSize],
@@ -130,13 +168,23 @@ export const SuppliersPage = () => {
                   <td className="px-4 py-3 text-slate-600 font-mono text-xs">{s.phone ?? '—'}</td>
                   <td className="px-4 py-3 text-slate-600">{s.state ?? '—'}</td>
                   <td className="px-4 py-3 text-right">
-                    <Link
-                      to={`/settings/suppliers/${s.id}`}
-                      className="btn-ghost text-brand-700 hover:bg-brand-50"
-                      title="Edit supplier"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Link>
+                    <div className="inline-flex items-center gap-1">
+                      <Link
+                        to={`/settings/suppliers/${s.id}`}
+                        className="btn-ghost text-brand-700 hover:bg-brand-50"
+                        title="Edit supplier"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Link>
+                      <button
+                        onClick={() => onDelete(s)}
+                        disabled={deletingId === s.id || removeSupplier.isPending}
+                        className="btn-ghost text-red-600 hover:bg-red-50 disabled:opacity-40"
+                        title="Delete supplier (only if nothing references them)"
+                      >
+                        {deletingId === s.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -147,6 +195,7 @@ export const SuppliersPage = () => {
           <Pagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} onPageSizeChange={changePageSize} />
         )}
       </div>
+      {confirmDialog}
     </div>
   );
 };
