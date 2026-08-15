@@ -21,6 +21,7 @@ type PendingItem = {
   grade: string;
   material: string;
   measure: string;
+  ht: number;
   flux: number | null;
   turns: number | null;
   testVoltage: number | null;
@@ -40,6 +41,7 @@ type WaItemDetail = {
   grade: string | null;
   material: string | null;
   measure: string | null;
+  ht: number | null;
   weightPerPc: number | null;
   flux: number | null;
   turns: number | null;
@@ -70,6 +72,7 @@ type RowState = {
   customerCode: string;
   orderDate: string;
   measure: string;
+  ht: number;          // core height in mm — the strip width to slit to
   grade: string;
   material: string;
   flux: string;
@@ -214,6 +217,7 @@ export const WorkAllotmentBuildPage = () => {
         customerCode:  it.customerCode ?? '',
         orderDate:     it.orderDate ?? '',
         measure:       it.measure ?? '',
+        ht:            Number(it.ht) || 0,
         grade:         it.grade ?? '',
         material:      it.material ?? '',
         flux:          numStr(it.flux, 2),
@@ -236,6 +240,7 @@ export const WorkAllotmentBuildPage = () => {
         customerCode:  p.customerCode,
         orderDate:     p.orderDate,
         measure:       p.measure,
+        ht:            Number(p.ht) || 0,
         grade:         p.grade,
         material:      p.material,
         flux:          numStr(p.flux, 2),
@@ -291,6 +296,27 @@ export const WorkAllotmentBuildPage = () => {
   // is edited. 3-decimal precision mirrors weights shown elsewhere in the app.
   const fmtWt = (n: number) => (Number.isFinite(n) ? n : 0).toFixed(3);
   const rowWt = (r: RowState) => (parseInt(r.pcs) || 0) * (r.weightPerPc || 0);
+
+  /* Slitting plan — a toroidal core is wound from CRGO strip, so the strip width
+     to slit IS the core height (ht). Group the allotted work by ht + grade +
+     material and total it, which is exactly what the slitting operator needs:
+     which widths, in which grade/material, and how much. Derived from the rows,
+     so it always matches the allotment above and needs no storage of its own. */
+  const slittingPlan = (() => {
+    const map = new Map<string, { ht: number; grade: string; material: string; pcs: number; weight: number }>();
+    for (const r of rows) {
+      const pcs = parseInt(r.pcs) || 0;
+      if (pcs <= 0) continue;
+      const key = `${r.ht}|${r.grade}|${r.material}`;
+      const g = map.get(key) ?? { ht: r.ht, grade: r.grade, material: r.material, pcs: 0, weight: 0 };
+      g.pcs += pcs;
+      g.weight += pcs * (r.weightPerPc || 0);
+      map.set(key, g);
+    }
+    // Ascending width is the order the slitter actually works in.
+    return [...map.values()].sort((a, b) => a.ht - b.ht || a.grade.localeCompare(b.grade) || a.material.localeCompare(b.material));
+  })();
+  const slitTotals = slittingPlan.reduce((t, g) => ({ pcs: t.pcs + g.pcs, weight: t.weight + g.weight }), { pcs: 0, weight: 0 });
   const totalWt = rows.reduce((s, r) => s + rowWt(r), 0);
 
   // Auto-save an in-progress draft (build mode only) so a refresh or accidental
@@ -422,6 +448,11 @@ export const WorkAllotmentBuildPage = () => {
     const colgroup = srcTable?.querySelector('colgroup') ?? null;
     const tbody = srcTable?.querySelector('tbody') ?? null;
     const signature = clone.querySelector<HTMLElement>('.wa-signature');
+    // Pulled out first: the paginator only moves table rows and the signature,
+    // and discards whatever is left in the clone. The slitting plan gets its own
+    // page at the end so the slitter can be handed just that sheet.
+    const slitting = clone.querySelector<HTMLElement>('.wa-slitting');
+    if (slitting) slitting.remove();
 
     let pages: HTMLElement[] = [clone];
     if (srcTable && tbody) {
@@ -482,8 +513,17 @@ export const WorkAllotmentBuildPage = () => {
         host.appendChild(signature);
         if (!sigOnLastPage) pages.push(host);
       }
+      if (slitting) {
+        const host = mkPage();
+        slitting.style.marginTop = '0';
+        host.appendChild(slitting);
+        pages.push(host);
+      }
       pages.forEach((p) => offscreen.appendChild(p));
       offscreen.removeChild(clone); // the gutted clone is no longer needed
+    } else if (slitting) {
+      // No item table to paginate — put the plan back so it still prints.
+      clone.appendChild(slitting);
     }
 
     const filename = `Work-Allotment-${waNumber || 'WA'}.pdf`;
@@ -951,6 +991,55 @@ export const WorkAllotmentBuildPage = () => {
               <div className="mt-2 text-[10px] text-slate-500">Date: ___________</div>
             </div>
           </div>
+
+          {/* Slitting plan — lifted onto its own PDF page by buildPdfJob. A toroid
+              is wound from strip, so the width to slit IS the core height. */}
+          {slittingPlan.length > 0 && (
+            <div className="wa-slitting mt-4">
+              <div className="border-b-2 border-slate-400 pb-1 mb-2 flex items-baseline justify-between">
+                <h3 className="text-sm font-black uppercase tracking-wider text-slate-800">Slitting Plan</h3>
+                <span className="text-[10px] text-slate-500">
+                  Strip width = core height (HT) · {slittingPlan.length} width{slittingPlan.length === 1 ? '' : 's'} to slit
+                </span>
+              </div>
+              <table className="w-full border-collapse">
+                <colgroup>
+                  <col style={{ width: '8%' }} /><col style={{ width: '14%' }} />
+                  <col style={{ width: '26%' }} /><col style={{ width: '30%' }} />
+                  <col style={{ width: '11%' }} /><col style={{ width: '11%' }} />
+                </colgroup>
+                <thead>
+                  <tr className="bg-slate-100 border-y-2 border-slate-400 text-[10px] font-black uppercase tracking-wide text-slate-700">
+                    <th className="px-1 py-1.5 border-r border-slate-400 text-center">Sr</th>
+                    <th className="px-1 py-1.5 border-r border-slate-400 text-center">HT (mm)</th>
+                    <th className="px-2 py-1.5 border-r border-slate-400 text-left">Grade</th>
+                    <th className="px-2 py-1.5 border-r border-slate-400 text-left">Material</th>
+                    <th className="px-1 py-1.5 border-r border-slate-400 text-center">Qty (Pcs)</th>
+                    <th className="px-1 py-1.5 text-center">Wt (Kg.)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {slittingPlan.map((g, i) => (
+                    <tr key={`${g.ht}-${g.grade}-${g.material}`} className="border-b border-slate-300 text-xs">
+                      <td className="px-1 py-1 border-r border-slate-400 text-center text-slate-500 tabular-nums">{i + 1}</td>
+                      <td className="px-1 py-1 border-r border-slate-400 text-center font-black tabular-nums text-slate-900">{g.ht}</td>
+                      <td className="px-2 py-1 border-r border-slate-400 font-semibold text-slate-800">{g.grade || '—'}</td>
+                      <td className="px-2 py-1 border-r border-slate-400 text-slate-700">{g.material || '—'}</td>
+                      <td className="px-1 py-1 border-r border-slate-400 text-center font-bold tabular-nums">{g.pcs}</td>
+                      <td className="px-1 py-1 text-center font-bold tabular-nums">{fmtWt(g.weight)}</td>
+                    </tr>
+                  ))}
+                  <tr className="border-y-2 border-slate-400 bg-slate-100">
+                    <td colSpan={4} className="px-2 py-1.5 border-r border-slate-400 text-right text-xs font-black uppercase tracking-wide text-slate-700">
+                      Total
+                    </td>
+                    <td className="px-1 py-1.5 border-r border-slate-400 text-center text-xs font-black tabular-nums text-slate-900">{slitTotals.pcs}</td>
+                    <td className="px-1 py-1.5 text-center text-xs font-black tabular-nums text-slate-900">{fmtWt(slitTotals.weight)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
 
         </div>
       </div>
