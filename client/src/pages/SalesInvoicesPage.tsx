@@ -208,11 +208,19 @@ export const SalesInvoicesPage = () => {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card label="Total Sales" value={inr(summary?.totalSales ?? 0)} tone="brand" />
-        <Card label="Output GST" value={inr(summary?.outputGst ?? 0)} tone="muted" />
-        <Card label="Total Credit Notes" value={inr(summary?.creditNotes ?? 0)} tone={summary && summary.creditNotes > 0 ? 'warning' : 'muted'} />
-        <Card label="Net Sales" value={inr(summary?.netSales ?? 0)} tone="brand" />
+        <Card label="Total Sales" value={inr(summary?.totalSales ?? 0)} tone="brand" note="Invoices only — before credit notes" />
+        <Card label="Output GST" value={inr(summary?.outputGst ?? 0)} tone="muted" note="On invoices only" />
+        <Card label="Less: Credit Notes" value={inr(summary?.creditNotes ?? 0)} tone={summary && summary.creditNotes > 0 ? 'warning' : 'muted'} note="Deducted from sales" />
+        <Card label="Net Sales" value={inr(summary?.netSales ?? 0)} tone="brand" note="Ties to your register's Total row" />
       </div>
+      {/* A register's own Total row is NET of credit notes, so the figure to
+          compare against it is Net Sales — not the larger Total Sales card. */}
+      {!!summary?.creditNotes && (
+        <p className="-mt-1 text-[11px] text-slate-500">
+          Your register's <b>Total</b> row is net of credit notes — compare it with <b>Net Sales</b>
+          {' '}({inr(summary.totalSales)} − {inr(summary.creditNotes)} = <b>{inr(summary.netSales)}</b>), not Total Sales.
+        </p>
+      )}
 
       {/* Due-invoices drill-down banner (from the "Invoices due today" reminder) */}
       {due && (
@@ -498,8 +506,8 @@ const FixInvoiceDialog = ({ invoice, onClose, onSaved }: { invoice: Invoice; onC
 };
 
 /* ---------- small presentational bits ---------- */
-const Card = ({ label, value, tone, onClick }: {
-  label: string; value: string; tone: 'brand' | 'danger' | 'warning' | 'muted'; onClick?: () => void;
+const Card = ({ label, value, tone, onClick, note }: {
+  label: string; value: string; tone: 'brand' | 'danger' | 'warning' | 'muted'; onClick?: () => void; note?: string;
 }) => {
   const c = tone === 'brand' ? 'border-brand-200 bg-brand-50' : tone === 'danger' ? 'border-red-200 bg-red-50'
     : tone === 'warning' ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-white';
@@ -508,6 +516,7 @@ const Card = ({ label, value, tone, onClick }: {
     <div onClick={onClick} className={cn('rounded-xl border p-3', c, onClick && 'cursor-pointer hover:shadow-sm transition')}>
       <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</div>
       <div className={cn('mt-1 text-xl font-bold tabular-nums', t)}>{value}</div>
+      {note && <div className="mt-0.5 text-[10px] leading-tight text-slate-400">{note}</div>}
     </div>
   );
 };
