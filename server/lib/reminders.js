@@ -10,6 +10,9 @@
 // A ReminderRun guard row (unique per job+day) makes each job fire exactly once,
 // surviving restarts and two domain clones that share one database.
 import { q, qOne, newId } from './db.js';
+import { round2 } from './invoicing.js';
+import { loadPartyBalances, sideBalance } from './partyBalances.js';
+import { loadReceivableAging, summariseReceivable } from './receivableAging.js';
 import { env } from './env.js';
 import { notifyCompanyAdmins } from './push.js';
 
@@ -73,52 +76,34 @@ const runInvoiceDueReminder = async (localDate) => {
     let overdue = { n: 0, amt: 0 };
     let worst = [];
     try {
-      const r = await qOne(
-        `SELECT COUNT(*) AS n, COALESCE(SUM(\`amount\` - \`paidAmount\`), 0) AS amt
-           FROM \`SalesInvoice\`
-          WHERE \`companyId\` = ? AND \`status\` <> 'PAID'
-            AND \`dueDate\` IS NOT NULL AND DATE(\`dueDate\`) = ?`,
-        [c.id, localDate]
-      );
-      sales = { n: Number(r?.n ?? 0), amt: Number(r?.amt ?? 0) };
-      // Anything already past its due date. Matching only DATE(dueDate)=today
-      // meant a bill was mentioned once, on its due date, and never again —
-      // so the invoices that most need chasing were the silent ones.
-      const o = await qOne(
-        `SELECT COUNT(*) AS n, COALESCE(SUM(\`amount\` - \`paidAmount\`), 0) AS amt
-           FROM \`SalesInvoice\`
-          WHERE \`companyId\` = ? AND \`status\` <> 'PAID'
-            AND \`dueDate\` IS NOT NULL AND DATE(\`dueDate\`) < ?`,
-        [c.id, localDate]
-      );
-      overdue = { n: Number(o?.n ?? 0), amt: Number(o?.amt ?? 0) };
-      // Name the worst debtors — an aggregate can't be acted on.
-      worst = await q(
-        `SELECT \`customerName\` nm, COALESCE(SUM(\`amount\` - \`paidAmount\`), 0) amt,
-                MAX(DATEDIFF(?, \`dueDate\`)) days
-           FROM \`SalesInvoice\`
-          WHERE \`companyId\` = ? AND \`status\` <> 'PAID'
-            AND \`dueDate\` IS NOT NULL AND DATE(\`dueDate\`) < ?
-          GROUP BY \`customerName\` ORDER BY amt DESC LIMIT 3`,
-        [localDate, c.id, localDate]
-      );
+      // Ledger basis, NOT `amount - paidAmount`. Payment allocation drifts — the
+      // aging reports refuse to use it — so quoting it here reported money that
+      // had already been banked, and named parties who owed nothing.
+      const rows = await loadReceivableAging(c.id, new Date(`${localDate}T00:00:00`));
+      const sum = summariseReceivable(rows);
+      overdue = { n: sum.overdueCount, amt: sum.overdueAmount };
+      sales = { n: sum.dueTodayCount, amt: sum.dueTodayAmount };
+      worst = sum.worst.map((w) => ({ nm: w.name, amt: w.amount, days: w.days }));
     } catch { /* table may be absent */ }
     try {
-      const r = await qOne(
-        `SELECT COUNT(*) AS n, COALESCE(SUM(\`amount\` - \`paidAmount\`), 0) AS amt
-           FROM \`PurchaseInvoice\`
+      // Payable side: what we owe on the same ledger basis.
+      const bal = await loadPartyBalances(c.id);
+      let amt = 0;
+      for (const [, p] of bal) { const v = sideBalance(p, 'PAYABLE'); if (v > 0.01) amt += v; }
+      const n = await qOne(
+        `SELECT COUNT(*) AS n FROM \`PurchaseInvoice\`
           WHERE \`companyId\` = ? AND \`status\` <> 'PAID'
-            AND \`dueDate\` IS NOT NULL AND DATE(\`dueDate\`) = ?`,
+            AND \`dueDate\` IS NOT NULL AND DATE(\`dueDate\`) <= ?`,
         [c.id, localDate]
       );
-      purch = { n: Number(r?.n ?? 0), amt: Number(r?.amt ?? 0) };
+      purch = { n: Number(n?.n ?? 0), amt: round2(amt) };
     } catch { /* dueDate/table may be absent */ }
 
-    if (sales.n + purch.n + overdue.n === 0) continue;
+    if (sales.n + overdue.n === 0 && purch.amt <= 0.01) continue;
     const parts = [];
     if (overdue.n) parts.push(`${overdue.n} OVERDUE (${inr(overdue.amt)})`);
     if (sales.n) parts.push(`${sales.n} due today (${inr(sales.amt)})`);
-    if (purch.n) parts.push(`${purch.n} purchase (${inr(purch.amt)}) to pay`);
+    if (purch.amt > 0.01) parts.push(`payable ${inr(purch.amt)}`);
     // Who to chase, longest-overdue amount first.
     if (worst.length) {
       parts.push(worst.map((w) => `${w.nm} ${inr(Number(w.amt))} (${Number(w.days)}d)`).join(', '));
