@@ -7,6 +7,7 @@ import { asyncHandler } from '../lib/errors.js';
 import { requireAuth, requireRole } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 import { saveSubscription, removeSubscription, broadcastToCompany, notifyCompanyAdmins } from '../lib/push.js';
+import { buildInvoiceDueNotification, sendInvoiceDueReminder } from '../lib/reminders.js';
 
 const router = Router();
 
@@ -57,9 +58,32 @@ router.post('/broadcast', requireRole('COMPANY_ADMIN'), asyncHandler(async (req,
   const payload = z.object({
     title: z.string().min(1).max(80),
     body: z.string().min(1).max(240),
-    url: z.string().url().optional(),
+    // Relative in-app paths are the normal case ("/s/admin/sales-invoices");
+    // requiring a fully-qualified URL made the field unusable.
+    url: z.string().trim().max(300).refine((v) => v.startsWith('/') || /^https?:\/\//.test(v),
+      { message: 'Use an in-app path like /s/admin/sales-invoices, or a full https:// URL' }).optional(),
+    audience: z.enum(['ADMINS', 'EVERYONE']).default('EVERYONE'),
   }).parse(req.body);
-  res.json(await broadcastToCompany(req.tenant.companyId, payload));
+
+  const { audience, ...msg } = payload;
+  if (audience === 'ADMINS') {
+    const r = await notifyCompanyAdmins(req.tenant.companyId, { type: 'INFO', ...msg });
+    return res.json({ sent: r?.sent ?? 0, admins: r?.admins ?? 0, audience });
+  }
+  res.json({ ...(await broadcastToCompany(req.tenant.companyId, { type: 'INFO', ...msg })), audience });
+}));
+
+/* ---------- Outstanding-invoice reminder, on demand ----------
+   Same builder the 9am sweep uses, so the figures are identical. `preview`
+   returns what WOULD be sent without notifying anyone — worth being able to
+   check a money figure before it reaches everyone's phone. */
+router.get('/reminder-preview', requireRole('COMPANY_ADMIN'), asyncHandler(async (req, res) => {
+  const payload = await buildInvoiceDueNotification(req.tenant.companyId);
+  res.json({ payload });
+}));
+
+router.post('/send-reminder', requireRole('COMPANY_ADMIN'), asyncHandler(async (req, res) => {
+  res.json(await sendInvoiceDueReminder(req.tenant.companyId));
 }));
 
 export default router;

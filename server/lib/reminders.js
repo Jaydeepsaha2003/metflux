@@ -67,10 +67,12 @@ const runProductionReminder = async (localDate) => {
 };
 
 // ── Job: invoices due today ──
-const runInvoiceDueReminder = async (localDate) => {
-  if (!(await claim(`invdue:${localDate}`))) return;
-  const companies = await activeCompanies();
-  for (const c of companies) {
+/** The notification for ONE company, or null when there is nothing to say.
+ *  Exported so a manual "send now" quotes identical figures to the daily sweep —
+ *  two code paths would eventually disagree. */
+export const buildInvoiceDueNotification = async (companyId, localDate) => {
+  {
+    const c = { id: companyId };
     let sales = { n: 0, amt: 0 };
     let purch = { n: 0, amt: 0 };
     let overdue = { n: 0, amt: 0 };
@@ -99,7 +101,7 @@ const runInvoiceDueReminder = async (localDate) => {
       purch = { n: Number(n?.n ?? 0), amt: round2(amt) };
     } catch { /* dueDate/table may be absent */ }
 
-    if (sales.n + overdue.n === 0 && purch.amt <= 0.01) continue;
+    if (sales.n + overdue.n === 0 && purch.amt <= 0.01) return null;
     const parts = [];
     if (overdue.n) parts.push(`${overdue.n} OVERDUE (${inr(overdue.amt)})`);
     if (sales.n) parts.push(`${sales.n} due today (${inr(sales.amt)})`);
@@ -108,7 +110,7 @@ const runInvoiceDueReminder = async (localDate) => {
     if (worst.length) {
       parts.push(worst.map((w) => `${w.nm} ${inr(Number(w.amt))} (${Number(w.days)}d)`).join(', '));
     }
-    await notifyCompanyAdmins(c.id, {
+    return {
       type: 'DUE',
       // Overdue is the more urgent fact, so it leads.
       title: overdue.n ? `${overdue.n} invoice${overdue.n === 1 ? '' : 's'} overdue — ${inr(overdue.amt)}` : 'Invoices due today',
@@ -116,7 +118,23 @@ const runInvoiceDueReminder = async (localDate) => {
       url: overdue.n ? '/s/admin/sales-invoices?due=overdue'
         : sales.n ? '/s/admin/sales-invoices?due=today' : '/s/admin/accounts/creditor-aging',
       tag: 'invoice-due',
-    }).catch(() => {});
+    };
+  }
+};
+
+/** Send it for one company on demand (no claim guard — the caller asked). */
+export const sendInvoiceDueReminder = async (companyId, localDate = localParts().date) => {
+  const payload = await buildInvoiceDueNotification(companyId, localDate);
+  if (!payload) return { sent: 0, payload: null };
+  const r = await notifyCompanyAdmins(companyId, payload).catch(() => ({ sent: 0, admins: 0 }));
+  return { sent: r?.sent ?? 0, admins: r?.admins ?? 0, payload };
+};
+
+const runInvoiceDueReminder = async (localDate) => {
+  if (!(await claim(`invdue:${localDate}`))) return;
+  for (const c of await activeCompanies()) {
+    const payload = await buildInvoiceDueNotification(c.id, localDate);
+    if (payload) await notifyCompanyAdmins(c.id, payload).catch(() => {});
   }
   console.log('[reminders] invoice-due sweep done');
 };
