@@ -230,7 +230,7 @@ export const DashboardPage = () => {
               amount={fmtCompactMoney(stats.salesOrders.amount)}
               split={{ toroidal: stats.salesOrders.toroidalPcs, rectangular: stats.salesOrders.rectangularPcs }}
               info="Pcs from active Sales Orders created within the selected date range. Use the date filter above to change the period."
-              to={`/po/summary${drillQuery()}`} drillLabel="Open SO Summary"
+              to={`/po/summary?status=ACTIVE${drillQuery().replace('?', '&')}`} drillLabel="Open SO Summary"
             />
             <KpiCard
               icon={Factory} accent="amber"
@@ -248,7 +248,7 @@ export const DashboardPage = () => {
               meta={`${stats.readyDispatch.kg.toFixed(1)} kg`}
               amount={fmtCompactMoney(stats.readyDispatch.amount)}
               info="Pcs produced but not yet dispatched — across ALL Sales Orders regardless of date. These are ready to ship right now."
-              to={`/po/summary${drillQuery({ dates: false })}`} drillLabel="See what is ready"
+              to={`/po/summary?status=ACTIVE${drillQuery({ dates: false }).replace('?', '&')}`} drillLabel="See what is ready"
             />
             <KpiCard
               icon={Truck} accent="indigo"

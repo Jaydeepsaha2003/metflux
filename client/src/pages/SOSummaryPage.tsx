@@ -62,7 +62,16 @@ type Aggregates = {
   pcsPending: number;
 };
 
-type Status = 'ACTIVE' | 'CANCELLED' | 'ALL';
+// OPEN/COMPLETED are quantity states (is anything still pending?); CANCELLED
+// is the line's lifecycle flag. ACTIVE (= not cancelled, regardless of pending)
+// is still accepted so a Dashboard card can drill to the slice it counted.
+type Status = 'OPEN' | 'COMPLETED' | 'ACTIVE' | 'CANCELLED' | 'ALL';
+const STATUS_TABS = ['OPEN', 'COMPLETED', 'CANCELLED', 'ALL'] as const;
+const STATUS_LABEL: Record<Status, string> = {
+  OPEN: 'Open', COMPLETED: 'Completed', ACTIVE: 'Active', CANCELLED: 'Cancelled', ALL: 'All',
+};
+const isStatus = (v: string | null): v is Status =>
+  v === 'OPEN' || v === 'COMPLETED' || v === 'ACTIVE' || v === 'CANCELLED' || v === 'ALL';
 
 const fmtDate = (iso: string | null | undefined) => {
   if (!iso) return '—';
@@ -125,13 +134,14 @@ const groupByPo = (items: SummaryItem[]): PoGroup[] => {
 export const SOSummaryPage = () => {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<Status>('ACTIVE');
   const hideNames = useHideCustomerNames();
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set()); // item test panels
   const [expandedPos, setExpandedPos] = useState<Set<string>>(new Set());     // PO groups
   // Seeded from the URL so a Dashboard KPI card lands on the same slice it
   // counted, rather than the page's own defaults.
   const [sp] = useSearchParams();
+  const urlStatus = sp.get('status');
+  const [status, setStatus] = useState<Status>(isStatus(urlStatus) ? urlStatus : 'OPEN');
   const [from, setFrom] = useState(sp.get('from') ?? '');
   const [to, setTo] = useState(sp.get('to') ?? '');
   const customerId = sp.get('customerId') ?? '';
@@ -214,7 +224,8 @@ export const SOSummaryPage = () => {
   });
 
   /* Export the currently-filtered SO items to a styled, PO-grouped workbook.
-     On the Active tab this pulls active items only (status follows the tab).
+     Every on-screen filter is passed through — tab, search, date range and
+     customer — so the workbook is exactly the rows the user is looking at.
      Detail rows are nested one Excel outline level under each PO summary row,
      so the sheet can be grouped/ungrouped by PO with the +/- controls. */
   const [exporting, setExporting] = useState(false);
@@ -223,7 +234,7 @@ export const SOSummaryPage = () => {
     setExporting(true);
     try {
       const all = await api<{ items: SummaryItem[] }>(
-        `/po-orders/summary?status=${status}&page=1&pageSize=10000${search ? `&search=${encodeURIComponent(search)}` : ''}`
+        `/po-orders/summary?status=${status}&page=1&pageSize=10000${search ? `&search=${encodeURIComponent(search)}` : ''}${from ? `&from=${from}` : ''}${to ? `&to=${to}` : ''}${customerId ? `&customerId=${customerId}` : ''}`
       );
       const exportGroups = groupByPo(all.items);
       const pend = (it: SummaryItem) => ({
@@ -309,7 +320,7 @@ export const SOSummaryPage = () => {
 
       {/* Status chips + server-side aggregate counts */}
       <div className="flex flex-wrap items-center gap-2">
-        {(['ACTIVE', 'CANCELLED', 'ALL'] as const).map((s) => (
+        {(status === 'ACTIVE' ? (['ACTIVE', ...STATUS_TABS] as const) : STATUS_TABS).map((s) => (
           <button
             key={s}
             onClick={() => setStatus(s)}
@@ -320,7 +331,7 @@ export const SOSummaryPage = () => {
                 : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
             )}
           >
-            {s.charAt(0) + s.slice(1).toLowerCase()}
+            {STATUS_LABEL[s]}
           </button>
         ))}
         {aggregates && (
@@ -410,7 +421,7 @@ export const SOSummaryPage = () => {
                         </span>
                       </td>
                       <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
-                        {status === 'ACTIVE' && group.totalPending > 0 && (
+                        {status !== 'CANCELLED' && group.totalPending > 0 && (
                           <button
                             type="button"
                             onClick={() => setPrecloseTarget(group)}
@@ -570,7 +581,7 @@ export const SOSummaryPage = () => {
                       <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
                         {group.items.length} item{group.items.length !== 1 ? 's' : ''}
                       </span>
-                      {status === 'ACTIVE' && group.totalPending > 0 && (
+                      {status !== 'CANCELLED' && group.totalPending > 0 && (
                         <button
                           type="button"
                           onClick={() => setPrecloseTarget(group)}

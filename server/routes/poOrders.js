@@ -289,6 +289,10 @@ const flattenItem = (it) => {
 
 // SQL that returns each PoOrderItem row joined with its parent + customer
 // plus pcsProduced / pcsDispatched aggregated via correlated subqueries.
+// Pieces produced against one line. Kept as a named expression because the
+// summary filters on it (Open vs Completed) as well as selecting it.
+const PRODUCED_SQ = '(SELECT COALESCE(SUM(p.`pcs`),0) FROM `Production` p WHERE p.`poOrderItemId` = it.`id`)';
+
 const itemRowSql = `
   SELECT it.*,
          po.\`poNumber\`     AS poNumber,
@@ -514,7 +518,7 @@ router.get('/summary', requirePermission('po_summary'), asyncHandler(async (req,
     // one request) works without paging. Normal browsing uses pageSize=20.
     pageSize: z.coerce.number().int().min(1).max(10000).default(50),
     search: z.string().trim().max(120).optional(),
-    status: z.enum(['ACTIVE', 'CANCELLED', 'ALL']).default('ACTIVE'),
+    status: z.enum(['OPEN', 'COMPLETED', 'ACTIVE', 'CANCELLED', 'ALL']).default('ACTIVE'),
     from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     customerId: z.string().min(1).optional(),
@@ -523,7 +527,17 @@ router.get('/summary', requirePermission('po_summary'), asyncHandler(async (req,
 
   let where = 'po.`companyId` = ?';
   const params = [req.tenant.companyId];
-  if (status !== 'ALL') { where += ' AND it.`status` = ?'; params.push(status); }
+  // OPEN/COMPLETED split live lines by whether anything is still to be made.
+  // Pending is `pcs - produced`, so "still open" is exactly `pcs > produced`.
+  // Neither branch binds a parameter, so the count and totals queries below can
+  // reuse `where`/`params` unchanged.
+  if (status === 'OPEN') {
+    where += ` AND it.\`status\` = 'ACTIVE' AND it.\`pcs\` > ${PRODUCED_SQ}`;
+  } else if (status === 'COMPLETED') {
+    where += ` AND it.\`status\` = 'ACTIVE' AND it.\`pcs\` <= ${PRODUCED_SQ}`;
+  } else if (status !== 'ALL') {
+    where += ' AND it.`status` = ?'; params.push(status);
+  }
   if (from) { where += ' AND DATE(po.`orderDate`) >= ?'; params.push(from); }
   if (to) { where += ' AND DATE(po.`orderDate`) <= ?'; params.push(to); }
   if (customerId) { where += ' AND po.`customerId` = ?'; params.push(customerId); }
