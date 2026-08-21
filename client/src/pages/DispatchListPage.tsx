@@ -1,12 +1,13 @@
 // All dispatch records — flat table with search and per-row edit/delete.
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Pencil, Trash2, Truck, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
 import { Pagination } from '@/components/Pagination';
+import { DateRangeFilter } from '@/components/DateRangeFilter';
 import { useHideCustomerNames } from '@/store/auth';
 
 type Row = {
@@ -39,16 +40,20 @@ export const DispatchListPage = () => {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<'date' | 'customer'>('date');
+  const [sp] = useSearchParams();
+  const [from, setFrom] = useState(sp.get('from') ?? '');
+  const [to, setTo] = useState(sp.get('to') ?? '');
+  const customerId = sp.get('customerId') ?? '';
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const changePageSize = (n: number) => { setPageSize(n); setPage(1); };
-  useEffect(() => { setPage(1); }, [search, sort]);
+  useEffect(() => { setPage(1); }, [search, sort, from, to]);
   const queryClient = useQueryClient();
   const hideNames = useHideCustomerNames();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['dispatch', search, page, pageSize, sort],
-    queryFn: () => api<ListResp>(`/dispatch?search=${encodeURIComponent(search)}&page=${page}&pageSize=${pageSize}&sort=${sort}`),
+    queryKey: ['dispatch', search, page, pageSize, sort, from, to, customerId],
+    queryFn: () => api<ListResp>(`/dispatch?search=${encodeURIComponent(search)}&page=${page}&pageSize=${pageSize}&sort=${sort}${from ? `&from=${from}` : ''}${to ? `&to=${to}` : ''}${customerId ? `&customerId=${customerId}` : ''}`),
   });
 
   const remove = useMutation({
@@ -79,6 +84,7 @@ export const DispatchListPage = () => {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
+          <DateRangeFilter from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} label="Filter dispatch by date" />
           <div className="ml-auto flex items-center gap-2">
             <div className="flex items-center gap-1.5 text-xs text-slate-500">
               <span className="hidden sm:inline">Sort by</span>

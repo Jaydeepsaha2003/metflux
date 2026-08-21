@@ -99,19 +99,23 @@ const flattenReturn = (r, itemRows = []) => ({
 
 /* GET / — paginated */
 router.get('/', requireAnyPermission('manage_returns', 'dispatch'), asyncHandler(async (req, res) => {
-  const { page, pageSize, search, status } = z.object({
+  const { page, pageSize, search, status, from, to } = z.object({
     page:     z.coerce.number().int().min(1).default(1),
     // Generous cap so the "Excel" button (pulls every filtered row at once)
     // works without paging. Normal browsing uses pageSize=20.
     pageSize: z.coerce.number().int().min(1).max(10000).default(50),
     search:   z.string().trim().max(120).optional(),
     status:   z.enum(['PENDING','RECEIVED','IN_REWORK','REDISPATCHED','CLOSED','CANCELLED','ALL']).default('ALL'),
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   }).parse(req.query);
   const skip = (page - 1) * pageSize;
 
   let where = 'r.`companyId` = ?';
   const params = [req.tenant.companyId];
   if (status !== 'ALL') { where += ' AND r.`status` = ?'; params.push(status); }
+  if (from) { where += ' AND DATE(r.`returnDate`) >= ?'; params.push(from); }
+  if (to) { where += ' AND DATE(r.`returnDate`) <= ?'; params.push(to); }
   if (search) {
     const like = `%${search}%`;
     where += ` AND (

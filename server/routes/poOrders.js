@@ -508,19 +508,25 @@ router.post('/:id/preclose', requirePermission('add_po'), asyncHandler(async (re
 
 /* GET /api/po-orders/summary */
 router.get('/summary', requirePermission('po_summary'), asyncHandler(async (req, res) => {
-  const { page, pageSize, search, status } = z.object({
+  const { page, pageSize, search, status, from, to, customerId } = z.object({
     page: z.coerce.number().int().min(1).default(1),
     // Cap is generous so the "Excel" button (which pulls every filtered row in
     // one request) works without paging. Normal browsing uses pageSize=20.
     pageSize: z.coerce.number().int().min(1).max(10000).default(50),
     search: z.string().trim().max(120).optional(),
     status: z.enum(['ACTIVE', 'CANCELLED', 'ALL']).default('ACTIVE'),
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    customerId: z.string().min(1).optional(),
   }).parse(req.query);
   const skip = (page - 1) * pageSize;
 
   let where = 'po.`companyId` = ?';
   const params = [req.tenant.companyId];
   if (status !== 'ALL') { where += ' AND it.`status` = ?'; params.push(status); }
+  if (from) { where += ' AND DATE(po.`orderDate`) >= ?'; params.push(from); }
+  if (to) { where += ' AND DATE(po.`orderDate`) <= ?'; params.push(to); }
+  if (customerId) { where += ' AND po.`customerId` = ?'; params.push(customerId); }
   if (search) {
     const like = `%${search}%`;
     where += ' AND (po.`poNumber` LIKE ? OR c.`name` LIKE ? OR it.`grade` LIKE ? OR it.`material` LIKE ? OR it.`measure` LIKE ?)';

@@ -1,13 +1,14 @@
 // Returns list — shows all customer returns with their lifecycle status.
 // Mobile: cards. Desktop: table. Filters by status + free-text search.
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, Plus, Loader2, Pencil, Trash2, RotateCcw, Download } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
 import { Pagination } from '@/components/Pagination';
+import { DateRangeFilter } from '@/components/DateRangeFilter';
 import { downloadXlsx, todayStamp } from '@/lib/excel';
 
 type ReturnStatus = 'PENDING' | 'RECEIVED' | 'IN_REWORK' | 'REDISPATCHED' | 'CLOSED' | 'CANCELLED';
@@ -65,16 +66,19 @@ export const ReturnsListPage = () => {
   const { confirm, alert, confirmDialog } = useConfirm();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<'ALL' | ReturnStatus>('ALL');
+  const [sp] = useSearchParams();
+  const [from, setFrom] = useState(sp.get('from') ?? '');
+  const [to, setTo] = useState(sp.get('to') ?? '');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const changePageSize = (n: number) => { setPageSize(n); setPage(1); };
-  useEffect(() => { setPage(1); }, [search, status]);
+  useEffect(() => { setPage(1); }, [search, status, from, to]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['returns', search, status, page, pageSize],
+    queryKey: ['returns', search, status, page, pageSize, from, to],
     queryFn: () =>
       api<{ items: ReturnRow[]; total: number }>(
-        `/returns?status=${status}&page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}`,
+        `/returns?status=${status}&page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}${from ? `&from=${from}` : ''}${to ? `&to=${to}` : ''}`,
       ),
   });
 
@@ -156,6 +160,7 @@ export const ReturnsListPage = () => {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        <DateRangeFilter from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} label="Filter returns by date" />
         <select
           className="input sm:w-44"
           value={status}

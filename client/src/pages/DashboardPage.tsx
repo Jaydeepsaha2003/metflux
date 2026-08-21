@@ -1,10 +1,11 @@
 // Dashboard — KPIs + employee performance table.
 // Mobile-first: KPI cards stack 2-up on phones, tables become cards.
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Factory, Truck, Package, RotateCcw, FileText, Users2, Trophy, Loader2,
-  CalendarRange, RotateCw, User, TrendingUp,
+  CalendarRange, RotateCw, User, TrendingUp, ArrowUpRight,
 } from 'lucide-react';
 import { useAuthStore, activeMembership, useHideCustomerNames } from '@/store/auth';
 import { api } from '@/lib/api';
@@ -116,6 +117,18 @@ export const DashboardPage = () => {
   const [customerId, setCustomerId] = useState('');
   const [empSearch, setEmpSearch] = useState('');
 
+  /* Drill-down links carry the dashboard's own filters, so the target page opens
+     on exactly the slice the card counted rather than its own defaults. Cards
+     whose figure is deliberately all-time (backlog, ready-to-dispatch, returns)
+     pass no dates — filtering those by order date would contradict the number. */
+  const drillQuery = (opts: { dates?: boolean } = {}) => {
+    const q = new URLSearchParams();
+    if (opts.dates !== false) { if (from) q.set('from', from); if (to) q.set('to', to); }
+    if (customerId) q.set('customerId', customerId);
+    const qs = q.toString();
+    return qs ? `?${qs}` : '';
+  };
+
   const activePreset = detectPreset(from, to);
   const applyPreset = (p: typeof PRESETS[number]) => {
     setFrom(p.from());
@@ -201,13 +214,14 @@ export const DashboardPage = () => {
         <h2 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
           <span className="inline-block h-3.5 w-1 rounded-sm bg-brand-400" />
           Key metrics
+          <span className="ml-1 font-normal normal-case tracking-normal text-slate-400">— tap a card to drill in</span>
         </h2>
         {loadingStats ? (
           <div className="card flex items-center justify-center gap-2 py-8 text-slate-400">
             <Loader2 className="h-5 w-5 animate-spin" /> Loading…
           </div>
         ) : !stats ? null : (
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-5">
             <KpiCard
               icon={FileText} accent="brand"
               label="Sales orders"
@@ -216,6 +230,7 @@ export const DashboardPage = () => {
               amount={fmtCompactMoney(stats.salesOrders.amount)}
               split={{ toroidal: stats.salesOrders.toroidalPcs, rectangular: stats.salesOrders.rectangularPcs }}
               info="Pcs from active Sales Orders created within the selected date range. Use the date filter above to change the period."
+              to={`/po/summary${drillQuery()}`} drillLabel="Open SO Summary"
             />
             <KpiCard
               icon={Factory} accent="amber"
@@ -224,6 +239,7 @@ export const DashboardPage = () => {
               meta={`${stats.pendingProduction.kg.toFixed(1)} kg`}
               amount={fmtCompactMoney(stats.pendingProduction.amount)}
               info="Total pcs not yet produced — across ALL Sales Orders regardless of date. This is your current full production backlog."
+              to={`/po/summary${drillQuery({ dates: false })}`} drillLabel="See the backlog"
             />
             <KpiCard
               icon={Package} accent="blue"
@@ -232,6 +248,7 @@ export const DashboardPage = () => {
               meta={`${stats.readyDispatch.kg.toFixed(1)} kg`}
               amount={fmtCompactMoney(stats.readyDispatch.amount)}
               info="Pcs produced but not yet dispatched — across ALL Sales Orders regardless of date. These are ready to ship right now."
+              to={`/po/summary${drillQuery({ dates: false })}`} drillLabel="See what is ready"
             />
             <KpiCard
               icon={Truck} accent="indigo"
@@ -240,6 +257,7 @@ export const DashboardPage = () => {
               meta={`${stats.dispatched.kg.toFixed(1)} kg`}
               amount={fmtCompactMoney(stats.dispatched.amount)}
               info="Pcs dispatched within the selected date range. Use the date filter above to change the period."
+              to={`/dispatch${drillQuery()}`} drillLabel="Open dispatch records"
             />
             <KpiCard
               icon={RotateCcw} accent={stats.openReturns ? 'rose' : 'slate'}
@@ -248,6 +266,7 @@ export const DashboardPage = () => {
               status={stats.openReturns ? 'Need attention' : 'All clear'}
               statusTone={stats.openReturns ? 'warn' : 'ok'}
               info="Total open return requests — across all time, not filtered by date."
+              to="/returns" drillLabel="View returns"
             />
           </div>
         )}
@@ -579,7 +598,7 @@ const InfoTip = ({ text }: { text: string }) => {
 };
 
 const KpiCard = ({
-  icon: Icon, label, primary, amount, meta, status, statusTone = 'ok', accent = 'slate', info, split,
+  icon: Icon, label, primary, amount, meta, status, statusTone = 'ok', accent = 'slate', info, split, to, drillLabel,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
@@ -593,21 +612,31 @@ const KpiCard = ({
   info?: string;
   /** Toroidal / Rectangular pcs breakdown shown as small tags. */
   split?: { toroidal: number; rectangular: number };
+  /** Drill-down target, already carrying the dashboard's filters. */
+  to?: string;
+  /** What the drill-down will show, for the aria-label and hover hint. */
+  drillLabel?: string;
 }) => (
-  <div className="card relative flex flex-col p-4 pt-[18px]">
-    <span className={cn('absolute inset-x-0 top-0 h-1 rounded-t-xl', TOP_BARS[accent])} />
-    <div className="flex items-center gap-2">
-      <div className={cn('grid h-8 w-8 place-items-center rounded-lg ring-1 shrink-0', ACCENTS[accent])}>
-        <Icon className="h-4 w-4" />
+  <div className={cn('card group relative flex flex-col overflow-hidden p-0 transition-shadow duration-200 motion-reduce:transition-none',
+    to && 'hover:shadow-md focus-within:shadow-md')}>
+    <span className={cn('absolute inset-x-0 top-0 z-10 h-1', TOP_BARS[accent])} />
+    {/* The (i) sits outside the link: a button inside an anchor is invalid
+        markup and would hijack the card's tab stop. */}
+    {info && <span className="absolute right-3 top-[18px] z-20"><InfoTip text={info} /></span>}
+
+    <Wrap to={to} label={drillLabel ? `${label}: ${primary}. ${drillLabel}` : undefined}>
+      <div className="flex items-center gap-2 pr-7">
+        <div className={cn('grid h-8 w-8 place-items-center rounded-lg ring-1 shrink-0 transition-colors',
+          ACCENTS[accent])}>
+          <Icon className="h-4 w-4" />
+        </div>
+        <div className="min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+          {label}
+        </div>
       </div>
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 truncate flex-1 min-w-0">
-        {label}
+      <div className="mt-3 text-[22px] font-bold leading-none tracking-tight text-slate-900 tabular-nums sm:text-2xl">
+        {primary}
       </div>
-      {info && <InfoTip text={info} />}
-    </div>
-    <div className="mt-2.5 text-xl font-bold tracking-tight text-slate-900 tabular-nums leading-tight">
-      {primary}
-    </div>
     {split && (split.toroidal > 0 || split.rectangular > 0) && (
       <div className="mt-1 flex items-center gap-1.5 flex-wrap">
         {split.toroidal > 0 && (
@@ -622,7 +651,7 @@ const KpiCard = ({
         )}
       </div>
     )}
-    <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
+    <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-2.5">
       {amount && (
         <span className={cn(
           'inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1',
@@ -641,8 +670,32 @@ const KpiCard = ({
       )}
       {meta && <span className="text-[10px] text-slate-500 tabular-nums">{meta}</span>}
     </div>
+
+      {/* Affordance that appears on hover/focus. Colour + opacity only — a
+          scale transform here would nudge the figures and read as jitter. */}
+      {to && (
+        <span className="mt-2 inline-flex items-center gap-1 text-[10px] font-semibold text-slate-400 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none">
+          {drillLabel ?? 'View details'} <ArrowUpRight className="h-3 w-3" />
+        </span>
+      )}
+    </Wrap>
   </div>
 );
+
+/* A KPI card is a link when it can drill down, and a plain box when it can't —
+   so only the ones that actually navigate take a tab stop or show a pointer. */
+const Wrap = ({ to, label, children }: { to?: string; label?: string; children: React.ReactNode }) =>
+  to ? (
+    <Link
+      to={to}
+      aria-label={label}
+      className="flex min-h-[112px] flex-col rounded-xl p-4 pt-[18px] transition-colors duration-200 hover:bg-slate-50/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 motion-reduce:transition-none"
+    >
+      {children}
+    </Link>
+  ) : (
+    <div className="flex min-h-[112px] flex-col p-4 pt-[18px]">{children}</div>
+  );
 
 /* ── MonthlyChart — pure SVG bar + line chart ── */
 const MonthlyChart = ({ data }: { data: MonthlyPoint[] }) => {

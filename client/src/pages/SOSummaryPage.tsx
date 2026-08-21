@@ -5,6 +5,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import {
   Search, Loader2, BarChart3, Eye, EyeOff, FileText, Activity,
   Download, ChevronDown, ChevronRight, Pencil, Trash2, RotateCcw, LockKeyhole,
@@ -12,6 +13,7 @@ import {
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { Pagination } from '@/components/Pagination';
+import { DateRangeFilter } from '@/components/DateRangeFilter';
 import { todayStamp } from '@/lib/excel';
 import { downloadGroupedXlsx, type Cell } from '@/lib/xlsxGrouped';
 import { useHideCustomerNames } from '@/store/auth';
@@ -127,19 +129,25 @@ export const SOSummaryPage = () => {
   const hideNames = useHideCustomerNames();
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set()); // item test panels
   const [expandedPos, setExpandedPos] = useState<Set<string>>(new Set());     // PO groups
+  // Seeded from the URL so a Dashboard KPI card lands on the same slice it
+  // counted, rather than the page's own defaults.
+  const [sp] = useSearchParams();
+  const [from, setFrom] = useState(sp.get('from') ?? '');
+  const [to, setTo] = useState(sp.get('to') ?? '');
+  const customerId = sp.get('customerId') ?? '';
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const changePageSize = (n: number) => { setPageSize(n); setPage(1); };
   const [deleteTarget, setDeleteTarget] = useState<SummaryItem | null>(null);
   const [restoreTarget, setRestoreTarget] = useState<SummaryItem | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  useEffect(() => { setPage(1); }, [search, status]);
+  useEffect(() => { setPage(1); }, [search, status, from, to]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['po-summary', search, status, page, pageSize],
+    queryKey: ['po-summary', search, status, page, pageSize, from, to, customerId],
     queryFn: () =>
       api<{ items: SummaryItem[]; total: number; aggregates: Aggregates }>(
-        `/po-orders/summary?status=${status}&page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}`
+        `/po-orders/summary?status=${status}&page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}${from ? `&from=${from}` : ''}${to ? `&to=${to}` : ''}${customerId ? `&customerId=${customerId}` : ''}`
       ),
   });
 
@@ -276,7 +284,8 @@ export const SOSummaryPage = () => {
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
           <BarChart3 className="h-5 w-5 text-brand-600" /> SO Summary
         </h1>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <DateRangeFilter from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} label="Filter orders by date" />
           <div className="relative flex-1 sm:w-72">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input

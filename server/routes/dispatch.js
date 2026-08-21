@@ -183,7 +183,7 @@ router.get('/ready', requirePermission('dispatch'), asyncHandler(async (req, res
 
 /* GET / — paginated list */
 router.get('/', requirePermission('dispatch'), asyncHandler(async (req, res) => {
-  const { page, pageSize, search, sort } = z.object({
+  const { page, pageSize, search, sort, from, to, customerId } = z.object({
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(200).default(50),
     search: z.string().trim().max(120).optional(),
@@ -191,11 +191,17 @@ router.get('/', requirePermission('dispatch'), asyncHandler(async (req, res) => 
     // together, newest first within each — so same-customer/same-day rows sit
     // next to each other).
     sort: z.enum(['date', 'customer']).default('date'),
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    customerId: z.string().min(1).optional(),
   }).parse(req.query);
   const skip = (page - 1) * pageSize;
 
   let where = 'd.`companyId` = ?';
   const params = [req.tenant.companyId];
+  if (from) { where += ' AND DATE(d.`dispatchDate`) >= ?'; params.push(from); }
+  if (to) { where += ' AND DATE(d.`dispatchDate`) <= ?'; params.push(to); }
+  if (customerId) { where += ' AND po.`customerId` = ?'; params.push(customerId); }
   if (search) {
     const like = `%${search}%`;
     where += ' AND (d.`vehicleNo` LIKE ? OR po.`poNumber` LIKE ? OR c.`name` LIKE ? OR it.`grade` LIKE ? OR it.`material` LIKE ? OR it.`measure` LIKE ?)';
