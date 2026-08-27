@@ -117,6 +117,24 @@ const ActionButton = ({ label, hint, icon, onClick, disabled, tone }: {
   </button>
 );
 
+type StoreResult = {
+  stored: number;
+  skipped: number;
+  duplicates?: number;
+  rowsRead?: number;
+  receiptTotal?: number;
+  paymentTotal?: number;
+  undated?: number;
+  continuationRows?: number;
+  check?: {
+    statedOpening: number | null;
+    statedClosing: number;
+    computedClosing: number;
+    difference: number;
+    matches: boolean;
+  } | null;
+};
+
 export const ReceiptsPaymentsPage = () => {
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -134,7 +152,7 @@ export const ReceiptsPaymentsPage = () => {
   const [rcvOn, setRcvOn] = useState<Record<string, boolean>>({});
   const [payOn, setPayOn] = useState<Record<string, boolean>>({});
   const [result, setResult] = useState<PostResult | null>(null);
-  const [storeResult, setStoreResult] = useState<{ stored: number; skipped: number } | null>(null);
+  const [storeResult, setStoreResult] = useState<StoreResult | null>(null);
 
   /* Which account the book is being viewed / imported against. '' = all accounts. */
   const [bankId, setBankId] = useState('');
@@ -188,7 +206,7 @@ export const ReceiptsPaymentsPage = () => {
       // Store the whole book against the chosen bank account (duplicates skipped),
       // then post the allocations.
       const store = rows
-        ? await api<{ stored: number; skipped: number }>('/cashbook/store', { method: 'POST', json: { rows, bankAccountId: importTarget?.id } })
+        ? await api<StoreResult>('/cashbook/store', { method: 'POST', json: { rows, bankAccountId: importTarget?.id } })
         : { stored: 0, skipped: 0 };
       const post = await api<PostResult>('/receipts-payments/post', {
         method: 'POST',
@@ -443,6 +461,26 @@ export const ReceiptsPaymentsPage = () => {
                 <div className="mt-1">
                   Cashbook: {storeResult.stored} new entr{storeResult.stored === 1 ? 'y' : 'ies'} stored
                   {storeResult.skipped > 0 && <> · <b>{storeResult.skipped} duplicate{storeResult.skipped === 1 ? '' : 's'} skipped</b></>}.
+                </div>
+              )}
+              {/* The book states its own opening and closing balance. Proving the
+                  import against them is the only way the user learns that a file
+                  was misread — a silently wrong balance looks exactly like a
+                  correct one. */}
+              {storeResult?.check && (
+                <div className={cn('mt-1.5 rounded border px-2 py-1.5 font-sans',
+                  storeResult.check.matches
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                    : 'border-red-300 bg-red-50 text-red-800')}>
+                  <b>{storeResult.check.matches ? 'Balance verified against the file' : 'Balance does NOT match the file'}</b>
+                  <div className="mt-0.5 tabular-nums">
+                    Opening {inr(storeResult.check.statedOpening ?? 0)} + receipts {inr(storeResult.receiptTotal ?? 0)} − payments {inr(storeResult.paymentTotal ?? 0)} = <b>{inr(storeResult.check.computedClosing)}</b>
+                    {' · '}the file says <b>{inr(storeResult.check.statedClosing)}</b>
+                    {!storeResult.check.matches && <> · <b>off by {inr(Math.abs(storeResult.check.difference))}</b></>}
+                  </div>
+                  {!storeResult.check.matches && (
+                    <div className="mt-0.5">Do not rely on these figures until the difference is explained.</div>
+                  )}
                 </div>
               )}
               {result.errors.length > 0 && (

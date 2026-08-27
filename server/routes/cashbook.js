@@ -196,9 +196,10 @@ router.post('/store', requireAnyPermission(...PERM), asyncHandler(async (req, re
     rows: z.array(z.array(z.any())).max(50000),
     bankAccountId: z.string().min(1).optional(),
   }).parse(req.body);
-  const { entries } = parseBankBook(rows);
+  const parsed = parseBankBook(rows);
+  const { entries } = parsed;
   const companyId = req.tenant.companyId;
-  if (!entries.length) return res.json({ stored: 0, skipped: 0 });
+  if (!entries.length) return res.json({ stored: 0, skipped: 0, duplicates: 0 });
 
   // Resolve the target account: the one asked for, else the company default.
   // A statement must land somewhere specific, so this is required.
@@ -227,7 +228,22 @@ router.post('/store', requireAnyPermission(...PERM), asyncHandler(async (req, re
     );
     stored += r?.affectedRows ?? 0;
   }
-  res.json({ stored, skipped: entries.length - stored, bankAccountId: bank.id });
+  // The parser proves itself against the book's own opening/closing figures.
+  // Discarding that made a misread import look identical to a clean one, which
+  // is how a wrong balance reached the user with no warning at all.
+  res.json({
+    stored,
+    duplicates: entries.length - stored,
+    skipped: entries.length - stored,   // kept for older clients
+    bankAccountId: bank.id,
+    rowsRead: entries.length,
+    receiptTotal: parsed.receiptTotal,
+    paymentTotal: parsed.paymentTotal,
+    undated: parsed.undated,
+    continuationRows: parsed.continuationRows,
+    skippedRows: parsed.skipped,
+    check: parsed.check,
+  });
 }));
 
 /* ---------- Summary ---------- */

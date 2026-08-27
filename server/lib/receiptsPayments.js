@@ -73,11 +73,25 @@ export const parseBankBook = (matrix) => {
   const dateStrs = [];
   // Diagnostics so nothing can vanish from an import without the user seeing it.
   const skipped = { balanceRows: 0, cancelled: 0, unreadableAmount: 0 };
+  // A voucher that hits several ledger heads is printed as one dated line
+  // followed by continuation lines with the Date and Vch cells left blank
+  // (a GST payment split across CGST/SGST/IGST, for example). Those blanks
+  // mean "same voucher as above", not "no date" — carried forward below.
+  let carriedDate = '';
+  let carriedVch = '';
+  let continuationRows = 0;
   let statedOpening = null;   // from the statement's own opening/B-F line
   let statedClosing = null;   // from its closing/C-F line
 
   for (let i = headerIdx + 1; i < M.length; i++) {
     const r = M[i];
+    const dateCell = (r[cDate] ?? '').trim();
+    const vchCell = (r[cVch] ?? '').trim();
+    if (dateCell) { carriedDate = dateCell; carriedVch = vchCell; }
+    else if (carriedDate) continuationRows++;
+    const rowDate = dateCell || carriedDate;
+    const rowVch = dateCell ? vchCell : (vchCell || carriedVch);
+
     const account = (r[cAcct] ?? '').trim();
     if (!account) continue;
     if (isCancelledName(account)) { skipped.cancelled++; continue; }
@@ -112,16 +126,27 @@ export const parseBankBook = (matrix) => {
     if (receipt !== 0) { side = receipt > 0 ? 'RECEIPT' : 'PAYMENT'; amount = Math.abs(receipt); }
     else { side = payment > 0 ? 'PAYMENT' : 'RECEIPT'; amount = Math.abs(payment); }
 
-    dateStrs.push(r[cDate] ?? '');
-    raw.push({ dateStr: (r[cDate] ?? '').trim(), side, account, amount, vch: (r[cVch] ?? '').trim() });
+    dateStrs.push(rowDate);
+    raw.push({ dateStr: rowDate, side, account, amount, vch: rowVch });
   }
 
-  // "Opening Bal. = 1,25,000.00 Dr" often sits above the header instead.
-  if (statedOpening == null) {
-    for (let i = 0; i < headerIdx; i++) {
-      const m = /open(?:ing)?\.?\s*bal[^0-9-]*([\d,]+(?:\.\d+)?)/i.exec(M[i].join(' '));
-      if (m) { statedOpening = parseAmount(m[1]); break; }
-    }
+  // Busy-style books print the balances as free text rather than as a row with
+  // an amount column — "Opening Bal. = 1,92,318.97 Dr" above the header and
+  // "Closing Bal. = 2,01,359.82 Dr" under the last line. Without these the
+  // self-check below silently never runs, which defeats the point of it, so
+  // scan the whole sheet for them. Dr is money in hand, Cr is overdrawn.
+  const OPEN_BAL = /open[a-z]*\.?\s*bal[a-z]*\.?\s*[:=]?\s*([\d,]+(?:\.\d+)?)\s*(dr|cr)?/i;
+  const CLOSE_BAL = /clos[a-z]*\.?\s*bal[a-z]*\.?\s*[:=]?\s*([\d,]+(?:\.\d+)?)\s*(dr|cr)?/i;
+  const balanceLine = (text, re) => {
+    const m = re.exec(text);
+    if (!m) return null;
+    const v = parseAmount(m[1]);
+    return /^cr$/i.test(m[2] ?? '') ? -v : v;
+  };
+  for (let i = 0; i < M.length && (statedOpening == null || statedClosing == null); i++) {
+    const text = M[i].join(' ');
+    if (statedOpening == null) { const v = balanceLine(text, OPEN_BAL); if (v != null) statedOpening = v; }
+    if (statedClosing == null) { const v = balanceLine(text, CLOSE_BAL); if (v != null) statedClosing = v; }
   }
 
   const order = bankBookDateOrder(dateStrs);
@@ -145,5 +170,5 @@ export const parseBankBook = (matrix) => {
     };
   }
 
-  return { entries, asOn, skipped, undated, receiptTotal, paymentTotal, check };
+  return { entries, asOn, skipped, undated, continuationRows, receiptTotal, paymentTotal, check };
 };
