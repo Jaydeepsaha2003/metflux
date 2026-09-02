@@ -1,0 +1,99 @@
+==========================================================================
+ METFLUX — HOW TO DEPLOY UPDATES TO HOSTINGER (step by step)
+==========================================================================
+
+You do this AFTER you have pushed new code to GitHub from your PC
+(git push). GitHub is already connected — nothing to reconnect.
+
+There are TWO websites on the same server, each its own copy of the app:
+    ~/domains/metfluxelectrical.com/nodejs
+    ~/domains/torofluxindustries.com/nodejs
+You must deploy to BOTH (run the block once per domain).
+
+--------------------------------------------------------------------------
+ STEP 1 — CONNECT TO THE SERVER (SSH)
+--------------------------------------------------------------------------
+1. On your PC press the Windows key, type  PowerShell , open it.
+2. Paste this and press Enter:
+
+       ssh -p 65002 u857571106@82.112.232.206
+
+3. If asked "Are you sure you want to continue connecting?" type  yes  + Enter.
+4. Enter your SSH password (it stays invisible while typing — that's normal).
+   You are connected when you see a prompt ending in  $
+
+(If SSH is ever "INACTIVE": hPanel > Websites > Manage > Advanced > SSH Access
+ > click Enable, and set a password with "Change".)
+
+--------------------------------------------------------------------------
+ STEP 2 — DEPLOY THE METFLUX SITE
+--------------------------------------------------------------------------
+Copy this WHOLE block, paste into the terminal, press Enter, and wait
+(2-5 minutes; lots of output is normal):
+
+export PATH=/opt/alt/alt-nodejs20/root/usr/bin:$PATH && cd ~/domains/metfluxelectrical.com/nodejs && git fetch origin && git reset --hard origin/main && npm install --include=dev && chmod +x node_modules/@esbuild/linux-x64/bin/esbuild && cd client && node ../node_modules/typescript/bin/tsc -b && node ../node_modules/vite/bin/vite.js build && cd .. && npm --workspace server run build:copy-client && npm --workspace server run build:copy-portfolio && set -a && . ~/domains/metfluxelectrical.com/public_html/.builds/config/.env && set +a && npm --workspace server run migrate && touch tmp/restart.txt
+
+Success looks like: a "built in ..." line, a copied message, several
+"[migrate] ..." lines ending near "[migrate] done.", and no "Error".
+
+Then open in a browser:   https://metfluxelectrical.com/healthz
+You should see  {"ok":true,...}  with a fresh timestamp.
+
+--------------------------------------------------------------------------
+ STEP 3 — DEPLOY THE TOROFLUX SITE (same thing, other domain)
+--------------------------------------------------------------------------
+Copy this WHOLE block, paste, press Enter, wait:
+
+export PATH=/opt/alt/alt-nodejs20/root/usr/bin:$PATH && cd ~/domains/torofluxindustries.com/nodejs && git fetch origin && git reset --hard origin/main && npm install --include=dev && chmod +x node_modules/@esbuild/linux-x64/bin/esbuild && cd client && node ../node_modules/typescript/bin/tsc -b && node ../node_modules/vite/bin/vite.js build && cd .. && npm --workspace server run build:copy-client && npm --workspace server run build:copy-portfolio && set -a && . ~/domains/torofluxindustries.com/public_html/.builds/config/.env && set +a && npm --workspace server run migrate && touch tmp/restart.txt
+
+Then check:   https://torofluxindustries.com/healthz
+
+Both sites are now updated. Done.
+
+==========================================================================
+ WHAT EACH PART DOES (reference)
+==========================================================================
+export PATH=...alt-nodejs20...     puts node/npm on the path (not there by default)
+git fetch + reset --hard origin/main  pulls your latest pushed code (won't touch .env)
+npm install --include=dev          installs build tools (your .npmrc skips them)
+chmod +x ...esbuild                makes the build tool runnable (installed without +x)
+node ...tsc -b / node ...vite.js   builds the admin app (run via node on purpose)
+build:copy-portfolio               copies the committed marketing site (portfolio/out-metflux,
+                                   out-toroflux) into server/public/portfolio-*, which is what
+                                   the server actually serves. server/public/ is gitignored, so
+                                   a git pull ALONE never updates the marketing site — skip this
+                                   and website changes (logos, favicons, text) stay invisible.
+build:copy-client                  copies the built app into the live folder
+set -a; . .../.env; set +a         loads your DATABASE_URL + secrets so migrate can connect
+migrate                            applies any new database columns (safe to re-run)
+touch tmp/restart.txt              restarts the app so new code loads
+
+IMPORTANT: your real settings file lives at
+    ~/domains/<DOMAIN>/public_html/.builds/config/.env
+The "set -a; . .../.env; set +a" line loads it. WITHOUT this line the migrate
+step fails with "DATABASE_URL Required" and the app never restarts (which makes
+new features 404). If you ever move the .env, find it again with:
+    find ~/domains/<DOMAIN> -maxdepth 4 -type f -iname "*.env*" 2>/dev/null
+
+==========================================================================
+ IF SOMETHING GOES WRONG
+==========================================================================
+- "npm: command not found"  -> you skipped the  export PATH=...  part. Re-run the
+  whole block (it starts with that line).
+- "DATABASE_URL Required" / migrate fails  -> the  .env  path is wrong. Run the
+  find command above to locate it, then fix the path in the block.
+- A new button/feature gives "Route not found"  -> the server didn't restart.
+  Re-run  touch tmp/restart.txt  in  ~/domains/<DOMAIN>/nodejs , or re-run the block.
+- "Permission denied" on esbuild  -> re-run the block; the  chmod +x ...esbuild
+  line fixes it.
+
+==========================================================================
+ GOOD PRACTICE
+==========================================================================
+- Before big updates, back up first:
+    * Database: hPanel > Databases > phpMyAdmin > your DB > Export > Go
+    * Full account: hPanel > Files > Backups > create a backup
+- NEVER paste your .env contents into chat — it has DB password + secrets.
+- The portfolio (marketing site) is NOT rebuilt by these steps. It is only
+  rebuilt when the marketing pages change (rare) — ask for those steps separately.
+==========================================================================
