@@ -730,7 +730,125 @@ const buildLrDoc = (d: LrPdf) => {
   };
 };
 
+/* ── Production by Employee ──────────────────────────────────── */
+export type ProductionPdf = {
+  company: PdfCompany;
+  brand?: string | null;
+  meta: { period: string; employees: string; days: string; filters: string; generated: string };
+  totals: { pcs: number; weight: number; amount: number };
+  employees: Array<{
+    name: string; days: number; sizes: number;
+    pcs: number; weight: number; amount: number;
+    rows: Array<{
+      kind: 'day' | 'size';
+      label: string; type?: string; grade?: string; material?: string;
+      pcs: number; weight: number; amount: number;
+    }>;
+  }>;
+};
+
+const grp = (n: number) => Number(n || 0).toLocaleString('en-IN');
+const amt2 = (n: number) => Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const buildProductionDoc = (d: ProductionPdf) => {
+  const brandDark = brandShadeHex(d.brand, 700);
+  const brandMid = brandShadeHex(d.brand, 600);
+  const brandLight = brandShadeHex(d.brand, 50);
+
+  // EMPLOYEE/DATE/SIZE | TYPE | GRADE | MATERIAL | PCS | WEIGHT | AMOUNT
+  const COLS = ['*', 30, 70, 70, 32, 54, 64];
+  const th = (t: string, align: any = 'center') =>
+    ({ text: t, bold: true, fontSize: 8.5, color: WHITE, fillColor: brandMid, alignment: align, characterSpacing: 0.2 });
+
+  const body: any[] = [[
+    th('EMPLOYEE / DATE / SIZE', 'left'), th('TYPE'), th('GRADE', 'left'), th('MATERIAL', 'left'),
+    th('PCS', 'right'), th('WEIGHT (KG)', 'right'), th('AMOUNT', 'right'),
+  ]];
+
+  for (const e of d.employees) {
+    // Employee band — the row the eye lands on, so it carries the brand fill.
+    body.push([
+      { text: e.name, bold: true, fontSize: 9.5, color: WHITE, fillColor: brandDark, colSpan: 4, margin: [3, 3, 3, 3] },
+      {}, {}, {},
+      { text: grp(e.pcs), bold: true, fontSize: 9, color: WHITE, fillColor: brandDark, alignment: 'right', margin: [3, 3, 3, 3] },
+      { text: e.weight.toFixed(3), bold: true, fontSize: 9, color: WHITE, fillColor: brandDark, alignment: 'right', margin: [3, 3, 3, 3] },
+      { text: amt2(e.amount), bold: true, fontSize: 9, color: WHITE, fillColor: brandDark, alignment: 'right', margin: [3, 3, 3, 3] },
+    ]);
+    body.push([
+      { text: `${e.days} day${e.days === 1 ? '' : 's'}  ·  ${e.sizes} size${e.sizes === 1 ? '' : 's'}`,
+        fontSize: 7.5, color: GREY, fillColor: brandLight, colSpan: 7, margin: [3, 2, 3, 2] },
+      {}, {}, {}, {}, {}, {},
+    ]);
+
+    for (const r of e.rows) {
+      if (r.kind === 'day') {
+        body.push([
+          { text: r.label, bold: true, fontSize: 8.5, fillColor: brandLight, margin: [3, 2.5, 3, 2.5] },
+          { text: 'DAY TOTAL', fontSize: 6.5, color: GREY, fillColor: brandLight, colSpan: 3, alignment: 'left', margin: [3, 3, 3, 2] },
+          {}, {},
+          { text: grp(r.pcs), bold: true, fontSize: 8.5, fillColor: brandLight, alignment: 'right', margin: [3, 2.5, 3, 2.5] },
+          { text: r.weight.toFixed(3), bold: true, fontSize: 8.5, fillColor: brandLight, alignment: 'right', margin: [3, 2.5, 3, 2.5] },
+          { text: amt2(r.amount), bold: true, fontSize: 8.5, fillColor: brandLight, alignment: 'right', margin: [3, 2.5, 3, 2.5] },
+        ]);
+      } else {
+        const rc = (t: string, align: any = 'left') => ({ text: t, font: 'Carlito', fontSize: 8.5, alignment: align, margin: [3, 2, 3, 2] });
+        body.push([
+          { text: `    ${r.label}`, font: 'Carlito', fontSize: 8.5, margin: [3, 2, 3, 2] },
+          rc(r.type ?? '', 'center'), rc(r.grade ?? ''), rc(r.material ?? ''),
+          rc(grp(r.pcs), 'right'), rc(r.weight.toFixed(3), 'right'), rc(amt2(r.amount), 'right'),
+        ]);
+      }
+    }
+  }
+
+  const content: any[] = [header(d.company, 'PRODUCTION SUMMARY', brandDark), rule(brandDark)];
+  content.push(infoGrid([
+    ['PERIOD', d.meta.period], ['GENERATED', d.meta.generated],
+    ['EMPLOYEES', d.meta.employees], ['DAYS', d.meta.days],
+    ...(d.meta.filters ? [['FILTERS', d.meta.filters] as [string, string], ['', ''] as [string, string]] : []),
+  ], brandLight));
+
+  content.push({
+    // headerRows repeats the column titles on every page — a report that runs
+    // to twenty pages is unreadable without it.
+    table: { widths: COLS, headerRows: 1, body },
+    layout: {
+      hLineWidth: () => 0.4, vLineWidth: () => 0.4,
+      hLineColor: () => LIGHT, vLineColor: () => LIGHT,
+      paddingLeft: () => 2, paddingRight: () => 2, paddingTop: () => 0, paddingBottom: () => 0,
+    },
+  });
+
+  content.push({
+    table: {
+      widths: ['*', 'auto', 'auto', 'auto'],
+      body: [[
+        { text: 'GRAND TOTAL', color: WHITE, bold: true, fontSize: 11, characterSpacing: 1, fillColor: brandDark, margin: [6, 6, 6, 6] },
+        { text: `${grp(d.totals.pcs)} pcs`, color: WHITE, bold: true, fontSize: 13, alignment: 'right', fillColor: brandDark, margin: [6, 5, 10, 5] },
+        { text: `${d.totals.weight.toFixed(3)} kg`, color: WHITE, bold: true, fontSize: 13, alignment: 'right', fillColor: brandDark, margin: [6, 5, 10, 5] },
+        { text: amt2(d.totals.amount), color: WHITE, bold: true, fontSize: 13, alignment: 'right', fillColor: brandDark, margin: [6, 5, 6, 5] },
+      ]],
+    },
+    layout: { hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => 0, paddingRight: () => 0, paddingTop: () => 0, paddingBottom: () => 0 },
+    margin: [0, 3, 0, 0],
+  });
+
+  return {
+    pageSize: 'A4', pageMargins: [24, 22, 24, 28],
+    defaultStyle: { font: 'Montserrat', fontSize: 9, color: INK, lineHeight: 1.05 },
+    content, footer: docFooter(d.company),
+  };
+};
+
 /* ── Public API ──────────────────────────────────────────────── */
+export const downloadProductionPdf = async (data: ProductionPdf, filename: string) => {
+  const pdfMake = await loadPdfMake();
+  pdfMake.createPdf(buildProductionDoc(data)).download(filename);
+};
+export const productionPdfBlob = async (data: ProductionPdf): Promise<Blob> => {
+  const pdfMake = await loadPdfMake();
+  return new Promise((resolve) => pdfMake.createPdf(buildProductionDoc(data)).getBlob(resolve));
+};
 export const downloadQuotationPdf = async (data: QuotationPdf, filename: string) => {
   const pdfMake = await loadPdfMake();
   pdfMake.createPdf(buildQuotationDoc(data)).download(filename);

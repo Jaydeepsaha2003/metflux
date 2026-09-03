@@ -3,13 +3,16 @@
 // customer; download the filtered set as Excel.
 import { Fragment, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Factory, Loader2, Download, Search, ChevronDown, ChevronRight, Users, List, SlidersHorizontal } from 'lucide-react';
+import { Factory, Loader2, Download, Search, ChevronDown, ChevronRight, Users, List, SlidersHorizontal, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { downloadXlsx, todayStamp } from '@/lib/excel';
 import { downloadReportXlsx, type ReportRow } from '@/lib/xlsxReport';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { Panel, Th, StatStrip, num } from '@/components/tally';
+import { downloadProductionPdf, type ProductionPdf } from '@/lib/reportPdf';
+import { brandColorFor } from '@/lib/brandColor';
+import { useBranding } from '@/store/branding';
 import { useHideCustomerNames } from '@/store/auth';
 
 type Row = {
@@ -100,6 +103,12 @@ export const ProductionSummaryPage = () => {
     queryFn: () => api<SummaryResp>(`/production/summary?${qs.toString()}`),
   });
 
+  const brandColor = useBranding((st) => st.brandColor);
+  const { data: company } = useQuery({
+    queryKey: ['company-me'],
+    queryFn: () => api<{ name?: string; address?: string; phone?: string; whatsappNumber?: string; email?: string; gstNumber?: string; logoUrl?: string }>('/companies/me'),
+  });
+
   const { data: customers } = useQuery({
     queryKey: ['customers-options'],
     queryFn: () => api<{ items: { id: string; name: string; customerCode: string }[] }>('/customers?pageSize=500'),
@@ -156,6 +165,58 @@ export const ProductionSummaryPage = () => {
     });
   };
 
+  /* Same tree the screen renders, on the shared A4 letterhead used by the
+     packing list / testing report, so every document out of the system looks
+     like it came from the same company. Always the FULL report — a section
+     collapsed on screen is a viewing preference, not a filter. */
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const onExportPdf = async () => {
+    if (!employees.length || !totals || pdfBusy) return;
+    setPdfBusy(true);
+    try {
+      const period = from && to ? `${fmt(from)} — ${fmt(to)}` : from ? `From ${fmt(from)}` : to ? `Up to ${fmt(to)}` : 'All dates';
+      const bits: string[] = [];
+      if (labour) bits.push(`Employee: ${labour}`);
+      if (customerId) bits.push(`Customer: ${customerOptions.find((c) => c.value === customerId)?.label ?? customerId}`);
+      if (search.trim()) bits.push(`Search: ${search.trim()}`);
+
+      const data: ProductionPdf = {
+        company: {
+          name: company?.name, address: company?.address, phone: company?.phone,
+          whatsappNumber: company?.whatsappNumber, email: company?.email,
+          gstNumber: company?.gstNumber, logoUrl: company?.logoUrl,
+        },
+        brand: brandColorFor(company?.name) ?? brandColor,
+        meta: {
+          period,
+          generated: fmt(new Date().toISOString()),
+          employees: String(employees.length),
+          days: String(dayCount),
+          filters: bits.join('   ·   '),
+        },
+        totals,
+        employees: employees.map((e) => ({
+          name: e.name,
+          days: e.days.length,
+          sizes: new Set(e.days.flatMap((d) => d.sizes.map((z) => z.key))).size,
+          pcs: e.pcs, weight: e.weight, amount: e.amount,
+          rows: e.days.flatMap((d) => [
+            { kind: 'day' as const, label: fmt(d.iso), pcs: d.pcs, weight: d.weight, amount: d.amount },
+            ...d.sizes.map((z) => ({
+              kind: 'size' as const, label: z.measure,
+              type: z.coreType === 'TOROIDAL' ? 'Toro' : 'Rect',
+              grade: z.grade, material: z.material,
+              pcs: z.pcs, weight: z.weight, amount: z.amount,
+            })),
+          ]),
+        })),
+      };
+      await downloadProductionPdf(data, `production-by-employee-${todayStamp()}.pdf`);
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
   const onExport = () => {
     if (view === 'BY_EMPLOYEE') return onExportByEmployee();
     if (!items.length) return;
@@ -206,6 +267,14 @@ export const ProductionSummaryPage = () => {
             title="Download the report as a formatted Excel sheet"
           >
             <Download className="h-3.5 w-3.5" /> Excel
+          </button>
+          <button
+            onClick={onExportPdf}
+            disabled={!employees.length || pdfBusy}
+            className="inline-flex min-h-[32px] items-center gap-1.5 rounded border border-slate-300 bg-white px-3 text-[11.5px] font-bold uppercase tracking-wider text-rose-700 transition-colors duration-200 hover:bg-rose-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-40 motion-reduce:transition-none"
+            title="Download the report as a formatted A4 PDF"
+          >
+            {pdfBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />} PDF
           </button>
         </div>
       </div>
