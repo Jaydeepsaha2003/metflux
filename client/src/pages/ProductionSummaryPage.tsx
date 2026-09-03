@@ -182,7 +182,7 @@ export const ProductionSummaryPage = () => {
     <div className="max-w-full space-y-3">
       {/* Title bar */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="flex items-center gap-2 text-lg font-bold tracking-tight text-slate-800 sm:text-xl">
+        <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight text-slate-800 sm:text-2xl">
           <Factory className="h-4.5 w-4.5 text-brand-600" /> Production Summary
         </h1>
         <div className="flex flex-wrap items-center gap-2">
@@ -192,7 +192,7 @@ export const ProductionSummaryPage = () => {
                 key={k}
                 onClick={() => setView(k)}
                 aria-pressed={view === k}
-                className={cn('inline-flex min-h-[30px] items-center gap-1.5 rounded-sm px-2.5 text-[10.5px] font-bold uppercase tracking-wider transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 motion-reduce:transition-none',
+                className={cn('inline-flex min-h-[30px] items-center gap-1.5 rounded-sm px-2.5 text-[12px] font-bold uppercase tracking-wider transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 motion-reduce:transition-none',
                   view === k ? 'bg-slate-700 text-white' : 'text-slate-600 hover:bg-slate-100')}
               >
                 <Icon className="h-3.5 w-3.5" /> {label}
@@ -202,7 +202,7 @@ export const ProductionSummaryPage = () => {
           <button
             onClick={onExport}
             disabled={!items.length}
-            className="inline-flex min-h-[32px] items-center gap-1.5 rounded border border-slate-300 bg-white px-3 text-[10.5px] font-bold uppercase tracking-wider text-emerald-700 transition-colors duration-200 hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-40 motion-reduce:transition-none"
+            className="inline-flex min-h-[32px] items-center gap-1.5 rounded border border-slate-300 bg-white px-3 text-[12px] font-bold uppercase tracking-wider text-emerald-700 transition-colors duration-200 hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-40 motion-reduce:transition-none"
             title="Download the report as a formatted Excel sheet"
           >
             <Download className="h-3.5 w-3.5" /> Excel
@@ -211,16 +211,19 @@ export const ProductionSummaryPage = () => {
       </div>
 
       {/* Filters */}
-      <Panel title={<><SlidersHorizontal className="h-3.5 w-3.5" /> Filters</>}>
+      {/* overflow-visible: the Employee/Customer pickers render their menu as an
+          absolutely-positioned child, and Panel clips by default — which cut the
+          dropdown off at the card edge. */}
+      <Panel title={<><SlidersHorizontal className="h-3.5 w-3.5" /> Filters</>} className="overflow-visible">
         <div className="grid grid-cols-1 gap-2.5 p-3 sm:grid-cols-2 lg:grid-cols-5">
-          <Field label="From"><input type="date" className="input h-8 text-[13px]" value={from} onChange={(e) => setFrom(e.target.value)} /></Field>
-          <Field label="To"><input type="date" className="input h-8 text-[13px]" value={to} onChange={(e) => setTo(e.target.value)} /></Field>
+          <Field label="From"><input type="date" className="input h-9 text-sm" value={from} onChange={(e) => setFrom(e.target.value)} /></Field>
+          <Field label="To"><input type="date" className="input h-9 text-sm" value={to} onChange={(e) => setTo(e.target.value)} /></Field>
           <Field label="Employee"><SearchableSelect value={labour} onChange={setLabour} options={labourOptions} placeholder="All employees" /></Field>
           <Field label="Customer"><SearchableSelect value={customerId} onChange={setCustomerId} options={customerOptions} placeholder="All customers" /></Field>
           <Field label="Search">
             <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-              <input className="input h-8 pl-8 text-[13px]" placeholder="PO, grade, measure…" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <input className="input h-9 pl-8 text-sm" placeholder="PO, grade, measure…" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
           </Field>
         </div>
@@ -230,6 +233,7 @@ export const ProductionSummaryPage = () => {
       {totals && !isLoading && (
         <Panel title="Totals">
           <StatStrip
+            size="md"
             cols={5}
             items={[
               { label: 'Employees', value: String(employees.length) },
@@ -263,23 +267,23 @@ export const ProductionSummaryPage = () => {
           right={
             <button
               onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(employees.map((e) => e.name)))}
-              className="inline-flex min-h-[26px] items-center rounded border border-slate-300 bg-white px-2 text-[10px] font-bold uppercase tracking-wider text-slate-600 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              className="inline-flex min-h-[26px] items-center rounded border border-slate-300 bg-white px-2 text-[11.5px] font-bold uppercase tracking-wider text-slate-600 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
               {allCollapsed ? 'Expand all' : 'Collapse all'}
             </button>
           }
         >
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] border-collapse text-[13px]">
+            <table className="w-full min-w-[680px] border-collapse text-sm">
               <thead>
                 <tr>
-                  <Th className="sm:pl-3">Employee / Date / Size</Th>
-                  <Th align="center" className="w-[62px]">Type</Th>
-                  <Th className="hidden w-[104px] sm:table-cell">Grade</Th>
-                  <Th className="hidden w-[112px] md:table-cell">Material</Th>
-                  <Th align="right" className="w-[68px]">Pcs</Th>
-                  <Th align="right" className="w-[96px]">Weight (kg)</Th>
-                  <Th align="right" className="w-[112px]">Amount</Th>
+                  <Th size="md" className="sm:pl-3">Employee / Date / Size</Th>
+                  <Th size="md" align="center" className="w-[62px]">Type</Th>
+                  <Th size="md" className="hidden w-[104px] sm:table-cell">Grade</Th>
+                  <Th size="md" className="hidden w-[112px] md:table-cell">Material</Th>
+                  <Th size="md" align="right" className="w-[68px]">Pcs</Th>
+                  <Th size="md" align="right" className="w-[96px]">Weight (kg)</Th>
+                  <Th size="md" align="right" className="w-[112px]">Amount</Th>
                 </tr>
               </thead>
 
@@ -301,48 +305,48 @@ export const ProductionSummaryPage = () => {
                             ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden />
                             : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden />}
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[13px] font-bold uppercase tracking-wide text-slate-800">{e.name}</span>
+                            <span className="block truncate text-[15px] font-bold uppercase tracking-wide text-slate-800">{e.name}</span>
                             <span className="mt-0.5 flex items-center gap-1.5">
                               <span className="h-1 w-14 overflow-hidden rounded-sm bg-slate-200 sm:w-20">
                                 <span className="block h-full bg-brand-500" style={{ width: `${Math.max(share * 100, 2)}%` }} />
                               </span>
-                              <span className="font-mono text-[10px] tabular-nums text-slate-500">
+                              <span className="font-mono text-[11.5px] tabular-nums text-slate-500">
                                 {(share * 100).toFixed(1)}% · {e.days.length}d · {sizeCount} size{sizeCount === 1 ? '' : 's'}
                               </span>
                             </span>
                           </span>
                         </button>
                       </td>
-                      <td className="border-b border-slate-200 px-2 py-1.5 text-right font-mono text-[13px] font-bold tabular-nums text-slate-800">{pcsFmt(e.pcs)}</td>
-                      <td className="border-b border-slate-200 px-2 py-1.5 text-right font-mono text-[13px] font-bold tabular-nums text-slate-900">{kg(e.weight)}</td>
-                      <td className="border-b border-slate-200 px-2 py-1.5 text-right font-mono text-[13px] font-bold tabular-nums text-brand-700">{num(e.amount)}</td>
+                      <td className="border-b border-slate-200 px-2 py-1.5 text-right font-mono text-[15px] font-bold tabular-nums text-slate-800">{pcsFmt(e.pcs)}</td>
+                      <td className="border-b border-slate-200 px-2 py-1.5 text-right font-mono text-[15px] font-bold tabular-nums text-slate-900">{kg(e.weight)}</td>
+                      <td className="border-b border-slate-200 px-2 py-1.5 text-right font-mono text-[15px] font-bold tabular-nums text-brand-700">{num(e.amount)}</td>
                     </tr>
 
                     {open && e.days.map((d) => (
                       <Fragment key={d.key}>
                         {/* Day sub-total */}
                         <tr className="bg-white">
-                          <th scope="rowgroup" className="whitespace-nowrap border-b border-slate-100 py-1 pl-7 pr-2 text-left text-[12px] font-bold text-slate-700 sm:pl-9">{fmt(d.iso)}</th>
-                          <td className="hidden border-b border-slate-100 px-2 py-1 text-[9.5px] uppercase tracking-wider text-slate-400 sm:table-cell" colSpan={3}>Day total</td>
-                          <td className="border-b border-slate-100 px-2 py-1 text-right font-mono text-[12px] font-semibold tabular-nums text-slate-700">{pcsFmt(d.pcs)}</td>
-                          <td className="border-b border-slate-100 px-2 py-1 text-right font-mono text-[12px] font-semibold tabular-nums text-slate-800">{kg(d.weight)}</td>
-                          <td className="border-b border-slate-100 px-2 py-1 text-right font-mono text-[12px] font-semibold tabular-nums text-slate-700">{num(d.amount)}</td>
+                          <th scope="rowgroup" className="whitespace-nowrap border-b border-slate-100 py-1 pl-7 pr-2 text-left text-[13.5px] font-bold text-slate-700 sm:pl-9">{fmt(d.iso)}</th>
+                          <td className="hidden border-b border-slate-100 px-2 py-1 text-[11px] uppercase tracking-wider text-slate-400 sm:table-cell" colSpan={3}>Day total</td>
+                          <td className="border-b border-slate-100 px-2 py-1 text-right font-mono text-[13.5px] font-semibold tabular-nums text-slate-700">{pcsFmt(d.pcs)}</td>
+                          <td className="border-b border-slate-100 px-2 py-1 text-right font-mono text-[13.5px] font-semibold tabular-nums text-slate-800">{kg(d.weight)}</td>
+                          <td className="border-b border-slate-100 px-2 py-1 text-right font-mono text-[13.5px] font-semibold tabular-nums text-slate-700">{num(d.amount)}</td>
                         </tr>
                         {/* Size lines */}
                         {d.sizes.map((z) => (
                           <tr key={z.key} className="odd:bg-white even:bg-slate-50/40 hover:bg-brand-50/50">
-                            <td className="whitespace-nowrap py-1 pl-10 pr-2 font-mono text-[11.5px] text-slate-700 sm:pl-14">{z.measure}</td>
+                            <td className="whitespace-nowrap py-1 pl-10 pr-2 font-mono text-[13px] text-slate-700 sm:pl-14">{z.measure}</td>
                             <td className="px-1 py-1 text-center">
-                              <span className={cn('inline-block rounded-sm border px-1 py-px font-mono text-[9.5px] font-bold uppercase',
+                              <span className={cn('inline-block rounded-sm border px-1 py-px font-mono text-[11px] font-bold uppercase',
                                 z.coreType === 'TOROIDAL' ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-rose-300 bg-rose-50 text-rose-800')}>
                                 {z.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
                               </span>
                             </td>
-                            <td className="hidden whitespace-nowrap px-2 py-1 text-[11.5px] text-slate-600 sm:table-cell">{z.grade}</td>
-                            <td className="hidden whitespace-nowrap px-2 py-1 text-[11.5px] text-slate-600 md:table-cell">{z.material}</td>
-                            <td className="px-2 py-1 text-right font-mono text-[11.5px] tabular-nums text-slate-700">{pcsFmt(z.pcs)}</td>
-                            <td className="px-2 py-1 text-right font-mono text-[11.5px] tabular-nums text-slate-900">{kg(z.weight)}</td>
-                            <td className="px-2 py-1 text-right font-mono text-[11.5px] tabular-nums text-slate-600">{num(z.amount)}</td>
+                            <td className="hidden whitespace-nowrap px-2 py-1 text-[13px] text-slate-600 sm:table-cell">{z.grade}</td>
+                            <td className="hidden whitespace-nowrap px-2 py-1 text-[13px] text-slate-600 md:table-cell">{z.material}</td>
+                            <td className="px-2 py-1 text-right font-mono text-[13px] tabular-nums text-slate-700">{pcsFmt(z.pcs)}</td>
+                            <td className="px-2 py-1 text-right font-mono text-[13px] tabular-nums text-slate-900">{kg(z.weight)}</td>
+                            <td className="px-2 py-1 text-right font-mono text-[13px] tabular-nums text-slate-600">{num(z.amount)}</td>
                           </tr>
                         ))}
                       </Fragment>
@@ -354,10 +358,10 @@ export const ProductionSummaryPage = () => {
               {totals && (
                 <tfoot>
                   <tr className="bg-slate-700 text-white">
-                    <td className="px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider sm:px-3" colSpan={4}>Grand Total</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-[13px] font-bold tabular-nums">{pcsFmt(totals.pcs)}</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-[13px] font-bold tabular-nums">{kg(totals.weight)}</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-[13px] font-bold tabular-nums">{num(totals.amount)}</td>
+                    <td className="px-2 py-1.5 text-[12.5px] font-bold uppercase tracking-wider sm:px-3" colSpan={4}>Grand Total</td>
+                    <td className="px-2 py-1.5 text-right font-mono text-[15px] font-bold tabular-nums">{pcsFmt(totals.pcs)}</td>
+                    <td className="px-2 py-1.5 text-right font-mono text-[15px] font-bold tabular-nums">{kg(totals.weight)}</td>
+                    <td className="px-2 py-1.5 text-right font-mono text-[15px] font-bold tabular-nums">{num(totals.amount)}</td>
                   </tr>
                 </tfoot>
               )}
@@ -370,47 +374,47 @@ export const ProductionSummaryPage = () => {
       {!isLoading && items.length > 0 && view === 'ENTRIES' && (
         <Panel title={<><List className="h-3.5 w-3.5" /> All Entries</>}>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] border-collapse text-[13px]">
+            <table className="w-full min-w-[760px] border-collapse text-sm">
               <thead>
                 <tr>
-                  <Th className="sm:pl-3">Date</Th>
+                  <Th size="md" className="sm:pl-3">Date</Th>
                   <Th>Employee</Th>
-                  <Th align="center" className="w-[62px]">Type</Th>
-                  <Th className="hidden sm:table-cell">Grade</Th>
-                  <Th className="hidden md:table-cell">Material</Th>
+                  <Th size="md" align="center" className="w-[62px]">Type</Th>
+                  <Th size="md" className="hidden sm:table-cell">Grade</Th>
+                  <Th size="md" className="hidden md:table-cell">Material</Th>
                   <Th>Measure</Th>
-                  <Th align="right" className="w-[68px]">Pcs</Th>
-                  <Th align="right" className="w-[96px]">Weight (kg)</Th>
-                  <Th align="right" className="w-[112px]">Amount</Th>
+                  <Th size="md" align="right" className="w-[68px]">Pcs</Th>
+                  <Th size="md" align="right" className="w-[96px]">Weight (kg)</Th>
+                  <Th size="md" align="right" className="w-[112px]">Amount</Th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((r) => (
                   <tr key={r.id} className="odd:bg-white even:bg-slate-50/40 hover:bg-brand-50/50">
-                    <td className="whitespace-nowrap px-2 py-1 text-[12px] text-slate-600 sm:pl-3">{fmt(r.prodDate)}</td>
-                    <td className="whitespace-nowrap px-2 py-1 text-[12px] font-semibold text-slate-800">{r.labourName}</td>
+                    <td className="whitespace-nowrap px-2 py-1 text-[13.5px] text-slate-600 sm:pl-3">{fmt(r.prodDate)}</td>
+                    <td className="whitespace-nowrap px-2 py-1 text-[13.5px] font-semibold text-slate-800">{r.labourName}</td>
                     <td className="px-1 py-1 text-center">
-                      <span className={cn('inline-block rounded-sm border px-1 py-px font-mono text-[9.5px] font-bold uppercase',
+                      <span className={cn('inline-block rounded-sm border px-1 py-px font-mono text-[11px] font-bold uppercase',
                         r.coreType === 'TOROIDAL' ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-rose-300 bg-rose-50 text-rose-800')}>
                         {r.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
                       </span>
                     </td>
-                    <td className="hidden whitespace-nowrap px-2 py-1 text-[11.5px] text-slate-600 sm:table-cell">{r.grade}</td>
-                    <td className="hidden whitespace-nowrap px-2 py-1 text-[11.5px] text-slate-600 md:table-cell">{r.material}</td>
-                    <td className="whitespace-nowrap px-2 py-1 font-mono text-[11.5px] text-slate-700">{r.measure}</td>
-                    <td className="px-2 py-1 text-right font-mono text-[11.5px] tabular-nums text-slate-700">{pcsFmt(r.pcs)}</td>
-                    <td className="px-2 py-1 text-right font-mono text-[11.5px] tabular-nums text-slate-900">{kg(r.totalWeight)}</td>
-                    <td className="px-2 py-1 text-right font-mono text-[11.5px] tabular-nums text-slate-600">{r.amount == null ? '—' : num(r.amount)}</td>
+                    <td className="hidden whitespace-nowrap px-2 py-1 text-[13px] text-slate-600 sm:table-cell">{r.grade}</td>
+                    <td className="hidden whitespace-nowrap px-2 py-1 text-[13px] text-slate-600 md:table-cell">{r.material}</td>
+                    <td className="whitespace-nowrap px-2 py-1 font-mono text-[13px] text-slate-700">{r.measure}</td>
+                    <td className="px-2 py-1 text-right font-mono text-[13px] tabular-nums text-slate-700">{pcsFmt(r.pcs)}</td>
+                    <td className="px-2 py-1 text-right font-mono text-[13px] tabular-nums text-slate-900">{kg(r.totalWeight)}</td>
+                    <td className="px-2 py-1 text-right font-mono text-[13px] tabular-nums text-slate-600">{r.amount == null ? '—' : num(r.amount)}</td>
                   </tr>
                 ))}
               </tbody>
               {totals && (
                 <tfoot>
                   <tr className="bg-slate-700 text-white">
-                    <td className="px-2 py-1.5 text-[11px] font-bold uppercase tracking-wider sm:px-3" colSpan={6}>Grand Total</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-[13px] font-bold tabular-nums">{pcsFmt(totals.pcs)}</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-[13px] font-bold tabular-nums">{kg(totals.weight)}</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-[13px] font-bold tabular-nums">{num(totals.amount)}</td>
+                    <td className="px-2 py-1.5 text-[12.5px] font-bold uppercase tracking-wider sm:px-3" colSpan={6}>Grand Total</td>
+                    <td className="px-2 py-1.5 text-right font-mono text-[15px] font-bold tabular-nums">{pcsFmt(totals.pcs)}</td>
+                    <td className="px-2 py-1.5 text-right font-mono text-[15px] font-bold tabular-nums">{kg(totals.weight)}</td>
+                    <td className="px-2 py-1.5 text-right font-mono text-[15px] font-bold tabular-nums">{num(totals.amount)}</td>
                   </tr>
                 </tfoot>
               )}
@@ -424,7 +428,7 @@ export const ProductionSummaryPage = () => {
 
 const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
   <label className="block">
-    <span className="mb-1 block text-[9.5px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
+    <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
     {children}
   </label>
 );

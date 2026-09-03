@@ -7,7 +7,7 @@ export const Panel = ({ title, right, children, className }: {
   title: React.ReactNode; right?: React.ReactNode; children: React.ReactNode; className?: string;
 }) => (
   <section className={cn('overflow-hidden rounded border border-slate-300 bg-white shadow-sm', className)}>
-    <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-300 bg-slate-100 px-3 py-1.5">
+    <header className="flex flex-wrap items-center justify-between gap-2 rounded-t-[3px] border-b border-slate-300 bg-slate-100 px-3 py-1.5">
       <h2 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-600">{title}</h2>
       {right}
     </header>
@@ -15,25 +15,31 @@ export const Panel = ({ title, right, children, className }: {
   </section>
 );
 
-export const Th = ({ children, align = 'left', className }: {
-  children?: React.ReactNode; align?: 'left' | 'right' | 'center'; className?: string;
+export const Th = ({ children, align = 'left', size = 'sm', className }: {
+  children?: React.ReactNode; align?: 'left' | 'right' | 'center';
+  /** 'md' is a roomier heading for report-style tables. */
+  size?: 'sm' | 'md'; className?: string;
 }) => (
   <th className={cn(
-    'border-b-2 border-slate-300 bg-slate-100 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500',
+    'border-b-2 border-slate-300 bg-slate-100 px-2 font-bold uppercase tracking-wider text-slate-500',
+    size === 'md' ? 'py-2 text-[11.5px]' : 'py-1.5 text-[10px]',
     align === 'right' && 'text-right', align === 'center' && 'text-center', align === 'left' && 'text-left', className,
   )}>{children}</th>
 );
 
 /** Edge-to-edge strip of figures, hairline-separated like a Tally summary band. */
-export const StatStrip = ({ items, cols = 4 }: {
+export const StatStrip = ({ items, cols = 4, size = 'sm' }: {
   items: { label: string; value: string; tone?: string }[]; cols?: 3 | 4 | 5;
+  /** 'md' is a roomier band for report headers. */
+  size?: 'sm' | 'md';
 }) => (
   <div className={cn('grid grid-cols-2 gap-px bg-slate-200',
     cols === 3 && 'sm:grid-cols-3', cols === 4 && 'sm:grid-cols-4', cols === 5 && 'sm:grid-cols-5')}>
     {items.map((s) => (
-      <div key={s.label} className="bg-white px-3 py-1.5">
-        <div className="text-[9.5px] font-semibold uppercase tracking-wider text-slate-400">{s.label}</div>
-        <div className={cn('font-mono text-sm font-bold tabular-nums', s.tone ?? 'text-slate-700')}>{s.value}</div>
+      <div key={s.label} className={cn('bg-white px-3', size === 'md' ? 'py-2.5' : 'py-1.5')}>
+        <div className={cn('font-semibold uppercase tracking-wider text-slate-500',
+          size === 'md' ? 'text-[11px]' : 'text-[9.5px]')}>{s.label}</div>
+        <div className={cn('font-mono font-bold tabular-nums', size === 'md' ? 'text-lg' : 'text-sm', s.tone ?? 'text-slate-700')}>{s.value}</div>
       </div>
     ))}
   </div>
