@@ -60,13 +60,20 @@ const measureOf = (it: Item) => it.coreType === 'RECTANGULAR'
   ? rectGeom(it).measure
   : `${+it.id} x ${+it.od} x ${+it.ht}`;
 
+// Epoxy / plastic casing has no separate SS case — same rule as the New
+// Sales Order form (POOrderNewPage's `isEpoxy`), so a Nano/Composite item's
+// weight here matches what was actually ordered instead of always adding a
+// case that was never fitted.
+const isEpoxyGrade = (grade: string) => /epoxy|plastic/i.test(grade || '');
+
 // Weight per piece (kg) from the dimensions — same math as the New Sales Order form.
 const weightOf = (it: Item): number => {
   if (!numOk(it)) return 0;
   if (it.coreType === 'RECTANGULAR') return rectGeom(it).weightPerPc;
   if (it.coreType === 'NANO' || it.coreType === 'COMPOSITE') {
     const c = nanoCalc({ id: +it.id, od: +it.od, ht: +it.ht, pcs: 0 });
-    return round3(c.coreWeight + c.caseWeight);
+    const caseWt = isEpoxyGrade(it.grade) ? 0 : c.caseWeight;
+    return round3(c.coreWeight + caseWt);
   }
   return toroidalCalc({ id: +it.id, od: +it.od, ht: +it.ht, pcs: 0 }).weightPerPc;
 };
