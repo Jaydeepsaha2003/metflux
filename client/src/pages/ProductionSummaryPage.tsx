@@ -247,7 +247,7 @@ export const ProductionSummaryPage = () => {
     <div className="max-w-full space-y-3">
       {/* Title bar */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="flex items-center gap-2 font-archivo text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
+        <h1 className="flex items-center gap-2 font-manrope text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
           <Factory className="h-4.5 w-4.5 text-brand-600" /> Production Summary
         </h1>
         <div className="flex flex-wrap items-center gap-2">
@@ -259,7 +259,7 @@ export const ProductionSummaryPage = () => {
           <button
             onClick={onExport}
             disabled={!items.length}
-            className="inline-flex min-h-[32px] items-center gap-1.5 rounded border border-slate-200 bg-white px-3 font-archivo text-[11px] font-extrabold uppercase tracking-wide text-emerald-700 transition-colors duration-200 hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-40 motion-reduce:transition-none"
+            className="inline-flex min-h-[32px] items-center gap-1.5 rounded border border-slate-200 bg-white px-3 font-manrope text-[11px] font-extrabold uppercase tracking-wide text-emerald-700 transition-colors duration-200 hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-40 motion-reduce:transition-none"
             title="Download the report as a formatted Excel sheet"
           >
             <Download className="h-3.5 w-3.5" /> Excel
@@ -267,7 +267,7 @@ export const ProductionSummaryPage = () => {
           <button
             onClick={onExportPdf}
             disabled={!employees.length || pdfBusy}
-            className="inline-flex min-h-[32px] items-center gap-1.5 rounded border border-slate-200 bg-white px-3 font-archivo text-[11px] font-extrabold uppercase tracking-wide text-rose-700 transition-colors duration-200 hover:bg-rose-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-40 motion-reduce:transition-none"
+            className="inline-flex min-h-[32px] items-center gap-1.5 rounded border border-slate-200 bg-white px-3 font-manrope text-[11px] font-extrabold uppercase tracking-wide text-rose-700 transition-colors duration-200 hover:bg-rose-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-40 motion-reduce:transition-none"
             title="Download the report as a formatted A4 PDF"
           >
             {pdfBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />} PDF
@@ -314,14 +314,14 @@ export const ProductionSummaryPage = () => {
             </div>
           </div>
           {hasFilters && (
-            <button onClick={clearFilters} className="flex h-9 items-center gap-1 font-archivo text-[11px] font-extrabold uppercase tracking-wide text-brand-700 hover:text-brand-800">
+            <button onClick={clearFilters} className="flex h-9 items-center gap-1 font-manrope text-[11px] font-extrabold uppercase tracking-wide text-brand-700 hover:text-brand-800">
               <X className="h-3 w-3" /> Clear
             </button>
           )}
           {view === 'BY_EMPLOYEE' && employees.length > 0 && (
             <button
               onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(employees.map((e) => e.name)))}
-              className="flex h-9 items-center gap-1 rounded border border-slate-200 bg-white px-2.5 font-archivo text-[11px] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-50 lg:ml-auto"
+              className="flex h-9 items-center gap-1 rounded border border-slate-200 bg-white px-2.5 font-manrope text-[11px] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-50 lg:ml-auto"
             >
               {allCollapsed ? 'Expand all' : 'Collapse all'}
             </button>
@@ -387,21 +387,21 @@ export const ProductionSummaryPage = () => {
                             ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden />
                             : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden />}
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate font-archivo text-[14px] font-extrabold uppercase tracking-wide text-slate-800">{e.name}</span>
+                            <span className="block truncate font-manrope text-[14px] font-extrabold uppercase tracking-wide text-slate-800">{e.name}</span>
                             <span className="mt-0.5 flex items-center gap-1.5">
                               <span className="h-1 w-14 overflow-hidden rounded-sm bg-slate-200 sm:w-20">
                                 <span className="block h-full bg-brand-500" style={{ width: `${Math.max(share * 100, 2)}%` }} />
                               </span>
-                              <span className="font-jbmono text-[11px] tabular-nums text-slate-500">
+                              <span className="font-ibmmono text-[11px] tabular-nums text-slate-500">
                                 {(share * 100).toFixed(1)}% · {e.days.length}d · {sizeCount} size{sizeCount === 1 ? '' : 's'}
                               </span>
                             </span>
                           </span>
                         </button>
                       </td>
-                      <td className="px-2 py-1.5 text-right font-jbmono text-[14px] font-bold tabular-nums text-slate-800">{pcsFmt(e.pcs)}</td>
-                      <td className="px-2 py-1.5 text-right font-jbmono text-[14px] font-bold tabular-nums text-slate-900">{kg(e.weight)}</td>
-                      <td className="px-2 py-1.5 text-right font-jbmono text-[14px] font-bold tabular-nums text-brand-700">{num(e.amount)}</td>
+                      <td className="px-2 py-1.5 text-right font-ibmmono text-[14px] font-bold tabular-nums text-slate-800">{pcsFmt(e.pcs)}</td>
+                      <td className="px-2 py-1.5 text-right font-ibmmono text-[14px] font-bold tabular-nums text-slate-900">{kg(e.weight)}</td>
+                      <td className="px-2 py-1.5 text-right font-ibmmono text-[14px] font-bold tabular-nums text-brand-700">{num(e.amount)}</td>
                     </tr>
 
                     {open && e.days.map((d) => (
@@ -409,21 +409,21 @@ export const ProductionSummaryPage = () => {
                         {/* Day sub-total */}
                         <tr className="bg-white">
                           <th scope="rowgroup" className="whitespace-nowrap border-b border-slate-100 py-1 pl-7 pr-2 text-left text-[13px] font-bold text-slate-700 sm:pl-9">{fmt(d.iso)}</th>
-                          <td className="hidden border-b border-slate-100 px-2 py-1 font-archivo text-[10px] uppercase tracking-wider text-slate-400 sm:table-cell" colSpan={3}>Day total</td>
-                          <td className="border-b border-slate-100 px-2 py-1 text-right font-jbmono text-[13px] font-semibold tabular-nums text-slate-700">{pcsFmt(d.pcs)}</td>
-                          <td className="border-b border-slate-100 px-2 py-1 text-right font-jbmono text-[13px] font-semibold tabular-nums text-slate-800">{kg(d.weight)}</td>
-                          <td className="border-b border-slate-100 px-2 py-1 text-right font-jbmono text-[13px] font-semibold tabular-nums text-slate-700">{num(d.amount)}</td>
+                          <td className="hidden border-b border-slate-100 px-2 py-1 font-manrope text-[10px] uppercase tracking-wider text-slate-400 sm:table-cell" colSpan={3}>Day total</td>
+                          <td className="border-b border-slate-100 px-2 py-1 text-right font-ibmmono text-[13px] font-semibold tabular-nums text-slate-700">{pcsFmt(d.pcs)}</td>
+                          <td className="border-b border-slate-100 px-2 py-1 text-right font-ibmmono text-[13px] font-semibold tabular-nums text-slate-800">{kg(d.weight)}</td>
+                          <td className="border-b border-slate-100 px-2 py-1 text-right font-ibmmono text-[13px] font-semibold tabular-nums text-slate-700">{num(d.amount)}</td>
                         </tr>
                         {/* Size lines */}
                         {d.sizes.map((z) => (
                           <tr key={z.key} className="odd:bg-white even:bg-slate-50/40 hover:bg-brand-50/50">
-                            <td className="whitespace-nowrap py-1 pl-10 pr-2 font-jbmono text-[12.5px] text-slate-700 sm:pl-14">{z.measure}</td>
+                            <td className="whitespace-nowrap py-1 pl-10 pr-2 font-ibmmono text-[12.5px] text-slate-700 sm:pl-14">{z.measure}</td>
                             <td className="px-1 py-1 text-center"><CoreTypeChip coreType={z.coreType} /></td>
                             <td className="hidden whitespace-nowrap px-2 py-1 text-[12.5px] text-slate-600 sm:table-cell">{z.grade}</td>
                             <td className="hidden whitespace-nowrap px-2 py-1 text-[12.5px] text-slate-600 md:table-cell">{z.material}</td>
-                            <td className="px-2 py-1 text-right font-jbmono text-[12.5px] tabular-nums text-slate-700">{pcsFmt(z.pcs)}</td>
-                            <td className="px-2 py-1 text-right font-jbmono text-[12.5px] tabular-nums text-slate-900">{kg(z.weight)}</td>
-                            <td className="px-2 py-1 text-right font-jbmono text-[12.5px] tabular-nums text-slate-600">{num(z.amount)}</td>
+                            <td className="px-2 py-1 text-right font-ibmmono text-[12.5px] tabular-nums text-slate-700">{pcsFmt(z.pcs)}</td>
+                            <td className="px-2 py-1 text-right font-ibmmono text-[12.5px] tabular-nums text-slate-900">{kg(z.weight)}</td>
+                            <td className="px-2 py-1 text-right font-ibmmono text-[12.5px] tabular-nums text-slate-600">{num(z.amount)}</td>
                           </tr>
                         ))}
                       </Fragment>
@@ -435,10 +435,10 @@ export const ProductionSummaryPage = () => {
               {totals && (
                 <tfoot>
                   <tr className="bg-brand-900 text-white">
-                    <td className="px-2 py-1.5 pl-3 font-archivo text-[11px] font-bold uppercase tracking-wider" colSpan={4}>Grand Total</td>
-                    <td className="px-2 py-1.5 text-right font-jbmono text-[14px] font-bold tabular-nums">{pcsFmt(totals.pcs)}</td>
-                    <td className="px-2 py-1.5 text-right font-jbmono text-[14px] font-bold tabular-nums">{kg(totals.weight)}</td>
-                    <td className="px-2 py-1.5 text-right font-jbmono text-[14px] font-bold tabular-nums">{num(totals.amount)}</td>
+                    <td className="px-2 py-1.5 pl-3 font-manrope text-[11px] font-bold uppercase tracking-wider" colSpan={4}>Grand Total</td>
+                    <td className="px-2 py-1.5 text-right font-ibmmono text-[14px] font-bold tabular-nums">{pcsFmt(totals.pcs)}</td>
+                    <td className="px-2 py-1.5 text-right font-ibmmono text-[14px] font-bold tabular-nums">{kg(totals.weight)}</td>
+                    <td className="px-2 py-1.5 text-right font-ibmmono text-[14px] font-bold tabular-nums">{num(totals.amount)}</td>
                   </tr>
                 </tfoot>
               )}
@@ -471,20 +471,20 @@ export const ProductionSummaryPage = () => {
                     <td className="px-1 py-1 text-center"><CoreTypeChip coreType={r.coreType} /></td>
                     <td className="hidden whitespace-nowrap px-2 py-1 text-[12.5px] text-slate-600 sm:table-cell">{r.grade}</td>
                     <td className="hidden whitespace-nowrap px-2 py-1 text-[12.5px] text-slate-600 md:table-cell">{r.material}</td>
-                    <td className="whitespace-nowrap px-2 py-1 font-jbmono text-[12.5px] text-slate-700">{r.measure}</td>
-                    <td className="px-2 py-1 text-right font-jbmono text-[12.5px] tabular-nums text-slate-700">{pcsFmt(r.pcs)}</td>
-                    <td className="px-2 py-1 text-right font-jbmono text-[12.5px] tabular-nums text-slate-900">{kg(r.totalWeight)}</td>
-                    <td className="px-2 py-1 text-right font-jbmono text-[12.5px] tabular-nums text-slate-600">{r.amount == null ? '—' : num(r.amount)}</td>
+                    <td className="whitespace-nowrap px-2 py-1 font-ibmmono text-[12.5px] text-slate-700">{r.measure}</td>
+                    <td className="px-2 py-1 text-right font-ibmmono text-[12.5px] tabular-nums text-slate-700">{pcsFmt(r.pcs)}</td>
+                    <td className="px-2 py-1 text-right font-ibmmono text-[12.5px] tabular-nums text-slate-900">{kg(r.totalWeight)}</td>
+                    <td className="px-2 py-1 text-right font-ibmmono text-[12.5px] tabular-nums text-slate-600">{r.amount == null ? '—' : num(r.amount)}</td>
                   </tr>
                 ))}
               </tbody>
               {totals && (
                 <tfoot>
                   <tr className="bg-brand-900 text-white">
-                    <td className="px-2 py-1.5 pl-3 font-archivo text-[11px] font-bold uppercase tracking-wider" colSpan={6}>Grand Total</td>
-                    <td className="px-2 py-1.5 text-right font-jbmono text-[14px] font-bold tabular-nums">{pcsFmt(totals.pcs)}</td>
-                    <td className="px-2 py-1.5 text-right font-jbmono text-[14px] font-bold tabular-nums">{kg(totals.weight)}</td>
-                    <td className="px-2 py-1.5 text-right font-jbmono text-[14px] font-bold tabular-nums">{num(totals.amount)}</td>
+                    <td className="px-2 py-1.5 pl-3 font-manrope text-[11px] font-bold uppercase tracking-wider" colSpan={6}>Grand Total</td>
+                    <td className="px-2 py-1.5 text-right font-ibmmono text-[14px] font-bold tabular-nums">{pcsFmt(totals.pcs)}</td>
+                    <td className="px-2 py-1.5 text-right font-ibmmono text-[14px] font-bold tabular-nums">{kg(totals.weight)}</td>
+                    <td className="px-2 py-1.5 text-right font-ibmmono text-[14px] font-bold tabular-nums">{num(totals.amount)}</td>
                   </tr>
                 </tfoot>
               )}

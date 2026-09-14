@@ -1,7 +1,7 @@
 // Shared visual language for the Production pages (Receive / Modify / Summary)
 // — reskinned from the user's own colour mockup. Deliberately separate from
 // components/tally.tsx (the Accounts screens' look): this is a denser,
-// dark-banded "manufacturing ERP" style with Archivo labels and JetBrains
+// dark-banded "manufacturing ERP" style with Manrope labels and IBM Plex
 // Mono figures, used ONLY here so no other page's typography or chrome moves.
 //
 // Colour rule: the mockup hardcodes a dark-green/lime pair everywhere. That
@@ -19,22 +19,22 @@ import { Link, useLocation } from 'react-router-dom';
 import { Inbox, Pencil, BarChart3, Factory } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
-/** Uppercase, letter-spaced Archivo label — the small caption text used above
+/** Uppercase, letter-spaced Manrope label — the small caption text used above
  *  every KPI figure, table header cell and section eyebrow in the mockup. */
 export const ErpLabel = ({ children, className }: { children: React.ReactNode; className?: string }) => (
-  <span className={cn('font-archivo text-[9.5px] font-extrabold uppercase tracking-[0.12em] text-slate-500', className)}>
+  <span className={cn('font-manrope text-[9.5px] font-extrabold uppercase tracking-[0.12em] text-slate-500', className)}>
     {children}
   </span>
 );
 
-/** One KPI cell for the stat strip — Archivo caption + JetBrains Mono value. */
+/** One KPI cell for the stat strip — Manrope caption + IBM Plex Mono value. */
 export const ErpStat = ({ label, value, caption, tone, big }: {
   label: string; value: string; caption?: string; tone?: 'brand' | 'ink'; big?: boolean;
 }) => (
   <div className="min-w-0 px-3.5 py-2.5 sm:px-4 sm:py-3">
     <ErpLabel>{label}</ErpLabel>
     <div className={cn(
-      'mt-0.5 truncate font-jbmono font-semibold tabular-nums',
+      'mt-0.5 truncate font-ibmmono font-semibold tabular-nums',
       big ? 'text-lg sm:text-xl' : 'text-base sm:text-lg',
       tone === 'brand' ? 'text-brand-700' : 'text-slate-900',
     )}>
@@ -60,7 +60,7 @@ export const ErpStatStrip = ({ children }: { children: React.ReactNode }) => (
  *  reskin of Production specifically, not a site-wide chip-colour change. */
 export const CoreTypeChip = ({ coreType, className }: { coreType: 'TOROIDAL' | 'RECTANGULAR'; className?: string }) => (
   <span className={cn(
-    'inline-flex items-center rounded-[3px] border px-1.5 py-0.5 font-archivo text-[9.5px] font-extrabold uppercase tracking-wider',
+    'inline-flex items-center rounded-[3px] border px-1.5 py-0.5 font-manrope text-[9.5px] font-extrabold uppercase tracking-wider',
     coreType === 'TOROIDAL'
       ? 'border-[#C6DAF0] bg-[#EAF0FA] text-[#1B4E82]'
       : 'border-[#D6E2D6] bg-[#EFF5EC] text-[#33473E]',
@@ -80,13 +80,13 @@ export const ErpCard = ({ children, className }: { children: React.ReactNode; cl
   </div>
 );
 
-/** Dense table header cell — brand-900 fill, light Archivo caption text. Use
+/** Dense table header cell — brand-900 fill, light Manrope caption text. Use
  *  inside a <thead><tr> exactly like a normal <th>. */
 export const ErpTh = ({ children, align = 'left', className }: {
   children?: React.ReactNode; align?: 'left' | 'right' | 'center'; className?: string;
 }) => (
   <th className={cn(
-    'whitespace-nowrap bg-brand-900 px-2.5 py-2 font-archivo text-[9.5px] font-extrabold uppercase tracking-[0.12em] text-brand-100/80',
+    'whitespace-nowrap bg-brand-900 px-2.5 py-2 font-manrope text-[9.5px] font-extrabold uppercase tracking-[0.12em] text-brand-100/80',
     align === 'right' && 'text-right', align === 'center' && 'text-center', align === 'left' && 'text-left',
     className,
   )}>
@@ -97,7 +97,7 @@ export const ErpTh = ({ children, align = 'left', className }: {
 /** Dark grand-total / footer band (brand-900), matching the table header. */
 export const ErpFooterRow = ({ children, colSpan }: { children: React.ReactNode; colSpan?: number }) => (
   <tr className="bg-brand-900 text-white">
-    <td colSpan={colSpan} className="px-2.5 py-2 font-archivo text-[11px] font-bold uppercase tracking-wider">
+    <td colSpan={colSpan} className="px-2.5 py-2 font-manrope text-[11px] font-bold uppercase tracking-wider">
       {children}
     </td>
   </tr>
@@ -117,7 +117,7 @@ export const ErpSegmented = <T extends string>({ value, onChange, options }: {
         onClick={() => onChange(o.value)}
         aria-pressed={value === o.value}
         className={cn(
-          'rounded-[3px] px-3 py-1 font-archivo text-[11px] font-extrabold uppercase tracking-wide transition-colors duration-150 motion-reduce:transition-none',
+          'rounded-[3px] px-3 py-1 font-manrope text-[11px] font-extrabold uppercase tracking-wide transition-colors duration-150 motion-reduce:transition-none',
           value === o.value ? 'bg-brand-900 text-white' : 'text-slate-600 hover:bg-slate-100',
         )}
       >
@@ -143,19 +143,19 @@ export const ErpMobileHeader = ({ subtitle, primary, stats }: {
         <Factory className="h-4 w-4 text-white" />
       </span>
       <div className="min-w-0">
-        <div className="font-archivo text-[15px] font-extrabold leading-tight">Production</div>
+        <div className="font-manrope text-[15px] font-extrabold leading-tight">Production</div>
         <div className="truncate text-[11px] text-brand-100/70">{subtitle}</div>
       </div>
     </div>
     <div className="mt-3.5">
       <ErpLabel className="!text-brand-100/60">{primary.label}</ErpLabel>
-      <div className="mt-0.5 font-jbmono text-2xl font-bold tabular-nums text-brand-300">{primary.value}</div>
+      <div className="mt-0.5 font-ibmmono text-2xl font-bold tabular-nums text-brand-300">{primary.value}</div>
     </div>
     <div className="mt-3 grid grid-cols-2 gap-2.5 border-t border-white/10 pt-3">
       {stats.map((s) => (
         <div key={s.label}>
           <ErpLabel className="!text-brand-100/60">{s.label}</ErpLabel>
-          <div className="mt-0.5 font-jbmono text-lg font-semibold tabular-nums">{s.value}</div>
+          <div className="mt-0.5 font-ibmmono text-lg font-semibold tabular-nums">{s.value}</div>
         </div>
       ))}
     </div>
@@ -183,7 +183,7 @@ export const ProductionTabs = () => {
             to={t.to}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'flex items-center gap-1.5 border-b-2 py-2.5 font-archivo text-[12.5px] font-extrabold uppercase tracking-wide transition-colors duration-150 motion-reduce:transition-none',
+              'flex items-center gap-1.5 border-b-2 py-2.5 font-manrope text-[12.5px] font-extrabold uppercase tracking-wide transition-colors duration-150 motion-reduce:transition-none',
               active ? 'border-brand-600 text-brand-800' : 'border-transparent text-slate-500 hover:text-slate-700',
             )}
           >
