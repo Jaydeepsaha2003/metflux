@@ -4,11 +4,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Save, Loader2, Factory, Hash, User2 } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, Factory } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useHideCustomerNames } from '@/store/auth';
 import { useConfirm } from '@/hooks/useConfirm';
+import { ErpCard, ErpLabel, CoreTypeChip, ProductionTabs } from '@/components/production/erp';
 
 type Item = {
   id: string;
@@ -132,37 +133,55 @@ export const ProductionEditPage = () => {
   };
 
   return (
-    <div className="space-y-4 max-w-4xl">
+    <div className="space-y-3 max-w-3xl">
       <div className="flex items-center gap-3">
         <Link to="/production" className="btn-ghost text-slate-600">
           <ArrowLeft className="h-4 w-4" /> Back
         </Link>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+        <h1 className="flex items-center gap-2 font-archivo text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
           <Factory className="h-5 w-5 text-brand-600" /> Edit Production
         </h1>
       </div>
 
-      {isLoading && <div className="card p-8 text-center text-slate-400">Loading…</div>}
+      <ProductionTabs />
+
+      {isLoading && <ErpCard className="p-8 text-center text-slate-400">Loading…</ErpCard>}
 
       {item && (
-        <>
-          <section className="card p-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
-            <span className="flex items-center gap-1.5 text-slate-500"><Hash className="h-3.5 w-3.5" /> PO</span>
-            <span className="font-mono text-slate-900">{item.poNumber}</span>
-            <span className="flex items-center gap-1.5 text-slate-500"><User2 className="h-3.5 w-3.5" /> Customer</span>
-            <span className="text-slate-900 truncate">
-              <span className="font-mono text-xs font-semibold text-brand-700 mr-1.5">{item.customerCode ?? '—'}</span>
-              {!hideNames && item.customerName}
-            </span>
-            <span className="basis-full sm:basis-auto sm:ml-auto text-xs text-slate-500">
-              {item.grade} · {item.material} · <span className="font-mono break-all">{item.measure}</span>
-            </span>
-          </section>
+        <ErpCard>
+          {/* WHAT WAS MADE — the order this entry was recorded against; not
+              editable here, it comes from the PO item itself. */}
+          <div className="border-b border-slate-100 p-3 sm:p-4">
+            <ErpLabel className="mb-2 block">What Was Made</ErpLabel>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm sm:grid-cols-4">
+              <div>
+                <ErpLabel className="block">Sales Order</ErpLabel>
+                <div className="mt-0.5 font-jbmono text-[13px] font-semibold text-slate-900">{item.poNumber}</div>
+              </div>
+              <div className="col-span-2">
+                <ErpLabel className="block">Customer</ErpLabel>
+                <div className="mt-0.5 truncate text-sm font-medium text-slate-900">
+                  <span className="mr-1.5 font-jbmono text-xs font-semibold text-brand-700">{item.customerCode ?? '—'}</span>
+                  {!hideNames && item.customerName}
+                </div>
+              </div>
+              <div>
+                <ErpLabel className="block">Core</ErpLabel>
+                <div className="mt-0.5 flex items-center gap-1.5"><CoreTypeChip coreType={item.coreType} /> <span className="text-sm text-slate-700">{item.grade}</span></div>
+              </div>
+              <div className="col-span-2 sm:col-span-4">
+                <ErpLabel className="block">Measure</ErpLabel>
+                <div className="mt-0.5 font-jbmono text-[13px] text-slate-700">{item.measure} <span className="text-slate-400">· {item.material}</span></div>
+              </div>
+            </dl>
+          </div>
 
-          <section className="card p-4 space-y-4">
+          {/* FIGURES — the editable production entry. */}
+          <div className="space-y-4 p-3 sm:p-4">
+            <ErpLabel className="block">Figures</ErpLabel>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <Field label="Production Date">
-                <input className="input" type="date" value={prodDate} onChange={(e) => setProdDate(e.target.value)} />
+                <input className="input h-9 text-sm" type="date" value={prodDate} onChange={(e) => setProdDate(e.target.value)} />
               </Field>
               <Field label="Worker / Labour">
                 <SearchableSelect
@@ -174,20 +193,20 @@ export const ProductionEditPage = () => {
               </Field>
               <Field label={`Pcs (${item.itemPcs - item.othersPcs} remaining)`}>
                 <input
-                  className="input" type="number" inputMode="numeric" min={1}
+                  className="input h-9 text-sm" type="number" inputMode="numeric" min={1}
                   value={pcs || ''} onChange={(e) => setPcs(parseInt(e.target.value || '0', 10))}
                 />
               </Field>
               <Field label="Wt / pc">
-                <input className="input bg-slate-50" value={item.weightPerPc.toFixed(3)} readOnly />
+                <input className="input h-9 bg-slate-50 text-sm font-jbmono" value={item.weightPerPc.toFixed(3)} readOnly />
               </Field>
               <Field label="Total Weight">
-                <input className="input bg-slate-50" value={totalWeight ? totalWeight.toFixed(3) : ''} readOnly />
+                <input className="input h-9 bg-slate-50 text-sm font-jbmono" value={totalWeight ? totalWeight.toFixed(3) : ''} readOnly />
               </Field>
             </div>
 
             {error && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                 <div className="font-medium">{error.message}</div>
                 {error.details && (
                   <ul className="mt-1 list-disc pl-5 text-xs">
@@ -197,15 +216,15 @@ export const ProductionEditPage = () => {
               </div>
             )}
 
-            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+            <div className="flex flex-col-reverse gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:justify-end sm:gap-3">
               <Link to="/production" className="btn-ghost w-full sm:w-auto justify-center">Cancel</Link>
               <button onClick={onSave} disabled={save.isPending} className="btn-primary w-full sm:w-auto justify-center">
                 {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 Save changes
               </button>
             </div>
-          </section>
-        </>
+          </div>
+        </ErpCard>
       )}
       {confirmDialog}
     </div>
@@ -214,7 +233,7 @@ export const ProductionEditPage = () => {
 
 const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
   <label className="block">
-    <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</span>
+    <ErpLabel className="mb-1 block">{label}</ErpLabel>
     {children}
   </label>
 );

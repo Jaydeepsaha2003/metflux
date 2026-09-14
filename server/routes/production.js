@@ -154,12 +154,14 @@ router.get('/_meta/labours', requirePermission('rec_production'), asyncHandler(a
 
 /* GET / — paginated list */
 router.get('/', requirePermission('view_po'), asyncHandler(async (req, res) => {
-  const { page, pageSize, search } = z.object({
+  const { page, pageSize, search, coreType, labour } = z.object({
     page: z.coerce.number().int().min(1).default(1),
     // Generous cap so the "Excel" button (pulls every filtered row at once)
     // works without paging. Normal browsing uses pageSize=20.
     pageSize: z.coerce.number().int().min(1).max(10000).default(50),
     search: z.string().trim().max(120).optional(),
+    coreType: z.enum(['TOROIDAL', 'RECTANGULAR']).optional(),
+    labour: z.string().trim().max(120).optional(),
   }).parse(req.query);
   const skip = (page - 1) * pageSize;
 
@@ -170,19 +172,60 @@ router.get('/', requirePermission('view_po'), asyncHandler(async (req, res) => {
     where += ' AND (p.`labourName` LIKE ? OR po.`poNumber` LIKE ? OR c.`name` LIKE ? OR it.`grade` LIKE ? OR it.`material` LIKE ? OR it.`measure` LIKE ?)';
     params.push(like, like, like, like, like, like);
   }
+  if (coreType) { where += ' AND it.`coreType` = ?'; params.push(coreType); }
+  if (labour)   { where += ' AND p.`labourName` = ?'; params.push(labour); }
 
-  const [rows, totalRow] = await Promise.all([
+  const [rows, totalRow, aggRow, labours] = await Promise.all([
     q(`${PROD_ROW_SQL} WHERE ${where} ORDER BY p.\`prodDate\` DESC LIMIT ? OFFSET ?`,
       [...params, pageSize, skip]),
     qOne(
-      `SELECT COUNT(*) AS n FROM \`Production\` p
+      `SELECT COUNT(*) AS n, COUNT(DISTINCT p.\`labourName\`) AS labourCount, COUNT(DISTINCT po.\`id\`) AS poCount
+         FROM \`Production\` p
         INNER JOIN \`PoOrderItem\` it ON it.\`id\` = p.\`poOrderItemId\`
         INNER JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
         INNER JOIN \`Customer\` c ON c.\`id\` = po.\`customerId\`
         WHERE ${where}`, params),
+    // Job amount is pro-rated from the PARENT item's totalAmount (see flatten()
+    // below), which SQL can't do directly — sum it in JS from the same rows
+    // used for the flat total so the KPI strip always matches the table.
+    q(`SELECT p.\`pcs\`, p.\`totalWeight\`, it.\`pcs\` AS item_pcs, it.\`totalAmount\` AS item_totalAmount
+         FROM \`Production\` p
+        INNER JOIN \`PoOrderItem\` it ON it.\`id\` = p.\`poOrderItemId\`
+        INNER JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
+        INNER JOIN \`Customer\` c ON c.\`id\` = po.\`customerId\`
+        WHERE ${where}`, params),
+    q(
+      "SELECT DISTINCT `labourName` FROM `Production` WHERE `companyId` = ? AND `labourName` <> '' ORDER BY `labourName` ASC",
+      [req.tenant.companyId]
+    ),
   ]);
 
-  res.json({ items: rows.map(flatten), total: Number(totalRow?.n ?? 0), page, pageSize });
+  let pcs = 0, weight = 0, amount = 0, unratedCount = 0;
+  for (const r of aggRow) {
+    pcs += Number(r.pcs) || 0;
+    weight += Number(r.totalWeight) || 0;
+    if (r.item_totalAmount != null && r.item_pcs > 0) {
+      amount += (Number(r.item_totalAmount) * (Number(r.pcs) / Number(r.item_pcs)));
+    } else {
+      unratedCount++;
+    }
+  }
+
+  res.json({
+    items: rows.map(flatten),
+    total: Number(totalRow?.n ?? 0),
+    page, pageSize,
+    aggregates: {
+      records: Number(totalRow?.n ?? 0),
+      pcs,
+      weight: +weight.toFixed(3),
+      amount: +amount.toFixed(2),
+      unratedCount,
+      poCount: Number(totalRow?.poCount ?? 0),
+      labourCount: Number(totalRow?.labourCount ?? 0),
+    },
+    labours: labours.map((r) => r.labourName),
+  });
 }));
 
 /* GET /summary — filtered production report (by date / employee / customer),

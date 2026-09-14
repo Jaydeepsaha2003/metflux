@@ -3,17 +3,19 @@
 // customer; download the filtered set as Excel.
 import { Fragment, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Factory, Loader2, Download, Search, ChevronDown, ChevronRight, Users, List, SlidersHorizontal, FileText } from 'lucide-react';
+import { Factory, Loader2, Download, Search, ChevronDown, ChevronRight, FileText, X } from 'lucide-react';
 import { api } from '@/lib/api';
-import { cn } from '@/lib/cn';
 import { downloadXlsx, todayStamp } from '@/lib/excel';
 import { downloadReportXlsx, type ReportRow } from '@/lib/xlsxReport';
 import { SearchableSelect } from '@/components/SearchableSelect';
-import { Panel, Th, StatStrip, num } from '@/components/tally';
+import { num } from '@/components/tally';
 import { downloadProductionPdf, type ProductionPdf } from '@/lib/reportPdf';
 import { brandColorFor } from '@/lib/brandColor';
 import { useBranding } from '@/store/branding';
 import { useHideCustomerNames } from '@/store/auth';
+import {
+  ErpCard, ErpLabel, ErpStat, ErpStatStrip, ErpTh, ErpSegmented, CoreTypeChip, ProductionTabs, ErpMobileHeader,
+} from '@/components/production/erp';
 
 type Row = {
   id: string; prodDate: string; poNumber: string;
@@ -159,7 +161,7 @@ export const ProductionSummaryPage = () => {
         { header: 'Date', width: 14 },
         { header: 'Pcs', width: 9, numFmt: '#,##0' },
         { header: 'Weight (kg)', width: 13, numFmt: '#,##0.000' },
-        { header: 'Amount', width: 15, numFmt: '\u20B9#,##0.00' },
+        { header: 'Amount', width: 15, numFmt: '₹#,##0.00' },
       ],
       rows,
     });
@@ -238,32 +240,26 @@ export const ProductionSummaryPage = () => {
   };
 
   const dayCount = new Set(employees.flatMap((e) => e.days.map((d) => d.key))).size;
+  const hasFilters = !!from || !!to || !!labour || !!customerId || !!search.trim();
+  const clearFilters = () => { setFrom(''); setTo(''); setLabour(''); setCustomerId(''); setSearch(''); };
 
   return (
     <div className="max-w-full space-y-3">
       {/* Title bar */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight text-slate-800 sm:text-2xl">
+        <h1 className="flex items-center gap-2 font-archivo text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
           <Factory className="h-4.5 w-4.5 text-brand-600" /> Production Summary
         </h1>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded border border-slate-300 bg-white p-0.5">
-            {([['BY_EMPLOYEE', 'By Employee', Users], ['ENTRIES', 'All Entries', List]] as const).map(([k, label, Icon]) => (
-              <button
-                key={k}
-                onClick={() => setView(k)}
-                aria-pressed={view === k}
-                className={cn('inline-flex min-h-[30px] items-center gap-1.5 rounded-sm px-2.5 text-[12px] font-bold uppercase tracking-wider transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 motion-reduce:transition-none',
-                  view === k ? 'bg-slate-700 text-white' : 'text-slate-600 hover:bg-slate-100')}
-              >
-                <Icon className="h-3.5 w-3.5" /> {label}
-              </button>
-            ))}
-          </div>
+          <ErpSegmented
+            value={view}
+            onChange={setView}
+            options={[{ value: 'BY_EMPLOYEE', label: 'By Employee' }, { value: 'ENTRIES', label: 'All Entries' }]}
+          />
           <button
             onClick={onExport}
             disabled={!items.length}
-            className="inline-flex min-h-[32px] items-center gap-1.5 rounded border border-slate-300 bg-white px-3 text-[12px] font-bold uppercase tracking-wider text-emerald-700 transition-colors duration-200 hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-40 motion-reduce:transition-none"
+            className="inline-flex min-h-[32px] items-center gap-1.5 rounded border border-slate-200 bg-white px-3 font-archivo text-[11px] font-extrabold uppercase tracking-wide text-emerald-700 transition-colors duration-200 hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-40 motion-reduce:transition-none"
             title="Download the report as a formatted Excel sheet"
           >
             <Download className="h-3.5 w-3.5" /> Excel
@@ -271,7 +267,7 @@ export const ProductionSummaryPage = () => {
           <button
             onClick={onExportPdf}
             disabled={!employees.length || pdfBusy}
-            className="inline-flex min-h-[32px] items-center gap-1.5 rounded border border-slate-300 bg-white px-3 text-[11.5px] font-bold uppercase tracking-wider text-rose-700 transition-colors duration-200 hover:bg-rose-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-40 motion-reduce:transition-none"
+            className="inline-flex min-h-[32px] items-center gap-1.5 rounded border border-slate-200 bg-white px-3 font-archivo text-[11px] font-extrabold uppercase tracking-wide text-rose-700 transition-colors duration-200 hover:bg-rose-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-40 motion-reduce:transition-none"
             title="Download the report as a formatted A4 PDF"
           >
             {pdfBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />} PDF
@@ -279,80 +275,97 @@ export const ProductionSummaryPage = () => {
         </div>
       </div>
 
-      {/* Filters */}
-      {/* overflow-visible: the Employee/Customer pickers render their menu as an
-          absolutely-positioned child, and Panel clips by default — which cut the
-          dropdown off at the card edge. */}
-      <Panel title={<><SlidersHorizontal className="h-3.5 w-3.5" /> Filters</>} className="overflow-visible">
-        <div className="grid grid-cols-1 gap-2.5 p-3 sm:grid-cols-2 lg:grid-cols-5">
-          <Field label="From"><input type="date" className="input h-9 text-sm" value={from} onChange={(e) => setFrom(e.target.value)} /></Field>
-          <Field label="To"><input type="date" className="input h-9 text-sm" value={to} onChange={(e) => setTo(e.target.value)} /></Field>
-          <Field label="Employee"><SearchableSelect value={labour} onChange={setLabour} options={labourOptions} placeholder="All employees" /></Field>
-          <Field label="Customer"><SearchableSelect value={customerId} onChange={setCustomerId} options={customerOptions} placeholder="All customers" /></Field>
-          <Field label="Search">
+      <ProductionTabs />
+
+      {totals && !isLoading && (
+        <ErpMobileHeader
+          subtitle={hasFilters ? 'Filtered' : 'All dates'}
+          primary={{ label: 'Total Amount', value: '₹' + num(totals.amount) }}
+          stats={[{ label: 'Pcs', value: pcsFmt(totals.pcs) }, { label: 'Weight', value: `${kg(totals.weight)} kg` }]}
+        />
+      )}
+
+      {/* overflow-visible: the Employee/Customer pickers render their menu as
+          an absolutely-positioned child, and the card below clips by default. */}
+      <ErpCard className="overflow-visible">
+        {/* Filter toolbar — one row, matches Modify's layout. */}
+        <div className="flex flex-col gap-2.5 p-3 lg:flex-row lg:items-end lg:flex-wrap">
+          <div className="w-32">
+            <ErpLabel className="mb-1 block">From</ErpLabel>
+            <input type="date" className="input h-9 text-sm" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+          <div className="w-32">
+            <ErpLabel className="mb-1 block">To</ErpLabel>
+            <input type="date" className="input h-9 text-sm" value={to} onChange={(e) => setTo(e.target.value)} />
+          </div>
+          <div className="w-44">
+            <ErpLabel className="mb-1 block">Employee</ErpLabel>
+            <SearchableSelect value={labour} onChange={setLabour} options={labourOptions} placeholder="All employees" />
+          </div>
+          <div className="w-52">
+            <ErpLabel className="mb-1 block">Customer</ErpLabel>
+            <SearchableSelect value={customerId} onChange={setCustomerId} options={customerOptions} placeholder="All customers" />
+          </div>
+          <div className="relative min-w-0 flex-1">
+            <ErpLabel className="mb-1 block">Search</ErpLabel>
             <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
               <input className="input h-9 pl-8 text-sm" placeholder="PO, grade, measure…" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
-          </Field>
-        </div>
-      </Panel>
-
-      {/* Totals band */}
-      {totals && !isLoading && (
-        <Panel title="Totals">
-          <StatStrip
-            size="md"
-            cols={5}
-            items={[
-              { label: 'Employees', value: String(employees.length) },
-              { label: 'Days', value: String(dayCount) },
-              { label: 'Total Pcs', value: pcsFmt(totals.pcs) },
-              { label: 'Total Weight (kg)', value: kg(totals.weight), tone: 'text-slate-900' },
-              { label: 'Total Amount', value: '\u20B9' + num(totals.amount), tone: 'text-brand-700' },
-            ]}
-          />
-        </Panel>
-      )}
-
-      {isLoading && (
-        <div className="rounded border border-slate-300 bg-white p-10 text-center text-slate-400">
-          <Loader2 className="mx-auto h-5 w-5 animate-spin" />
-        </div>
-      )}
-      {!isLoading && !items.length && (
-        <div className="rounded border border-slate-300 bg-white p-10 text-center text-sm text-slate-500">
-          No production records for these filters.
-        </div>
-      )}
-
-      {/* ---------------- By employee: one continuous columnar report ----------------
-          A single table for every employee (rather than a table per card) so the
-          figures line up in one column down the whole page — the thing that makes
-          a printed ERP report readable. */}
-      {!isLoading && items.length > 0 && view === 'BY_EMPLOYEE' && (
-        <Panel
-          title={<><Users className="h-3.5 w-3.5" /> Production by Employee</>}
-          right={
+          </div>
+          {hasFilters && (
+            <button onClick={clearFilters} className="flex h-9 items-center gap-1 font-archivo text-[11px] font-extrabold uppercase tracking-wide text-brand-700 hover:text-brand-800">
+              <X className="h-3 w-3" /> Clear
+            </button>
+          )}
+          {view === 'BY_EMPLOYEE' && employees.length > 0 && (
             <button
               onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(employees.map((e) => e.name)))}
-              className="inline-flex min-h-[26px] items-center rounded border border-slate-300 bg-white px-2 text-[11.5px] font-bold uppercase tracking-wider text-slate-600 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              className="flex h-9 items-center gap-1 rounded border border-slate-200 bg-white px-2.5 font-archivo text-[11px] font-extrabold uppercase tracking-wide text-slate-600 hover:bg-slate-50 lg:ml-auto"
             >
               {allCollapsed ? 'Expand all' : 'Collapse all'}
             </button>
-          }
-        >
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[680px] border-collapse text-sm">
+          )}
+        </div>
+
+        {/* KPI strip */}
+        {totals && !isLoading && (
+          <ErpStatStrip>
+            <ErpStat label="Employees" value={String(employees.length)} />
+            <ErpStat label="Days" value={String(dayCount)} />
+            <ErpStat label="Total Pcs" value={pcsFmt(totals.pcs)} />
+            <ErpStat label="Total Weight" value={`${kg(totals.weight)} kg`} />
+            <ErpStat label="Total Amount" value={'₹' + num(totals.amount)} tone="brand" />
+          </ErpStatStrip>
+        )}
+
+        {isLoading && (
+          <div className="border-t border-slate-100 p-10 text-center text-slate-400">
+            <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+          </div>
+        )}
+        {!isLoading && !items.length && (
+          <div className="border-t border-slate-100 p-10 text-center text-sm text-slate-500">
+            No production records for these filters.
+          </div>
+        )}
+
+        {/* ---------------- By employee: one continuous columnar report ----------------
+            A single table for every employee (rather than a table per card) so the
+            figures line up in one column down the whole page — the thing that makes
+            a printed ERP report readable. */}
+        {!isLoading && items.length > 0 && view === 'BY_EMPLOYEE' && (
+          <div className="overflow-x-auto border-t border-slate-100">
+            <table className="w-full min-w-[680px] border-collapse text-[13px]">
               <thead>
                 <tr>
-                  <Th size="md" className="sm:pl-3">Employee / Date / Size</Th>
-                  <Th size="md" align="center" className="w-[62px]">Type</Th>
-                  <Th size="md" className="hidden w-[104px] sm:table-cell">Grade</Th>
-                  <Th size="md" className="hidden w-[112px] md:table-cell">Material</Th>
-                  <Th size="md" align="right" className="w-[68px]">Pcs</Th>
-                  <Th size="md" align="right" className="w-[96px]">Weight (kg)</Th>
-                  <Th size="md" align="right" className="w-[112px]">Amount</Th>
+                  <ErpTh className="pl-3">Employee / Date / Size</ErpTh>
+                  <ErpTh align="center" className="w-[62px]">Type</ErpTh>
+                  <ErpTh className="hidden w-[104px] sm:table-cell">Grade</ErpTh>
+                  <ErpTh className="hidden w-[112px] md:table-cell">Material</ErpTh>
+                  <ErpTh align="right" className="w-[68px]">Pcs</ErpTh>
+                  <ErpTh align="right" className="w-[96px]">Weight (kg)</ErpTh>
+                  <ErpTh align="right" className="w-[112px]">Amount</ErpTh>
                 </tr>
               </thead>
 
@@ -361,10 +374,10 @@ export const ProductionSummaryPage = () => {
                 const share = totals && totals.weight > 0 ? e.weight / totals.weight : 0;
                 const sizeCount = new Set(e.days.flatMap((d) => d.sizes.map((z) => z.key))).size;
                 return (
-                  <tbody key={e.name} className="border-b-2 border-slate-200 last:border-b-0">
+                  <tbody key={e.name} className="border-b-2 border-slate-100 last:border-b-0">
                     {/* Employee band */}
                     <tr className="bg-slate-50">
-                      <td className="border-b border-slate-200 p-0" colSpan={4}>
+                      <td className="p-0" colSpan={4}>
                         <button
                           onClick={() => toggleEmp(e.name)}
                           aria-expanded={open}
@@ -374,48 +387,43 @@ export const ProductionSummaryPage = () => {
                             ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden />
                             : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden />}
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[15px] font-bold uppercase tracking-wide text-slate-800">{e.name}</span>
+                            <span className="block truncate font-archivo text-[14px] font-extrabold uppercase tracking-wide text-slate-800">{e.name}</span>
                             <span className="mt-0.5 flex items-center gap-1.5">
                               <span className="h-1 w-14 overflow-hidden rounded-sm bg-slate-200 sm:w-20">
                                 <span className="block h-full bg-brand-500" style={{ width: `${Math.max(share * 100, 2)}%` }} />
                               </span>
-                              <span className="font-mono text-[11.5px] tabular-nums text-slate-500">
+                              <span className="font-jbmono text-[11px] tabular-nums text-slate-500">
                                 {(share * 100).toFixed(1)}% · {e.days.length}d · {sizeCount} size{sizeCount === 1 ? '' : 's'}
                               </span>
                             </span>
                           </span>
                         </button>
                       </td>
-                      <td className="border-b border-slate-200 px-2 py-1.5 text-right font-mono text-[15px] font-bold tabular-nums text-slate-800">{pcsFmt(e.pcs)}</td>
-                      <td className="border-b border-slate-200 px-2 py-1.5 text-right font-mono text-[15px] font-bold tabular-nums text-slate-900">{kg(e.weight)}</td>
-                      <td className="border-b border-slate-200 px-2 py-1.5 text-right font-mono text-[15px] font-bold tabular-nums text-brand-700">{num(e.amount)}</td>
+                      <td className="px-2 py-1.5 text-right font-jbmono text-[14px] font-bold tabular-nums text-slate-800">{pcsFmt(e.pcs)}</td>
+                      <td className="px-2 py-1.5 text-right font-jbmono text-[14px] font-bold tabular-nums text-slate-900">{kg(e.weight)}</td>
+                      <td className="px-2 py-1.5 text-right font-jbmono text-[14px] font-bold tabular-nums text-brand-700">{num(e.amount)}</td>
                     </tr>
 
                     {open && e.days.map((d) => (
                       <Fragment key={d.key}>
                         {/* Day sub-total */}
                         <tr className="bg-white">
-                          <th scope="rowgroup" className="whitespace-nowrap border-b border-slate-100 py-1 pl-7 pr-2 text-left text-[13.5px] font-bold text-slate-700 sm:pl-9">{fmt(d.iso)}</th>
-                          <td className="hidden border-b border-slate-100 px-2 py-1 text-[11px] uppercase tracking-wider text-slate-400 sm:table-cell" colSpan={3}>Day total</td>
-                          <td className="border-b border-slate-100 px-2 py-1 text-right font-mono text-[13.5px] font-semibold tabular-nums text-slate-700">{pcsFmt(d.pcs)}</td>
-                          <td className="border-b border-slate-100 px-2 py-1 text-right font-mono text-[13.5px] font-semibold tabular-nums text-slate-800">{kg(d.weight)}</td>
-                          <td className="border-b border-slate-100 px-2 py-1 text-right font-mono text-[13.5px] font-semibold tabular-nums text-slate-700">{num(d.amount)}</td>
+                          <th scope="rowgroup" className="whitespace-nowrap border-b border-slate-100 py-1 pl-7 pr-2 text-left text-[13px] font-bold text-slate-700 sm:pl-9">{fmt(d.iso)}</th>
+                          <td className="hidden border-b border-slate-100 px-2 py-1 font-archivo text-[10px] uppercase tracking-wider text-slate-400 sm:table-cell" colSpan={3}>Day total</td>
+                          <td className="border-b border-slate-100 px-2 py-1 text-right font-jbmono text-[13px] font-semibold tabular-nums text-slate-700">{pcsFmt(d.pcs)}</td>
+                          <td className="border-b border-slate-100 px-2 py-1 text-right font-jbmono text-[13px] font-semibold tabular-nums text-slate-800">{kg(d.weight)}</td>
+                          <td className="border-b border-slate-100 px-2 py-1 text-right font-jbmono text-[13px] font-semibold tabular-nums text-slate-700">{num(d.amount)}</td>
                         </tr>
                         {/* Size lines */}
                         {d.sizes.map((z) => (
                           <tr key={z.key} className="odd:bg-white even:bg-slate-50/40 hover:bg-brand-50/50">
-                            <td className="whitespace-nowrap py-1 pl-10 pr-2 font-mono text-[13px] text-slate-700 sm:pl-14">{z.measure}</td>
-                            <td className="px-1 py-1 text-center">
-                              <span className={cn('inline-block rounded-sm border px-1 py-px font-mono text-[11px] font-bold uppercase',
-                                z.coreType === 'TOROIDAL' ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-rose-300 bg-rose-50 text-rose-800')}>
-                                {z.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
-                              </span>
-                            </td>
-                            <td className="hidden whitespace-nowrap px-2 py-1 text-[13px] text-slate-600 sm:table-cell">{z.grade}</td>
-                            <td className="hidden whitespace-nowrap px-2 py-1 text-[13px] text-slate-600 md:table-cell">{z.material}</td>
-                            <td className="px-2 py-1 text-right font-mono text-[13px] tabular-nums text-slate-700">{pcsFmt(z.pcs)}</td>
-                            <td className="px-2 py-1 text-right font-mono text-[13px] tabular-nums text-slate-900">{kg(z.weight)}</td>
-                            <td className="px-2 py-1 text-right font-mono text-[13px] tabular-nums text-slate-600">{num(z.amount)}</td>
+                            <td className="whitespace-nowrap py-1 pl-10 pr-2 font-jbmono text-[12.5px] text-slate-700 sm:pl-14">{z.measure}</td>
+                            <td className="px-1 py-1 text-center"><CoreTypeChip coreType={z.coreType} /></td>
+                            <td className="hidden whitespace-nowrap px-2 py-1 text-[12.5px] text-slate-600 sm:table-cell">{z.grade}</td>
+                            <td className="hidden whitespace-nowrap px-2 py-1 text-[12.5px] text-slate-600 md:table-cell">{z.material}</td>
+                            <td className="px-2 py-1 text-right font-jbmono text-[12.5px] tabular-nums text-slate-700">{pcsFmt(z.pcs)}</td>
+                            <td className="px-2 py-1 text-right font-jbmono text-[12.5px] tabular-nums text-slate-900">{kg(z.weight)}</td>
+                            <td className="px-2 py-1 text-right font-jbmono text-[12.5px] tabular-nums text-slate-600">{num(z.amount)}</td>
                           </tr>
                         ))}
                       </Fragment>
@@ -426,78 +434,64 @@ export const ProductionSummaryPage = () => {
 
               {totals && (
                 <tfoot>
-                  <tr className="bg-slate-700 text-white">
-                    <td className="px-2 py-1.5 text-[12.5px] font-bold uppercase tracking-wider sm:px-3" colSpan={4}>Grand Total</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-[15px] font-bold tabular-nums">{pcsFmt(totals.pcs)}</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-[15px] font-bold tabular-nums">{kg(totals.weight)}</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-[15px] font-bold tabular-nums">{num(totals.amount)}</td>
+                  <tr className="bg-brand-900 text-white">
+                    <td className="px-2 py-1.5 pl-3 font-archivo text-[11px] font-bold uppercase tracking-wider" colSpan={4}>Grand Total</td>
+                    <td className="px-2 py-1.5 text-right font-jbmono text-[14px] font-bold tabular-nums">{pcsFmt(totals.pcs)}</td>
+                    <td className="px-2 py-1.5 text-right font-jbmono text-[14px] font-bold tabular-nums">{kg(totals.weight)}</td>
+                    <td className="px-2 py-1.5 text-right font-jbmono text-[14px] font-bold tabular-nums">{num(totals.amount)}</td>
                   </tr>
                 </tfoot>
               )}
             </table>
           </div>
-        </Panel>
-      )}
+        )}
 
-      {/* ---------------- All entries: the flat register ---------------- */}
-      {!isLoading && items.length > 0 && view === 'ENTRIES' && (
-        <Panel title={<><List className="h-3.5 w-3.5" /> All Entries</>}>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] border-collapse text-sm">
+        {/* ---------------- All entries: the flat register ---------------- */}
+        {!isLoading && items.length > 0 && view === 'ENTRIES' && (
+          <div className="overflow-x-auto border-t border-slate-100">
+            <table className="w-full min-w-[760px] border-collapse text-[13px]">
               <thead>
                 <tr>
-                  <Th size="md" className="sm:pl-3">Date</Th>
-                  <Th>Employee</Th>
-                  <Th size="md" align="center" className="w-[62px]">Type</Th>
-                  <Th size="md" className="hidden sm:table-cell">Grade</Th>
-                  <Th size="md" className="hidden md:table-cell">Material</Th>
-                  <Th>Measure</Th>
-                  <Th size="md" align="right" className="w-[68px]">Pcs</Th>
-                  <Th size="md" align="right" className="w-[96px]">Weight (kg)</Th>
-                  <Th size="md" align="right" className="w-[112px]">Amount</Th>
+                  <ErpTh className="pl-3">Date</ErpTh>
+                  <ErpTh>Employee</ErpTh>
+                  <ErpTh align="center" className="w-[62px]">Type</ErpTh>
+                  <ErpTh className="hidden sm:table-cell">Grade</ErpTh>
+                  <ErpTh className="hidden md:table-cell">Material</ErpTh>
+                  <ErpTh>Measure</ErpTh>
+                  <ErpTh align="right" className="w-[68px]">Pcs</ErpTh>
+                  <ErpTh align="right" className="w-[96px]">Weight (kg)</ErpTh>
+                  <ErpTh align="right" className="w-[112px]">Amount</ErpTh>
                 </tr>
               </thead>
               <tbody>
                 {items.map((r) => (
                   <tr key={r.id} className="odd:bg-white even:bg-slate-50/40 hover:bg-brand-50/50">
-                    <td className="whitespace-nowrap px-2 py-1 text-[13.5px] text-slate-600 sm:pl-3">{fmt(r.prodDate)}</td>
-                    <td className="whitespace-nowrap px-2 py-1 text-[13.5px] font-semibold text-slate-800">{r.labourName}</td>
-                    <td className="px-1 py-1 text-center">
-                      <span className={cn('inline-block rounded-sm border px-1 py-px font-mono text-[11px] font-bold uppercase',
-                        r.coreType === 'TOROIDAL' ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-rose-300 bg-rose-50 text-rose-800')}>
-                        {r.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
-                      </span>
-                    </td>
-                    <td className="hidden whitespace-nowrap px-2 py-1 text-[13px] text-slate-600 sm:table-cell">{r.grade}</td>
-                    <td className="hidden whitespace-nowrap px-2 py-1 text-[13px] text-slate-600 md:table-cell">{r.material}</td>
-                    <td className="whitespace-nowrap px-2 py-1 font-mono text-[13px] text-slate-700">{r.measure}</td>
-                    <td className="px-2 py-1 text-right font-mono text-[13px] tabular-nums text-slate-700">{pcsFmt(r.pcs)}</td>
-                    <td className="px-2 py-1 text-right font-mono text-[13px] tabular-nums text-slate-900">{kg(r.totalWeight)}</td>
-                    <td className="px-2 py-1 text-right font-mono text-[13px] tabular-nums text-slate-600">{r.amount == null ? '—' : num(r.amount)}</td>
+                    <td className="whitespace-nowrap px-2 py-1 pl-3 text-[13px] text-slate-600">{fmt(r.prodDate)}</td>
+                    <td className="whitespace-nowrap px-2 py-1 text-[13px] font-semibold text-slate-800">{r.labourName}</td>
+                    <td className="px-1 py-1 text-center"><CoreTypeChip coreType={r.coreType} /></td>
+                    <td className="hidden whitespace-nowrap px-2 py-1 text-[12.5px] text-slate-600 sm:table-cell">{r.grade}</td>
+                    <td className="hidden whitespace-nowrap px-2 py-1 text-[12.5px] text-slate-600 md:table-cell">{r.material}</td>
+                    <td className="whitespace-nowrap px-2 py-1 font-jbmono text-[12.5px] text-slate-700">{r.measure}</td>
+                    <td className="px-2 py-1 text-right font-jbmono text-[12.5px] tabular-nums text-slate-700">{pcsFmt(r.pcs)}</td>
+                    <td className="px-2 py-1 text-right font-jbmono text-[12.5px] tabular-nums text-slate-900">{kg(r.totalWeight)}</td>
+                    <td className="px-2 py-1 text-right font-jbmono text-[12.5px] tabular-nums text-slate-600">{r.amount == null ? '—' : num(r.amount)}</td>
                   </tr>
                 ))}
               </tbody>
               {totals && (
                 <tfoot>
-                  <tr className="bg-slate-700 text-white">
-                    <td className="px-2 py-1.5 text-[12.5px] font-bold uppercase tracking-wider sm:px-3" colSpan={6}>Grand Total</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-[15px] font-bold tabular-nums">{pcsFmt(totals.pcs)}</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-[15px] font-bold tabular-nums">{kg(totals.weight)}</td>
-                    <td className="px-2 py-1.5 text-right font-mono text-[15px] font-bold tabular-nums">{num(totals.amount)}</td>
+                  <tr className="bg-brand-900 text-white">
+                    <td className="px-2 py-1.5 pl-3 font-archivo text-[11px] font-bold uppercase tracking-wider" colSpan={6}>Grand Total</td>
+                    <td className="px-2 py-1.5 text-right font-jbmono text-[14px] font-bold tabular-nums">{pcsFmt(totals.pcs)}</td>
+                    <td className="px-2 py-1.5 text-right font-jbmono text-[14px] font-bold tabular-nums">{kg(totals.weight)}</td>
+                    <td className="px-2 py-1.5 text-right font-jbmono text-[14px] font-bold tabular-nums">{num(totals.amount)}</td>
                   </tr>
                 </tfoot>
               )}
             </table>
           </div>
-        </Panel>
-      )}
+        )}
+      </ErpCard>
     </div>
   );
 };
-
-const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-  <label className="block">
-    <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
-    {children}
-  </label>
-);

@@ -38,6 +38,10 @@ export default {
       },
       fontFamily: {
         sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        // Production pages' ERP redesign only — scoped via these explicit
+        // classes so no other page's typography moves.
+        archivo: ['Archivo', 'system-ui', 'sans-serif'],
+        jbmono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
       },
       keyframes: {
         blob: {
