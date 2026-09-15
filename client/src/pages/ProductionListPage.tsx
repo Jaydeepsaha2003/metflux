@@ -1,3 +1,4 @@
+import '@/components/production/workspace.css';
 // All production records — filterable, dense ERP-style table with per-row
 // edit/delete. Mirrors the .NET Modify_Production grid.
 //
@@ -146,7 +147,7 @@ export const ProductionListPage = () => {
   };
 
   return (
-    <div className="max-w-full space-y-3">
+    <div className="production-workspace max-w-full space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="flex items-center gap-2 text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
           <Factory className="h-5 w-5 text-brand-600" /> Production
@@ -229,7 +230,7 @@ export const ProductionListPage = () => {
         )}
 
         {/* Desktop table */}
-        <div className="hidden md:block overflow-x-auto border-t border-slate-100">
+        <div className="production-scroll hidden md:block overflow-x-auto border-t border-slate-100" tabIndex={0} role="region" aria-label="Production records">
           <table className="w-full min-w-[1180px] text-[13px]">
             <thead>
               <tr>

@@ -1,3 +1,4 @@
+import '@/components/sales-tables.css';
 // Sales Order Summary — items grouped by PO with expand/collapse.
 // Each PO row shows aggregate quantities; expanding reveals the individual
 // items. "Edit PO" opens the full PO editor; "Edit item" opens the single
@@ -295,12 +296,12 @@ export const SOSummaryPage = () => {
   };
 
   return (
-    <div className="space-y-4 sm:space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+    <div className="sales-register space-y-4 sm:space-y-5">
+      <div className="register-page-heading flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
           <BarChart3 className="h-5 w-5 text-brand-600" /> SO Summary
         </h1>
-        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+        <div className="register-toolbar flex flex-wrap items-center gap-2 w-full sm:w-auto">
           <DateRangeFilter from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t); }} label="Filter orders by date" />
           <div className="relative flex-1 sm:w-72">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -324,7 +325,7 @@ export const SOSummaryPage = () => {
       </div>
 
       {/* Status chips + server-side aggregate counts */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="register-filters flex flex-wrap items-center gap-2">
         {(status === 'ACTIVE' ? (['ACTIVE', ...STATUS_TABS] as const) : STATUS_TABS).map((s) => (
           <button
             key={s}
@@ -368,8 +369,10 @@ export const SOSummaryPage = () => {
 
       {/* Grouped table — desktop md+ */}
       {!isLoading && groups.length > 0 && (
-        <div className="card overflow-hidden hidden md:block">
-          <table className="w-full text-sm whitespace-nowrap">
+        <div className="register-table-shell hidden md:block">
+          <div className="register-table-heading"><div><h2>Order fulfillment</h2><p>Expand orders for item quantities, specifications and test details.</p></div><span className="register-table-count">{data?.total.toLocaleString('en-IN')} items</span></div>
+          <div className="register-table-scroll" tabIndex={0} role="region" aria-label="Sales order fulfillment">
+          <table className="register-table w-full text-sm whitespace-nowrap">
             <thead className="bg-slate-50 text-left text-xs tracking-wide text-slate-500">
               <tr>
                 <th className="w-8 px-2 py-2" />
@@ -392,21 +395,24 @@ export const SOSummaryPage = () => {
                     {/* PO header row */}
                     <tr
                       className={cn(
-                        'border-t border-slate-200 cursor-pointer transition-colors',
+                        'register-group border-t border-slate-200 cursor-pointer transition-colors',
                         isPoOpen ? 'bg-brand-50/60' : 'hover:bg-slate-50 bg-slate-50/40'
                       )}
+                      data-expanded={isPoOpen}
                       onClick={() => togglePoExpand(group.poOrderId)}
                     >
                       <td className="px-2 py-2.5 text-center">
+                        <button type="button" className="register-expand" aria-expanded={isPoOpen} aria-label={`${isPoOpen ? 'Collapse' : 'Expand'} order ${group.poNumber}`} onClick={(e) => { e.stopPropagation(); togglePoExpand(group.poOrderId); }}>
                         {isPoOpen
                           ? <ChevronDown className="h-4 w-4 text-brand-600 inline" />
                           : <ChevronRight className="h-4 w-4 text-slate-400 inline" />}
+                        </button>
                       </td>
                       <td className="px-3 py-2.5 text-slate-600">{fmtDate(group.orderDate)}</td>
                       <td className="px-3 py-2.5 font-semibold text-slate-900">{group.poNumber}</td>
                       <td className="px-3 py-2.5 font-medium text-slate-900">
                         {hideNames
-                          ? <span className="font-mono text-xs text-brand-700">{group.customerCode ?? '—'}</span>
+                          ? <span className="font-num text-xs text-brand-700">{group.customerCode ?? '—'}</span>
                           : group.customerName}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums font-medium">{group.totalOrdered}</td>
@@ -445,7 +451,7 @@ export const SOSummaryPage = () => {
                       return (
                         <Fragment key={it.id}>
                           <tr className={cn(
-                            'border-t border-slate-100 transition-colors',
+                            'register-item border-t border-slate-100 transition-colors',
                             isTestOpen ? 'bg-amber-50/30' : 'bg-white hover:bg-slate-50/60'
                           )}>
                             <td className="px-2 py-2 pl-8 text-center">
@@ -455,7 +461,7 @@ export const SOSummaryPage = () => {
                             </td>
                             <td className="px-3 py-2 text-slate-500 text-xs">{it.grade}</td>
                             <td className="px-3 py-2 text-slate-500 text-xs">{it.material}</td>
-                            <td className="px-3 py-2 font-mono text-xs text-slate-700">{it.measure}</td>
+                            <td className="px-3 py-2 font-num text-xs text-slate-700">{it.measure}</td>
                             <td className="px-3 py-2 text-right tabular-nums text-slate-700">{it.pcsOrdered}</td>
                             <td className="px-3 py-2 text-right tabular-nums text-slate-500">{it.pcsProduced}</td>
                             <td className="px-3 py-2 text-right tabular-nums">
@@ -531,6 +537,7 @@ export const SOSummaryPage = () => {
               })}
             </tbody>
           </table>
+          </div>
           {data && (
             <Pagination page={page} pageSize={pageSize} total={data.total} onPageChange={setPage} onPageSizeChange={changePageSize} />
           )}
@@ -556,7 +563,7 @@ export const SOSummaryPage = () => {
                       </div>
                       <div className="mt-0.5 text-sm font-medium text-slate-900 truncate">
                         {hideNames
-                          ? <span className="font-mono text-xs text-brand-700">{group.customerCode ?? '—'}</span>
+                          ? <span className="font-num text-xs text-brand-700">{group.customerCode ?? '—'}</span>
                           : group.customerName}
                       </div>
                     </div>
@@ -610,7 +617,7 @@ export const SOSummaryPage = () => {
                                   <span className="text-xs text-slate-600 font-medium">{it.grade}</span>
                                   <span className="text-xs text-slate-500">{it.material}</span>
                                 </div>
-                                <div className="mt-0.5 font-mono text-xs text-slate-700 truncate">{it.measure}</div>
+                                <div className="mt-0.5 font-num text-xs text-slate-700 truncate">{it.measure}</div>
                               </div>
                               <div className="flex items-center gap-1 shrink-0">
                                 <button onClick={() => toggleItemTest(it.id)} className={cn(
@@ -680,7 +687,7 @@ export const SOSummaryPage = () => {
             <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs">
               <div className="font-medium text-slate-900">{deleteTarget.poNumber}</div>
               <div className="text-slate-600">{deleteTarget.grade} · {deleteTarget.material}</div>
-              <div className="font-mono text-slate-700">{deleteTarget.measure}</div>
+              <div className="font-num text-slate-700">{deleteTarget.measure}</div>
             </div>
             <div className="text-xs text-red-700 rounded-md border border-red-200 bg-red-50 px-3 py-2">
               This item will be permanently removed. This cannot be undone.
@@ -703,7 +710,7 @@ export const SOSummaryPage = () => {
           <div className="text-sm rounded-lg bg-slate-50 px-3 py-2">
             <div className="font-medium text-slate-900">{restoreTarget.poNumber}</div>
             <div className="text-slate-600">{restoreTarget.grade} · {restoreTarget.material}</div>
-            <div className="font-mono text-xs text-slate-700">{restoreTarget.measure}</div>
+            <div className="font-num text-xs text-slate-700">{restoreTarget.measure}</div>
           </div>
         ) : null}
       />
@@ -818,7 +825,7 @@ const TestPanel = ({ item }: { item: SummaryItem }) => {
 const FieldCell = ({ label, value, mono }: { label: string; value: string; mono?: boolean }) => (
   <div className="min-w-0">
     <div className="text-[10px] font-medium tracking-wide text-slate-500">{label}</div>
-    <div className={cn('truncate text-sm text-slate-900 leading-tight', mono && 'font-mono tabular-nums')}>{value}</div>
+    <div className={cn('truncate text-sm text-slate-900 leading-tight', mono && 'font-num tabular-nums')}>{value}</div>
   </div>
 );
 
@@ -828,7 +835,7 @@ const FluxField = ({ label, value, highlight }: { label: string; value: string; 
     highlight ? 'border-amber-400 bg-white shadow-sm' : 'border-amber-200 bg-white/70'
   )}>
     <div className={cn('text-[10px] font-medium tracking-wide', highlight ? 'text-amber-700' : 'text-amber-600/80')}>{label}</div>
-    <div className={cn('truncate font-mono tabular-nums leading-tight mt-0.5', highlight ? 'text-base font-bold text-amber-900' : 'text-sm font-semibold text-slate-900')}>
+    <div className={cn('truncate font-num tabular-nums leading-tight mt-0.5', highlight ? 'text-base font-bold text-amber-900' : 'text-sm font-semibold text-slate-900')}>
       {value}
     </div>
   </div>

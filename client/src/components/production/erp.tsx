@@ -23,7 +23,7 @@ import { cn } from '@/lib/cn';
 /** Uppercase, letter-spaced label — the small caption text used above every
  *  KPI figure, table header cell and section eyebrow in the mockup. */
 export const ErpLabel = ({ children, className }: { children: React.ReactNode; className?: string }) => (
-  <span className={cn('text-[10px] font-bold uppercase tracking-[0.09em] text-slate-500', className)}>
+  <span className={cn('production-label text-[10px] font-bold uppercase tracking-[0.09em] text-slate-500', className)}>
     {children}
   </span>
 );
@@ -32,7 +32,7 @@ export const ErpLabel = ({ children, className }: { children: React.ReactNode; c
 export const ErpStat = ({ label, value, caption, tone, big }: {
   label: string; value: string; caption?: string; tone?: 'brand' | 'ink'; big?: boolean;
 }) => (
-  <div className="group min-w-0 px-4 py-3 transition-colors duration-200 hover:bg-white motion-reduce:transition-none sm:px-5 sm:py-3.5">
+  <div className="production-stat group min-w-0 px-4 py-3 transition-colors duration-200 hover:bg-white motion-reduce:transition-none sm:px-5 sm:py-3.5">
     <ErpLabel>{label}</ErpLabel>
     <div className={cn(
       'mt-1 truncate font-num font-bold tracking-tight tabular-nums',
@@ -50,7 +50,7 @@ export const ErpStat = ({ label, value, caption, tone, big }: {
  *  md: on phones, ErpMobileHeader's dark card carries the same figures, so
  *  showing both would repeat every number twice on one screen. */
 export const ErpStatStrip = ({ children }: { children: React.ReactNode }) => (
-  <div className="hidden divide-x divide-y divide-slate-100 border-t border-slate-200 bg-slate-50/40 md:grid md:grid-cols-4 md:divide-y-0 lg:grid-cols-5">
+  <div className="production-stat-strip hidden divide-x divide-y divide-slate-100 border-t border-slate-200 bg-slate-50/40 md:grid md:grid-cols-4 md:divide-y-0 lg:grid-cols-5">
     {children}
   </div>
 );
@@ -61,7 +61,7 @@ export const ErpStatStrip = ({ children }: { children: React.ReactNode }) => (
  *  reskin of Production specifically, not a site-wide chip-colour change. */
 export const CoreTypeChip = ({ coreType, className }: { coreType: 'TOROIDAL' | 'RECTANGULAR'; className?: string }) => (
   <span className={cn(
-    'inline-flex items-center rounded-md px-1.5 py-[3px] text-[10px] font-bold uppercase tracking-[0.06em] shadow-e1 ring-1 ring-inset',
+    'production-chip inline-flex items-center rounded-md px-1.5 py-[3px] text-[10px] font-bold uppercase tracking-[0.06em] shadow-e1 ring-1 ring-inset',
     coreType === 'TOROIDAL'
       ? 'bg-[#EAF0FA] text-[#1B4E82] ring-[#C6DAF0]'
       : 'bg-[#EFF5EC] text-[#33473E] ring-[#CFDECB]',
@@ -78,7 +78,7 @@ export const CoreTypeChip = ({ coreType, className }: { coreType: 'TOROIDAL' | '
  *  the core type itself. */
 export const SplitHeightChip = ({ height, className }: { height: number; className?: string }) => (
   <span className={cn(
-    'inline-flex items-center rounded-md bg-amber-50 px-1.5 py-[3px] text-[10px] font-bold uppercase tracking-[0.06em] text-amber-800 ring-1 ring-inset ring-amber-200',
+    'production-chip inline-flex items-center rounded-md bg-amber-50 px-1.5 py-[3px] text-[10px] font-bold uppercase tracking-[0.06em] text-amber-800 ring-1 ring-inset ring-amber-200',
     className,
   )}>
     Split {height}
@@ -90,7 +90,7 @@ export const SplitHeightChip = ({ height, className }: { height: number; classNa
  *  filters, stats, table and footer are one bordered surface with hairline
  *  internal dividers. */
 export const ErpCard = ({ children, className }: { children: React.ReactNode; className?: string }) => (
-  <div className={cn('overflow-hidden rounded-xl border border-slate-200/70 bg-gradient-to-b from-white to-slate-50/60 shadow-e2', className)}>
+  <div className={cn('production-card overflow-hidden rounded-xl border border-slate-200/70 bg-gradient-to-b from-white to-slate-50/60 shadow-e2', className)}>
     {children}
   </div>
 );
@@ -124,7 +124,7 @@ export const ErpFooterRow = ({ children, colSpan }: { children: React.ReactNode;
 export const ErpSegmented = <T extends string>({ value, onChange, options }: {
   value: T; onChange: (v: T) => void; options: { value: T; label: string }[];
 }) => (
-  <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100/70 p-0.5 shadow-[inset_0_1px_2px_rgb(15_23_42_/_0.05)]">
+  <div className="production-segment inline-flex rounded-lg border border-slate-200 bg-slate-100/70 p-0.5 shadow-[inset_0_1px_2px_rgb(15_23_42_/_0.05)]">
     {options.map((o) => (
       <button
         key={o.value}
@@ -154,7 +154,7 @@ export const ErpMobileHeader = ({ subtitle, primary, stats }: {
   primary: { label: string; value: string };
   stats: { label: string; value: string }[];
 }) => (
-  <div className="overflow-hidden rounded-xl bg-gradient-to-br from-brand-800 via-brand-900 to-brand-950 p-4 text-white shadow-e3 ring-1 ring-inset ring-white/10 md:hidden">
+  <div className="production-mobile-header overflow-hidden rounded-xl bg-gradient-to-br from-brand-800 via-brand-900 to-brand-950 p-4 text-white shadow-e3 ring-1 ring-inset ring-white/10 md:hidden">
     <div className="flex items-center gap-2.5">
       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-brand-500/90">
         <Factory className="h-4 w-4 text-white" />
@@ -202,7 +202,7 @@ export const ProductionTabs = () => {
     { to: '/production/summary', label: 'Summary', icon: BarChart3, match: (p: string) => p === '/production/summary' },
   ];
   return (
-    <nav className="flex items-center gap-1 border-b border-slate-200">
+    <nav aria-label="Production pages" className="production-tabs flex items-center gap-1 border-b border-slate-200">
       {tabs.map((t) => {
         const active = t.match(pathname);
         return (

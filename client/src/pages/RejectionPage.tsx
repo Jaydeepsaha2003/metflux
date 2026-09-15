@@ -1,3 +1,4 @@
+import '@/components/production/workspace.css';
 // Production → Rejection. Move produced-but-not-yet-dispatched pcs into a store
 // as REJECTED stock: it leaves the production floor (so it no longer shows as
 // ready-to-dispatch) and is NOT sellable store stock (never appears in
@@ -104,7 +105,7 @@ export const RejectionPage = () => {
   };
 
   return (
-    <div className="max-w-full space-y-4 text-[13px] sm:space-y-5">
+    <div className="production-workspace max-w-full space-y-4 text-[13px] sm:space-y-5">
       {/* Page header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
@@ -118,9 +119,9 @@ export const RejectionPage = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-slate-200">
+      <div className="production-rejection-tabs flex gap-1 border-b border-slate-200">
         {(['reject', 'modify'] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)}
+          <button key={t} aria-pressed={tab === t} onClick={() => setTab(t)}
             className={cn('-mb-px border-b-2 px-4 py-2 text-xs font-semibold', tab === t ? 'border-rose-600 text-rose-700' : 'border-transparent text-slate-500 hover:text-slate-700')}>
             {t === 'reject' ? 'Reject' : `Modify (${rejList.length})`}
           </button>
@@ -128,7 +129,7 @@ export const RejectionPage = () => {
       </div>
 
       {tab === 'reject' ? (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="production-surface overflow-hidden rounded-xl border border-slate-200 bg-white">
           {/* Shared controls */}
           <div className="grid grid-cols-1 gap-3 border-b border-slate-100 p-4 sm:grid-cols-3 sm:items-end sm:p-5">
             <div>
@@ -189,7 +190,7 @@ export const RejectionPage = () => {
               </div>
 
               {/* Desktop: table */}
-              <div className="hidden overflow-x-auto md:block">
+              <div className="production-scroll hidden overflow-x-auto md:block" tabIndex={0} role="region" aria-label="Production records">
                 <table className="w-full whitespace-nowrap text-xs">
                   <thead><tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                     <th className="px-3 py-2 text-left">Customer</th>
@@ -235,7 +236,7 @@ export const RejectionPage = () => {
           )}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="production-surface overflow-hidden rounded-xl border border-slate-200 bg-white">
           {editErr && <div className="mx-4 mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700 sm:mx-5">{editErr}</div>}
           {!rejList.length ? (
             <div className="py-10 text-center text-xs text-slate-400">No rejections yet.</div>
@@ -301,7 +302,7 @@ export const RejectionPage = () => {
               </div>
 
               {/* Desktop: table */}
-              <div className="hidden overflow-x-auto md:block">
+              <div className="production-scroll hidden overflow-x-auto md:block" tabIndex={0} role="region" aria-label="Production records">
                 <table className="w-full whitespace-nowrap text-xs">
                   <thead><tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                     <th className="px-3 py-2 text-left">Date</th>

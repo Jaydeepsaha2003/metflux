@@ -1,3 +1,4 @@
+import '@/components/sales-tables.css';
 // Modify Sales Order — flat list of every line item in the active company.
 // Search, filter by status, edit one item, cancel the unprocessed remainder.
 // Cancel logic on the backend: if no production/dispatch yet → full cancel;
@@ -143,8 +144,8 @@ export const POManagePage = () => {
   });
 
   return (
-    <div className="space-y-4 sm:space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="sales-register space-y-4 sm:space-y-5">
+      <div className="register-page-heading flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl">
           <FileText className="h-6 w-6 text-brand-600" />
           Modify Sales Order
@@ -155,7 +156,7 @@ export const POManagePage = () => {
       </div>
 
       {/* Filters */}
-      <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
+      <div className="register-toolbar rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -204,9 +205,10 @@ export const POManagePage = () => {
 
       {/* Desktop table — md+ */}
       {!isLoading && data && data.items.length > 0 && (
-        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden hidden md:block">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+        <div className="register-table-shell hidden md:block">
+          <div className="register-table-heading"><div><h2>Sales order register</h2><p>Expand an order to review its items and available actions.</p></div><span className="register-table-count">{data.total.toLocaleString('en-IN')} items</span></div>
+          <div className="register-table-scroll" tabIndex={0} role="region" aria-label="Sales order items">
+            <table className="register-table w-full text-sm">
               <thead className="bg-slate-50 text-left text-xs tracking-wide text-slate-500">
                 <tr>
                   <th className="px-3 py-2.5 font-medium whitespace-nowrap">SO #</th>
@@ -220,7 +222,7 @@ export const POManagePage = () => {
                   <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">Wt/pc</th>
                   <th className="px-3 py-2.5 font-medium text-right whitespace-nowrap">Total Wt</th>
                   <th className="px-3 py-2.5 font-medium text-center whitespace-nowrap w-16">Status</th>
-                  <th className="w-24 px-3 py-2.5"></th>
+                  <th className="w-24 px-3 py-2.5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -230,18 +232,19 @@ export const POManagePage = () => {
                     <Fragment key={group.poOrderId}>
                       <tr
                         className={cn(
-                          'border-t border-slate-200 cursor-pointer select-none',
+                          'register-group border-t border-slate-200 cursor-pointer select-none',
                           isOpen ? 'bg-brand-50/40' : 'bg-slate-50/60 hover:bg-slate-50'
                         )}
+                        data-expanded={isOpen}
                         onClick={() => togglePoExpand(group.poOrderId)}
                       >
                         <td className="px-3 py-2.5 font-semibold text-slate-900 whitespace-nowrap">
-                          <span className="inline-flex items-center gap-1.5">
+                          <button type="button" className="register-expand" aria-expanded={isOpen} aria-label={`${isOpen ? 'Collapse' : 'Expand'} order ${group.poNumber}`} onClick={(e) => { e.stopPropagation(); togglePoExpand(group.poOrderId); }}>
                             {isOpen
                               ? <ChevronDown className="h-3.5 w-3.5 text-brand-600 shrink-0" />
                               : <ChevronRight className="h-3.5 w-3.5 text-slate-400 shrink-0" />}
                             {group.poNumber}
-                          </span>
+                          </button>
                         </td>
                         <td className="px-3 py-2.5 text-slate-900 font-medium whitespace-nowrap">{group.customerName}</td>
                         <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{formatDate(group.orderDate)}</td>
@@ -251,7 +254,7 @@ export const POManagePage = () => {
                         <td className="px-3 py-2.5 whitespace-nowrap" />
                         <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap font-semibold">{group.totalPcs}</td>
                         <td className="px-3 py-2.5 whitespace-nowrap" />
-                        <td className="px-3 py-2.5 text-right font-mono font-semibold tabular-nums whitespace-nowrap">{group.totalWeight.toFixed(3)}</td>
+                        <td className="px-3 py-2.5 text-right font-num font-semibold tabular-nums whitespace-nowrap">{group.totalWeight.toFixed(3)}</td>
                         <td className="px-3 py-2.5 whitespace-nowrap" />
                         <td className="px-3 py-2.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                           <Link
@@ -260,12 +263,12 @@ export const POManagePage = () => {
                             title="Edit whole PO (add / remove / modify items)"
                           >
                             <Pencil className="h-3.5 w-3.5" />
-                            <span className="hidden lg:inline ml-1">Edit PO</span>
+                            <span className="hidden lg:inline ml-1">Edit SO</span>
                           </Link>
                         </td>
                       </tr>
                       {isOpen && group.items.map((it) => (
-                        <tr key={it.id} className="border-t border-slate-100 hover:bg-slate-50/60">
+                        <tr key={it.id} className="register-item border-t border-slate-100 hover:bg-slate-50/60">
                           <td className="pl-8 pr-3 py-2.5 text-xs text-slate-400 whitespace-nowrap">{it.poNumber}</td>
                           <td className="px-3 py-2.5 text-slate-900 font-medium whitespace-nowrap">{it.customerName}</td>
                           <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{formatDate(it.orderDate)}</td>
@@ -279,10 +282,10 @@ export const POManagePage = () => {
                           </td>
                           <td className="px-3 py-2.5 text-slate-700 font-medium whitespace-nowrap">{it.grade}</td>
                           <td className="px-3 py-2.5 text-slate-700 whitespace-nowrap">{it.material}</td>
-                          <td className="px-3 py-2.5 font-mono text-slate-700 whitespace-nowrap">{it.measure}</td>
+                          <td className="px-3 py-2.5 font-num text-slate-700 whitespace-nowrap">{it.measure}</td>
                           <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap">{it.pcs}</td>
-                          <td className="px-3 py-2.5 text-right font-mono tabular-nums whitespace-nowrap">{it.weightPerPc.toFixed(3)}</td>
-                          <td className="px-3 py-2.5 text-right font-mono font-semibold tabular-nums whitespace-nowrap">{it.totalWeight.toFixed(3)}</td>
+                          <td className="px-3 py-2.5 text-right font-num tabular-nums whitespace-nowrap">{it.weightPerPc.toFixed(3)}</td>
+                          <td className="px-3 py-2.5 text-right font-num font-semibold tabular-nums whitespace-nowrap">{it.totalWeight.toFixed(3)}</td>
                           <td className="px-3 py-2.5 text-center whitespace-nowrap">
                             {it.status === 'ACTIVE'
                               ? <CheckCircle2 className="h-5 w-5 text-green-600 inline" aria-label="Active" />
@@ -358,7 +361,7 @@ export const POManagePage = () => {
           {groups.map((group) => {
             const isOpen = expandedPos.has(group.poOrderId);
             return (
-              <div key={group.poOrderId} className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <div key={group.poOrderId} className="register-mobile-card rounded-xl border border-slate-200 bg-white overflow-hidden">
                 <button
                   type="button"
                   onClick={() => togglePoExpand(group.poOrderId)}
@@ -375,7 +378,7 @@ export const POManagePage = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-xs font-mono tabular-nums font-semibold text-slate-700">{group.totalWeight.toFixed(3)} kg</span>
+                      <span className="text-xs font-num tabular-nums font-semibold text-slate-700">{group.totalWeight.toFixed(3)} kg</span>
                       {isOpen
                         ? <ChevronDown className="h-4 w-4 text-brand-600" />
                         : <ChevronRight className="h-4 w-4 text-slate-400" />}
@@ -392,7 +395,7 @@ export const POManagePage = () => {
                         className="btn-ghost text-xs text-brand-700 hover:bg-brand-50"
                         title="Edit whole PO"
                       >
-                        <Pencil className="h-3.5 w-3.5" /> Edit PO
+                        <Pencil className="h-3.5 w-3.5" /> Edit SO
                       </Link>
                     </div>
                     {group.items.map((it) => (
@@ -409,7 +412,7 @@ export const POManagePage = () => {
                                 </span>
                                 <span className="text-xs text-slate-700 font-medium">{it.grade}</span>
                               </div>
-                              <div className="mt-0.5 font-mono text-xs text-slate-600 truncate">{it.measure}</div>
+                              <div className="mt-0.5 font-num text-xs text-slate-600 truncate">{it.measure}</div>
                               <div className="mt-0.5 text-[11px] text-slate-500">{it.material}</div>
                             </div>
                             <div className="shrink-0">
@@ -500,7 +503,7 @@ export const POManagePage = () => {
             <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs">
               <div className="font-semibold text-slate-900">{deleteTarget.poNumber}</div>
               <div className="text-slate-600">{deleteTarget.grade} · {deleteTarget.material}</div>
-              <div className="font-mono text-slate-700">{deleteTarget.measure}</div>
+              <div className="font-num text-slate-700">{deleteTarget.measure}</div>
             </div>
             <div className="text-xs text-red-700 rounded-md border border-red-200 bg-red-50 px-3 py-2">
               This item will be permanently removed. This cannot be undone.
@@ -523,7 +526,7 @@ export const POManagePage = () => {
           <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm">
             <div className="font-semibold text-slate-900">{restoreTarget.poNumber}</div>
             <div className="text-slate-600 text-xs">{restoreTarget.grade} · {restoreTarget.material}</div>
-            <div className="font-mono text-xs text-slate-700">{restoreTarget.measure}</div>
+            <div className="font-num text-xs text-slate-700">{restoreTarget.measure}</div>
           </div>
         ) : null}
       />
@@ -563,7 +566,7 @@ const Stat = ({ label, value, accent }: { label: string; value: string; accent?:
   <div className="rounded-md bg-slate-50 px-2 py-1.5 text-center">
     <div className="text-[10px] font-medium text-slate-500">{label}</div>
     <div className={cn(
-      'text-sm font-mono tabular-nums',
+      'text-sm font-num tabular-nums',
       accent ? 'font-bold text-slate-900' : 'font-semibold text-slate-700'
     )}>{value}</div>
   </div>
@@ -587,7 +590,7 @@ const CancelBreakdown = ({ item }: { item: Item }) => {
           <span className="text-slate-700">{item.customerName}</span>
         </div>
         <div className="mt-1 text-slate-600">
-          {item.grade} · {item.material} · <span className="font-mono">{item.measure}</span>
+          {item.grade} · {item.material} · <span className="font-num">{item.measure}</span>
         </div>
       </div>
 

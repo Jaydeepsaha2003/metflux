@@ -1,3 +1,4 @@
+import '@/components/production/workspace.css';
 // Work Allotment template — opened either in "build mode" (state.poItemIds) or
 // "view mode" (state.waId). Each row carries an editable pcs and a labour
 // dropdown. On save we POST to /work-allotments and download a PDF using the
@@ -678,7 +679,7 @@ export const WorkAllotmentBuildPage = () => {
     <div className="space-y-4">
 
       {/* ── Control bar (hidden in print) ── */}
-      <div className="no-print rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm space-y-3">
+      <div className="production-workspace production-surface no-print rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm space-y-3">
         <div className="flex items-center gap-2 sm:gap-3">
           <Link to="/work-allotment" className="btn-ghost text-slate-600 shrink-0">
             <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">Back</span>
@@ -757,7 +758,7 @@ export const WorkAllotmentBuildPage = () => {
           </div>
 
           {/* Desktop / tablet — table */}
-          <div className="hidden md:block overflow-x-auto">
+          <div className="production-scroll hidden md:block overflow-x-auto">
             <table className="w-full text-sm whitespace-nowrap">
               <thead>
                 <tr className="border-b border-slate-200 bg-white text-xs font-semibold uppercase tracking-wide text-slate-500">

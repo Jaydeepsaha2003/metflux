@@ -1,3 +1,4 @@
+import '@/components/production/workspace.css';
 // Edit a production record. Pcs is constrained: cannot exceed
 // (item.pcs − sum of OTHER production records). Weight per pc is read-only
 // since it comes from the PO item itself.
@@ -145,7 +146,7 @@ export const ProductionEditPage = () => {
   };
 
   return (
-    <div className="space-y-3 max-w-3xl">
+    <div className="production-workspace space-y-3 max-w-3xl">
       <div className="flex items-center gap-3">
         <Link to="/production" className="btn-ghost text-slate-600">
           <ArrowLeft className="h-4 w-4" /> Back

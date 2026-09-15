@@ -61,6 +61,26 @@
 .dashboard-glass thead, .dashboard-glass tfoot { background: var(--d-accent-dim); }
 .dashboard-glass td, .dashboard-glass th { padding-top: 14px; padding-bottom: 14px; }
 .dashboard-glass tbody tr:hover { background: var(--d-accent-dim); }
+
+/* Match the KPI typography while keeping tabular figures aligned. */
+.dashboard-glass .dash-employees table { line-height: 1.5; }
+.dashboard-glass .dash-employees th { text-align: left; }
+.dashboard-glass .dash-employees th.text-right { text-align: right; }
+.dashboard-glass .dash-employees th.text-center { text-align: center; }
+.dashboard-glass .dash-employees th > span,
+.dashboard-glass .dash-employees tfoot td:first-child > div {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .065em;
+  color: var(--d-text);
+}
+.dashboard-glass .dash-employees td { font-weight: 500; }
+.dashboard-glass .dash-employees td.font-bold,
+.dashboard-glass .dash-employees td.font-semibold { font-weight: 650; }
+.dashboard-glass .dash-employees td:nth-child(2) { font-size: 14px; }
+.dashboard-glass .dash-employees td,
+.dashboard-glass .dash-employees th { padding-top: 16px; padding-bottom: 16px; }
+.dashboard-glass .dash-employees .dash-chip { font-size: 12px; line-height: 1.35; }
 @media (max-width: 639px) {
   .dashboard-glass .dash-hero { padding: 20px; }
   .dashboard-glass .dash-kpi { padding: 15px; }

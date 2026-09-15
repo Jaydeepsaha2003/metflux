@@ -1,3 +1,4 @@
+import '@/components/production/workspace.css';
 // Record new production — a two-step wizard: pick a pending PO item, then
 // fill in labour + pcs. Total weight auto-calcs from pcs × wt/pc.
 //
@@ -268,7 +269,7 @@ export const ProductionNewPage = () => {
   })();
 
   return (
-    <div className="max-w-full space-y-3">
+    <div className="production-workspace max-w-full space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="flex items-center gap-2 text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
           <Factory className="h-5 w-5 text-brand-600" /> Receive Production
@@ -353,7 +354,7 @@ export const ProductionNewPage = () => {
               ))}
             </div>
 
-            <div className="hidden md:block overflow-x-auto border-t border-slate-100">
+            <div className="production-scroll hidden md:block overflow-x-auto border-t border-slate-100" tabIndex={0} role="region" aria-label="Production records">
               <table className="w-full min-w-[980px] text-[13px]">
                 <thead>
                   <tr>
@@ -625,7 +626,7 @@ export const ProductionNewPage = () => {
             <aside className="flex flex-col gap-3 border-t border-slate-200/70 bg-gradient-to-b from-slate-50 to-slate-100/70 p-4 xl:border-l xl:border-t-0">
               <ErpLabel>This Entry</ErpLabel>
 
-              <div className="rounded-xl border border-slate-200/80 bg-white px-3.5 py-3 shadow-e1">
+              <div className="production-surface rounded-xl border border-slate-200/80 bg-white px-3.5 py-3 shadow-e1">
                 <ErpLabel>Total Weight</ErpLabel>
                 <div className="mt-1 font-num text-[26px] font-extrabold leading-none tracking-tight tabular-nums text-slate-900">
                   {totalWeight ? totalWeight.toFixed(3) : '0.000'}

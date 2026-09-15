@@ -384,7 +384,7 @@ export const DashboardPage = () => {
         </section>
 
         {/* ── Employee performance ───────────────────────────────── */}
-        <DashPanel className="overflow-hidden">
+        <DashPanel className="dash-employees overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-3 p-5 sm:p-6">
             <div>
               <h2 className="text-[15px] font-extrabold tracking-tight">Employee performance</h2>
@@ -394,30 +394,30 @@ export const DashboardPage = () => {
               value={empSearch}
               onChange={(e) => setEmpSearch(e.target.value)}
               aria-label="Search worker" placeholder="Search worker"
-              className="h-8 w-44 rounded-[3px] border border-[var(--d-line)] bg-[var(--d-raised)] px-2.5 text-[12px] text-[var(--d-text)] outline-none placeholder:text-[var(--d-faint)] focus-visible:ring-2 focus-visible:ring-[var(--d-accent)] sm:w-56"
+              className="h-8 w-44 rounded-[3px] border border-[var(--d-line)] bg-[var(--d-raised)] px-2.5 text-[14px] text-[var(--d-text)] outline-none placeholder:text-[var(--d-muted)] focus-visible:ring-2 focus-visible:ring-[var(--d-accent)] sm:w-56"
             />
           </div>
 
           {loadingEmps && !empData ? (
-            <div className="flex items-center justify-center gap-2 py-10 text-[var(--d-muted)]">
+            <div className="flex items-center justify-center gap-2 py-10 text-[var(--d-text)]">
               <Loader2 className="h-4 w-4 animate-spin" /> Loading…
             </div>
           ) : !empItems.length ? (
-            <div className="py-10 text-center text-[12.5px] text-[var(--d-muted)]">
+            <div className="py-10 text-center text-[14px] text-[var(--d-text)]">
               {empSearch.trim() ? 'No worker matches that search.' : 'No production records in this date range.'}
             </div>
           ) : (
             <>
               {/* Desktop table */}
               <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[820px] whitespace-nowrap text-[12.5px]">
+                <table className="w-full min-w-[940px] whitespace-nowrap text-[14px]">
                   <thead>
                     <tr className="border-y border-[var(--d-line)]">
                       <Th className="w-14 pl-4 text-center">Rank</Th>
                       <Th>Worker</Th>
                       <Th align="right">Total kg</Th>
                       <Th align="right">Pcs</Th>
-                      <Th className="w-[200px]">Share of output</Th>
+                      <Th className="w-[220px]">Share of output</Th>
                       <Th align="right">Entries</Th>
                       <Th align="right">Sizes</Th>
                       <Th className="pr-4">Top size</Th>
@@ -430,26 +430,26 @@ export const DashboardPage = () => {
                         <tr key={row.labourName} className="border-b border-[var(--d-line-soft)] last:border-b-0">
                           <td className="py-2 pl-4 text-center">
                             {row.rank === 1 ? (
-                              <span className="inline-flex items-center gap-1 rounded-[3px] border px-1.5 py-[3px] text-[10.5px] font-bold"
+                              <span className="inline-flex items-center gap-1 rounded-[3px] border px-1.5 py-[3px] text-[13px] font-bold"
                                 style={{ backgroundColor: 'var(--d-accent-dim)', color: 'var(--d-accent)', borderColor: 'var(--d-accent-line)' }}>
                                 <Trophy className="h-3 w-3" /> 1
                               </span>
                             ) : (
-                              <span className="font-mono text-[11.5px] tabular-nums text-[var(--d-muted)]">{row.rank}</span>
+                              <span className="font-num text-[14px] tabular-nums text-[var(--d-text)]">{row.rank}</span>
                             )}
                           </td>
                           <td className="py-2 font-semibold">{row.labourName}</td>
-                          <td className="py-2 pr-3 text-right font-mono font-bold tabular-nums">{row.totalWeight.toFixed(3)}</td>
-                          <td className="py-2 pr-3 text-right font-mono tabular-nums text-[var(--d-muted)]">{pcs(row.pcs)}</td>
+                          <td className="py-2 pr-3 text-right font-num text-[15px] font-bold tabular-nums">{row.totalWeight.toFixed(3)}</td>
+                          <td className="py-2 pr-3 text-right font-num tabular-nums text-[var(--d-text)]">{pcs(row.pcs)}</td>
                           <td className="py-2 pr-4">
                             <div className="flex items-center gap-2">
                               <span className="min-w-0 flex-1"><DashBar pct={share} /></span>
-                              <span className="w-11 shrink-0 text-right font-mono text-[11px] tabular-nums text-[var(--d-muted)]">{share.toFixed(1)}%</span>
+                              <span className="w-14 shrink-0 text-right font-num text-[13px] tabular-nums text-[var(--d-text)]">{share.toFixed(1)}%</span>
                             </div>
                           </td>
-                          <td className="py-2 pr-3 text-right font-mono tabular-nums text-[var(--d-muted)]">{row.entries}</td>
-                          <td className="py-2 pr-3 text-right font-mono tabular-nums text-[var(--d-muted)]">{row.distinctSizes}</td>
-                          <td className="py-2 pr-4 font-mono text-[11.5px] tabular-nums text-[var(--d-muted)]">
+                          <td className="py-2 pr-3 text-right font-num tabular-nums text-[var(--d-text)]">{row.entries}</td>
+                          <td className="py-2 pr-3 text-right font-num tabular-nums text-[var(--d-text)]">{row.distinctSizes}</td>
+                          <td className="py-2 pr-4 font-num text-[14px] tabular-nums text-[var(--d-text)]">
                             {row.topSize ? `${row.topSize} (${pcs(row.topSizePcs)})` : '—'}
                           </td>
                         </tr>
@@ -459,8 +459,8 @@ export const DashboardPage = () => {
                   <tfoot>
                     <tr className="border-t border-[var(--d-line)]">
                       <td colSpan={2} className="py-2 pl-4"><DashLabel>Total</DashLabel></td>
-                      <td className="py-2 pr-3 text-right font-mono font-bold tabular-nums">{empTotalWeight.toFixed(3)}</td>
-                      <td className="py-2 pr-3 text-right font-mono font-bold tabular-nums">{pcs(empData?.totalPcs ?? 0)}</td>
+                      <td className="py-2 pr-3 text-right font-num text-[15px] font-bold tabular-nums">{empTotalWeight.toFixed(3)}</td>
+                      <td className="py-2 pr-3 text-right font-num text-[15px] font-bold tabular-nums">{pcs(empData?.totalPcs ?? 0)}</td>
                       <td colSpan={4} />
                     </tr>
                   </tfoot>
@@ -475,17 +475,17 @@ export const DashboardPage = () => {
                     <div key={row.labourName} className="border-t border-[var(--d-line-soft)] px-3 py-2.5">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex min-w-0 items-center gap-2">
-                          <span className="font-mono text-[11px] tabular-nums text-[var(--d-faint)]">#{row.rank}</span>
+                          <span className="font-num text-[13px] tabular-nums text-[var(--d-muted)]">#{row.rank}</span>
                           <span className="truncate text-[13px] font-semibold">{row.labourName}</span>
                         </div>
                         <div className="shrink-0 text-right">
-                          <div className="font-mono text-[13px] font-bold tabular-nums">{row.totalWeight.toFixed(3)} kg</div>
-                          <div className="font-mono text-[10.5px] tabular-nums text-[var(--d-muted)]">{pcs(row.pcs)} pcs</div>
+                          <div className="font-num text-[13px] font-bold tabular-nums">{row.totalWeight.toFixed(3)} kg</div>
+                          <div className="font-num text-[13px] tabular-nums text-[var(--d-text)]">{pcs(row.pcs)} pcs</div>
                         </div>
                       </div>
                       <div className="mt-1.5 flex items-center gap-2">
                         <span className="min-w-0 flex-1"><DashBar pct={share} /></span>
-                        <span className="font-mono text-[10.5px] tabular-nums text-[var(--d-muted)]">{share.toFixed(1)}%</span>
+                        <span className="font-num text-[13px] tabular-nums text-[var(--d-text)]">{share.toFixed(1)}%</span>
                       </div>
                       {row.sizes.length > 0 && (
                         <div className="mt-1.5 flex flex-wrap gap-1">
@@ -499,7 +499,7 @@ export const DashboardPage = () => {
                 })}
                 <div className="flex justify-between border-t border-[var(--d-line)] px-3 py-2">
                   <DashLabel>Total</DashLabel>
-                  <span className="font-mono text-[12px] font-bold tabular-nums">
+                  <span className="font-num text-[14px] font-bold tabular-nums">
                     {pcs(empData?.totalPcs ?? 0)} pcs · {empTotalWeight.toFixed(3)} kg
                   </span>
                 </div>

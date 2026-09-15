@@ -1,3 +1,4 @@
+import '@/components/production/workspace.css';
 // Work Allotment landing page — top half is pending PO items (selectable),
 // bottom half is the recently generated allotments (auto-deleted after 7 days
 // by the server). Columns mirror exactly what the user asked for:
@@ -104,7 +105,7 @@ export const WorkAllotmentPage = () => {
   const someChecked = selected.size > 0;
 
   return (
-    <div className="space-y-4 sm:space-y-5 max-w-full">
+    <div className="production-workspace space-y-4 sm:space-y-5 max-w-full">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
           <ClipboardList className="h-6 w-6 text-brand-600" /> Work Allotment
@@ -136,7 +137,7 @@ export const WorkAllotmentPage = () => {
             </button>
           )}
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+        <div className="production-surface rounded-xl border border-slate-200 bg-white overflow-hidden">
           {loadingPending ? (
             <div className="flex items-center justify-center gap-2 py-10 text-slate-400 text-sm">
               <Loader2 className="h-5 w-5 animate-spin" /> Loading…
@@ -148,12 +149,12 @@ export const WorkAllotmentPage = () => {
           ) : (
             <>
               {/* Desktop / tablet — table */}
-              <div className="hidden md:block overflow-x-auto">
+              <div className="production-scroll hidden md:block overflow-x-auto" tabIndex={0} role="region" aria-label="Production records">
                 <table className="w-full text-sm whitespace-nowrap">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                       <th className="px-3 py-3 w-10">
-                        <input type="checkbox" checked={allChecked} onChange={toggleAll}
+                        <input type="checkbox" aria-label="Select all pending items" checked={allChecked} onChange={toggleAll}
                           className="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
                       </th>
                       <th className="px-4 py-3 text-left">Cust Code</th>
@@ -175,7 +176,7 @@ export const WorkAllotmentPage = () => {
                         <tr key={it.id} onClick={() => toggleRow(it.id)}
                           className={cn('cursor-pointer transition-colors', isChecked ? 'bg-brand-50 hover:bg-brand-100' : 'hover:bg-slate-50')}>
                           <td className="px-3 py-3 text-center">
-                            <input type="checkbox" checked={isChecked}
+                            <input type="checkbox" aria-label={`Select ${it.customerCode} ${it.measure}`} checked={isChecked}
                               onChange={() => toggleRow(it.id)} onClick={(e) => e.stopPropagation()}
                               className="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
                           </td>
@@ -216,7 +217,7 @@ export const WorkAllotmentPage = () => {
                         isChecked ? 'bg-brand-50' : 'hover:bg-slate-50'
                       )}
                     >
-                      <input type="checkbox" checked={isChecked}
+                      <input type="checkbox" aria-label={`Select ${it.customerCode} ${it.measure}`} checked={isChecked}
                         onChange={() => toggleRow(it.id)} onClick={(e) => e.stopPropagation()}
                         className="mt-1 rounded border-slate-300 text-brand-600 focus:ring-brand-500 shrink-0" />
                       <div className="flex-1 min-w-0">
@@ -273,7 +274,7 @@ export const WorkAllotmentPage = () => {
           </h2>
           <span className="text-[11px] font-medium text-slate-400">(auto-deleted after 7 days)</span>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+        <div className="production-surface rounded-xl border border-slate-200 bg-white overflow-hidden">
           {loadingGenerated ? (
             <div className="flex items-center justify-center gap-2 py-10 text-slate-400 text-sm">
               <Loader2 className="h-5 w-5 animate-spin" /> Loading…
@@ -285,7 +286,7 @@ export const WorkAllotmentPage = () => {
           ) : (
             <>
               {/* Desktop / tablet — table */}
-              <div className="hidden md:block overflow-x-auto">
+              <div className="production-scroll hidden md:block overflow-x-auto" tabIndex={0} role="region" aria-label="Production records">
                 <table className="w-full text-sm whitespace-nowrap">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">

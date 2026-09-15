@@ -1,3 +1,4 @@
+import '@/components/production/workspace.css';
 // Production Summary — filterable report of production by employee, with type,
 // size/measure, pcs, weight and amount. Filter by date range, employee and
 // customer; download the filtered set as Excel.
@@ -271,7 +272,7 @@ export const ProductionSummaryPage = () => {
   const clearFilters = () => { setFrom(''); setTo(''); setLabour(''); setCustomerId(''); setSearch(''); };
 
   return (
-    <div className="max-w-full space-y-3">
+    <div className="production-workspace max-w-full space-y-3">
       {/* Title bar */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="flex items-center gap-2 text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
@@ -386,7 +387,7 @@ export const ProductionSummaryPage = () => {
             figures line up in one column down the whole page — the thing that makes
             a printed ERP report readable. */}
         {!isLoading && items.length > 0 && view === 'BY_EMPLOYEE' && (
-          <div className="overflow-x-auto border-t border-slate-100">
+          <div className="production-scroll overflow-x-auto border-t border-slate-100" tabIndex={0} role="region" aria-label="Production records">
             <table className="w-full min-w-[680px] border-collapse text-[13px]">
               <thead>
                 <tr>
@@ -479,7 +480,7 @@ export const ProductionSummaryPage = () => {
 
         {/* ---------------- All entries: the flat register ---------------- */}
         {!isLoading && items.length > 0 && view === 'ENTRIES' && (
-          <div className="overflow-x-auto border-t border-slate-100">
+          <div className="production-scroll overflow-x-auto border-t border-slate-100" tabIndex={0} role="region" aria-label="Production records">
             <table className="w-full min-w-[760px] border-collapse text-[13px]">
               <thead>
                 <tr>
