@@ -169,8 +169,8 @@ export const ErpMobileHeader = ({ subtitle, primary, stats }: {
 export const ProductionTabs = () => {
   const { pathname } = useLocation();
   const tabs = [
-    { to: '/production', label: 'Modify', icon: Pencil, match: (p: string) => p === '/production' || /^\/production\/[^/]+$/.test(p) },
     { to: '/production/new', label: 'Receive', icon: Inbox, match: (p: string) => p === '/production/new' },
+    { to: '/production', label: 'Modify', icon: Pencil, match: (p: string) => p === '/production' || /^\/production\/[^/]+$/.test(p) },
     { to: '/production/summary', label: 'Summary', icon: BarChart3, match: (p: string) => p === '/production/summary' },
   ];
   return (
