@@ -8,6 +8,7 @@ import { requireAuth, requirePermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 import { logAudit, snapshotEntity } from '../lib/audit.js';
 import { notifyCompanyAdmins } from '../lib/push.js';
+import { producedPcsExpr } from '../lib/splitProduction.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -291,7 +292,10 @@ const flattenItem = (it) => {
 // plus pcsProduced / pcsDispatched aggregated via correlated subqueries.
 // Pieces produced against one line. Kept as a named expression because the
 // summary filters on it (Open vs Completed) as well as selecting it.
-const PRODUCED_SQ = '(SELECT COALESCE(SUM(p.`pcs`),0) FROM `Production` p WHERE p.`poOrderItemId` = it.`id`)';
+// Finished pcs against one item — whole-piece runs plus matched split-run
+// sets (see lib/splitProduction.js). A raw SUM would double-count an
+// unmatched split pile as if both halves were already joined.
+const PRODUCED_SQ = producedPcsExpr('it');
 
 const itemRowSql = `
   SELECT it.*,
@@ -301,7 +305,7 @@ const itemRowSql = `
          po.\`customerId\`   AS customerId,
          c.\`name\`          AS customerName,
          c.\`customerCode\`  AS customerCode,
-         (SELECT COALESCE(SUM(p.\`pcs\`),0) FROM \`Production\` p WHERE p.\`poOrderItemId\` = it.\`id\`) AS pcsProduced,
+         ${PRODUCED_SQ} AS pcsProduced,
          (SELECT COALESCE(SUM(d.\`pcs\`),0) FROM \`Dispatch\`   d WHERE d.\`poOrderItemId\` = it.\`id\`) AS pcsDispatched
     FROM \`PoOrderItem\` it
     INNER JOIN \`PoOrder\`  po ON po.\`id\` = it.\`poOrderId\`
@@ -602,15 +606,11 @@ router.get('/summary', requirePermission('po_summary'), asyncHandler(async (req,
   const aggRow = await qOne(
     `SELECT
        COALESCE(SUM(it.\`pcs\`), 0) AS totalOrdered,
-       COALESCE(SUM(
-         (SELECT COALESCE(SUM(pp.\`pcs\`),0) FROM \`Production\` pp WHERE pp.\`poOrderItemId\` = it.\`id\`)
-       ), 0) AS totalProduced,
+       COALESCE(SUM(${PRODUCED_SQ}), 0) AS totalProduced,
        COALESCE(SUM(
          (SELECT COALESCE(SUM(dd.\`pcs\`),0) FROM \`Dispatch\` dd WHERE dd.\`poOrderItemId\` = it.\`id\`)
        ), 0) AS totalDispatched,
-       COALESCE(SUM(GREATEST(
-         (SELECT COALESCE(SUM(pp.\`pcs\`),0) FROM \`Production\` pp WHERE pp.\`poOrderItemId\` = it.\`id\`) - it.\`pcs\`, 0
-       )), 0) AS totalOverproduced
+       COALESCE(SUM(GREATEST(${PRODUCED_SQ} - it.\`pcs\`, 0)), 0) AS totalOverproduced
      FROM \`PoOrderItem\` it
        INNER JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
        INNER JOIN \`Customer\` c ON c.\`id\` = po.\`customerId\`

@@ -70,6 +70,20 @@ export const CoreTypeChip = ({ coreType, className }: { coreType: 'TOROIDAL' | '
   </span>
 );
 
+/** Small tag marking a production entry as one physical run of a split-width
+ *  job (Production.splitHeight != null) — amber/WIP-toned and deliberately
+ *  distinct from CoreTypeChip's blue/green core-type tag, so a split entry
+ *  stands out at a glance in Modify/Summary/Edit without being mistaken for
+ *  the core type itself. */
+export const SplitHeightChip = ({ height, className }: { height: number; className?: string }) => (
+  <span className={cn(
+    'inline-flex items-center rounded-[3px] border border-amber-200 bg-amber-50 px-1.5 py-0.5 font-manrope text-[9.5px] font-extrabold uppercase tracking-wider text-amber-800',
+    className,
+  )}>
+    Split {height}
+  </span>
+);
+
 /** The single continuous white card every Production page content area sits
  *  in — the mockup never nests titled sub-panels (unlike tally.tsx's Panel);
  *  filters, stats, table and footer are one bordered surface with hairline

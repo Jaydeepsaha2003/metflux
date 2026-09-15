@@ -16,7 +16,7 @@ import { SearchableSelect } from '@/components/SearchableSelect';
 import { downloadXlsx, todayStamp } from '@/lib/excel';
 import { useHideCustomerNames } from '@/store/auth';
 import {
-  ErpCard, ErpLabel, ErpStat, ErpStatStrip, ErpTh, ErpSegmented, CoreTypeChip, ProductionTabs, ErpMobileHeader,
+  ErpCard, ErpLabel, ErpStat, ErpStatStrip, ErpTh, ErpSegmented, CoreTypeChip, SplitHeightChip, ProductionTabs, ErpMobileHeader,
 } from '@/components/production/erp';
 
 type Row = {
@@ -35,6 +35,7 @@ type Row = {
   totalWeight: number;
   labourName: string;
   amount: number | null;
+  splitHeight: number | null;
 };
 type Aggregates = {
   records: number; pcs: number; weight: number; amount: number;
@@ -267,7 +268,12 @@ export const ProductionListPage = () => {
                   <td className="px-2.5 py-2 text-center"><CoreTypeChip coreType={p.coreType} /></td>
                   <td className="whitespace-nowrap px-2.5 py-2 text-slate-700">{p.grade}</td>
                   <td className="whitespace-nowrap px-2.5 py-2 text-slate-700">{p.material}</td>
-                  <td className="whitespace-nowrap px-2.5 py-2 font-ibmmono text-xs text-slate-700">{p.measure}</td>
+                  <td className="whitespace-nowrap px-2.5 py-2 font-ibmmono text-xs text-slate-700">
+                    <div className="flex items-center gap-1.5">
+                      {p.measure}
+                      {p.splitHeight != null && <SplitHeightChip height={p.splitHeight} />}
+                    </div>
+                  </td>
                   <td className="px-2.5 py-2 text-right font-ibmmono tabular-nums">{pcsFmt(p.pcs)}</td>
                   <td className="px-2.5 py-2 text-right font-ibmmono tabular-nums">{kg(p.weightPerPc)}</td>
                   <td className="px-2.5 py-2 text-right font-ibmmono font-semibold tabular-nums">{kg(p.totalWeight)}</td>
@@ -335,6 +341,7 @@ export const ProductionListPage = () => {
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="font-ibmmono text-xs font-semibold text-slate-800">{p.poNumber}</span>
                     <CoreTypeChip coreType={p.coreType} />
+                    {p.splitHeight != null && <SplitHeightChip height={p.splitHeight} />}
                   </div>
                   <div className="mt-0.5 text-sm font-medium text-slate-900 truncate">
                     {hideNames

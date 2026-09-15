@@ -7,6 +7,7 @@ import { requireAuth, requirePermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 import { notifyCompanyAdmins } from '../lib/push.js';
 import { logAudit, snapshotEntity } from '../lib/audit.js';
+import { producedPcsExpr } from '../lib/splitProduction.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -136,7 +137,7 @@ router.get('/ready', requirePermission('dispatch'), asyncHandler(async (req, res
             po.\`deliveryDate\` AS po_deliveryDate,
             c.\`name\`          AS customer_name,
             c.\`customerCode\`  AS customer_code,
-            (SELECT COALESCE(SUM(pp.\`pcs\`),0) FROM \`Production\` pp WHERE pp.\`poOrderItemId\` = it.\`id\`) AS produced,
+            ${producedPcsExpr('it')} AS produced,
             (SELECT COALESCE(SUM(dd.\`pcs\`),0) FROM \`Dispatch\`   dd WHERE dd.\`poOrderItemId\` = it.\`id\`) AS dispatched,
             (SELECT COALESCE(SUM(sm.\`pcs\`),0) FROM \`StockMovement\` sm WHERE sm.\`poOrderItemId\` = it.\`id\` AND sm.\`direction\` = 'IN') AS stockedIn
        FROM \`PoOrderItem\` it
@@ -242,7 +243,7 @@ router.post('/', requirePermission('dispatch'), asyncHandler(async (req, res) =>
 
   const item = await qOne(
     `SELECT it.*,
-            (SELECT COALESCE(SUM(pp.\`pcs\`),0) FROM \`Production\` pp WHERE pp.\`poOrderItemId\` = it.\`id\`) AS produced,
+            ${producedPcsExpr('it')} AS produced,
             (SELECT COALESCE(SUM(dd.\`pcs\`),0) FROM \`Dispatch\`   dd WHERE dd.\`poOrderItemId\` = it.\`id\`) AS dispatched
        FROM \`PoOrderItem\` it
        INNER JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
@@ -287,7 +288,7 @@ router.patch('/:id', requirePermission('dispatch'), asyncHandler(async (req, res
   const data = updateSchema.parse(req.body);
   const existing = await qOne(
     `SELECT d.*, it.\`pcs\` AS item_pcs,
-            (SELECT COALESCE(SUM(pp.\`pcs\`),0) FROM \`Production\` pp WHERE pp.\`poOrderItemId\` = d.\`poOrderItemId\`) AS produced,
+            ${producedPcsExpr('it')} AS produced,
             (SELECT COALESCE(SUM(dd.\`pcs\`),0) FROM \`Dispatch\` dd WHERE dd.\`poOrderItemId\` = d.\`poOrderItemId\` AND dd.\`id\` <> d.\`id\`) AS others
        FROM \`Dispatch\` d
        INNER JOIN \`PoOrderItem\` it ON it.\`id\` = d.\`poOrderItemId\`

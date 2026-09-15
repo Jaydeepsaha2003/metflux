@@ -9,7 +9,8 @@ import { api, ApiError } from '@/lib/api';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useHideCustomerNames } from '@/store/auth';
 import { useConfirm } from '@/hooks/useConfirm';
-import { ErpCard, ErpLabel, CoreTypeChip, ProductionTabs } from '@/components/production/erp';
+import { cn } from '@/lib/cn';
+import { ErpCard, ErpLabel, CoreTypeChip, SplitHeightChip, ProductionTabs } from '@/components/production/erp';
 
 type Item = {
   id: string;
@@ -21,12 +22,14 @@ type Item = {
   material: string;
   measure: string;
   itemPcs: number;
+  itemHt: number | null;
   othersPcs: number;
   prodDate: string;
   pcs: number;
   weightPerPc: number;
   totalWeight: number;
   labourName: string;
+  splitHeight: number | null;
 };
 
 export const ProductionEditPage = () => {
@@ -50,6 +53,8 @@ export const ProductionEditPage = () => {
   const [prodDate, setProdDate] = useState('');
   const [labourName, setLabourName] = useState('');
   const [pcs, setPcs] = useState(0);
+  const [isSplit, setIsSplit] = useState(false);
+  const [splitHeight, setSplitHeight] = useState(0);
   const [error, setError] = useState<{ message: string; details?: string[] } | null>(null);
 
   useEffect(() => {
@@ -57,6 +62,8 @@ export const ProductionEditPage = () => {
     setProdDate(item.prodDate.slice(0, 10));
     setLabourName(item.labourName);
     setPcs(item.pcs);
+    setIsSplit(item.splitHeight != null);
+    setSplitHeight(item.splitHeight ?? 0);
   }, [item]);
 
   const totalWeight = useMemo(
@@ -92,6 +99,10 @@ export const ProductionEditPage = () => {
     const missing: string[] = [];
     if (!labourName.trim()) missing.push('Labour name');
     if (pcs <= 0) missing.push('Pcs > 0');
+    if (isSplit) {
+      if (!(splitHeight > 0)) missing.push('Split height > 0');
+      else if (item.itemHt != null && splitHeight >= item.itemHt) missing.push(`Split height must be less than ${item.itemHt} (the full ordered height)`);
+    }
     if (missing.length) {
       setError({ message: 'Please fix the form', details: missing });
       return;
@@ -129,6 +140,7 @@ export const ProductionEditPage = () => {
       labourName: labourName.trim(),
       weightPerPc: item.weightPerPc,
       totalWeight,
+      splitHeight: isSplit ? splitHeight : null,
     });
   };
 
@@ -171,7 +183,10 @@ export const ProductionEditPage = () => {
               </div>
               <div className="col-span-2 sm:col-span-4">
                 <ErpLabel className="block">Measure</ErpLabel>
-                <div className="mt-0.5 font-ibmmono text-[13px] text-slate-700">{item.measure} <span className="text-slate-400">· {item.material}</span></div>
+                <div className="mt-0.5 flex flex-wrap items-center gap-1.5 font-ibmmono text-[13px] text-slate-700">
+                  {item.measure} <span className="text-slate-400">· {item.material}</span>
+                  {item.splitHeight != null && <SplitHeightChip height={item.splitHeight} />}
+                </div>
               </div>
             </dl>
           </div>
@@ -203,6 +218,47 @@ export const ProductionEditPage = () => {
               <Field label="Total Weight">
                 <input className="input h-9 bg-slate-50 text-sm font-ibmmono" value={totalWeight ? totalWeight.toFixed(3) : ''} readOnly />
               </Field>
+            </div>
+
+            {/* Whole Piece vs Split Width — see splitProduction.js for the
+                matching rule. Switching back to Whole Piece here clears this
+                entry's splitHeight on save. */}
+            <div className="rounded border border-slate-200 bg-white px-3 py-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <ErpLabel>Production Type</ErpLabel>
+                <div className="inline-flex rounded-[3px] border border-slate-200 bg-white p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => { setIsSplit(false); setSplitHeight(0); }}
+                    className={cn('rounded-[3px] px-2.5 py-1 font-manrope text-[11px] font-extrabold uppercase tracking-wide transition-colors duration-150',
+                      !isSplit ? 'bg-brand-900 text-white' : 'text-slate-600 hover:bg-slate-100')}
+                  >
+                    Whole Piece
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsSplit(true)}
+                    className={cn('rounded-[3px] px-2.5 py-1 font-manrope text-[11px] font-extrabold uppercase tracking-wide transition-colors duration-150',
+                      isSplit ? 'bg-brand-900 text-white' : 'text-slate-600 hover:bg-slate-100')}
+                  >
+                    Split Width
+                  </button>
+                </div>
+              </div>
+              {isSplit && (
+                <div className="mt-3">
+                  <Field label={`Split Height (full height: ${item.itemHt ?? '—'})`}>
+                    <input
+                      className="input h-9 text-sm"
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      value={splitHeight || ''}
+                      onChange={(e) => setSplitHeight(parseFloat(e.target.value || '0'))}
+                    />
+                  </Field>
+                </div>
+              )}
             </div>
 
             {error && (

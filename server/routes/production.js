@@ -7,6 +7,7 @@ import { requireAuth, requirePermission } from '../lib/auth.js';
 import { resolveTenant } from '../lib/tenant.js';
 import { logAudit, snapshotEntity } from '../lib/audit.js';
 import { notifyCompanyAdmins } from '../lib/push.js';
+import { producedPcsExpr, producedPcsFromRows, splitAmountsByEntry, unmatchedByHeight } from '../lib/splitProduction.js';
 
 const router = Router();
 router.use(requireAuth, resolveTenant);
@@ -19,6 +20,10 @@ const createSchema = z.object({
   totalWeight: z.coerce.number().nonnegative(),
   labourName: z.string().trim().min(1).max(120),
   notes: z.string().max(2000).optional().nullable(),
+  // Split-width production: this run is one physical strip of a wider item
+  // (e.g. the 40mm half of a 65mm item), not the full ordered height. See
+  // lib/splitProduction.js for the matching/pay rule.
+  splitHeight: z.coerce.number().positive().optional().nullable(),
 });
 
 const updateSchema = z.object({
@@ -28,6 +33,7 @@ const updateSchema = z.object({
   totalWeight: z.coerce.number().nonnegative().optional(),
   labourName: z.string().trim().min(1).max(120).optional(),
   notes: z.string().max(2000).optional().nullable(),
+  splitHeight: z.coerce.number().positive().optional().nullable(),
 });
 
 // Production rows joined with their parent PO item + PO + customer.
@@ -39,6 +45,7 @@ const PROD_ROW_SQL = `
          it.\`grade\`       AS item_grade,
          it.\`material\`    AS item_material,
          it.\`measure\`     AS item_measure,
+         it.\`ht\`          AS item_ht,
          it.\`rateBasis\`   AS item_rateBasis,
          it.\`rateValue\`   AS item_rateValue,
          it.\`ratePerKg\`   AS item_ratePerKg,
@@ -55,7 +62,13 @@ const PROD_ROW_SQL = `
 
 const flatten = (r) => {
   const lineAmount = r.item_totalAmount ?? null;
-  const proRataAmount = (lineAmount != null && r.item_pcs > 0)
+  const isSplit = r.splitHeight != null;
+  // Whole-piece rows keep the exact math they always had. A split row's real
+  // amount depends on its sibling split rows (has the matching half arrived
+  // yet?), which a single flattened row can't see — left null here and
+  // filled in afterward by attachSplitAmounts() once all of an item's split
+  // rows are in hand. See lib/splitProduction.js.
+  const proRataAmount = (!isSplit && lineAmount != null && r.item_pcs > 0)
     ? +(lineAmount * (r.pcs / r.item_pcs)).toFixed(2)
     : null;
   return {
@@ -70,6 +83,7 @@ const flatten = (r) => {
     material: r.item_material,
     measure: r.item_measure,
     itemPcs: r.item_pcs,
+    itemHt: r.item_ht,
     prodDate: r.prodDate,
     pcs: r.pcs,
     weightPerPc: r.weightPerPc,
@@ -82,8 +96,47 @@ const flatten = (r) => {
     ratePerKg:   r.item_ratePerKg ?? null,
     ratePerPc:   r.item_ratePerPc ?? null,
     lineAmount,
+    splitHeight: r.splitHeight ?? null,
     amount:      proRataAmount,
   };
+};
+
+/* Split rows' amounts depend on siblings the current query may not have
+   fetched (a date-filtered Summary view, a paginated Modify page, …), so
+   correctness requires re-reading EVERY split row ever recorded against
+   each affected item — not just the ones on screen — and replaying them in
+   order. Cheap in the common case: a no-op unless the result actually
+   contains a split row. Mutates and returns `items`. */
+const attachSplitAmounts = async (items) => {
+  const splitItemIds = [...new Set(items.filter((i) => i.splitHeight != null).map((i) => i.poOrderItemId))];
+  if (!splitItemIds.length) return items;
+  const placeholders = splitItemIds.map(() => '?').join(',');
+  const allSplitRows = await q(
+    `SELECT \`id\`, \`poOrderItemId\`, \`pcs\`, \`splitHeight\`, \`createdAt\`
+       FROM \`Production\` WHERE \`poOrderItemId\` IN (${placeholders}) AND \`splitHeight\` IS NOT NULL`,
+    splitItemIds
+  );
+  const rowsByItem = new Map();
+  for (const r of allSplitRows) {
+    if (!rowsByItem.has(r.poOrderItemId)) rowsByItem.set(r.poOrderItemId, []);
+    rowsByItem.get(r.poOrderItemId).push(r);
+  }
+  // Any item row already carries its own item's rate/pcs — grab one per item.
+  const rateByItem = new Map();
+  for (const it of items) {
+    if (it.splitHeight == null || rateByItem.has(it.poOrderItemId)) continue;
+    rateByItem.set(it.poOrderItemId, (it.lineAmount != null && it.itemPcs > 0) ? it.lineAmount / it.itemPcs : null);
+  }
+  const amountsByItem = new Map();
+  for (const [poOrderItemId, rows] of rowsByItem) {
+    amountsByItem.set(poOrderItemId, splitAmountsByEntry(rows, rateByItem.get(poOrderItemId) ?? null));
+  }
+  for (const it of items) {
+    if (it.splitHeight == null) continue;
+    const m = amountsByItem.get(it.poOrderItemId);
+    it.amount = m ? (m.get(it.id) ?? null) : null;
+  }
+  return items;
 };
 
 /* ---------- /pending — items still awaiting production ---------- */
@@ -106,7 +159,7 @@ router.get('/pending', requirePermission('rec_production'), asyncHandler(async (
             po.\`deliveryDate\` AS po_deliveryDate,
             c.\`name\`          AS customer_name,
             c.\`customerCode\`  AS customer_code,
-            (SELECT COALESCE(SUM(pp.\`pcs\`),0) FROM \`Production\` pp WHERE pp.\`poOrderItemId\` = it.\`id\`) AS produced
+            ${producedPcsExpr('it')} AS produced
        FROM \`PoOrderItem\` it
        INNER JOIN \`PoOrder\`  po ON po.\`id\` = it.\`poOrderId\`
        INNER JOIN \`Customer\` c  ON c.\`id\`  = po.\`customerId\`
@@ -115,12 +168,30 @@ router.get('/pending', requirePermission('rec_production'), asyncHandler(async (
     params
   );
 
+  // Split state per item — so the operator picking an item that already has
+  // an unmatched split pile (e.g. 50 pcs of a 40mm half with no 25mm match
+  // yet) can see that before recording another run against it, rather than
+  // guessing or re-typing a height that doesn't actually match.
+  const splitRows = rows.length
+    ? await q(
+        `SELECT \`poOrderItemId\`, \`pcs\`, \`splitHeight\` FROM \`Production\`
+          WHERE \`splitHeight\` IS NOT NULL AND \`poOrderItemId\` IN (${rows.map(() => '?').join(',')})`,
+        rows.map((r) => r.id)
+      )
+    : [];
+  const splitByItem = new Map();
+  for (const r of splitRows) {
+    if (!splitByItem.has(r.poOrderItemId)) splitByItem.set(r.poOrderItemId, []);
+    splitByItem.get(r.poOrderItemId).push(r);
+  }
+
   const pending = rows.map((it) => {
     const produced = Number(it.produced ?? 0);
     const remaining = Math.max(it.pcs - produced, 0);
     const pendingAmount = (it.totalAmount != null && it.pcs > 0)
       ? +(it.totalAmount * (remaining / it.pcs)).toFixed(2)
       : null;
+    const splits = splitByItem.get(it.id);
     return {
       id: it.id,
       poNumber: it.po_number,
@@ -129,6 +200,10 @@ router.get('/pending', requirePermission('rec_production'), asyncHandler(async (
       orderDate: it.po_orderDate,
       deliveryDate: it.po_deliveryDate,
       coreType: it.coreType, grade: it.grade, material: it.material, measure: it.measure,
+      // Raw dims (not just the composed measure string) so the client can
+      // recompute weight for a chosen split height the same way calc.ts
+      // already computes it for the full piece.
+      id1: it.id1, id2: it.id2, od1: it.od1, od2: it.od2, ht: it.ht,
       weightPerPc: it.weightPerPc,
       orderedPcs: it.pcs,
       producedPcs: produced,
@@ -137,6 +212,7 @@ router.get('/pending', requirePermission('rec_production'), asyncHandler(async (
       rateValue:   it.rateValue   ?? null,
       totalAmount: it.totalAmount ?? null,
       pendingAmount,
+      splitInfo: splits ? unmatchedByHeight(splits) : [],
     };
   }).filter((x) => x.remainingPcs > 0);
 
@@ -188,7 +264,11 @@ router.get('/', requirePermission('view_po'), asyncHandler(async (req, res) => {
     // Job amount is pro-rated from the PARENT item's totalAmount (see flatten()
     // below), which SQL can't do directly — sum it in JS from the same rows
     // used for the flat total so the KPI strip always matches the table.
-    q(`SELECT p.\`pcs\`, p.\`totalWeight\`, it.\`pcs\` AS item_pcs, it.\`totalAmount\` AS item_totalAmount
+    // Also carries what attachSplitAmounts needs (id/poOrderItemId/splitHeight)
+    // so a split row here is matched the same way as everywhere else, over
+    // its FULL history — not just whatever this filter happens to catch.
+    q(`SELECT p.\`id\`, p.\`poOrderItemId\`, p.\`splitHeight\`, p.\`pcs\`, p.\`totalWeight\`,
+              it.\`pcs\` AS item_pcs, it.\`totalAmount\` AS item_totalAmount
          FROM \`Production\` p
         INNER JOIN \`PoOrderItem\` it ON it.\`id\` = p.\`poOrderItemId\`
         INNER JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
@@ -201,18 +281,24 @@ router.get('/', requirePermission('view_po'), asyncHandler(async (req, res) => {
   ]);
 
   let pcs = 0, weight = 0, amount = 0, unratedCount = 0;
-  for (const r of aggRow) {
+  const aggItems = aggRow.map((r) => ({
+    id: r.id, poOrderItemId: r.poOrderItemId, splitHeight: r.splitHeight ?? null,
+    itemPcs: r.item_pcs, lineAmount: r.item_totalAmount ?? null,
+    amount: (r.splitHeight == null && r.item_totalAmount != null && r.item_pcs > 0)
+      ? +(Number(r.item_totalAmount) * (Number(r.pcs) / Number(r.item_pcs))).toFixed(2)
+      : null,
+  }));
+  await attachSplitAmounts(aggItems);
+  for (let i = 0; i < aggRow.length; i++) {
+    const r = aggRow[i];
     pcs += Number(r.pcs) || 0;
     weight += Number(r.totalWeight) || 0;
-    if (r.item_totalAmount != null && r.item_pcs > 0) {
-      amount += (Number(r.item_totalAmount) * (Number(r.pcs) / Number(r.item_pcs)));
-    } else {
-      unratedCount++;
-    }
+    const a = aggItems[i].amount;
+    if (a != null) amount += a; else unratedCount++;
   }
 
   res.json({
-    items: rows.map(flatten),
+    items: await attachSplitAmounts(rows.map(flatten)),
     total: Number(totalRow?.n ?? 0),
     page, pageSize,
     aggregates: {
@@ -252,7 +338,7 @@ router.get('/summary', requirePermission('view_po'), asyncHandler(async (req, re
   }
 
   const rows = await q(`${PROD_ROW_SQL} WHERE ${where} ORDER BY p.\`prodDate\` DESC LIMIT 20000`, params);
-  const items = rows.map(flatten);
+  const items = await attachSplitAmounts(rows.map(flatten));
   const totals = items.reduce((t, r) => ({
     pcs:    t.pcs + (Number(r.pcs) || 0),
     weight: +(t.weight + (Number(r.totalWeight) || 0)).toFixed(3),
@@ -272,12 +358,16 @@ router.get('/:id', requirePermission('view_po'), asyncHandler(async (req, res) =
     [req.params.id, req.tenant.companyId]
   );
   if (!row) throw new AppError('Production record not found', 404, 'NOT_FOUND');
-  // othersPcs = sum of OTHER production records for the same PO item (needed for excess-production check on edit).
-  const othersRow = await qOne(
-    'SELECT COALESCE(SUM(`pcs`),0) AS n FROM `Production` WHERE `poOrderItemId` = ? AND `id` <> ?',
+  // othersPcs = finished pcs from every OTHER production record on the same
+  // PO item (used by the edit page's "N remaining" hint) — matched, not a
+  // raw sum, so editing one half of a split doesn't get a phantom allowance
+  // from its own still-unmatched sibling pile.
+  const otherRows = await q(
+    'SELECT `pcs`, `splitHeight` FROM `Production` WHERE `poOrderItemId` = ? AND `id` <> ?',
     [row.poOrderItemId, row.id]
   );
-  res.json({ ...flatten(row), othersPcs: Number(othersRow?.n ?? 0) });
+  const [flat] = await attachSplitAmounts([flatten(row)]);
+  res.json({ ...flat, othersPcs: producedPcsFromRows(otherRows) });
 }));
 
 /* POST / */
@@ -285,8 +375,7 @@ router.post('/', requirePermission('rec_production'), asyncHandler(async (req, r
   const data = createSchema.parse(req.body);
 
   const item = await qOne(
-    `SELECT it.*, po.\`orderDate\` AS po_orderDate,
-            (SELECT COALESCE(SUM(pp.\`pcs\`),0) FROM \`Production\` pp WHERE pp.\`poOrderItemId\` = it.\`id\`) AS produced
+    `SELECT it.*, po.\`orderDate\` AS po_orderDate
        FROM \`PoOrderItem\` it
        INNER JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
        WHERE it.\`id\` = ? AND po.\`companyId\` = ?`,
@@ -295,11 +384,16 @@ router.post('/', requirePermission('rec_production'), asyncHandler(async (req, r
   if (!item) throw new AppError('PO item not found', 404, 'NOT_FOUND');
   if (item.status === 'CANCELLED') throw new AppError('PO item is cancelled', 400, 'ITEM_CANCELLED');
 
-  const produced = Number(item.produced ?? 0);
   // Excess production is allowed — more pcs than ordered can be recorded and
   // will be available for dispatch (readyPcs = produced - dispatched, uncapped).
   if (new Date(data.prodDate) < new Date(item.po_orderDate)) {
     throw new AppError('Production date cannot be before order date', 400, 'BAD_DATE');
+  }
+  // A split height is a PARTIAL run — it has to be smaller than the item's
+  // own full height, or it isn't a split at all (record it as a normal,
+  // whole-piece entry instead by leaving splitHeight out).
+  if (data.splitHeight != null && item.ht != null && data.splitHeight >= item.ht) {
+    throw new AppError(`Split height (${data.splitHeight}mm) must be less than the item's full height (${item.ht}mm).`, 400, 'BAD_SPLIT_HEIGHT');
   }
 
   const created = await insert('Production', {
@@ -310,6 +404,7 @@ router.post('/', requirePermission('rec_production'), asyncHandler(async (req, r
     totalWeight: data.totalWeight,
     labourName: data.labourName,
     notes: data.notes ?? null,
+    splitHeight: data.splitHeight ?? null,
     companyId: req.tenant.companyId,
     createdById: req.auth.userId,
   });
@@ -326,8 +421,7 @@ router.post('/', requirePermission('rec_production'), asyncHandler(async (req, r
 router.patch('/:id', requirePermission('modify_prod_qty'), asyncHandler(async (req, res) => {
   const data = updateSchema.parse(req.body);
   const row = await qOne(
-    `SELECT p.*, it.\`pcs\` AS item_pcs, po.\`orderDate\` AS po_orderDate,
-            (SELECT COALESCE(SUM(pp.\`pcs\`),0) FROM \`Production\` pp WHERE pp.\`poOrderItemId\` = p.\`poOrderItemId\` AND pp.\`id\` <> p.\`id\`) AS others
+    `SELECT p.*, it.\`pcs\` AS item_pcs, it.\`ht\` AS item_ht, po.\`orderDate\` AS po_orderDate
        FROM \`Production\` p
        INNER JOIN \`PoOrderItem\` it ON it.\`id\` = p.\`poOrderItemId\`
        INNER JOIN \`PoOrder\`     po ON po.\`id\` = it.\`poOrderId\`
@@ -339,6 +433,10 @@ router.patch('/:id', requirePermission('modify_prod_qty'), asyncHandler(async (r
   // Excess production is allowed (confirmed by the user on the frontend).
   if (data.prodDate !== undefined && new Date(data.prodDate) < new Date(row.po_orderDate)) {
     throw new AppError('Production date cannot be before order date', 400, 'BAD_DATE');
+  }
+  const nextSplitHeight = data.splitHeight !== undefined ? data.splitHeight : row.splitHeight;
+  if (nextSplitHeight != null && row.item_ht != null && nextSplitHeight >= row.item_ht) {
+    throw new AppError(`Split height (${nextSplitHeight}mm) must be less than the item's full height (${row.item_ht}mm).`, 400, 'BAD_SPLIT_HEIGHT');
   }
 
   const before = await snapshotEntity('Production', row.id);

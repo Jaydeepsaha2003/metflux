@@ -15,9 +15,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Search, Save, Loader2, Factory, ArrowLeft, CheckCircle2, Check } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { toroidalCalc, rectangularCalc } from '@/lib/calc';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useConfirm } from '@/hooks/useConfirm';
-import { ErpCard, ErpLabel, CoreTypeChip, ErpTh, ProductionTabs } from '@/components/production/erp';
+import { ErpCard, ErpLabel, CoreTypeChip, SplitHeightChip, ErpTh, ProductionTabs } from '@/components/production/erp';
+
+type SplitPile = { splitHeight: number; pcs: number; matched: number; unmatched: number };
 
 type PendingItem = {
   id: string;
@@ -29,12 +32,18 @@ type PendingItem = {
   grade: string;
   material: string;
   measure: string;
+  id1: number | null;
+  id2: number | null;
+  od1: number | null;
+  od2: number | null;
+  ht: number | null;
   weightPerPc: number;
   orderedPcs: number;
   producedPcs: number;
   remainingPcs: number;
   totalAmount: number | null;
   pendingAmount: number | null;
+  splitInfo: SplitPile[];
 };
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -79,6 +88,14 @@ export const ProductionNewPage = () => {
   const [prodDate, setProdDate] = useState(todayISO());
   const [labourName, setLabourName] = useState('');
   const [pcs, setPcs] = useState(0);
+  // Split-width production: a wide core sometimes can't be made in one run,
+  // so it's produced as two (or more) narrower strips joined into one
+  // finished piece before dispatch. Whole Piece (the default, unchanged
+  // behaviour) leaves splitHeight out entirely; Split Width records this
+  // entry as one physical run at `splitHeight`, matched against any other
+  // split runs already recorded for the same item (see splitProduction.js).
+  const [isSplit, setIsSplit] = useState(false);
+  const [splitHeight, setSplitHeight] = useState(0);
   const [error, setError] = useState<{ message: string; details?: string[] } | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
@@ -92,22 +109,42 @@ export const ProductionNewPage = () => {
   const pickItem = (it: PendingItem) => {
     setSelected(it);
     setPcs(0);
+    setIsSplit(false);
+    setSplitHeight(0);
     setError(null);
     setStep(2);
   };
 
+  // Weight/pc for a split run is computed with the SAME formulas as a whole
+  // piece — both toroidalCalc and rectangularCalc take `ht` directly and are
+  // linear in it — just substituting the entered split height for the item's
+  // full ordered height. No new calc.ts helper needed.
+  const splitWeightPerPc = useMemo(() => {
+    if (!selected || !isSplit || splitHeight <= 0) return null;
+    if (selected.coreType === 'TOROIDAL') {
+      return toroidalCalc({ id: selected.id1 ?? 0, od: selected.od1 ?? 0, ht: splitHeight, pcs: 0 }).weightPerPc;
+    }
+    return rectangularCalc({
+      id1: selected.id1 ?? 0, id2: selected.id2 ?? 0, od1: selected.od1 ?? 0, od2: selected.od2 ?? 0,
+      ht: splitHeight, pcs: 0,
+    }).weightPerPc;
+  }, [selected, isSplit, splitHeight]);
+  const effectiveWeightPerPc = isSplit ? (splitWeightPerPc ?? 0) : (selected?.weightPerPc ?? 0);
+
   const totalWeight = useMemo(
-    () => (selected ? +(pcs * selected.weightPerPc).toFixed(3) : 0),
-    [pcs, selected]
+    () => (selected ? +(pcs * effectiveWeightPerPc).toFixed(3) : 0),
+    [pcs, effectiveWeightPerPc, selected]
   );
   // Job amount for THIS entry, prorated from the item's own total the same
   // way the server prorates it once the entry is saved (see production.js's
   // flatten()) — so the figure shown here matches what lands in Modify/Summary.
+  // Not meaningful for a split run: a split earns nothing on its own, so the
+  // server leaves its amount at 0 until a matching run completes the piece.
   const jobAmount = useMemo(
-    () => (selected?.totalAmount != null && selected.orderedPcs > 0 && pcs > 0
+    () => (!isSplit && selected?.totalAmount != null && selected.orderedPcs > 0 && pcs > 0
       ? +(selected.totalAmount * (pcs / selected.orderedPcs)).toFixed(2)
       : null),
-    [pcs, selected]
+    [pcs, selected, isSplit]
   );
 
   const submit = useMutation({
@@ -122,6 +159,8 @@ export const ProductionNewPage = () => {
       setSelected(null);
       setStep(1);
       setPcs(0);
+      setIsSplit(false);
+      setSplitHeight(0);
       setLabourName('');
       setError(null);
       setSavedAt(Date.now());
@@ -150,6 +189,10 @@ export const ProductionNewPage = () => {
     const missing: string[] = [];
     if (!labourName.trim()) missing.push('Labour name');
     if (pcs <= 0) missing.push('Pcs > 0');
+    if (isSplit) {
+      if (!(splitHeight > 0)) missing.push('Split height > 0');
+      else if (selected.ht != null && splitHeight >= selected.ht) missing.push(`Split height must be less than ${selected.ht} (the full ordered height)`);
+    }
     if (missing.length) {
       setError({ message: 'Please fix the form', details: missing });
       return;
@@ -184,9 +227,10 @@ export const ProductionNewPage = () => {
       poOrderItemId: selected.id,
       prodDate,
       pcs,
-      weightPerPc: selected.weightPerPc,
+      weightPerPc: effectiveWeightPerPc,
       totalWeight,
       labourName: labourName.trim(),
+      splitHeight: isSplit ? splitHeight : null,
     });
   };
 
@@ -369,7 +413,9 @@ export const ProductionNewPage = () => {
                     onChange={(e) => setPcs(parseInt(e.target.value || '0', 10))}
                   />
                   <div className="mt-1 text-[11px] text-slate-400">
-                    {selected.remainingPcs} open of {selected.orderedPcs} ordered
+                    {isSplit
+                      ? `Strips at this height — counted toward a matching pile, not the order balance directly.`
+                      : `${selected.remainingPcs} open of ${selected.orderedPcs} ordered`}
                   </div>
                 </Field>
                 <Field label="Total Weight">
@@ -378,12 +424,100 @@ export const ProductionNewPage = () => {
                 </Field>
               </div>
 
+              {/* Whole Piece vs Split Width — decided per production batch, not
+                  on the sales order line itself (the order still just states the
+                  full height). See lib/splitProduction.js for the matching rule. */}
+              <div className="rounded border border-slate-200 bg-white px-3 py-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <ErpLabel>Production Type</ErpLabel>
+                  <div className="inline-flex rounded-[3px] border border-slate-200 bg-white p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => { setIsSplit(false); setSplitHeight(0); }}
+                      className={cn('rounded-[3px] px-2.5 py-1 font-manrope text-[11px] font-extrabold uppercase tracking-wide transition-colors duration-150',
+                        !isSplit ? 'bg-brand-900 text-white' : 'text-slate-600 hover:bg-slate-100')}
+                    >
+                      Whole Piece
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsSplit(true)}
+                      className={cn('rounded-[3px] px-2.5 py-1 font-manrope text-[11px] font-extrabold uppercase tracking-wide transition-colors duration-150',
+                        isSplit ? 'bg-brand-900 text-white' : 'text-slate-600 hover:bg-slate-100')}
+                    >
+                      Split Width
+                    </button>
+                  </div>
+                </div>
+
+                {isSplit && (
+                  <div className="mt-3 space-y-3">
+                    <Field label={`Split Height (full height: ${selected.ht ?? '—'})`}>
+                      <input
+                        className="input h-9 text-sm"
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        value={splitHeight || ''}
+                        onChange={(e) => setSplitHeight(parseFloat(e.target.value || '0'))}
+                      />
+                    </Field>
+                    {splitWeightPerPc != null && (
+                      <div className="text-[11px] text-slate-500">
+                        Weight/pc at {splitHeight}: <span className="font-ibmmono font-semibold text-slate-700">{splitWeightPerPc.toFixed(3)} kg</span>
+                      </div>
+                    )}
+                    {selected.splitInfo.length > 0 && (
+                      <div className="rounded border border-slate-100 bg-slate-50 p-2">
+                        <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+                          Existing split piles on this order
+                        </div>
+                        <table className="w-full text-[11px]">
+                          <thead>
+                            <tr className="text-slate-400">
+                              <th className="text-left font-medium">Height</th>
+                              <th className="text-right font-medium">Pcs</th>
+                              <th className="text-right font-medium">Matched</th>
+                              <th className="text-right font-medium">Unmatched</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {selected.splitInfo.map((p) => (
+                              <tr key={p.splitHeight}>
+                                <td className="py-0.5"><SplitHeightChip height={p.splitHeight} /></td>
+                                <td className="py-0.5 text-right font-ibmmono tabular-nums">{p.pcs}</td>
+                                <td className="py-0.5 text-right font-ibmmono tabular-nums text-green-700">{p.matched}</td>
+                                <td className="py-0.5 text-right font-ibmmono tabular-nums text-amber-700">{p.unmatched}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    <p className="text-[11px] text-slate-400">
+                      A narrower strip of this item — once another split height's pile reaches the same count, those pieces become finished and dispatchable together.
+                    </p>
+                  </div>
+                )}
+              </div>
+
               <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2.5">
                 <ErpLabel>Job Amount (weight × rate)</ErpLabel>
-                <div className="mt-0.5 font-ibmmono text-lg font-bold tabular-nums text-brand-700">
-                  {jobAmount != null ? inr(jobAmount) : '—'}
-                </div>
-                <div className="mt-0.5 text-[11px] text-slate-400">At the rate posted on the work allotment, credited to the worker you pick.</div>
+                {isSplit ? (
+                  <>
+                    <div className="mt-0.5 font-ibmmono text-sm font-semibold text-slate-500">Credited once matched</div>
+                    <div className="mt-0.5 text-[11px] text-slate-400">
+                      A split run earns nothing on its own — the full per-piece rate is credited to whichever run completes a matching pair, shown on the Modify page after saving.
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="mt-0.5 font-ibmmono text-lg font-bold tabular-nums text-brand-700">
+                      {jobAmount != null ? inr(jobAmount) : '—'}
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-slate-400">At the rate posted on the work allotment, credited to the worker you pick.</div>
+                  </>
+                )}
               </div>
 
               <div className="rounded border px-3 py-2.5 text-sm" style={{ borderColor: isExcess ? '#fcd34d' : '#e2e8f0', backgroundColor: isExcess ? '#fffbeb' : '#fff' }}>
@@ -392,11 +526,13 @@ export const ProductionNewPage = () => {
                   {isExcess ? `${pcs - selected.remainingPcs} pcs over` : `${balanceAfter} pcs`}
                 </div>
                 <div className="mt-0.5 text-[11px] text-slate-500">
-                  {pcs <= 0
-                    ? 'Nothing entered yet, so the order is untouched.'
-                    : isExcess
-                      ? `This exceeds the order by ${pcs - selected.remainingPcs} pcs — you'll be asked to confirm before saving.`
-                      : `${selected.producedPcs + pcs} of ${selected.orderedPcs} pcs produced — ${Math.round(((selected.producedPcs + pcs) / selected.orderedPcs) * 100)}% of the order.`}
+                  {isSplit
+                    ? 'Split runs feed a WIP pile — pcs only count as produced once a matching height completes them. This figure assumes an immediate match; check the pile table above for the real state.'
+                    : pcs <= 0
+                      ? 'Nothing entered yet, so the order is untouched.'
+                      : isExcess
+                        ? `This exceeds the order by ${pcs - selected.remainingPcs} pcs — you'll be asked to confirm before saving.`
+                        : `${selected.producedPcs + pcs} of ${selected.orderedPcs} pcs produced — ${Math.round(((selected.producedPcs + pcs) / selected.orderedPcs) * 100)}% of the order.`}
                 </div>
               </div>
 

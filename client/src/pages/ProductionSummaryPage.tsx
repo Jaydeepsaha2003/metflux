@@ -14,7 +14,7 @@ import { brandColorFor } from '@/lib/brandColor';
 import { useBranding } from '@/store/branding';
 import { useHideCustomerNames } from '@/store/auth';
 import {
-  ErpCard, ErpLabel, ErpStat, ErpStatStrip, ErpTh, ErpSegmented, CoreTypeChip, ProductionTabs, ErpMobileHeader,
+  ErpCard, ErpLabel, ErpStat, ErpStatStrip, ErpTh, ErpSegmented, CoreTypeChip, SplitHeightChip, ProductionTabs, ErpMobileHeader,
 } from '@/components/production/erp';
 
 type Row = {
@@ -23,6 +23,7 @@ type Row = {
   labourName: string; coreType: 'TOROIDAL' | 'RECTANGULAR';
   grade: string; material: string; measure: string;
   pcs: number; weightPerPc: number; totalWeight: number; amount: number | null;
+  splitHeight: number | null;
 };
 type SummaryResp = { items: Row[]; totals: { pcs: number; weight: number; amount: number }; labours: string[] };
 
@@ -481,7 +482,12 @@ export const ProductionSummaryPage = () => {
                     <td className="px-1 py-1 text-center"><CoreTypeChip coreType={r.coreType} /></td>
                     <td className="hidden whitespace-nowrap px-2 py-1 text-[12.5px] text-slate-600 sm:table-cell">{r.grade}</td>
                     <td className="hidden whitespace-nowrap px-2 py-1 text-[12.5px] text-slate-600 md:table-cell">{r.material}</td>
-                    <td className="whitespace-nowrap px-2 py-1 font-ibmmono text-[12.5px] text-slate-700">{r.measure}</td>
+                    <td className="whitespace-nowrap px-2 py-1 font-ibmmono text-[12.5px] text-slate-700">
+                      <div className="flex items-center gap-1.5">
+                        {r.measure}
+                        {r.splitHeight != null && <SplitHeightChip height={r.splitHeight} />}
+                      </div>
+                    </td>
                     <td className="px-2 py-1 text-right font-ibmmono text-[12.5px] tabular-nums text-slate-700">{pcsFmt(r.pcs)}</td>
                     <td className="px-2 py-1 text-right font-ibmmono text-[12.5px] tabular-nums text-slate-900">{kg(r.totalWeight)}</td>
                     <td className="px-2 py-1 text-right font-ibmmono text-[12.5px] tabular-nums text-slate-600">{r.amount == null ? '—' : num(r.amount)}</td>
