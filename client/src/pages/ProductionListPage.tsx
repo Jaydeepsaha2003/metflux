@@ -2,7 +2,7 @@
 // edit/delete. Mirrors the .NET Modify_Production grid.
 //
 // Reskinned to match the user's own colour mockup (dark brand-900 bands,
-// Archivo labels, JetBrains Mono figures) — see components/production/erp.tsx
+// Manrope labels, IBM Plex Mono figures) — see components/production/erp.tsx
 // for the shared tokens and the colour-mapping rationale. Data fetching,
 // pagination, search, and the edit/delete actions are unchanged from before.
 import { useEffect, useState } from 'react';
@@ -43,10 +43,16 @@ type Aggregates = {
 type ListResp = { items: Row[]; total: number; aggregates: Aggregates; labours: string[] };
 type CoreFilter = 'ALL' | 'TOROIDAL' | 'RECTANGULAR';
 
+// dd-mm-yy, spelled out manually rather than via Intl — locale formatting
+// options don't reliably guarantee this exact digit order + 2-digit year
+// combination across browsers.
 const formatDate = (iso: string) => {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}-${mm}-${yy}`;
 };
 const pcsFmt = (n: number) => n.toLocaleString('en-IN');
 const kg = (n: number) => n.toFixed(3);
@@ -131,9 +137,9 @@ export const ProductionListPage = () => {
   };
 
   return (
-    <div className="space-y-3 max-w-[1400px]">
+    <div className="max-w-full space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="flex items-center gap-2 font-archivo text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
+        <h1 className="flex items-center gap-2 font-manrope text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
           <Factory className="h-5 w-5 text-brand-600" /> Production
         </h1>
         <div className="flex items-center gap-2">
@@ -190,7 +196,7 @@ export const ProductionListPage = () => {
               <SearchableSelect value={labour} onChange={setLabour} options={labourOptions} placeholder="All workers" />
             </div>
             {hasFilters && (
-              <button onClick={clearFilters} className="mt-4 flex items-center gap-1 font-archivo text-[11px] font-extrabold uppercase tracking-wide text-brand-700 hover:text-brand-800">
+              <button onClick={clearFilters} className="mt-4 flex items-center gap-1 font-manrope text-[11px] font-extrabold uppercase tracking-wide text-brand-700 hover:text-brand-800">
                 <X className="h-3 w-3" /> Clear
               </button>
             )}
@@ -252,21 +258,21 @@ export const ProductionListPage = () => {
               )}
               {data?.items.map((p) => (
                 <tr key={p.id} className="border-t border-slate-100 odd:bg-white even:bg-slate-50/40 hover:bg-brand-50/50">
-                  <td className="px-2.5 py-2 pl-3 text-slate-600">{formatDate(p.prodDate)}</td>
-                  <td className="px-2.5 py-2 font-jbmono text-xs">{p.poNumber}</td>
-                  <td className="px-2.5 py-2 font-jbmono text-xs font-semibold text-brand-700">{p.customerCode ?? '—'}</td>
+                  <td className="whitespace-nowrap px-2.5 py-2 pl-3 text-slate-600">{formatDate(p.prodDate)}</td>
+                  <td className="whitespace-nowrap px-2.5 py-2 font-ibmmono text-xs">{p.poNumber}</td>
+                  <td className="whitespace-nowrap px-2.5 py-2 font-ibmmono text-xs font-semibold text-brand-700">{p.customerCode ?? '—'}</td>
                   <td className="px-2.5 py-2 max-w-[160px] truncate" title={hideNames ? undefined : p.customerName}>
                     {hideNames ? <span className="text-slate-300">—</span> : p.customerName}
                   </td>
                   <td className="px-2.5 py-2 text-center"><CoreTypeChip coreType={p.coreType} /></td>
-                  <td className="px-2.5 py-2 text-slate-700">{p.grade}</td>
-                  <td className="px-2.5 py-2 text-slate-700">{p.material}</td>
-                  <td className="px-2.5 py-2 font-jbmono text-xs text-slate-700">{p.measure}</td>
-                  <td className="px-2.5 py-2 text-right font-jbmono tabular-nums">{pcsFmt(p.pcs)}</td>
-                  <td className="px-2.5 py-2 text-right font-jbmono tabular-nums">{kg(p.weightPerPc)}</td>
-                  <td className="px-2.5 py-2 text-right font-jbmono font-semibold tabular-nums">{kg(p.totalWeight)}</td>
-                  <td className="px-2.5 py-2 font-medium text-slate-800">{p.labourName}</td>
-                  <td className="px-2.5 py-2 text-right font-jbmono tabular-nums text-brand-700">
+                  <td className="whitespace-nowrap px-2.5 py-2 text-slate-700">{p.grade}</td>
+                  <td className="whitespace-nowrap px-2.5 py-2 text-slate-700">{p.material}</td>
+                  <td className="whitespace-nowrap px-2.5 py-2 font-ibmmono text-xs text-slate-700">{p.measure}</td>
+                  <td className="px-2.5 py-2 text-right font-ibmmono tabular-nums">{pcsFmt(p.pcs)}</td>
+                  <td className="px-2.5 py-2 text-right font-ibmmono tabular-nums">{kg(p.weightPerPc)}</td>
+                  <td className="px-2.5 py-2 text-right font-ibmmono font-semibold tabular-nums">{kg(p.totalWeight)}</td>
+                  <td className="whitespace-nowrap px-2.5 py-2 font-medium text-slate-800">{p.labourName}</td>
+                  <td className="px-2.5 py-2 text-right font-ibmmono tabular-nums text-brand-700">
                     {p.amount != null ? inr(p.amount) : '—'}
                   </td>
                   <td className="px-2.5 py-2">
@@ -294,14 +300,14 @@ export const ProductionListPage = () => {
                     label plus a separately-positioned numbers row would drift
                     out of alignment the moment a column's width changes. */}
                 <tr className="bg-brand-900 text-white">
-                  <td colSpan={8} className="px-2.5 py-2 pl-3 font-archivo text-[11px] font-bold uppercase tracking-wider">
+                  <td colSpan={8} className="px-2.5 py-2 pl-3 font-manrope text-[11px] font-bold uppercase tracking-wider">
                     Total · {agg.records} record{agg.records === 1 ? '' : 's'} · {agg.labourCount} worker{agg.labourCount === 1 ? '' : 's'}
                   </td>
-                  <td className="px-2.5 py-2 text-right font-jbmono text-[13px] font-bold tabular-nums">{pcsFmt(agg.pcs)}</td>
+                  <td className="px-2.5 py-2 text-right font-ibmmono text-[13px] font-bold tabular-nums">{pcsFmt(agg.pcs)}</td>
                   <td></td>
-                  <td className="px-2.5 py-2 text-right font-jbmono text-[13px] font-bold tabular-nums">{kg(agg.weight)}</td>
+                  <td className="px-2.5 py-2 text-right font-ibmmono text-[13px] font-bold tabular-nums">{kg(agg.weight)}</td>
                   <td></td>
-                  <td className="px-2.5 py-2 text-right font-jbmono text-[13px] font-bold tabular-nums">{inr(agg.amount)}</td>
+                  <td className="px-2.5 py-2 text-right font-ibmmono text-[13px] font-bold tabular-nums">{inr(agg.amount)}</td>
                   <td></td>
                 </tr>
               </tfoot>
@@ -327,24 +333,24 @@ export const ProductionListPage = () => {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="font-jbmono text-xs font-semibold text-slate-800">{p.poNumber}</span>
+                    <span className="font-ibmmono text-xs font-semibold text-slate-800">{p.poNumber}</span>
                     <CoreTypeChip coreType={p.coreType} />
                   </div>
                   <div className="mt-0.5 text-sm font-medium text-slate-900 truncate">
                     {hideNames
-                      ? <span className="font-jbmono text-brand-700">{p.customerCode ?? '—'}</span>
+                      ? <span className="font-ibmmono text-brand-700">{p.customerCode ?? '—'}</span>
                       : p.customerName}
                   </div>
                   <div className="mt-0.5 text-[11px] text-slate-500">
                     {formatDate(p.prodDate)} · {p.grade} · {p.material} · <span className="font-medium text-slate-600">{p.labourName}</span>
                   </div>
-                  <div className="mt-0.5 font-jbmono text-xs text-slate-600 truncate">{p.measure}</div>
+                  <div className="mt-0.5 font-ibmmono text-xs text-slate-600 truncate">{p.measure}</div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="font-jbmono tabular-nums font-semibold text-sm">{pcsFmt(p.pcs)} pcs</div>
-                  <div className="text-[10px] text-slate-500 font-jbmono tabular-nums">{kg(p.totalWeight)} kg</div>
+                  <div className="font-ibmmono tabular-nums font-semibold text-sm">{pcsFmt(p.pcs)} pcs</div>
+                  <div className="text-[10px] text-slate-500 font-ibmmono tabular-nums">{kg(p.totalWeight)} kg</div>
                   {p.amount != null && (
-                    <div className="text-[11px] font-jbmono text-brand-700 tabular-nums">{inr(p.amount)}</div>
+                    <div className="text-[11px] font-ibmmono text-brand-700 tabular-nums">{inr(p.amount)}</div>
                   )}
                 </div>
               </div>
@@ -364,21 +370,21 @@ export const ProductionListPage = () => {
           ))}
           {agg && data && data.items.length > 0 && (
             <div className="bg-brand-900 px-3 py-2.5 text-white">
-              <div className="font-archivo text-[10.5px] font-extrabold uppercase tracking-wide text-brand-100/80">
+              <div className="font-manrope text-[10.5px] font-extrabold uppercase tracking-wide text-brand-100/80">
                 Total · {agg.records} record{agg.records === 1 ? '' : 's'} · {agg.labourCount} worker{agg.labourCount === 1 ? '' : 's'}
               </div>
               <div className="mt-1 grid grid-cols-3 gap-1.5 text-center">
                 <div>
                   <div className="text-[9.5px] uppercase text-brand-100/70">Pcs</div>
-                  <div className="font-jbmono text-sm font-bold tabular-nums">{pcsFmt(agg.pcs)}</div>
+                  <div className="font-ibmmono text-sm font-bold tabular-nums">{pcsFmt(agg.pcs)}</div>
                 </div>
                 <div>
                   <div className="text-[9.5px] uppercase text-brand-100/70">Weight</div>
-                  <div className="font-jbmono text-sm font-bold tabular-nums">{kg(agg.weight)}</div>
+                  <div className="font-ibmmono text-sm font-bold tabular-nums">{kg(agg.weight)}</div>
                 </div>
                 <div>
                   <div className="text-[9.5px] uppercase text-brand-100/70">Amount</div>
-                  <div className="font-jbmono text-sm font-bold tabular-nums">{inr(agg.amount)}</div>
+                  <div className="font-ibmmono text-sm font-bold tabular-nums">{inr(agg.amount)}</div>
                 </div>
               </div>
             </div>

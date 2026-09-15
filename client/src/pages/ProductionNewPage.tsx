@@ -2,7 +2,7 @@
 // fill in labour + pcs. Total weight auto-calcs from pcs × wt/pc.
 //
 // Reskinned to match the user's own colour mockup (dark brand-900 bands,
-// Archivo labels, JetBrains Mono figures, a numbered step header) — see
+// Manrope labels, IBM Plex Mono figures, a numbered step header) — see
 // components/production/erp.tsx for the shared tokens. All state, validation,
 // the excess-production confirmation, and the "stay on page to record the
 // next entry" behaviour are unchanged from before; only the layout moved from
@@ -38,10 +38,16 @@ type PendingItem = {
 };
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
+// dd-mm-yy, spelled out manually rather than via Intl — locale formatting
+// options don't reliably guarantee this exact digit order + 2-digit year
+// combination across browsers.
 const formatDate = (iso: string) => {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}-${mm}-${yy}`;
 };
 const pcsFmt = (n: number) => n.toLocaleString('en-IN');
 const inr = (n: number) => '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -188,9 +194,9 @@ export const ProductionNewPage = () => {
   const isExcess = !!selected && pcs > selected.remainingPcs;
 
   return (
-    <div className="space-y-3 max-w-[1200px]">
+    <div className="max-w-full space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="flex items-center gap-2 font-archivo text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
+        <h1 className="flex items-center gap-2 font-manrope text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
           <Factory className="h-5 w-5 text-brand-600" /> Receive Production
         </h1>
         <Link to="/production" className="btn-ghost w-full justify-center text-slate-600 sm:w-auto">
@@ -252,7 +258,7 @@ export const ProductionNewPage = () => {
                         <span className="font-semibold text-sm text-slate-900 truncate">{it.customerName}</span>
                         <CoreTypeChip coreType={it.coreType} />
                       </div>
-                      <div className="mt-0.5 text-[11px] text-slate-500 font-jbmono truncate">{it.poNumber} · {it.measure}</div>
+                      <div className="mt-0.5 text-[11px] text-slate-500 font-ibmmono truncate">{it.poNumber} · {it.measure}</div>
                       <div className="mt-1 flex flex-wrap gap-1">
                         <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">{it.grade}</span>
                         <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">{it.material}</span>
@@ -263,7 +269,7 @@ export const ProductionNewPage = () => {
                         {it.remainingPcs} open
                       </span>
                       {it.pendingAmount != null && (
-                        <div className="mt-0.5 text-[10px] text-brand-700 font-jbmono tabular-nums">
+                        <div className="mt-0.5 text-[10px] text-brand-700 font-ibmmono tabular-nums">
                           {inr(it.pendingAmount)}
                         </div>
                       )}
@@ -274,7 +280,7 @@ export const ProductionNewPage = () => {
             </div>
 
             <div className="hidden md:block overflow-x-auto border-t border-slate-100">
-              <table className="w-full text-[13px]">
+              <table className="w-full min-w-[980px] text-[13px]">
                 <thead>
                   <tr>
                     <ErpTh className="pl-3">PO #</ErpTh>
@@ -301,24 +307,24 @@ export const ProductionNewPage = () => {
                   )}
                   {pendingResp?.items.map((it) => (
                     <tr key={it.id} className="border-t border-slate-100 odd:bg-white even:bg-slate-50/40 hover:bg-brand-50/50">
-                      <td className="px-2.5 py-2 pl-3 font-jbmono text-xs">{it.poNumber}</td>
-                      <td className="px-2.5 py-2">{it.customerName}</td>
-                      <td className="px-2.5 py-2 text-slate-600 text-xs">{formatDate(it.deliveryDate)}</td>
+                      <td className="whitespace-nowrap px-2.5 py-2 pl-3 font-ibmmono text-xs">{it.poNumber}</td>
+                      <td className="whitespace-nowrap px-2.5 py-2">{it.customerName}</td>
+                      <td className="whitespace-nowrap px-2.5 py-2 text-slate-600 text-xs">{formatDate(it.deliveryDate)}</td>
                       <td className="px-2.5 py-2 text-center"><CoreTypeChip coreType={it.coreType} /></td>
-                      <td className="px-2.5 py-2">{it.grade}</td>
-                      <td className="px-2.5 py-2">{it.material}</td>
-                      <td className="px-2.5 py-2 font-jbmono text-xs">{it.measure}</td>
-                      <td className="px-2.5 py-2 text-right font-jbmono tabular-nums">{pcsFmt(it.orderedPcs)}</td>
-                      <td className="px-2.5 py-2 text-right text-slate-500 font-jbmono tabular-nums">{pcsFmt(it.producedPcs)}</td>
+                      <td className="whitespace-nowrap px-2.5 py-2">{it.grade}</td>
+                      <td className="whitespace-nowrap px-2.5 py-2">{it.material}</td>
+                      <td className="whitespace-nowrap px-2.5 py-2 font-ibmmono text-xs">{it.measure}</td>
+                      <td className="px-2.5 py-2 text-right font-ibmmono tabular-nums">{pcsFmt(it.orderedPcs)}</td>
+                      <td className="px-2.5 py-2 text-right text-slate-500 font-ibmmono tabular-nums">{pcsFmt(it.producedPcs)}</td>
                       <td className="px-2.5 py-2 text-right">
-                        <span className="rounded-md bg-yellow-50 px-2 py-0.5 font-jbmono font-semibold tabular-nums text-yellow-800">
+                        <span className="rounded-md bg-yellow-50 px-2 py-0.5 font-ibmmono font-semibold tabular-nums text-yellow-800">
                           {pcsFmt(it.remainingPcs)}
                         </span>
                       </td>
                       <td className="px-2.5 py-2 text-right">
                         <button
                           onClick={() => pickItem(it)}
-                          className="rounded bg-brand-600 px-3 py-1 font-archivo text-[10.5px] font-extrabold uppercase tracking-wide text-white hover:bg-brand-700"
+                          className="rounded bg-brand-600 px-3 py-1 font-manrope text-[10.5px] font-extrabold uppercase tracking-wide text-white hover:bg-brand-700"
                         >
                           Select
                         </button>
@@ -335,8 +341,11 @@ export const ProductionNewPage = () => {
         )}
 
         {/* ---- Step 2: enter production ---- */}
+        {/* Capped width even though the card itself is full-bleed: the picker
+            table above should fill a wide monitor, but stretching a form's
+            text inputs edge-to-edge on the same screen makes them unreadable. */}
         {step === 2 && selected && (
-          <div className="grid grid-cols-1 gap-0 lg:grid-cols-[1fr_320px]">
+          <div className="mx-auto grid max-w-5xl grid-cols-1 gap-0 lg:grid-cols-[1fr_320px]">
             <div className="space-y-4 p-3 sm:p-4">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label="Production Date">
@@ -364,14 +373,14 @@ export const ProductionNewPage = () => {
                   </div>
                 </Field>
                 <Field label="Total Weight">
-                  <input className="input h-9 bg-slate-50 text-sm font-jbmono" value={totalWeight ? totalWeight.toFixed(3) : '—'} readOnly />
+                  <input className="input h-9 bg-slate-50 text-sm font-ibmmono" value={totalWeight ? totalWeight.toFixed(3) : '—'} readOnly />
                   <div className="mt-1 text-[11px] text-slate-400">Computed, not entered — weight per piece is fixed by the order specification.</div>
                 </Field>
               </div>
 
               <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2.5">
                 <ErpLabel>Job Amount (weight × rate)</ErpLabel>
-                <div className="mt-0.5 font-jbmono text-lg font-bold tabular-nums text-brand-700">
+                <div className="mt-0.5 font-ibmmono text-lg font-bold tabular-nums text-brand-700">
                   {jobAmount != null ? inr(jobAmount) : '—'}
                 </div>
                 <div className="mt-0.5 text-[11px] text-slate-400">At the rate posted on the work allotment, credited to the worker you pick.</div>
@@ -379,7 +388,7 @@ export const ProductionNewPage = () => {
 
               <div className="rounded border px-3 py-2.5 text-sm" style={{ borderColor: isExcess ? '#fcd34d' : '#e2e8f0', backgroundColor: isExcess ? '#fffbeb' : '#fff' }}>
                 <ErpLabel>Order Balance After Saving</ErpLabel>
-                <div className={cn('mt-0.5 font-jbmono text-lg font-bold tabular-nums', isExcess ? 'text-amber-700' : 'text-slate-900')}>
+                <div className={cn('mt-0.5 font-ibmmono text-lg font-bold tabular-nums', isExcess ? 'text-amber-700' : 'text-slate-900')}>
                   {isExcess ? `${pcs - selected.remainingPcs} pcs over` : `${balanceAfter} pcs`}
                 </div>
                 <div className="mt-0.5 text-[11px] text-slate-500">
@@ -439,7 +448,7 @@ const StepBadge = ({ n, label, active, done, disabled, onClick }: {
   <button
     onClick={onClick}
     disabled={disabled}
-    className={cn('flex items-center gap-1.5 font-archivo text-[11px] font-extrabold uppercase tracking-wide disabled:cursor-not-allowed disabled:opacity-40',
+    className={cn('flex items-center gap-1.5 font-manrope text-[11px] font-extrabold uppercase tracking-wide disabled:cursor-not-allowed disabled:opacity-40',
       active ? 'text-brand-800' : done ? 'text-slate-500' : 'text-slate-400')}
   >
     <span className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px]',
@@ -460,6 +469,6 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
 const SummaryField = ({ label, value, mono, className }: { label: string; value: string; mono?: boolean; className?: string }) => (
   <div className={className}>
     <ErpLabel className="block">{label}</ErpLabel>
-    <div className={cn('mt-0.5 truncate text-slate-900', mono ? 'font-jbmono text-[13px] font-semibold' : 'text-sm font-medium')}>{value}</div>
+    <div className={cn('mt-0.5 truncate text-slate-900', mono ? 'font-ibmmono text-[13px] font-semibold' : 'text-sm font-medium')}>{value}</div>
   </div>
 );
