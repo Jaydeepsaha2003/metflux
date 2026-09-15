@@ -26,7 +26,19 @@
 /** SQL fragment: pieces truly finished against the item referenced by
  *  `<alias>.id` — whole-piece runs, plus the matched (smaller-pile) count
  *  from any split runs. Embed directly in a larger query; takes no
- *  parameters of its own (the alias must already be in scope). */
+ *  parameters of its own (the alias must already be in scope).
+ *
+ *  "Smallest pile" is written as GROUP BY + ORDER BY + LIMIT 1 rather than
+ *  the more obvious MIN() over a derived table, because a derived table may
+ *  not reference the outer query's alias (that is a LATERAL join). MySQL 8
+ *  happens to accept it; MariaDB — which the production hosting runs —
+ *  rejects it outright with "Unknown column '<alias>.id'", which surfaced as
+ *  every production/dispatch screen going blank. A correlated *scalar*
+ *  subquery like this one is plain SQL that both engines accept.
+ *
+ *  The >= 2 distinct-heights gate lives in the WHERE clause: with fewer than
+ *  two heights nothing qualifies, the subquery yields NULL, and COALESCE
+ *  turns that into 0 — nothing is finished until a second height exists. */
 export const producedPcsExpr = (alias) => `(
   COALESCE((
     SELECT SUM(pw.\`pcs\`) FROM \`Production\` pw
@@ -34,16 +46,16 @@ export const producedPcsExpr = (alias) => `(
   ), 0)
   +
   COALESCE((
-    SELECT MIN(byHeight.total) FROM (
-      SELECT SUM(ps.\`pcs\`) AS total
-        FROM \`Production\` ps
-       WHERE ps.\`poOrderItemId\` = ${alias}.\`id\` AND ps.\`splitHeight\` IS NOT NULL
-       GROUP BY ps.\`splitHeight\`
-    ) byHeight
-    WHERE (
-      SELECT COUNT(DISTINCT ps2.\`splitHeight\`) FROM \`Production\` ps2
-       WHERE ps2.\`poOrderItemId\` = ${alias}.\`id\` AND ps2.\`splitHeight\` IS NOT NULL
-    ) >= 2
+    SELECT SUM(ps.\`pcs\`)
+      FROM \`Production\` ps
+     WHERE ps.\`poOrderItemId\` = ${alias}.\`id\` AND ps.\`splitHeight\` IS NOT NULL
+       AND (
+         SELECT COUNT(DISTINCT ps2.\`splitHeight\`) FROM \`Production\` ps2
+          WHERE ps2.\`poOrderItemId\` = ${alias}.\`id\` AND ps2.\`splitHeight\` IS NOT NULL
+       ) >= 2
+     GROUP BY ps.\`splitHeight\`
+     ORDER BY SUM(ps.\`pcs\`) ASC
+     LIMIT 1
   ), 0)
 )`;
 
