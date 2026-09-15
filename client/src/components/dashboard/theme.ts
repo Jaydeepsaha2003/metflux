@@ -95,11 +95,11 @@ export const dashVars = (mode: DashMode): Record<string, string> => {
     '--d-bg':        css(mix(s(50), WHITE, 0.55)),
     '--d-panel':     css(WHITE),
     '--d-raised':    css(mix(s(50), WHITE, 0.3)),
-    '--d-line':      css(mix(s(200), WHITE, 0.45)),
-    '--d-line-soft': css(mix(s(200), WHITE, 0.68)),
-    '--d-text':      css(mix(s(950), BLACK, 0.15)),
-    '--d-muted':     css(mix(s(800), WHITE, 0.32)),
-    '--d-faint':     css(mix(s(800), WHITE, 0.55)),
+    '--d-line':      'rgb(226 232 240)',
+    '--d-line-soft': 'rgb(241 245 249)',
+    '--d-text':      'rgb(15 23 42)',
+    '--d-muted':     'rgb(71 85 105)',
+    '--d-faint':     'rgb(100 116 139)',
     '--d-accent':    css(s(600)),
     '--d-accent-ink': css(WHITE),
     '--d-accent-dim': css(s(500), 0.12),
@@ -118,14 +118,14 @@ export const dashVars = (mode: DashMode): Record<string, string> => {
 
 const STORAGE_KEY = 'metflux.dashboard.mode';
 
-/** The mockup opens dark, so that is the default; a viewer's own choice wins
- *  and persists. Storage can throw in a locked-down browser, hence the guards. */
+/** Opens light, matching every other screen in the app; a viewer's own choice
+ *  wins and persists. Storage can throw in a locked-down browser, so guarded. */
 export const readStoredMode = (): DashMode => {
   try {
     const v = localStorage.getItem(STORAGE_KEY);
-    return v === 'light' || v === 'dark' ? v : 'dark';
+    return v === 'light' || v === 'dark' ? v : 'light';
   } catch {
-    return 'dark';
+    return 'light';
   }
 };
 export const storeMode = (mode: DashMode) => {

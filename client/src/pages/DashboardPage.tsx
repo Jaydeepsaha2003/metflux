@@ -10,8 +10,8 @@
 //
 // Colours come from components/dashboard/theme.ts, which derives the whole
 // palette from the domain's own --brand-*: Metflux renders the mockup's dark
-// green, Toroflux the same design in its navy. Dark is the default, and the
-// Dark/Light switch from the mockup persists per viewer.
+// green, Toroflux the same design in its navy. It opens light to match the rest
+// of the app; the mockup's Dark/Light switch persists per viewer.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -185,16 +185,16 @@ export const DashboardPage = () => {
     // edge-to-edge ground has to cancel before painting its own.
     <div
       style={vars as React.CSSProperties}
-      className="-m-4 min-h-[calc(100vh-4rem)] bg-[var(--d-bg)] p-4 text-[var(--d-text)] sm:-m-6 sm:p-6"
+      className="-m-4 min-h-[calc(100vh-4rem)] bg-[var(--d-bg)] p-3 text-[var(--d-text)] sm:-m-6 sm:p-4"
     >
-      <div className="mx-auto flex max-w-[1600px] flex-col gap-3">
+      <div className="mx-auto flex max-w-[1700px] flex-col gap-2.5">
 
         {/* ── Header ─────────────────────────────────────────────── */}
-        <header className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex min-w-0 flex-col gap-1.5">
+        <header className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 flex-col gap-1">
             <DashLabel>{active?.companyName ?? 'Metflux'} operations</DashLabel>
             <div className="flex flex-wrap items-baseline gap-2.5">
-              <h1 className="text-[22px] font-extrabold leading-none tracking-tight sm:text-[26px]">Plant snapshot</h1>
+              <h1 className="text-[20px] font-extrabold leading-none tracking-tight sm:text-[23px]">Plant snapshot</h1>
               <span className="text-[12px] text-[var(--d-muted)]">
                 {user?.name ? `Welcome back, ${user.name.split(' ')[0]}` : ''}
                 {active?.companyName ? ` · ${active.companyName}` : ''}
@@ -266,7 +266,7 @@ export const DashboardPage = () => {
             <Loader2 className="h-4 w-4 animate-spin" /> Loading…
           </DashPanel>
         ) : !stats ? null : (
-          <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <section className="grid grid-cols-2 gap-2.5 lg:grid-cols-3 xl:grid-cols-5">
             <KpiCard
               label="Sales orders"
               figure={pcs(stats.salesOrders.pcs)}
@@ -335,8 +335,8 @@ export const DashboardPage = () => {
         )}
 
         {/* ── Monthly orders + Top customers ─────────────────────── */}
-        <section className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
-          <DashPanel className="min-w-0 p-3 sm:p-4">
+        <section className="grid grid-cols-1 gap-2.5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+          <DashPanel className="min-w-0 p-3">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <h2 className="text-[15px] font-extrabold tracking-tight">Monthly orders</h2>
@@ -345,7 +345,7 @@ export const DashboardPage = () => {
               {stats && (
                 <div className="text-right">
                   <DashLabel>{monthlyData?.data.length ? monthShortLong(monthlyData.data[monthlyData.data.length - 1].month) : ''}</DashLabel>
-                  <div className="mt-1 font-mono text-[20px] font-extrabold leading-none tabular-nums">
+                  <div className="mt-1 font-num text-[19px] font-extrabold leading-none tracking-tight tabular-nums">
                     {pcs(stats.salesOrders.pcs)} <span className="text-[12px] font-bold text-[var(--d-muted)]">pcs</span>
                   </div>
                   <div className="mt-0.5 text-[11.5px] font-bold tabular-nums text-[var(--d-accent)]">
@@ -354,7 +354,7 @@ export const DashboardPage = () => {
                 </div>
               )}
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-4">
+            <div className="mt-1.5 flex flex-wrap items-center gap-3">
               <span className="flex items-center gap-1.5 text-[11.5px] text-[var(--d-muted)]">
                 <span className="inline-block h-2.5 w-4 rounded-[2px]" style={{ backgroundColor: 'var(--d-accent)' }} /> Pcs ordered
               </span>
@@ -367,13 +367,13 @@ export const DashboardPage = () => {
             )}
           </DashPanel>
 
-          <DashPanel className="min-w-0 p-3 sm:p-4">
+          <DashPanel className="flex min-w-0 flex-col p-3">
             <h2 className="text-[15px] font-extrabold tracking-tight">Top customers</h2>
             <DashCaption className="mt-0.5">By order value in range</DashCaption>
             {!stats?.topCustomers.length ? (
               <div className="py-10 text-center text-[12px] text-[var(--d-muted)]">No orders in this range.</div>
             ) : (
-              <ol className="mt-3 flex flex-col gap-2.5">
+              <ol className="mt-2.5 flex max-h-[292px] flex-col gap-2 overflow-y-auto pr-1">
                 {stats.topCustomers.map((c, i) => (
                   <li key={c.id} className="flex flex-col gap-1">
                     <div className="flex items-baseline gap-2">
@@ -397,7 +397,7 @@ export const DashboardPage = () => {
 
         {/* ── Employee performance ───────────────────────────────── */}
         <DashPanel className="overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-2 p-3 sm:p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 p-3">
             <div>
               <h2 className="text-[15px] font-extrabold tracking-tight">Employee performance</h2>
               <DashCaption className="mt-0.5">Production entries in range, ranked by weight</DashCaption>
@@ -552,17 +552,16 @@ const KpiCard = ({ label, figure, unit = 'pcs', meta, spark, chips, to, title }:
   <Link
     to={to}
     title={title}
-    className="flex flex-col gap-1.5 rounded border border-[var(--d-line)] bg-[var(--d-panel)] px-3 py-3 transition-colors duration-150 hover:border-[var(--d-accent-line)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--d-accent)] motion-reduce:transition-none"
+    className="group flex cursor-pointer flex-col gap-1 rounded-lg border border-[var(--d-line)] bg-[var(--d-panel)] px-3 py-2.5 shadow-sm transition-colors duration-200 hover:border-[var(--d-accent-line)] hover:bg-[var(--d-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--d-accent)] motion-reduce:transition-none"
   >
     <DashLabel>{label}</DashLabel>
     <div className="flex items-baseline gap-1.5">
-      <span className="font-mono text-[28px] font-extrabold leading-none tabular-nums">{figure}</span>
-      <span className="text-[11.5px] text-[var(--d-muted)]">{unit}</span>
+      <span className="font-num text-[26px] font-extrabold leading-none tracking-tight tabular-nums">{figure}</span>
+      <span className="text-[11px] text-[var(--d-muted)]">{unit}</span>
     </div>
-    <DashCaption>{meta}</DashCaption>
-    {spark && spark.length > 1 && <Sparkline values={spark} className="mt-0.5" />}
-    <div className="flex-1" />
-    <div className="flex flex-wrap items-center gap-1.5">{chips}</div>
+    <DashCaption className="truncate">{meta}</DashCaption>
+    {spark && spark.length > 1 && <Sparkline values={spark} />}
+    <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">{chips}</div>
   </Link>
 );
 
@@ -589,8 +588,8 @@ const MonthlyChart = ({ data }: { data: MonthlyPoint[] }) => {
   if (!data.length) return null;
 
   const narrow = vw < 480;
-  const VW = vw, VH = narrow ? 210 : 250;
-  const PL = narrow ? 34 : 52, PR = narrow ? 42 : 62, PT = 14, PB = narrow ? 30 : 34;
+  const VW = vw, VH = narrow ? 178 : 208;
+  const PL = narrow ? 32 : 46, PR = narrow ? 38 : 56, PT = 10, PB = narrow ? 26 : 28;
   const IW = VW - PL - PR;
   const IH = VH - PT - PB;
 
@@ -652,7 +651,7 @@ const MonthlyChart = ({ data }: { data: MonthlyPoint[] }) => {
             x={xb(i).toFixed(1)} y={yp(d.totalPcs).toFixed(1)}
             width={barW} height={Math.max(1, PT + IH - yp(d.totalPcs))}
             fill="var(--d-accent)" opacity={hoverIdx === i ? 1 : 0.82}
-            rx="2" style={{ transition: 'opacity 0.1s' }}
+            rx="3" style={{ transition: 'opacity 0.15s' }}
           />
         ))}
 
