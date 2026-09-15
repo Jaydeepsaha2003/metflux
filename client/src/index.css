@@ -24,6 +24,12 @@
   html, body, #root { height: 100%; }
   body {
     font-family: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    /* Let the optical-size axis follow the rendered size, so small caps
+       labels open up and large figures tighten without a second family. */
+    font-optical-sizing: auto;
+    /* calt keeps Inter's contextual alternates on; cv05 gives the lower-case
+       l a tail so it stops reading as a 1 next to figures. */
+    font-feature-settings: 'calt' 1, 'cv05' 1;
     -webkit-font-smoothing: antialiased;
     -webkit-tap-highlight-color: transparent;
   }
@@ -40,8 +46,12 @@
      100 x 120 x 90 keeps its shape between rows. Replaces the IBM Plex Mono
      the Production screens used to switch to. */
   .font-num {
-    font-variant-numeric: tabular-nums;
-    font-feature-settings: 'tnum' 1, 'cv05' 1;
+    /* Tabular so columns of figures line up, and slashed zeros so an operator
+       reading a measure or a customer code never has to decide whether that
+       character is a nought or an O. Both are real Inter features, not a
+       second font. */
+    font-variant-numeric: tabular-nums slashed-zero;
+    font-feature-settings: 'tnum' 1, 'zero' 1, 'cv05' 1;
     letter-spacing: -0.01em;
   }
   .btn {

@@ -32,7 +32,7 @@ export const ErpLabel = ({ children, className }: { children: React.ReactNode; c
 export const ErpStat = ({ label, value, caption, tone, big }: {
   label: string; value: string; caption?: string; tone?: 'brand' | 'ink'; big?: boolean;
 }) => (
-  <div className="min-w-0 px-4 py-3 sm:px-5 sm:py-3.5">
+  <div className="group min-w-0 px-4 py-3 transition-colors duration-200 hover:bg-white motion-reduce:transition-none sm:px-5 sm:py-3.5">
     <ErpLabel>{label}</ErpLabel>
     <div className={cn(
       'mt-1 truncate font-num font-bold tracking-tight tabular-nums',
@@ -61,7 +61,7 @@ export const ErpStatStrip = ({ children }: { children: React.ReactNode }) => (
  *  reskin of Production specifically, not a site-wide chip-colour change. */
 export const CoreTypeChip = ({ coreType, className }: { coreType: 'TOROIDAL' | 'RECTANGULAR'; className?: string }) => (
   <span className={cn(
-    'inline-flex items-center rounded-md px-1.5 py-[3px] text-[10px] font-bold uppercase tracking-[0.06em] ring-1 ring-inset',
+    'inline-flex items-center rounded-md px-1.5 py-[3px] text-[10px] font-bold uppercase tracking-[0.06em] shadow-e1 ring-1 ring-inset',
     coreType === 'TOROIDAL'
       ? 'bg-[#EAF0FA] text-[#1B4E82] ring-[#C6DAF0]'
       : 'bg-[#EFF5EC] text-[#33473E] ring-[#CFDECB]',
@@ -90,7 +90,7 @@ export const SplitHeightChip = ({ height, className }: { height: number; classNa
  *  filters, stats, table and footer are one bordered surface with hairline
  *  internal dividers. */
 export const ErpCard = ({ children, className }: { children: React.ReactNode; className?: string }) => (
-  <div className={cn('overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm', className)}>
+  <div className={cn('overflow-hidden rounded-xl border border-slate-200/70 bg-gradient-to-b from-white to-slate-50/60 shadow-e2', className)}>
     {children}
   </div>
 );
@@ -101,7 +101,7 @@ export const ErpTh = ({ children, align = 'left', className }: {
   children?: React.ReactNode; align?: 'left' | 'right' | 'center'; className?: string;
 }) => (
   <th className={cn(
-    'sticky top-0 z-10 whitespace-nowrap bg-brand-900 px-2.5 py-2.5 text-[10px] font-bold uppercase tracking-[0.09em] text-brand-100/80',
+    'sticky top-0 z-10 whitespace-nowrap bg-gradient-to-b from-brand-800 to-brand-900 px-2.5 py-2.5 text-[10px] font-bold uppercase tracking-[0.09em] text-brand-100/85 shadow-lit',
     align === 'right' && 'text-right', align === 'center' && 'text-center', align === 'left' && 'text-left',
     className,
   )}>
@@ -111,7 +111,7 @@ export const ErpTh = ({ children, align = 'left', className }: {
 
 /** Dark grand-total / footer band (brand-900), matching the table header. */
 export const ErpFooterRow = ({ children, colSpan }: { children: React.ReactNode; colSpan?: number }) => (
-  <tr className="bg-brand-900 text-white">
+  <tr className="bg-gradient-to-b from-brand-800 to-brand-900 text-white shadow-lit">
     <td colSpan={colSpan} className="px-2.5 py-2 text-[11px] font-bold uppercase tracking-wider">
       {children}
     </td>
@@ -124,7 +124,7 @@ export const ErpFooterRow = ({ children, colSpan }: { children: React.ReactNode;
 export const ErpSegmented = <T extends string>({ value, onChange, options }: {
   value: T; onChange: (v: T) => void; options: { value: T; label: string }[];
 }) => (
-  <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50/80 p-0.5">
+  <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100/70 p-0.5 shadow-[inset_0_1px_2px_rgb(15_23_42_/_0.05)]">
     {options.map((o) => (
       <button
         key={o.value}
@@ -133,7 +133,9 @@ export const ErpSegmented = <T extends string>({ value, onChange, options }: {
         aria-pressed={value === o.value}
         className={cn(
           'rounded-md px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.06em] transition-all duration-150 motion-reduce:transition-none',
-          value === o.value ? 'bg-brand-900 text-white shadow-sm' : 'text-slate-600 hover:bg-white hover:text-slate-900',
+          value === o.value
+            ? 'bg-gradient-to-b from-brand-800 to-brand-900 text-white shadow-e1'
+            : 'text-slate-600 hover:bg-white/80 hover:text-slate-900',
         )}
       >
         {o.label}
@@ -152,7 +154,7 @@ export const ErpMobileHeader = ({ subtitle, primary, stats }: {
   primary: { label: string; value: string };
   stats: { label: string; value: string }[];
 }) => (
-  <div className="overflow-hidden rounded-xl bg-gradient-to-br from-brand-900 to-brand-950 p-4 text-white shadow-sm md:hidden">
+  <div className="overflow-hidden rounded-xl bg-gradient-to-br from-brand-800 via-brand-900 to-brand-950 p-4 text-white shadow-e3 ring-1 ring-inset ring-white/10 md:hidden">
     <div className="flex items-center gap-2.5">
       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-brand-500/90">
         <Factory className="h-4 w-4 text-white" />

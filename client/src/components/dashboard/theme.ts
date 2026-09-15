@@ -77,6 +77,10 @@ export const dashVars = (mode: DashMode): Record<string, string> => {
       '--d-accent-dim': css(s(400), 0.13),
       '--d-accent-line': css(s(400), 0.3),
       '--d-grid':      css(s(800), 0.35),
+      // A shadow on a near-black ground is invisible, so depth here comes from
+      // a lit top edge and a hairline ring — the way a real bevel catches light.
+      '--d-shadow':    'inset 0 1px 0 0 rgb(255 255 255 / 0.05), 0 1px 2px 0 rgb(0 0 0 / 0.4)',
+      '--d-shadow-lift': 'inset 0 1px 0 0 rgb(255 255 255 / 0.08), 0 6px 18px -6px rgb(0 0 0 / 0.55)',
       // Core-type tags stay a fixed blue/green pair: they label what a core IS,
       // the same way they do on the Production screens, so they must not move
       // with the domain's brand colour.
@@ -105,6 +109,10 @@ export const dashVars = (mode: DashMode): Record<string, string> => {
     '--d-accent-dim': css(s(500), 0.12),
     '--d-accent-line': css(s(500), 0.3),
     '--d-grid':      css(s(200), 0.5),
+    // Two layers: a tight contact shadow that seats the card, a wider soft one
+    // that gives it height.
+    '--d-shadow':    '0 1px 2px -1px rgb(15 23 42 / 0.06), 0 1px 3px 0 rgb(15 23 42 / 0.05)',
+    '--d-shadow-lift': '0 2px 4px -2px rgb(15 23 42 / 0.06), 0 8px 20px -6px rgb(15 23 42 / 0.12)',
     '--d-toro':      'rgb(21 128 96)',
     '--d-toro-dim':  'rgb(21 128 96 / 0.1)',
     '--d-rect':      'rgb(37 99 173)',

@@ -16,11 +16,13 @@
     <meta name="apple-mobile-web-app-title" content="Admin" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- Inter as a variable font across the whole weight axis. The Production
-         and Dashboard screens lean on 800/900 for figures and labels; the old
-         400-700 subset made the browser fake those, which reads as mush at
-         10px. One variable file also weighs less than the four static cuts. -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet" />
+    <!-- Inter as a variable font on BOTH its axes: weight, and optical size.
+         opsz lets one file behave like two cuts — a 10px uppercase label gets
+         opened up and a 26px figure gets tightened, automatically, instead of
+         every size wearing the same drawing. The weight axis matters too: the
+         old 400-700 subset made the browser fake the 800s these screens lean
+         on, which reads as mush at 10px. -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,100..900&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <title>Admin</title>

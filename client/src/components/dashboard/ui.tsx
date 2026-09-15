@@ -21,7 +21,8 @@ export const DashCaption = ({ children, className }: { children: React.ReactNode
 export const DashPanel = ({ children, className, ...rest }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     {...rest}
-    className={cn('rounded border border-[var(--d-line)] bg-[var(--d-panel)]', className)}
+    style={{ boxShadow: 'var(--d-shadow)' }}
+    className={cn('rounded-lg border border-[var(--d-line)] bg-[var(--d-panel)]', className)}
   >
     {children}
   </div>

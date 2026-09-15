@@ -424,7 +424,7 @@ export const ProductionNewPage = () => {
           <div className="grid grid-cols-1 gap-0 xl:grid-cols-[290px_minmax(0,1fr)_330px]">
 
             {/* Spec rail — the order being produced against. */}
-            <aside className="border-b border-slate-100 bg-slate-50/60 p-4 xl:border-b-0 xl:border-r">
+            <aside className="border-b border-slate-200/70 bg-gradient-to-b from-slate-50 to-slate-100/70 p-4 xl:border-b-0 xl:border-r">
               <ErpLabel>Selected Order</ErpLabel>
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
                 <CoreTypeChip coreType={selected.coreType} />
@@ -450,7 +450,7 @@ export const ProductionNewPage = () => {
                     {pcsFmt(selected.producedPcs)} / {pcsFmt(selected.orderedPcs)}
                   </span>
                 </div>
-                <div className="mt-1.5 flex h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                <div className="mt-1.5 flex h-2 w-full overflow-hidden rounded-full bg-slate-200 shadow-[inset_0_1px_2px_rgb(15_23_42_/_0.10)]">
                   <span className="h-full bg-brand-600 transition-all duration-300 motion-reduce:transition-none" style={{ width: donePct + '%' }} />
                   <span className="h-full bg-brand-400/60 transition-all duration-300 motion-reduce:transition-none" style={{ width: addedPct + '%' }} />
                 </div>
@@ -499,7 +499,7 @@ export const ProductionNewPage = () => {
                         type="button"
                         onClick={() => setPcs(q.value)}
                         className={cn(
-                          'cursor-pointer rounded-md border px-2 py-1 text-[11px] font-bold tabular-nums transition-colors duration-150 motion-reduce:transition-none',
+                          'cursor-pointer rounded-md border px-2 py-1 text-[11px] font-bold tabular-nums shadow-e1 transition-all duration-150 active:translate-y-px motion-reduce:transform-none motion-reduce:transition-none',
                           pcs === q.value
                             ? 'border-brand-300 bg-brand-50 text-brand-800'
                             : 'border-slate-200 bg-white text-slate-600 hover:border-brand-200 hover:bg-brand-50/60 hover:text-brand-700',
@@ -521,8 +521,8 @@ export const ProductionNewPage = () => {
                   on the sales order line itself (the order still just states the
                   full height). See lib/splitProduction.js for the matching rule. */}
               <div className={cn(
-                'rounded-lg border px-3.5 py-3 transition-colors duration-200 motion-reduce:transition-none',
-                isSplit ? 'border-amber-200 bg-amber-50/50' : 'border-slate-200 bg-white',
+                'rounded-xl border px-3.5 py-3 shadow-e1 transition-colors duration-200 motion-reduce:transition-none',
+                isSplit ? 'border-amber-200 bg-gradient-to-b from-amber-50 to-amber-100/50' : 'border-slate-200/80 bg-white',
               )}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
@@ -531,13 +531,13 @@ export const ProductionNewPage = () => {
                       {isSplit ? 'One narrower strip of the ordered height.' : 'The full ordered height, made in one run.'}
                     </div>
                   </div>
-                  <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50/80 p-0.5">
+                  <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100/70 p-0.5 shadow-[inset_0_1px_2px_rgb(15_23_42_/_0.05)]">
                     <button
                       type="button"
                       aria-pressed={!isSplit}
                       onClick={() => { setIsSplit(false); setSplitHeight(0); }}
                       className={cn('cursor-pointer rounded-md px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.06em] transition-all duration-150 motion-reduce:transition-none',
-                        !isSplit ? 'bg-brand-900 text-white shadow-sm' : 'text-slate-600 hover:bg-white hover:text-slate-900')}
+                        !isSplit ? 'bg-gradient-to-b from-brand-800 to-brand-900 text-white shadow-e1' : 'text-slate-600 hover:bg-white/80 hover:text-slate-900')}
                     >
                       Whole Piece
                     </button>
@@ -546,7 +546,7 @@ export const ProductionNewPage = () => {
                       aria-pressed={isSplit}
                       onClick={() => setIsSplit(true)}
                       className={cn('cursor-pointer rounded-md px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.06em] transition-all duration-150 motion-reduce:transition-none',
-                        isSplit ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 hover:bg-white hover:text-slate-900')}
+                        isSplit ? 'bg-gradient-to-b from-amber-500 to-amber-600 text-white shadow-e1' : 'text-slate-600 hover:bg-white/80 hover:text-slate-900')}
                     >
                       Split Width
                     </button>
@@ -622,10 +622,10 @@ export const ProductionNewPage = () => {
             </div>
 
             {/* Outcome rail — what saving this will do, and the actions. */}
-            <aside className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/60 p-4 xl:border-l xl:border-t-0">
+            <aside className="flex flex-col gap-3 border-t border-slate-200/70 bg-gradient-to-b from-slate-50 to-slate-100/70 p-4 xl:border-l xl:border-t-0">
               <ErpLabel>This Entry</ErpLabel>
 
-              <div className="rounded-lg border border-slate-200 bg-white px-3.5 py-3">
+              <div className="rounded-xl border border-slate-200/80 bg-white px-3.5 py-3 shadow-e1">
                 <ErpLabel>Total Weight</ErpLabel>
                 <div className="mt-1 font-num text-[26px] font-extrabold leading-none tracking-tight tabular-nums text-slate-900">
                   {totalWeight ? totalWeight.toFixed(3) : '0.000'}
@@ -636,7 +636,7 @@ export const ProductionNewPage = () => {
                 </div>
               </div>
 
-              <div className="rounded-lg border border-brand-200 bg-brand-50/70 px-3.5 py-3">
+              <div className="rounded-xl border border-brand-200 bg-gradient-to-b from-brand-50 to-brand-100/60 px-3.5 py-3 shadow-e1">
                 <ErpLabel>Job Amount</ErpLabel>
                 {isSplit ? (
                   <>
@@ -656,8 +656,8 @@ export const ProductionNewPage = () => {
               </div>
 
               <div className={cn(
-                'rounded-lg border px-3.5 py-3 transition-colors duration-200 motion-reduce:transition-none',
-                isExcess ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white',
+                'rounded-xl border px-3.5 py-3 shadow-e1 transition-colors duration-200 motion-reduce:transition-none',
+                isExcess ? 'border-amber-300 bg-gradient-to-b from-amber-50 to-amber-100/70' : 'border-slate-200/80 bg-white',
               )}>
                 <ErpLabel>Order Balance After</ErpLabel>
                 <div className={cn('mt-1 font-num text-[22px] font-extrabold leading-none tracking-tight tabular-nums',

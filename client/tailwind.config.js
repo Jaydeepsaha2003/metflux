@@ -81,6 +81,15 @@ export default {
       },
       boxShadow: {
         'glow-brand': '0 0 0 1px rgba(34,197,94,0.2), 0 8px 30px rgba(34,197,94,0.18)',
+        // A layered elevation scale. Each step is two shadows — a tight contact
+        // shadow that seats the element, and a wider soft one that gives it
+        // height. One big blurry shadow reads as a smudge; two read as depth.
+        e1: '0 1px 2px -1px rgb(15 23 42 / 0.06), 0 1px 3px 0 rgb(15 23 42 / 0.05)',
+        e2: '0 2px 4px -2px rgb(15 23 42 / 0.06), 0 6px 14px -4px rgb(15 23 42 / 0.10)',
+        e3: '0 4px 8px -4px rgb(15 23 42 / 0.08), 0 14px 32px -8px rgb(15 23 42 / 0.14)',
+        // Dark surfaces swallow shadow, so depth there comes from a lit top
+        // edge instead — the same trick a physical bevel uses.
+        lit: 'inset 0 1px 0 0 rgb(255 255 255 / 0.06)',
       },
     },
   },

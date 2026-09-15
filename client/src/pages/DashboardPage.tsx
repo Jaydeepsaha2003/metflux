@@ -552,7 +552,10 @@ const KpiCard = ({ label, figure, unit = 'pcs', meta, spark, chips, to, title }:
   <Link
     to={to}
     title={title}
-    className="group flex cursor-pointer flex-col gap-1 rounded-lg border border-[var(--d-line)] bg-[var(--d-panel)] px-3 py-2.5 shadow-sm transition-colors duration-200 hover:border-[var(--d-accent-line)] hover:bg-[var(--d-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--d-accent)] motion-reduce:transition-none"
+    style={{ boxShadow: 'var(--d-shadow)' }}
+    onMouseEnter={(e) => { e.currentTarget.style.boxShadow = 'var(--d-shadow-lift)'; }}
+    onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'var(--d-shadow)'; }}
+    className="group flex -translate-y-0 cursor-pointer flex-col gap-1 rounded-lg border border-[var(--d-line)] bg-[var(--d-panel)] px-3 py-2.5 transition-[transform,border-color,background-color] duration-200 hover:-translate-y-0.5 hover:border-[var(--d-accent-line)] hover:bg-[var(--d-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--d-accent)] motion-reduce:transform-none motion-reduce:transition-none"
   >
     <DashLabel>{label}</DashLabel>
     <div className="flex items-baseline gap-1.5">
