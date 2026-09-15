@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Search, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import './searchable-select.css';
 
 export type SelectOption = { value: string; label: string };
 
@@ -31,7 +32,7 @@ export const SearchableSelect = ({
   const isMouseDownRef = useRef(false);
 
   const filtered = query.trim()
-    ? options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase()))
+    ? options.filter((o) => `${o.label} ${o.value}`.toLowerCase().includes(query.toLowerCase()))
     : options;
 
   const selectedLabel = options.find((o) => o.value === value)?.label;
@@ -49,10 +50,15 @@ export const SearchableSelect = ({
   useEffect(() => {
     if (open) {
       setQuery('');
-      setHighlighted(0);
+      const selectedIndex = options.findIndex((option) => option.value === value);
+      setHighlighted(selectedIndex >= 0 ? selectedIndex : 0);
       setTimeout(() => searchRef.current?.focus(), 30);
     }
-  }, [open]);
+  }, [open, options, value]);
+
+  useEffect(() => {
+    if (highlighted >= filtered.length) setHighlighted(Math.max(filtered.length - 1, 0));
+  }, [filtered.length, highlighted]);
 
   // Keep the highlighted option scrolled into view as the user arrows
   // through long lists.
@@ -118,6 +124,9 @@ export const SearchableSelect = ({
           if (!disabled) setOpen(true);
         }}
         onClick={() => !disabled && setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={selectedLabel ?? placeholder}
         // Always attach so arrow keys / Enter still work the moment the panel
         // pops open via Tab focus — without this, the first key press right
         // after focus could land on a stale (closed-state) handler.
@@ -162,31 +171,33 @@ export const SearchableSelect = ({
           squashing the panel into a cramped strip. Search is hidden for short
           option lists where it would just add visual noise. */}
       {open && (
-        <div className="absolute left-0 top-full z-[100] mt-1.5 min-w-full w-56 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
-          {/* Search — only shown when there are enough options to need it */}
-          {options.length > 6 && (
-            <div className="border-b border-slate-100 px-3 py-2">
-              <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5">
-                <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                <input
-                  ref={searchRef}
-                  value={query}
-                  onChange={(e) => { setQuery(e.target.value); setHighlighted(0); }}
-                  onKeyDown={onKeyDown}
-                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400"
-                  placeholder="Search…"
-                />
-              </div>
+        <div className="searchable-select-panel absolute left-0 top-full z-[100] mt-1.5 min-w-full w-64 overflow-hidden border border-slate-200 bg-white shadow-xl" role="dialog" aria-label={`${placeholder} options`}>
+          <div className="searchable-select-search border-b border-slate-100 px-2.5 py-2">
+            <div className="flex items-center gap-2 border border-slate-200 bg-slate-50 px-2.5 py-1.5">
+              <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+              <input
+                ref={searchRef}
+                value={query}
+                onChange={(e) => { setQuery(e.target.value); setHighlighted(0); }}
+                onKeyDown={onKeyDown}
+                className="flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400"
+                placeholder={`Search ${options.length} option${options.length === 1 ? '' : 's'}…`}
+                aria-label={`Search ${placeholder}`}
+              />
+              {query && <button type="button" className="text-slate-400 hover:text-slate-700" onClick={() => { setQuery(''); setHighlighted(0); }} aria-label="Clear search"><X className="h-3.5 w-3.5" /></button>}
             </div>
-          )}
+            <div className="mt-1.5 flex items-center justify-between px-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              <span>{filtered.length} result{filtered.length === 1 ? '' : 's'}</span><span>↑ ↓ navigate · Enter select</span>
+            </div>
+          </div>
 
           {/* Options list */}
-          <ul ref={listRef} className="max-h-52 overflow-y-auto p-1.5">
+          <ul ref={listRef} className="max-h-60 overflow-y-auto p-1.5" role="listbox" aria-label="Options">
             {filtered.length === 0 && (
-              <li className="px-3 py-6 text-center text-sm text-slate-400">No results</li>
+              <li className="searchable-select-empty px-3 py-7 text-center text-sm text-slate-400">No matching options</li>
             )}
             {filtered.map((opt, i) => (
-              <li key={opt.value}>
+              <li key={opt.value} role="option" aria-selected={opt.value === value}>
                 <button
                   type="button"
                   // Skip in the tab order — arrow keys navigate inside the
@@ -196,10 +207,9 @@ export const SearchableSelect = ({
                   onClick={() => select(opt)}
                   onMouseEnter={() => setHighlighted(i)}
                   className={cn(
-                    'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition',
-                    // Stronger highlight so keyboard navigation is obvious.
-                    i === highlighted && 'bg-brand-100 text-brand-800 ring-1 ring-brand-300',
-                    opt.value === value && 'font-medium'
+                    'searchable-select-option flex w-full items-center gap-2.5 px-3 py-2 text-sm transition',
+                    i === highlighted && 'is-highlighted',
+                    opt.value === value && 'is-selected font-medium'
                   )}
                 >
                   <span className="flex-1 text-left">{opt.label}</span>

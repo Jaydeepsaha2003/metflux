@@ -1,0 +1,9 @@
+.searchable-select-panel { animation: searchable-select-in .12s ease-out; }
+.searchable-select-option { color: #334155; }
+.searchable-select-option:hover, .searchable-select-option.is-highlighted { background: rgb(var(--brand-50) / .85); color: rgb(var(--brand-900)); }
+.searchable-select-option.is-highlighted { box-shadow: inset 2px 0 0 rgb(var(--brand-600)); }
+.searchable-select-option.is-selected { color: rgb(var(--brand-800)); }
+.searchable-select-option.is-selected::after { content: ''; }
+.searchable-select-empty { background: linear-gradient(135deg, #fff, #f8fafc); }
+@keyframes searchable-select-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .searchable-select-panel { animation: none; } }

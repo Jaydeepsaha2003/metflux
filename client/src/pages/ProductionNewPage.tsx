@@ -269,15 +269,19 @@ export const ProductionNewPage = () => {
   })();
 
   return (
-    <div className="production-workspace max-w-full space-y-3">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="flex items-center gap-2 text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
-          <Factory className="h-5 w-5 text-brand-600" /> Receive Production
-        </h1>
+    <div className="production-workspace production-receive-page max-w-full space-y-3">
+      <header className="production-page-header receive-page-header flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="production-eyebrow">Operations / Production intake</div>
+          <h1 className="mt-1 flex items-center gap-2 text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
+            <Factory className="h-5 w-5 text-brand-600" /> Receive production
+          </h1>
+          <p className="mt-1 text-xs text-slate-500 sm:text-sm">Select an open order, record the finished pieces, and see the balance before saving.</p>
+        </div>
         <Link to="/production" className="btn-ghost w-full justify-center text-slate-600 sm:w-auto">
           <ArrowLeft className="h-4 w-4" /> Back to Modify
         </Link>
-      </div>
+      </header>
 
       <ProductionTabs />
 
@@ -289,9 +293,9 @@ export const ProductionNewPage = () => {
         </div>
       )}
 
-      <ErpCard>
+      <ErpCard className="receive-workspace-card">
         {/* Step header */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5 sm:px-4">
+        <div className="receive-stepper flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5 sm:px-4">
           <div className="flex items-center gap-4">
             <StepBadge n={1} label="Select Order" active={step === 1} done={step > 1} onClick={() => setStep(1)} />
             <div className={cn('h-px w-6 sm:w-10', step > 1 ? 'bg-brand-600' : 'bg-slate-200')} />
