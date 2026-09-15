@@ -337,18 +337,45 @@ router.get('/summary', requirePermission('view_po'), asyncHandler(async (req, re
     params.push(like, like, like, like, like, like);
   }
 
-  const rows = await q(`${PROD_ROW_SQL} WHERE ${where} ORDER BY p.\`prodDate\` DESC LIMIT 20000`, params);
+  const [rows, labours] = await Promise.all([
+    q(`${PROD_ROW_SQL} WHERE ${where} ORDER BY p.\`prodDate\` DESC LIMIT 20000`, params),
+    q(
+      "SELECT DISTINCT `labourName` FROM `Production` WHERE `companyId` = ? AND `labourName` <> '' ORDER BY `labourName` ASC",
+      [req.tenant.companyId]
+    ),
+  ]);
   const items = await attachSplitAmounts(rows.map(flatten));
   const totals = items.reduce((t, r) => ({
     pcs:    t.pcs + (Number(r.pcs) || 0),
     weight: +(t.weight + (Number(r.totalWeight) || 0)).toFixed(3),
     amount: +(t.amount + (Number(r.amount) || 0)).toFixed(2),
   }), { pcs: 0, weight: 0, amount: 0 });
-  const labours = await q(
-    "SELECT DISTINCT `labourName` FROM `Production` WHERE `companyId` = ? AND `labourName` <> '' ORDER BY `labourName` ASC",
-    [req.tenant.companyId]
-  );
-  res.json({ items, totals, labours: labours.map((r) => r.labourName) });
+  // This report is the one place that can legitimately ask for thousands of
+  // rows at once, so it sends only the fields the page actually renders rather
+  // than the full flattened row — the rate columns, notes, order dates and item
+  // totals behind each entry go unused here and roughly double the payload.
+  // The split-amount pass above needs the full shape, so trim afterwards.
+  res.json({
+    items: items.map((r) => ({
+      id: r.id,
+      prodDate: r.prodDate,
+      poNumber: r.poNumber,
+      customerName: r.customerName,
+      customerCode: r.customerCode,
+      labourName: r.labourName,
+      coreType: r.coreType,
+      grade: r.grade,
+      material: r.material,
+      measure: r.measure,
+      pcs: r.pcs,
+      weightPerPc: r.weightPerPc,
+      totalWeight: r.totalWeight,
+      amount: r.amount,
+      splitHeight: r.splitHeight,
+    })),
+    totals,
+    labours: labours.map((r) => r.labourName),
+  });
 }));
 
 /* GET /:id */

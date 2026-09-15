@@ -42,6 +42,15 @@ const fmt = (iso: string) => {
 const kg = (n: number) => n.toFixed(3);
 const pcsFmt = (n: number) => n.toLocaleString('en-IN');
 
+/* This report opens on the current month rather than on all history. Job work
+   is settled monthly, so that is the period people actually come here for, and
+   an unbounded default meant every visit pulled every production entry ever
+   recorded — thousands of rows to download, parse and group before anything
+   appeared. Clearing the dates still gives the full history on demand. */
+const isoDay = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const startOfThisMonth = () => { const d = new Date(); return isoDay(new Date(d.getFullYear(), d.getMonth(), 1)); };
+
 /* Day key from the LOCAL date parts, not toISOString() — an entry logged in the
    evening IST would otherwise fall into the previous UTC day and be counted
    against the wrong shift. This matches what fmt() renders. */
@@ -92,7 +101,7 @@ const groupByEmployee = (rows: Row[]): EmpAgg[] => {
 
 export const ProductionSummaryPage = () => {
   const hideNames = useHideCustomerNames();
-  const [from, setFrom] = useState('');
+  const [from, setFrom] = useState(startOfThisMonth);
   const [to, setTo] = useState('');
   const [labour, setLabour] = useState('');
   const [customerId, setCustomerId] = useState('');
@@ -257,6 +266,8 @@ export const ProductionSummaryPage = () => {
 
   const dayCount = new Set(employees.flatMap((e) => e.days.map((d) => d.key))).size;
   const hasFilters = !!from || !!to || !!labour || !!customerId || !!search.trim();
+  // Clearing deliberately widens to all dates — the one explicit way to ask
+  // for the full history that the month default holds back.
   const clearFilters = () => { setFrom(''); setTo(''); setLabour(''); setCustomerId(''); setSearch(''); };
 
   return (
@@ -330,7 +341,11 @@ export const ProductionSummaryPage = () => {
             </div>
           </div>
           {hasFilters && (
-            <button onClick={clearFilters} className="flex h-9 items-center gap-1 font-manrope text-[11px] font-extrabold uppercase tracking-wide text-brand-700 hover:text-brand-800">
+            <button
+              onClick={clearFilters}
+              title="Clear every filter, including the dates — shows all production ever recorded"
+              className="flex h-9 items-center gap-1 font-manrope text-[11px] font-extrabold uppercase tracking-wide text-brand-700 hover:text-brand-800"
+            >
               <X className="h-3 w-3" /> Clear
             </button>
           )}
