@@ -242,6 +242,31 @@ export const ProductionNewPage = () => {
   const balanceAfter = selected ? Math.max(selected.remainingPcs - pcs, 0) : 0;
   const isExcess = !!selected && pcs > selected.remainingPcs;
 
+  /* Progress bar segments: what is already produced, then what this entry adds
+     on top. Both are clamped so an over-production entry fills the bar rather
+     than overflowing it. A split run is left out of the added segment — it does
+     not move the order's produced count until its matching height arrives. */
+  const donePct = selected && selected.orderedPcs > 0
+    ? Math.min(100, (selected.producedPcs / selected.orderedPcs) * 100)
+    : 0;
+  const addedPct = selected && selected.orderedPcs > 0 && pcs > 0 && !isSplit
+    ? Math.min(100 - donePct, (pcs / selected.orderedPcs) * 100)
+    : 0;
+
+  /* One-tap amounts for the pcs field. Only offered when they are distinct and
+     worth a tap — no point showing "Half 1" next to "All 2". */
+  const quickFills = (() => {
+    if (!selected) return [] as { label: string; value: number }[];
+    const open = selected.remainingPcs;
+    if (open < 4) return [];
+    const half = Math.floor(open / 2);
+    const quarter = Math.floor(open / 4);
+    const out = [{ label: `All ${pcsFmt(open)}`, value: open }];
+    if (half > 0 && half !== open) out.push({ label: `Half ${pcsFmt(half)}`, value: half });
+    if (quarter > 0 && quarter !== half) out.push({ label: `Quarter ${pcsFmt(quarter)}`, value: quarter });
+    return out;
+  })();
+
   return (
     <div className="max-w-full space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -389,16 +414,59 @@ export const ProductionNewPage = () => {
           </>
         )}
 
-        {/* ---- Step 2: enter production ---- */}
-        {/* Capped width even though the card itself is full-bleed: the picker
-            table above should fill a wide monitor, but stretching a form's
-            text inputs edge-to-edge on the same screen makes them unreadable. */}
+        {/* ---- Step 2: enter production ----
+            Three zones across the width: what was ordered, what you are
+            entering, and what it will do to the order. Only the middle column
+            takes input; the outer two exist so the operator never has to
+            remember a figure or guess the outcome before saving. The old
+            centred, capped layout left half a wide monitor empty. */}
         {step === 2 && selected && (
-          <div className="mx-auto grid max-w-5xl grid-cols-1 gap-0 lg:grid-cols-[1fr_320px]">
-            <div className="space-y-4 p-3 sm:p-4">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-0 xl:grid-cols-[290px_minmax(0,1fr)_330px]">
+
+            {/* Spec rail — the order being produced against. */}
+            <aside className="border-b border-slate-100 bg-slate-50/60 p-4 xl:border-b-0 xl:border-r">
+              <ErpLabel>Selected Order</ErpLabel>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <CoreTypeChip coreType={selected.coreType} />
+                <span className="text-[11.5px] font-semibold text-slate-600">{selected.grade}</span>
+              </div>
+              <div className="mt-2.5 font-num text-[17px] font-bold tracking-tight text-slate-900">{selected.measure}</div>
+              <div className="mt-0.5 text-[11.5px] text-slate-500">{selected.material}</div>
+
+              <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-3">
+                <SummaryField label="Sales Order" value={selected.poNumber} mono />
+                <SummaryField label="Due" value={formatDate(selected.deliveryDate)} />
+                <SummaryField label="Customer" value={selected.customerName} className="col-span-2" />
+                <SummaryField label="Weight / Pc" value={selected.weightPerPc.toFixed(3) + ' kg'} mono />
+                <SummaryField label="Ordered" value={pcsFmt(selected.orderedPcs)} mono />
+              </dl>
+
+              {/* Where the order stands, and where this entry takes it — the
+                  lighter segment is what is about to be added. */}
+              <div className="mt-4">
+                <div className="flex items-baseline justify-between">
+                  <ErpLabel>Order Progress</ErpLabel>
+                  <span className="font-num text-[11px] font-bold tabular-nums text-slate-500">
+                    {pcsFmt(selected.producedPcs)} / {pcsFmt(selected.orderedPcs)}
+                  </span>
+                </div>
+                <div className="mt-1.5 flex h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                  <span className="h-full bg-brand-600 transition-all duration-300 motion-reduce:transition-none" style={{ width: donePct + '%' }} />
+                  <span className="h-full bg-brand-400/60 transition-all duration-300 motion-reduce:transition-none" style={{ width: addedPct + '%' }} />
+                </div>
+                <div className="mt-1.5 text-[11px] text-slate-500">
+                  {pcs > 0 && !isSplit
+                    ? 'Adding ' + pcsFmt(pcs) + ' pcs takes it to ' + Math.min(100, Math.round(((selected.producedPcs + pcs) / selected.orderedPcs) * 100)) + '%.'
+                    : pcsFmt(selected.remainingPcs) + ' pcs still open.'}
+                </div>
+              </div>
+            </aside>
+
+            {/* The form itself. */}
+            <div className="space-y-4 p-4">
+              <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
                 <Field label="Production Date">
-                  <input className="input h-9 text-sm" type="date" value={prodDate} onChange={(e) => setProdDate(e.target.value)} />
+                  <input className="input h-10 text-sm" type="date" value={prodDate} onChange={(e) => setProdDate(e.target.value)} />
                 </Field>
                 <Field label="Worker / Labour">
                   <SearchableSelect
@@ -408,47 +476,77 @@ export const ProductionNewPage = () => {
                     placeholder="Select worker…"
                   />
                 </Field>
-                <Field label="Pieces Made">
-                  <input
-                    className="input h-9 text-sm"
-                    type="number"
-                    inputMode="numeric"
-                    min={1}
-                    value={pcs || ''}
-                    onChange={(e) => setPcs(parseInt(e.target.value || '0', 10))}
-                  />
-                  <div className="mt-1 text-[11px] text-slate-400">
-                    {isSplit
-                      ? `Strips at this height — counted toward a matching pile, not the order balance directly.`
-                      : `${selected.remainingPcs} open of ${selected.orderedPcs} ordered`}
-                  </div>
-                </Field>
-                <Field label="Total Weight">
-                  <input className="input h-9 bg-slate-50 text-sm font-num" value={totalWeight ? totalWeight.toFixed(3) : '—'} readOnly />
-                  <div className="mt-1 text-[11px] text-slate-400">Computed, not entered — weight per piece is fixed by the order specification.</div>
-                </Field>
               </div>
+
+              <Field label="Pieces Made">
+                <input
+                  className="input h-12 font-num text-lg font-bold tabular-nums"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  placeholder="0"
+                  value={pcs || ''}
+                  onChange={(e) => setPcs(parseInt(e.target.value || '0', 10))}
+                />
+                {/* Retyping a four-digit count all day is the slowest part of
+                    this screen — these fill the common amounts in one tap. */}
+                {quickFills.length > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] text-slate-400">Quick fill</span>
+                    {quickFills.map((q) => (
+                      <button
+                        key={q.label}
+                        type="button"
+                        onClick={() => setPcs(q.value)}
+                        className={cn(
+                          'cursor-pointer rounded-md border px-2 py-1 text-[11px] font-bold tabular-nums transition-colors duration-150 motion-reduce:transition-none',
+                          pcs === q.value
+                            ? 'border-brand-300 bg-brand-50 text-brand-800'
+                            : 'border-slate-200 bg-white text-slate-600 hover:border-brand-200 hover:bg-brand-50/60 hover:text-brand-700',
+                        )}
+                      >
+                        {q.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="mt-1.5 text-[11px] text-slate-400">
+                  {isSplit
+                    ? 'Strips at this height — counted toward a matching pile, not the order balance directly.'
+                    : pcsFmt(selected.remainingPcs) + ' open of ' + pcsFmt(selected.orderedPcs) + ' ordered'}
+                </div>
+              </Field>
 
               {/* Whole Piece vs Split Width — decided per production batch, not
                   on the sales order line itself (the order still just states the
                   full height). See lib/splitProduction.js for the matching rule. */}
-              <div className="rounded border border-slate-200 bg-white px-3 py-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <ErpLabel>Production Type</ErpLabel>
-                  <div className="inline-flex rounded-[3px] border border-slate-200 bg-white p-0.5">
+              <div className={cn(
+                'rounded-lg border px-3.5 py-3 transition-colors duration-200 motion-reduce:transition-none',
+                isSplit ? 'border-amber-200 bg-amber-50/50' : 'border-slate-200 bg-white',
+              )}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <ErpLabel>Production Type</ErpLabel>
+                    <div className="mt-0.5 text-[11.5px] text-slate-500">
+                      {isSplit ? 'One narrower strip of the ordered height.' : 'The full ordered height, made in one run.'}
+                    </div>
+                  </div>
+                  <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50/80 p-0.5">
                     <button
                       type="button"
+                      aria-pressed={!isSplit}
                       onClick={() => { setIsSplit(false); setSplitHeight(0); }}
-                      className={cn('rounded-[3px] px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide transition-colors duration-150',
-                        !isSplit ? 'bg-brand-900 text-white' : 'text-slate-600 hover:bg-slate-100')}
+                      className={cn('cursor-pointer rounded-md px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.06em] transition-all duration-150 motion-reduce:transition-none',
+                        !isSplit ? 'bg-brand-900 text-white shadow-sm' : 'text-slate-600 hover:bg-white hover:text-slate-900')}
                     >
                       Whole Piece
                     </button>
                     <button
                       type="button"
+                      aria-pressed={isSplit}
                       onClick={() => setIsSplit(true)}
-                      className={cn('rounded-[3px] px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide transition-colors duration-150',
-                        isSplit ? 'bg-brand-900 text-white' : 'text-slate-600 hover:bg-slate-100')}
+                      className={cn('cursor-pointer rounded-md px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.06em] transition-all duration-150 motion-reduce:transition-none',
+                        isSplit ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 hover:bg-white hover:text-slate-900')}
                     >
                       Split Width
                     </button>
@@ -456,94 +554,64 @@ export const ProductionNewPage = () => {
                 </div>
 
                 {isSplit && (
-                  <div className="mt-3 space-y-3">
-                    <Field label={`Split Height (full height: ${selected.ht ?? '—'})`}>
-                      <input
-                        className="input h-9 text-sm"
-                        type="number"
-                        inputMode="decimal"
-                        min={0}
-                        value={splitHeight || ''}
-                        onChange={(e) => setSplitHeight(parseFloat(e.target.value || '0'))}
-                      />
-                    </Field>
-                    {splitWeightPerPc != null && (
-                      <div className="text-[11px] text-slate-500">
-                        Weight/pc at {splitHeight}: <span className="font-num font-semibold text-slate-700">{splitWeightPerPc.toFixed(3)} kg</span>
-                      </div>
-                    )}
-                    {selected.splitInfo.length > 0 && (
-                      <div className="rounded border border-slate-100 bg-slate-50 p-2">
-                        <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
-                          Existing split piles on this order
+                  <div className="mt-3.5 space-y-3 border-t border-amber-200/70 pt-3.5">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <Field label={'Split Height (full height ' + (selected.ht ?? '—') + ')'}>
+                        <input
+                          className="input h-10 font-num text-sm"
+                          type="number"
+                          inputMode="decimal"
+                          min={0}
+                          placeholder="e.g. 40"
+                          value={splitHeight || ''}
+                          onChange={(e) => setSplitHeight(parseFloat(e.target.value || '0'))}
+                        />
+                      </Field>
+                      <div>
+                        <ErpLabel className="mb-1 block">Weight / Pc at this height</ErpLabel>
+                        <div className="flex h-10 items-center rounded-lg border border-amber-200 bg-white px-3 font-num text-sm font-bold tabular-nums text-slate-800">
+                          {splitWeightPerPc != null ? splitWeightPerPc.toFixed(3) + ' kg' : '—'}
                         </div>
-                        <table className="w-full text-[11px]">
+                      </div>
+                    </div>
+
+                    {selected.splitInfo.length > 0 && (
+                      <div className="overflow-hidden rounded-lg border border-amber-200/70 bg-white">
+                        <div className="border-b border-amber-100 px-2.5 py-1.5">
+                          <ErpLabel>Existing split piles on this order</ErpLabel>
+                        </div>
+                        <table className="w-full text-[11.5px]">
                           <thead>
                             <tr className="text-slate-400">
-                              <th className="text-left font-medium">Height</th>
-                              <th className="text-right font-medium">Pcs</th>
-                              <th className="text-right font-medium">Matched</th>
-                              <th className="text-right font-medium">Unmatched</th>
+                              <th className="px-2.5 py-1 text-left font-semibold">Height</th>
+                              <th className="px-2.5 py-1 text-right font-semibold">Pcs</th>
+                              <th className="px-2.5 py-1 text-right font-semibold">Matched</th>
+                              <th className="px-2.5 py-1 text-right font-semibold">Waiting</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {selected.splitInfo.map((p) => (
-                              <tr key={p.splitHeight}>
-                                <td className="py-0.5"><SplitHeightChip height={p.splitHeight} /></td>
-                                <td className="py-0.5 text-right font-num tabular-nums">{p.pcs}</td>
-                                <td className="py-0.5 text-right font-num tabular-nums text-green-700">{p.matched}</td>
-                                <td className="py-0.5 text-right font-num tabular-nums text-amber-700">{p.unmatched}</td>
+                            {selected.splitInfo.map((sp) => (
+                              <tr key={sp.splitHeight} className="border-t border-slate-100">
+                                <td className="px-2.5 py-1.5"><SplitHeightChip height={sp.splitHeight} /></td>
+                                <td className="px-2.5 py-1.5 text-right font-num tabular-nums">{pcsFmt(sp.pcs)}</td>
+                                <td className="px-2.5 py-1.5 text-right font-num tabular-nums text-brand-700">{pcsFmt(sp.matched)}</td>
+                                <td className="px-2.5 py-1.5 text-right font-num tabular-nums text-amber-700">{pcsFmt(sp.unmatched)}</td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
                       </div>
                     )}
-                    <p className="text-[11px] text-slate-400">
-                      A narrower strip of this item — once another split height's pile reaches the same count, those pieces become finished and dispatchable together.
+                    <p className="text-[11px] leading-relaxed text-slate-500">
+                      Once another split height&apos;s pile reaches the same count, those pieces become finished and dispatchable together.
                     </p>
                   </div>
                 )}
               </div>
 
-              <div className="rounded border border-slate-200 bg-slate-50 px-3 py-2.5">
-                <ErpLabel>Job Amount (weight × rate)</ErpLabel>
-                {isSplit ? (
-                  <>
-                    <div className="mt-0.5 font-num text-sm font-semibold text-slate-500">Credited once matched</div>
-                    <div className="mt-0.5 text-[11px] text-slate-400">
-                      A split run earns nothing on its own — the full per-piece rate is credited to whichever run completes a matching pair, shown on the Modify page after saving.
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="mt-0.5 font-num text-lg font-bold tabular-nums text-brand-700">
-                      {jobAmount != null ? inr(jobAmount) : '—'}
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-slate-400">At the rate posted on the work allotment, credited to the worker you pick.</div>
-                  </>
-                )}
-              </div>
-
-              <div className="rounded border px-3 py-2.5 text-sm" style={{ borderColor: isExcess ? '#fcd34d' : '#e2e8f0', backgroundColor: isExcess ? '#fffbeb' : '#fff' }}>
-                <ErpLabel>Order Balance After Saving</ErpLabel>
-                <div className={cn('mt-0.5 font-num text-lg font-bold tabular-nums', isExcess ? 'text-amber-700' : 'text-slate-900')}>
-                  {isExcess ? `${pcs - selected.remainingPcs} pcs over` : `${balanceAfter} pcs`}
-                </div>
-                <div className="mt-0.5 text-[11px] text-slate-500">
-                  {isSplit
-                    ? 'Split runs feed a WIP pile — pcs only count as produced once a matching height completes them. This figure assumes an immediate match; check the pile table above for the real state.'
-                    : pcs <= 0
-                      ? 'Nothing entered yet, so the order is untouched.'
-                      : isExcess
-                        ? `This exceeds the order by ${pcs - selected.remainingPcs} pcs — you'll be asked to confirm before saving.`
-                        : `${selected.producedPcs + pcs} of ${selected.orderedPcs} pcs produced — ${Math.round(((selected.producedPcs + pcs) / selected.orderedPcs) * 100)}% of the order.`}
-                </div>
-              </div>
-
               {error && (
-                <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                  <div className="font-medium">{error.message}</div>
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">
+                  <div className="font-semibold">{error.message}</div>
                   {error.details && (
                     <ul className="mt-1 list-disc pl-5 text-xs">
                       {error.details.map((d, i) => <li key={i}>{d}</li>)}
@@ -551,30 +619,72 @@ export const ProductionNewPage = () => {
                   )}
                 </div>
               )}
+            </div>
 
-              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between sm:gap-3">
-                <button onClick={() => setStep(1)} className="btn-ghost w-full sm:w-auto justify-center">Back</button>
-                <button onClick={onSave} disabled={submit.isPending} className="btn-primary w-full sm:w-auto justify-center">
+            {/* Outcome rail — what saving this will do, and the actions. */}
+            <aside className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/60 p-4 xl:border-l xl:border-t-0">
+              <ErpLabel>This Entry</ErpLabel>
+
+              <div className="rounded-lg border border-slate-200 bg-white px-3.5 py-3">
+                <ErpLabel>Total Weight</ErpLabel>
+                <div className="mt-1 font-num text-[26px] font-extrabold leading-none tracking-tight tabular-nums text-slate-900">
+                  {totalWeight ? totalWeight.toFixed(3) : '0.000'}
+                  <span className="ml-1 text-[13px] font-bold text-slate-400">kg</span>
+                </div>
+                <div className="mt-1 text-[11px] text-slate-400">
+                  {pcsFmt(pcs || 0)} pcs × {effectiveWeightPerPc ? effectiveWeightPerPc.toFixed(3) : '—'} kg
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-brand-200 bg-brand-50/70 px-3.5 py-3">
+                <ErpLabel>Job Amount</ErpLabel>
+                {isSplit ? (
+                  <>
+                    <div className="mt-1 text-[15px] font-bold text-slate-600">Credited once matched</div>
+                    <div className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                      A split run earns nothing on its own — the full per-piece rate goes to whichever run completes the pair.
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="mt-1 font-num text-[26px] font-extrabold leading-none tracking-tight tabular-nums text-brand-700">
+                      {jobAmount != null ? inr(jobAmount) : '—'}
+                    </div>
+                    <div className="mt-1 text-[11px] text-slate-500">Credited to the worker you pick.</div>
+                  </>
+                )}
+              </div>
+
+              <div className={cn(
+                'rounded-lg border px-3.5 py-3 transition-colors duration-200 motion-reduce:transition-none',
+                isExcess ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white',
+              )}>
+                <ErpLabel>Order Balance After</ErpLabel>
+                <div className={cn('mt-1 font-num text-[22px] font-extrabold leading-none tracking-tight tabular-nums',
+                  isExcess ? 'text-amber-700' : 'text-slate-900')}>
+                  {isExcess ? pcsFmt(pcs - selected.remainingPcs) + ' over' : pcsFmt(balanceAfter) + ' pcs'}
+                </div>
+                <div className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                  {isSplit
+                    ? 'Split runs feed a work-in-progress pile — pcs only count as produced once a matching height completes them.'
+                    : pcs <= 0
+                      ? 'Nothing entered yet, so the order is untouched.'
+                      : isExcess
+                        ? 'Exceeds the order by ' + pcsFmt(pcs - selected.remainingPcs) + ' pcs — you will be asked to confirm.'
+                        : pcsFmt(selected.producedPcs + pcs) + ' of ' + pcsFmt(selected.orderedPcs) + ' pcs produced.'}
+                </div>
+              </div>
+
+              <div className="mt-auto flex flex-col gap-2 pt-2">
+                <button onClick={onSave} disabled={submit.isPending} className="btn-primary h-11 w-full justify-center text-[15px]">
                   {submit.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   Save production
                 </button>
+                <button onClick={() => setStep(1)} className="btn-ghost w-full justify-center text-slate-600">
+                  Back to orders
+                </button>
               </div>
-            </div>
-
-            {/* Selected order summary — read-only reference while filling the form. */}
-            <div className="space-y-3 border-t border-slate-100 bg-slate-50/70 p-3 sm:p-4 lg:border-l lg:border-t-0">
-              <ErpLabel>Selected Order</ErpLabel>
-              <dl className="grid grid-cols-2 gap-x-3 gap-y-2.5 text-sm">
-                <SummaryField label="Sales Order" value={selected.poNumber} mono />
-                <SummaryField label="Due" value={formatDate(selected.deliveryDate)} />
-                <SummaryField label="Customer" value={selected.customerName} className="col-span-2" />
-                <SummaryField label="Core" value={`${selected.coreType === 'TOROIDAL' ? 'Toroidal' : 'Rectangular'} · ${selected.grade}`} className="col-span-2" />
-                <SummaryField label="Measure" value={selected.measure} mono className="col-span-2" />
-                <SummaryField label="Weight / Pc" value={`${selected.weightPerPc.toFixed(3)} kg`} mono />
-                <SummaryField label="Ordered" value={pcsFmt(selected.orderedPcs)} mono />
-                <SummaryField label="Already Done" value={pcsFmt(selected.producedPcs)} mono />
-              </dl>
-            </div>
+            </aside>
           </div>
         )}
       </ErpCard>
