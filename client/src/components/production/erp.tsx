@@ -180,11 +180,22 @@ export const ErpMobileHeader = ({ subtitle, primary, stats }: {
  *  Production pages — routes and permissions are unchanged (still three
  *  separate routes/pages); this is a same-section convenience switcher that
  *  mirrors the sidebar's own Production sub-items. */
+// The edit route /production/:id belongs under Modify, but its sibling routes
+// are static paths rather than entry ids — so a bare "one segment after
+// /production" test claims them too, and Receive and Summary each lit their own
+// tab AND Modify at the same time. Anything listed here is somebody else's page.
+const RESERVED_SEGMENTS = ['new', 'summary', 'rejection'];
+const isModifyPath = (p: string) => {
+  if (p === '/production') return true;
+  const segment = /^\/production\/([^/]+)$/.exec(p)?.[1];
+  return !!segment && !RESERVED_SEGMENTS.includes(segment);
+};
+
 export const ProductionTabs = () => {
   const { pathname } = useLocation();
   const tabs = [
     { to: '/production/new', label: 'Receive', icon: Inbox, match: (p: string) => p === '/production/new' },
-    { to: '/production', label: 'Modify', icon: Pencil, match: (p: string) => p === '/production' || /^\/production\/[^/]+$/.test(p) },
+    { to: '/production', label: 'Modify', icon: Pencil, match: isModifyPath },
     { to: '/production/summary', label: 'Summary', icon: BarChart3, match: (p: string) => p === '/production/summary' },
   ];
   return (
