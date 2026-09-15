@@ -220,6 +220,92 @@ router.get('/stats', asyncHandler(async (req, res) => {
   });
 }));
 
+/* GET /api/dashboard/series?from=&to=&customerId=
+   Day-by-day movement behind each KPI card, for the sparklines. /stats gives
+   the totals; this gives their shape over the selected range.
+
+   Each series is a real daily FLOW, never a running stock level — a stock level
+   (today's backlog, today's ready pile) has no history to plot without
+   replaying every transaction, and inventing one would put a fake line under a
+   real number. So each card gets the movement that drives it:
+     salesOrders       pcs ordered that day
+     pendingProduction pcs produced that day — the work burning the backlog down
+     readyDispatch     produced minus dispatched — the net into the ready pile
+     dispatched        pcs dispatched that day
+     openReturns       returns opened that day
+   Produced here is raw entered pcs, not split-matched pcs: this is a measure of
+   the day's activity, and a split run is real work on the day it happened even
+   if its matching half lands later. */
+router.get('/series', asyncHandler(async (req, res) => {
+  const companyId = req.tenant.companyId;
+  const { from, to, customerId } = filterQuery.parse(req.query);
+  const start = from ?? startOfMonth(new Date());
+  const end = to ?? new Date();
+
+  const day = (d) => {
+    const x = new Date(d);
+    return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+  };
+  // Dense day axis — a day with no activity must plot as zero, not be skipped,
+  // or the sparkline's shape lies about how the period actually ran.
+  const days = [];
+  for (let d = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+       d <= end && days.length < 400;
+       d.setDate(d.getDate() + 1)) {
+    days.push(day(d));
+  }
+  const index = new Map(days.map((d, i) => [d, i]));
+  const blank = () => new Array(days.length).fill(0);
+  const fill = (rows, into) => {
+    for (const r of rows) {
+      const i = index.get(day(r.d));
+      if (i !== undefined) into[i] = Number(r.v ?? 0);
+    }
+    return into;
+  };
+
+  const custPo = customerId ? 'AND po.`customerId` = ?' : '';
+  const range = [start, end];
+  const args = (extra = []) => (customerId ? [...extra, ...range, customerId] : [...extra, ...range]);
+
+  const [orderedRows, producedRows, dispatchedRows, returnRows] = await Promise.all([
+    q(`SELECT DATE(po.\`orderDate\`) AS d, COALESCE(SUM(it.\`pcs\`),0) AS v
+         FROM \`PoOrderItem\` it
+         INNER JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
+        WHERE po.\`companyId\` = ? AND it.\`status\` = 'ACTIVE'
+          AND po.\`orderDate\` >= ? AND po.\`orderDate\` <= ? ${custPo}
+        GROUP BY DATE(po.\`orderDate\`)`, args([companyId])),
+    q(`SELECT DATE(p.\`prodDate\`) AS d, COALESCE(SUM(p.\`pcs\`),0) AS v
+         FROM \`Production\` p
+         INNER JOIN \`PoOrderItem\` it ON it.\`id\` = p.\`poOrderItemId\`
+         INNER JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
+        WHERE po.\`companyId\` = ? AND p.\`prodDate\` >= ? AND p.\`prodDate\` <= ? ${custPo}
+        GROUP BY DATE(p.\`prodDate\`)`, args([companyId])),
+    q(`SELECT DATE(d.\`dispatchDate\`) AS d, COALESCE(SUM(d.\`pcs\`),0) AS v
+         FROM \`Dispatch\` d
+         INNER JOIN \`PoOrderItem\` it ON it.\`id\` = d.\`poOrderItemId\`
+         INNER JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
+        WHERE po.\`companyId\` = ? AND d.\`dispatchDate\` >= ? AND d.\`dispatchDate\` <= ? ${custPo}
+        GROUP BY DATE(d.\`dispatchDate\`)`, args([companyId])),
+    q(`SELECT DATE(r.\`returnDate\`) AS d, COUNT(*) AS v
+         FROM \`Return\` r
+        WHERE r.\`companyId\` = ? AND r.\`returnDate\` >= ? AND r.\`returnDate\` <= ?
+          ${customerId ? 'AND r.`customerId` = ?' : ''}
+        GROUP BY DATE(r.\`returnDate\`)`, args([companyId])),
+  ]);
+
+  const produced = fill(producedRows, blank());
+  const dispatched = fill(dispatchedRows, blank());
+  res.json({
+    days,
+    salesOrders:       fill(orderedRows, blank()),
+    pendingProduction: produced,
+    readyDispatch:     produced.map((v, i) => v - dispatched[i]),
+    dispatched,
+    openReturns:       fill(returnRows, blank()),
+  });
+}));
+
 /* GET /api/dashboard/monthly?customerId=
    Returns last 12 calendar months of ordered pcs + amount for the bar/line chart. */
 router.get('/monthly', asyncHandler(async (req, res) => {
