@@ -11,6 +11,7 @@ import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { fluxTestCalc, rectangularCalc, rectangularFluxTestCalc, nanoTestCalc, toroidalCalc, nanoCalc, round3 } from '@/lib/calc';
 import { todayStamp } from '@/lib/excel';
+import './testing-calculator.css';
 
 type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE';
 const coreLabel: Record<CoreType, string> = { TOROIDAL: 'Toroidal', RECTANGULAR: 'Rectangular', NANO: 'Nano', COMPOSITE: 'Composite' };
@@ -240,8 +241,8 @@ export const TestingCalculatorPage = () => {
   const addressLine = company?.address?.replace(/\n+/g, ', ').trim() ?? '';
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="testing-calculator space-y-5">
+      <div className="tc-header flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-50 text-brand-600"><Calculator className="h-5 w-5" /></span>
@@ -249,7 +250,7 @@ export const TestingCalculatorPage = () => {
           </h1>
           <p className="mt-1 text-sm text-slate-500">Pick a core type per row, set turns &amp; flux levels → get Volt + Ie max, then export the lab sheet.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="tc-actions flex flex-wrap items-center gap-2">
           <button onClick={() => setImportOpen(true)} className="btn-ghost border border-slate-300 text-slate-600 hover:bg-slate-50">
             <FileDown className="h-4 w-4" /> Import PO items
           </button>
@@ -267,7 +268,7 @@ export const TestingCalculatorPage = () => {
 
       {/* Summary strip */}
       {items.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 text-xs">
+        <div className="tc-summary flex flex-wrap items-center gap-2 text-xs">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-700">
             {items.length} line{items.length === 1 ? '' : 's'}
           </span>
@@ -296,7 +297,7 @@ export const TestingCalculatorPage = () => {
           const isNano = it.coreType === 'NANO' || it.coreType === 'COMPOSITE';
           const accent = it.coreType === 'TOROIDAL' ? 'border-l-amber-400' : it.coreType === 'COMPOSITE' ? 'border-l-teal-400' : it.coreType === 'NANO' ? 'border-l-violet-400' : 'border-l-rose-400';
           return (
-            <div key={it.key} className={cn('card border-l-4 p-4 transition', accent)}>
+            <div key={it.key} className={cn('tc-item card border-l-4 p-4 transition', accent)}>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-3">
                   <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -395,14 +396,14 @@ export const TestingCalculatorPage = () => {
 
               {/* Weight per piece */}
               {numOk(it) && weightOf(it) > 0 && (
-                <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
+                <div className="tc-weight mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
                   Weight / pc: <span className="tabular-nums">{weightOf(it).toFixed(3)} kg</span>
                 </div>
               )}
 
               {/* Live preview */}
               {numOk(it) && it.fluxes.length > 0 && (
-                <div className="mt-3 overflow-x-auto rounded-lg border border-slate-100">
+                <div className="tc-preview mt-3 overflow-x-auto rounded-lg border border-slate-100">
                   <table className="w-full text-xs">
                     <thead className="bg-slate-50 text-slate-500">
                       <tr><th className="px-2 py-1.5 text-left">Flux</th>{it.fluxes.map((f) => <th key={f} className="px-2 py-1.5 text-right">{f} T</th>)}</tr>
@@ -422,7 +423,7 @@ export const TestingCalculatorPage = () => {
       </div>
 
       {items.length === 0 && (
-        <div className="card py-12 text-center text-sm text-slate-400">
+        <div className="tc-empty card py-12 text-center text-sm text-slate-400">
           <Beaker className="mx-auto mb-2 h-8 w-8 text-slate-300" />
           No items. Add one or import from your sales orders.
         </div>
@@ -527,8 +528,8 @@ const ImportDialog = ({ onClose, onAdd }: { onClose: () => void; onAdd: (po: PoS
     .filter((i) => !search.trim() || `${i.poNumber} ${i.measure} ${i.grade}`.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="tc-import-dialog flex max-h-[80vh] w-full max-w-lg flex-col rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <h3 className="font-bold text-slate-900">Import PO items</h3>
           <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
