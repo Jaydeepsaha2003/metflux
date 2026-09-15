@@ -1,8 +1,4 @@
-// Shared pieces for the Dashboard reskin. Measurements come from the user's
-// mockup (10px/800/1.1px-tracked labels, 28px/800 figures, 4px radii, hairline
-// borders); every colour comes from the CSS variables theme.ts writes, so the
-// same markup renders dark or light and green or navy without a second set of
-// classes.
+import { useId } from 'react';
 import { cn } from '@/lib/cn';
 
 /** Uppercase eyebrow above every figure, section and table column. */
@@ -22,7 +18,7 @@ export const DashPanel = ({ children, className, ...rest }: React.HTMLAttributes
   <div
     {...rest}
     style={{ boxShadow: 'var(--d-shadow)' }}
-    className={cn('rounded-lg border border-[var(--d-line)] bg-[var(--d-panel)]', className)}
+    className={cn('dash-panel rounded-lg border border-[var(--d-line)] bg-[var(--d-panel)]', className)}
   >
     {children}
   </div>
@@ -45,7 +41,7 @@ export const DashChip = ({ tone = 'plain', children, className }: {
   const c = CHIP[tone];
   return (
     <span
-      className={cn('inline-flex items-center gap-1 rounded-[3px] border px-1.5 py-[3px] text-[10.5px] font-bold leading-none tabular-nums', className)}
+      className={cn('dash-chip inline-flex items-center gap-1 rounded-[3px] border px-1.5 py-[3px] text-[10.5px] font-bold leading-none tabular-nums', className)}
       style={{ backgroundColor: c.bg, color: c.fg, borderColor: c.bd }}
     >
       {children}
@@ -58,7 +54,8 @@ export const DashSeg = ({ active, children, ...rest }: { active: boolean } & Rea
   <button
     type="button"
     {...rest}
-    className="rounded-[3px] px-2.5 py-1 text-[10.5px] font-extrabold uppercase tracking-[0.06em] transition-colors duration-150 motion-reduce:transition-none"
+    aria-pressed={active}
+    className="dash-seg rounded-[3px] px-2.5 py-1 text-[10.5px] font-extrabold uppercase tracking-[0.06em] transition-colors duration-150 motion-reduce:transition-none"
     style={active
       ? { backgroundColor: 'var(--d-accent)', color: 'var(--d-accent-ink)' }
       : { backgroundColor: 'transparent', color: 'var(--d-muted)' }}
@@ -87,7 +84,7 @@ export const Sparkline = ({ values, className }: { values: number[]; className?:
   const area = `${line} L${W},${H} L0,${H} Z`;
   // One gradient id per instance — duplicates across five cards would make
   // every sparkline adopt whichever definition rendered last.
-  const gid = `spark-${Math.random().toString(36).slice(2, 9)}`;
+  const gid = useId();
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className={cn('block h-[30px] w-full', className)} aria-hidden>
@@ -105,7 +102,7 @@ export const Sparkline = ({ values, className }: { values: number[]; className?:
 
 /** Horizontal share bar — top-customer value, worker share of output. */
 export const DashBar = ({ pct, tone = 'accent' }: { pct: number; tone?: 'accent' | 'muted' }) => (
-  <span className="block h-1 w-full overflow-hidden rounded-sm" style={{ backgroundColor: 'var(--d-line-soft)' }}>
+  <span className="dash-bar block h-1 w-full overflow-hidden rounded-sm" style={{ backgroundColor: 'var(--d-line-soft)' }}>
     <span
       className="block h-full rounded-sm"
       style={{

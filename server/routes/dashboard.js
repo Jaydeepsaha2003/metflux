@@ -241,6 +241,8 @@ router.get('/series', asyncHandler(async (req, res) => {
   const { from, to, customerId } = filterQuery.parse(req.query);
   const start = from ?? startOfMonth(new Date());
   const end = to ?? new Date();
+  // Include the whole final calendar day, matching /stats and /employees.
+  end.setHours(23, 59, 59, 999);
 
   const day = (d) => {
     const x = new Date(d);

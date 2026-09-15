@@ -1,21 +1,7 @@
-// Dashboard — reskinned to the user's own mockup: a dark, full-bleed plant
-// snapshot with a hairline-bordered KPI row, a monthly orders chart beside a
-// top-customer ranking, and an employee performance table.
-//
-// Every figure, filter, drill-down link and permission behaves exactly as it
-// did before the reskin; only the presentation moved. Two things are genuinely
-// new and both are backed by real data: the KPI sparklines (from the new
-// /dashboard/series endpoint) and the share-of-output bar, which is each
-// worker's weight over the range total.
-//
-// Colours come from components/dashboard/theme.ts, which derives the whole
-// palette from the domain's own --brand-*: Metflux renders the mockup's dark
-// green, Toroflux the same design in its navy. It opens light to match the rest
-// of the app; the mockup's Dark/Light switch persists per viewer.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, Trophy } from 'lucide-react';
+import { ArrowUpRight, Boxes, Factory, Loader2, PackageCheck, RotateCcw, ShoppingBag, Sun, Moon, Truck, Trophy, type LucideIcon } from 'lucide-react';
 import { useAuthStore, activeMembership, useHideCustomerNames } from '@/store/auth';
 import { useBranding } from '@/store/branding';
 import { api } from '@/lib/api';
@@ -24,30 +10,12 @@ import { useDebounced } from '@/hooks/useDebounced';
 import { dashVars, readStoredMode, storeMode, type DashMode } from '@/components/dashboard/theme';
 import { DashLabel, DashCaption, DashPanel, DashChip, DashSeg, Sparkline, DashBar } from '@/components/dashboard/ui';
 
+import { DashboardAnalysis } from '@/components/dashboard/DashboardAnalysis';
+import { AnimatedNumber, DashboardMotionContext } from '@/components/dashboard/AnimatedNumber';
+import { previousRange, type Stats, type Series } from '@/components/dashboard/analytics';
+import '@/components/dashboard/glass.css';
+
 type MonthlyPoint = { month: string; totalPcs: number; totalAmount: number; orderCount: number };
-
-type Stats = {
-  range:             { from: string; to: string };
-  salesOrders:       { count: number; pcs: number; kg: number; customers: number; amount: number; toroidalPcs: number; rectangularPcs: number };
-  pendingProduction: { pcs: number; kg: number; amount: number };
-  readyDispatch:     { pcs: number; kg: number; amount: number };
-  dispatched:        { count: number; pcs: number; kg: number; amount: number };
-  openReturns:       number;
-  overdueItems:      number;
-  topCustomers:      {
-    id: string; name: string; customerCode: string | null;
-    amount: number; pcs: number; kg: number; toroidalPcs: number; rectangularPcs: number;
-  }[];
-};
-
-type Series = {
-  days: string[];
-  salesOrders: number[];
-  pendingProduction: number[];
-  readyDispatch: number[];
-  dispatched: number[];
-  openReturns: number[];
-};
 
 type CustomerListResp = { items: { id: string; name: string; customerCode: string }[] };
 
@@ -106,6 +74,7 @@ export const DashboardPage = () => {
   const hideNames = useHideCustomerNames();
   const brandColor = useBranding((st) => st.brandColor);
 
+  const [motion, setMotion] = useState(true);
   const [mode, setMode] = useState<DashMode>(readStoredMode);
   const pickMode = (m: DashMode) => { setMode(m); storeMode(m); };
   // brandColor is only the recompute trigger — dashVars reads the live
@@ -152,12 +121,12 @@ export const DashboardPage = () => {
   // backgrounded tab, which keeps idle browsers off the server.
   const live = { refetchInterval: 60_000 };
 
-  const { data: stats, isLoading: loadingStats } = useQuery({
+  const { data: stats, isLoading: loadingStats, isError: statsError } = useQuery({
     queryKey: ['dashboard-stats', from, to, customerId, active?.companyId],
     queryFn: () => api<Stats>(`/dashboard/stats?${qs}`),
     ...live,
   });
-  const { data: series } = useQuery({
+  const { data: series, isError: seriesError } = useQuery({
     queryKey: ['dashboard-series', from, to, customerId, active?.companyId],
     queryFn: () => api<Series>(`/dashboard/series?${qs}`),
     ...live,
@@ -173,6 +142,14 @@ export const DashboardPage = () => {
     ...live,
   });
 
+  const comparison = previousRange(from, to);
+  const { data: previousStats, isError: comparisonError } = useQuery({
+    queryKey: ['dashboard-previous', comparison?.from, comparison?.to, customerId, active?.companyId],
+    queryFn: () => api<Stats>(`/dashboard/stats?from=${comparison!.from}&to=${comparison!.to}${customerId ? `&customerId=${encodeURIComponent(customerId)}` : ''}`),
+    enabled: Boolean(comparison),
+    staleTime: 60_000,
+  });
+
   const empItems = (empData?.items ?? []).filter((row) =>
     !debouncedEmpSearch.trim() || row.labourName.toLowerCase().includes(debouncedEmpSearch.toLowerCase())
   );
@@ -181,20 +158,21 @@ export const DashboardPage = () => {
   const selectedCustomer = customerOptions.find((o) => o.value === customerId)?.label ?? 'All customers';
 
   return (
-    // Full-bleed: the shell pads every page by 16/24px, which the mockup's
-    // edge-to-edge ground has to cancel before painting its own.
+    <DashboardMotionContext.Provider value={motion}>
     <div
       style={vars as React.CSSProperties}
-      className="-m-4 min-h-[calc(100vh-4rem)] bg-[var(--d-bg)] p-3 text-[var(--d-text)] sm:-m-6 sm:p-4"
+      data-mode={mode}
+      data-motion={motion ? 'active' : 'paused'}
+      className="dashboard-glass -m-4 min-h-[calc(100vh-4rem)] bg-[var(--d-bg)] p-4 text-[var(--d-text)] sm:-m-6 sm:p-6 lg:p-8"
     >
-      <div className="mx-auto flex max-w-[1700px] flex-col gap-2.5">
+      <div className="mx-auto flex max-w-[1700px] flex-col gap-5">
 
         {/* ── Header ─────────────────────────────────────────────── */}
-        <header className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 flex-col gap-1">
+        <header className="dash-panel dash-hero flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 flex-col gap-3">
             <DashLabel>{active?.companyName ?? 'Metflux'} operations</DashLabel>
-            <div className="flex flex-wrap items-baseline gap-2.5">
-              <h1 className="text-[20px] font-extrabold leading-none tracking-tight sm:text-[23px]">Plant snapshot</h1>
+            <div className="flex flex-col gap-2">
+              <h1 className="text-[20px] font-extrabold leading-none tracking-tight sm:text-[23px]">Operations overview</h1>
               <span className="text-[12px] text-[var(--d-muted)]">
                 {user?.name ? `Welcome back, ${user.name.split(' ')[0]}` : ''}
                 {active?.companyName ? ` · ${active.companyName}` : ''}
@@ -218,17 +196,18 @@ export const DashboardPage = () => {
               </select>
             </label>
             <div className="flex flex-col gap-1.5">
-              <DashLabel>Screen</DashLabel>
-              <div className="inline-flex rounded-[3px] border border-[var(--d-line)] bg-[var(--d-raised)] p-0.5">
-                <DashSeg active={mode === 'dark'} onClick={() => pickMode('dark')}>Dark</DashSeg>
-                <DashSeg active={mode === 'light'} onClick={() => pickMode('light')}>Light</DashSeg>
+              <DashLabel>Appearance</DashLabel>
+              <div className="inline-flex rounded-xl border border-[var(--d-line)] bg-[var(--d-raised)] p-1">
+                <DashSeg active={mode === 'dark'} onClick={() => pickMode('dark')}><Moon className="mr-1.5 inline h-3.5 w-3.5" />Dark</DashSeg>
+                <DashSeg active={mode === 'light'} onClick={() => pickMode('light')}><Sun className="mr-1.5 inline h-3.5 w-3.5" />Light</DashSeg>
               </div>
             </div>
           </div>
+          <button type="button" aria-pressed={!motion} onClick={() => setMotion((value) => !value)} className="dash-chart-toggle self-start lg:self-center">{motion ? 'Pause motion' : 'Enable motion'}</button>
         </header>
 
         {/* ── Range bar ──────────────────────────────────────────── */}
-        <DashPanel className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
+        <DashPanel className="flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-4">
           <DashLabel>Range</DashLabel>
           <div className="flex flex-wrap gap-1">
             {PRESETS.map((p) => (
@@ -243,12 +222,12 @@ export const DashboardPage = () => {
           </div>
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
             <input
-              type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)}
+              aria-label="Start date" type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)}
               className="h-8 rounded-[3px] border border-[var(--d-line)] bg-[var(--d-raised)] px-2 text-[12px] text-[var(--d-text)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--d-accent)]"
             />
             <span className="text-[12px] text-[var(--d-muted)]">→</span>
             <input
-              type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)}
+              aria-label="End date" type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)}
               className="h-8 rounded-[3px] border border-[var(--d-line)] bg-[var(--d-raised)] px-2 text-[12px] text-[var(--d-text)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--d-accent)]"
             />
             <button
@@ -260,14 +239,17 @@ export const DashboardPage = () => {
           </div>
         </DashPanel>
 
+        {statsError && <DashPanel role="alert" className="p-5 text-sm">Dashboard metrics could not be refreshed. {stats ? 'Showing the last available figures.' : 'Please try again shortly.'}</DashPanel>}
+
         {/* ── KPI row ────────────────────────────────────────────── */}
         {loadingStats && !stats ? (
           <DashPanel className="flex items-center justify-center gap-2 py-10 text-[var(--d-muted)]">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading…
           </DashPanel>
         ) : !stats ? null : (
-          <section className="grid grid-cols-2 gap-2.5 lg:grid-cols-3 xl:grid-cols-5">
+          <section className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <KpiCard
+              icon={ShoppingBag}
               label="Sales orders"
               figure={pcs(stats.salesOrders.pcs)}
               meta={`${stats.salesOrders.kg.toFixed(1)} kg · ${stats.salesOrders.customers} customers`}
@@ -281,6 +263,7 @@ export const DashboardPage = () => {
               </>}
             />
             <KpiCard
+              icon={Factory}
               label="Pending production"
               figure={pcs(stats.pendingProduction.pcs)}
               meta={`${stats.pendingProduction.kg.toFixed(1)} kg not yet produced`}
@@ -293,6 +276,7 @@ export const DashboardPage = () => {
               </>}
             />
             <KpiCard
+              icon={PackageCheck}
               label="Ready to dispatch"
               figure={pcs(stats.readyDispatch.pcs)}
               meta={`${stats.readyDispatch.kg.toFixed(1)} kg produced, not shipped`}
@@ -305,6 +289,7 @@ export const DashboardPage = () => {
               </>}
             />
             <KpiCard
+              icon={Truck}
               label="Dispatched"
               figure={pcs(stats.dispatched.pcs)}
               meta={`${stats.dispatched.kg.toFixed(1)} kg shipped in range`}
@@ -317,6 +302,7 @@ export const DashboardPage = () => {
               </>}
             />
             <KpiCard
+              icon={RotateCcw}
               label="Open returns"
               figure={String(stats.openReturns)}
               unit="requests"
@@ -334,9 +320,11 @@ export const DashboardPage = () => {
           </section>
         )}
 
+        {stats && <DashboardAnalysis stats={stats} previous={previousStats} comparison={comparison} comparisonError={comparisonError} series={series} seriesError={seriesError} customerId={customerId} from={from} to={to} />}
+
         {/* ── Monthly orders + Top customers ─────────────────────── */}
-        <section className="grid grid-cols-1 gap-2.5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-          <DashPanel className="min-w-0 p-3">
+        <section className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+          <DashPanel className="min-w-0 p-5 sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <h2 className="text-[15px] font-extrabold tracking-tight">Monthly orders</h2>
@@ -344,7 +332,7 @@ export const DashboardPage = () => {
               </div>
               {stats && (
                 <div className="text-right">
-                  <DashLabel>{monthlyData?.data.length ? monthShortLong(monthlyData.data[monthlyData.data.length - 1].month) : ''}</DashLabel>
+                  <DashLabel>Selected range</DashLabel>
                   <div className="mt-1 font-num text-[19px] font-extrabold leading-none tracking-tight tabular-nums">
                     {pcs(stats.salesOrders.pcs)} <span className="text-[12px] font-bold text-[var(--d-muted)]">pcs</span>
                   </div>
@@ -367,13 +355,13 @@ export const DashboardPage = () => {
             )}
           </DashPanel>
 
-          <DashPanel className="flex min-w-0 flex-col p-3">
+          <DashPanel className="flex min-w-0 flex-col p-5 sm:p-6">
             <h2 className="text-[15px] font-extrabold tracking-tight">Top customers</h2>
             <DashCaption className="mt-0.5">By order value in range</DashCaption>
             {!stats?.topCustomers.length ? (
               <div className="py-10 text-center text-[12px] text-[var(--d-muted)]">No orders in this range.</div>
             ) : (
-              <ol className="mt-2.5 flex max-h-[292px] flex-col gap-2 overflow-y-auto pr-1">
+              <ol className="dash-customers mt-2.5 flex max-h-[340px] flex-col gap-2 overflow-y-auto pr-1">
                 {stats.topCustomers.map((c, i) => (
                   <li key={c.id} className="flex flex-col gap-1">
                     <div className="flex items-baseline gap-2">
@@ -397,7 +385,7 @@ export const DashboardPage = () => {
 
         {/* ── Employee performance ───────────────────────────────── */}
         <DashPanel className="overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-2 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-5 sm:p-6">
             <div>
               <h2 className="text-[15px] font-extrabold tracking-tight">Employee performance</h2>
               <DashCaption className="mt-0.5">Production entries in range, ranked by weight</DashCaption>
@@ -405,7 +393,7 @@ export const DashboardPage = () => {
             <input
               value={empSearch}
               onChange={(e) => setEmpSearch(e.target.value)}
-              placeholder="Search worker"
+              aria-label="Search worker" placeholder="Search worker"
               className="h-8 w-44 rounded-[3px] border border-[var(--d-line)] bg-[var(--d-raised)] px-2.5 text-[12px] text-[var(--d-text)] outline-none placeholder:text-[var(--d-faint)] focus-visible:ring-2 focus-visible:ring-[var(--d-accent)] sm:w-56"
             />
           </div>
@@ -523,16 +511,12 @@ export const DashboardPage = () => {
         {/* ── Footer ─────────────────────────────────────────────── */}
         <div className="flex flex-wrap items-center justify-between gap-2 pb-1 text-[11px] text-[var(--d-faint)]">
           <span>{prettyDate(from)} – {prettyDate(to)} · {selectedCustomer}</span>
-          <span>Live · figures refresh every 60 s</span>
+          <span className="dash-live">Auto-refresh · every 60 seconds</span>
         </div>
       </div>
     </div>
+    </DashboardMotionContext.Provider>
   );
-};
-
-const monthShortLong = (m: string) => {
-  const [y, mo] = m.split('-');
-  return new Date(+y, +mo - 1, 1).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }).toUpperCase();
 };
 
 const Th = ({ children, align = 'left', className }: {
@@ -545,26 +529,23 @@ const Th = ({ children, align = 'left', className }: {
 
 /** One KPI tile. The whole card is the drill-down link it always was; `title`
  *  carries the explanation the old info tooltip held. */
-const KpiCard = ({ label, figure, unit = 'pcs', meta, spark, chips, to, title }: {
-  label: string; figure: string; unit?: string; meta: string;
+const KpiCard = ({ icon: Icon = Boxes, label, figure, unit = 'pcs', meta, spark, chips, to, title }: {
+  icon?: LucideIcon; label: string; figure: string; unit?: string; meta: string;
   spark?: number[]; chips: React.ReactNode; to: string; title: string;
 }) => (
   <Link
     to={to}
     title={title}
-    style={{ boxShadow: 'var(--d-shadow)' }}
-    onMouseEnter={(e) => { e.currentTarget.style.boxShadow = 'var(--d-shadow-lift)'; }}
-    onMouseLeave={(e) => { e.currentTarget.style.boxShadow = 'var(--d-shadow)'; }}
-    className="group flex -translate-y-0 cursor-pointer flex-col gap-1 rounded-lg border border-[var(--d-line)] bg-[var(--d-panel)] px-3 py-2.5 transition-[transform,border-color,background-color] duration-200 hover:-translate-y-0.5 hover:border-[var(--d-accent-line)] hover:bg-[var(--d-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--d-accent)] motion-reduce:transform-none motion-reduce:transition-none"
+    className="dash-kpi group flex -translate-y-0 cursor-pointer flex-col gap-1 rounded-lg border border-[var(--d-line)] bg-[var(--d-panel)] px-3 py-2.5 transition-[transform,border-color,background-color] duration-200 hover:-translate-y-0.5 hover:border-[var(--d-accent-line)] hover:bg-[var(--d-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--d-accent)] motion-reduce:transform-none motion-reduce:transition-none"
   >
-    <DashLabel>{label}</DashLabel>
+    <div className="dash-kpi-heading"><DashLabel>{label}</DashLabel><span className="dash-kpi-icon"><Icon className="h-4 w-4" /></span></div>
     <div className="flex items-baseline gap-1.5">
-      <span className="font-num text-[26px] font-extrabold leading-none tracking-tight tabular-nums">{figure}</span>
+      <span className="dash-kpi-figure font-num text-[26px] font-extrabold leading-none tracking-tight tabular-nums"><AnimatedNumber value={Number(figure.replaceAll(',', ''))} /></span>
       <span className="text-[11px] text-[var(--d-muted)]">{unit}</span>
     </div>
-    <DashCaption className="truncate">{meta}</DashCaption>
+    <DashCaption className="leading-relaxed">{meta}</DashCaption>
     {spark && spark.length > 1 && <Sparkline values={spark} />}
-    <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">{chips}</div>
+    <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">{chips}<ArrowUpRight className="ml-auto h-3.5 w-3.5 text-[var(--d-faint)] transition-colors group-hover:text-[var(--d-accent)]" /></div>
   </Link>
 );
 
@@ -588,10 +569,10 @@ const MonthlyChart = ({ data }: { data: MonthlyPoint[] }) => {
     return () => ro.disconnect();
   }, []);
 
-  if (!data.length) return null;
+  if (!data.length) return <div className="py-16 text-center text-sm text-[var(--d-muted)]">No orders to chart yet.</div>;
 
   const narrow = vw < 480;
-  const VW = vw, VH = narrow ? 178 : 208;
+  const VW = vw, VH = narrow ? 210 : 260;
   const PL = narrow ? 32 : 46, PR = narrow ? 38 : 56, PT = 10, PB = narrow ? 26 : 28;
   const IW = VW - PL - PR;
   const IH = VH - PT - PB;
@@ -636,6 +617,7 @@ const MonthlyChart = ({ data }: { data: MonthlyPoint[] }) => {
     <div ref={wrapRef} className="mt-1 w-full">
       <svg viewBox={`0 0 ${VW} ${VH}`} width="100%" height={VH} className="block select-none">
         <defs>
+          <linearGradient id="dashBarGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--d-accent)" /><stop offset="100%" stopColor="var(--d-accent)" stopOpacity="0.3" /></linearGradient>
           <linearGradient id="dashAmtGrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--d-muted)" stopOpacity="0.16" />
             <stop offset="100%" stopColor="var(--d-muted)" stopOpacity="0" />
@@ -653,7 +635,7 @@ const MonthlyChart = ({ data }: { data: MonthlyPoint[] }) => {
           <rect key={i}
             x={xb(i).toFixed(1)} y={yp(d.totalPcs).toFixed(1)}
             width={barW} height={Math.max(1, PT + IH - yp(d.totalPcs))}
-            fill="var(--d-accent)" opacity={hoverIdx === i ? 1 : 0.82}
+            fill="url(#dashBarGrad)" opacity={hoverIdx === i ? 1 : 0.82}
             rx="3" style={{ transition: 'opacity 0.15s' }}
           />
         ))}
