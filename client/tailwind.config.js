@@ -37,11 +37,11 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        // Production pages' ERP redesign only — scoped via these explicit
-        // classes so no other page's typography moves.
-        manrope: ['Manrope', 'system-ui', 'sans-serif'],
-        ibmmono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
+        // One family for the whole app. 'Inter Variable' is the name the
+        // variable file registers under when self-hosted; plain 'Inter' is what
+        // Google serves today, so both are listed and whichever is present
+        // wins before the system stack is reached.
+        sans: ['"Inter Variable"', 'Inter', 'system-ui', '-apple-system', '"Segoe UI"', 'Roboto', 'sans-serif'],
       },
       keyframes: {
         blob: {

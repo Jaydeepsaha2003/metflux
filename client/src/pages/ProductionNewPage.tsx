@@ -2,7 +2,7 @@
 // fill in labour + pcs. Total weight auto-calcs from pcs × wt/pc.
 //
 // Reskinned to match the user's own colour mockup (dark brand-900 bands,
-// Manrope labels, IBM Plex Mono figures, a numbered step header) — see
+// Inter throughout, tabular figures, a numbered step header) — see
 // components/production/erp.tsx for the shared tokens. All state, validation,
 // the excess-production confirmation, and the "stay on page to record the
 // next entry" behaviour are unchanged from before; only the layout moved from
@@ -245,7 +245,7 @@ export const ProductionNewPage = () => {
   return (
     <div className="max-w-full space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="flex items-center gap-2 font-manrope text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
+        <h1 className="flex items-center gap-2 text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
           <Factory className="h-5 w-5 text-brand-600" /> Receive Production
         </h1>
         <Link to="/production" className="btn-ghost w-full justify-center text-slate-600 sm:w-auto">
@@ -307,7 +307,7 @@ export const ProductionNewPage = () => {
                         <span className="font-semibold text-sm text-slate-900 truncate">{it.customerName}</span>
                         <CoreTypeChip coreType={it.coreType} />
                       </div>
-                      <div className="mt-0.5 text-[11px] text-slate-500 font-ibmmono truncate">{it.poNumber} · {it.measure}</div>
+                      <div className="mt-0.5 text-[11px] text-slate-500 font-num truncate">{it.poNumber} · {it.measure}</div>
                       <div className="mt-1 flex flex-wrap gap-1">
                         <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">{it.grade}</span>
                         <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">{it.material}</span>
@@ -318,7 +318,7 @@ export const ProductionNewPage = () => {
                         {it.remainingPcs} open
                       </span>
                       {it.pendingAmount != null && (
-                        <div className="mt-0.5 text-[10px] text-brand-700 font-ibmmono tabular-nums">
+                        <div className="mt-0.5 text-[10px] text-brand-700 font-num tabular-nums">
                           {inr(it.pendingAmount)}
                         </div>
                       )}
@@ -355,25 +355,25 @@ export const ProductionNewPage = () => {
                     </td></tr>
                   )}
                   {pendingResp?.items.map((it) => (
-                    <tr key={it.id} className="border-t border-slate-100 odd:bg-white even:bg-slate-50/40 hover:bg-brand-50/50">
-                      <td className="whitespace-nowrap px-2.5 py-2 pl-3 font-ibmmono text-xs">{it.poNumber}</td>
-                      <td className="whitespace-nowrap px-2.5 py-2">{it.customerName}</td>
-                      <td className="whitespace-nowrap px-2.5 py-2 text-slate-600 text-xs">{formatDate(it.deliveryDate)}</td>
-                      <td className="px-2.5 py-2 text-center"><CoreTypeChip coreType={it.coreType} /></td>
-                      <td className="whitespace-nowrap px-2.5 py-2">{it.grade}</td>
-                      <td className="whitespace-nowrap px-2.5 py-2">{it.material}</td>
-                      <td className="whitespace-nowrap px-2.5 py-2 font-ibmmono text-xs">{it.measure}</td>
-                      <td className="px-2.5 py-2 text-right font-ibmmono tabular-nums">{pcsFmt(it.orderedPcs)}</td>
-                      <td className="px-2.5 py-2 text-right text-slate-500 font-ibmmono tabular-nums">{pcsFmt(it.producedPcs)}</td>
-                      <td className="px-2.5 py-2 text-right">
-                        <span className="rounded-md bg-yellow-50 px-2 py-0.5 font-ibmmono font-semibold tabular-nums text-yellow-800">
+                    <tr key={it.id} className="border-t border-slate-100 odd:bg-white even:bg-slate-50/40 transition-colors hover:bg-brand-50/60">
+                      <td className="whitespace-nowrap px-3 py-2.5 pl-3 font-num text-xs">{it.poNumber}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5">{it.customerName}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-600 text-xs">{formatDate(it.deliveryDate)}</td>
+                      <td className="px-3 py-2.5 text-center"><CoreTypeChip coreType={it.coreType} /></td>
+                      <td className="whitespace-nowrap px-3 py-2.5">{it.grade}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5">{it.material}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5 font-num text-xs">{it.measure}</td>
+                      <td className="px-3 py-2.5 text-right font-num tabular-nums">{pcsFmt(it.orderedPcs)}</td>
+                      <td className="px-3 py-2.5 text-right text-slate-500 font-num tabular-nums">{pcsFmt(it.producedPcs)}</td>
+                      <td className="px-3 py-2.5 text-right">
+                        <span className="rounded-md bg-yellow-50 px-2 py-0.5 font-num font-semibold tabular-nums text-yellow-800">
                           {pcsFmt(it.remainingPcs)}
                         </span>
                       </td>
-                      <td className="px-2.5 py-2 text-right">
+                      <td className="px-3 py-2.5 text-right">
                         <button
                           onClick={() => pickItem(it)}
-                          className="rounded bg-brand-600 px-3 py-1 font-manrope text-[10.5px] font-extrabold uppercase tracking-wide text-white hover:bg-brand-700"
+                          className="rounded bg-brand-600 px-3 py-1 text-[10.5px] font-extrabold uppercase tracking-wide text-white hover:bg-brand-700"
                         >
                           Select
                         </button>
@@ -424,7 +424,7 @@ export const ProductionNewPage = () => {
                   </div>
                 </Field>
                 <Field label="Total Weight">
-                  <input className="input h-9 bg-slate-50 text-sm font-ibmmono" value={totalWeight ? totalWeight.toFixed(3) : '—'} readOnly />
+                  <input className="input h-9 bg-slate-50 text-sm font-num" value={totalWeight ? totalWeight.toFixed(3) : '—'} readOnly />
                   <div className="mt-1 text-[11px] text-slate-400">Computed, not entered — weight per piece is fixed by the order specification.</div>
                 </Field>
               </div>
@@ -439,7 +439,7 @@ export const ProductionNewPage = () => {
                     <button
                       type="button"
                       onClick={() => { setIsSplit(false); setSplitHeight(0); }}
-                      className={cn('rounded-[3px] px-2.5 py-1 font-manrope text-[11px] font-extrabold uppercase tracking-wide transition-colors duration-150',
+                      className={cn('rounded-[3px] px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide transition-colors duration-150',
                         !isSplit ? 'bg-brand-900 text-white' : 'text-slate-600 hover:bg-slate-100')}
                     >
                       Whole Piece
@@ -447,7 +447,7 @@ export const ProductionNewPage = () => {
                     <button
                       type="button"
                       onClick={() => setIsSplit(true)}
-                      className={cn('rounded-[3px] px-2.5 py-1 font-manrope text-[11px] font-extrabold uppercase tracking-wide transition-colors duration-150',
+                      className={cn('rounded-[3px] px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide transition-colors duration-150',
                         isSplit ? 'bg-brand-900 text-white' : 'text-slate-600 hover:bg-slate-100')}
                     >
                       Split Width
@@ -469,7 +469,7 @@ export const ProductionNewPage = () => {
                     </Field>
                     {splitWeightPerPc != null && (
                       <div className="text-[11px] text-slate-500">
-                        Weight/pc at {splitHeight}: <span className="font-ibmmono font-semibold text-slate-700">{splitWeightPerPc.toFixed(3)} kg</span>
+                        Weight/pc at {splitHeight}: <span className="font-num font-semibold text-slate-700">{splitWeightPerPc.toFixed(3)} kg</span>
                       </div>
                     )}
                     {selected.splitInfo.length > 0 && (
@@ -490,9 +490,9 @@ export const ProductionNewPage = () => {
                             {selected.splitInfo.map((p) => (
                               <tr key={p.splitHeight}>
                                 <td className="py-0.5"><SplitHeightChip height={p.splitHeight} /></td>
-                                <td className="py-0.5 text-right font-ibmmono tabular-nums">{p.pcs}</td>
-                                <td className="py-0.5 text-right font-ibmmono tabular-nums text-green-700">{p.matched}</td>
-                                <td className="py-0.5 text-right font-ibmmono tabular-nums text-amber-700">{p.unmatched}</td>
+                                <td className="py-0.5 text-right font-num tabular-nums">{p.pcs}</td>
+                                <td className="py-0.5 text-right font-num tabular-nums text-green-700">{p.matched}</td>
+                                <td className="py-0.5 text-right font-num tabular-nums text-amber-700">{p.unmatched}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -510,14 +510,14 @@ export const ProductionNewPage = () => {
                 <ErpLabel>Job Amount (weight × rate)</ErpLabel>
                 {isSplit ? (
                   <>
-                    <div className="mt-0.5 font-ibmmono text-sm font-semibold text-slate-500">Credited once matched</div>
+                    <div className="mt-0.5 font-num text-sm font-semibold text-slate-500">Credited once matched</div>
                     <div className="mt-0.5 text-[11px] text-slate-400">
                       A split run earns nothing on its own — the full per-piece rate is credited to whichever run completes a matching pair, shown on the Modify page after saving.
                     </div>
                   </>
                 ) : (
                   <>
-                    <div className="mt-0.5 font-ibmmono text-lg font-bold tabular-nums text-brand-700">
+                    <div className="mt-0.5 font-num text-lg font-bold tabular-nums text-brand-700">
                       {jobAmount != null ? inr(jobAmount) : '—'}
                     </div>
                     <div className="mt-0.5 text-[11px] text-slate-400">At the rate posted on the work allotment, credited to the worker you pick.</div>
@@ -527,7 +527,7 @@ export const ProductionNewPage = () => {
 
               <div className="rounded border px-3 py-2.5 text-sm" style={{ borderColor: isExcess ? '#fcd34d' : '#e2e8f0', backgroundColor: isExcess ? '#fffbeb' : '#fff' }}>
                 <ErpLabel>Order Balance After Saving</ErpLabel>
-                <div className={cn('mt-0.5 font-ibmmono text-lg font-bold tabular-nums', isExcess ? 'text-amber-700' : 'text-slate-900')}>
+                <div className={cn('mt-0.5 font-num text-lg font-bold tabular-nums', isExcess ? 'text-amber-700' : 'text-slate-900')}>
                   {isExcess ? `${pcs - selected.remainingPcs} pcs over` : `${balanceAfter} pcs`}
                 </div>
                 <div className="mt-0.5 text-[11px] text-slate-500">
@@ -589,7 +589,7 @@ const StepBadge = ({ n, label, active, done, disabled, onClick }: {
   <button
     onClick={onClick}
     disabled={disabled}
-    className={cn('flex items-center gap-1.5 font-manrope text-[11px] font-extrabold uppercase tracking-wide disabled:cursor-not-allowed disabled:opacity-40',
+    className={cn('flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide disabled:cursor-not-allowed disabled:opacity-40',
       active ? 'text-brand-800' : done ? 'text-slate-500' : 'text-slate-400')}
   >
     <span className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px]',
@@ -610,6 +610,6 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
 const SummaryField = ({ label, value, mono, className }: { label: string; value: string; mono?: boolean; className?: string }) => (
   <div className={className}>
     <ErpLabel className="block">{label}</ErpLabel>
-    <div className={cn('mt-0.5 truncate text-slate-900', mono ? 'font-ibmmono text-[13px] font-semibold' : 'text-sm font-medium')}>{value}</div>
+    <div className={cn('mt-0.5 truncate text-slate-900', mono ? 'font-num text-[13px] font-semibold' : 'text-sm font-medium')}>{value}</div>
   </div>
 );

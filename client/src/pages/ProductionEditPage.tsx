@@ -150,7 +150,7 @@ export const ProductionEditPage = () => {
         <Link to="/production" className="btn-ghost text-slate-600">
           <ArrowLeft className="h-4 w-4" /> Back
         </Link>
-        <h1 className="flex items-center gap-2 font-manrope text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
+        <h1 className="flex items-center gap-2 text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
           <Factory className="h-5 w-5 text-brand-600" /> Edit Production
         </h1>
       </div>
@@ -168,12 +168,12 @@ export const ProductionEditPage = () => {
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm sm:grid-cols-4">
               <div>
                 <ErpLabel className="block">Sales Order</ErpLabel>
-                <div className="mt-0.5 font-ibmmono text-[13px] font-semibold text-slate-900">{item.poNumber}</div>
+                <div className="mt-0.5 font-num text-[13px] font-semibold text-slate-900">{item.poNumber}</div>
               </div>
               <div className="col-span-2">
                 <ErpLabel className="block">Customer</ErpLabel>
                 <div className="mt-0.5 truncate text-sm font-medium text-slate-900">
-                  <span className="mr-1.5 font-ibmmono text-xs font-semibold text-brand-700">{item.customerCode ?? '—'}</span>
+                  <span className="mr-1.5 font-num text-xs font-semibold text-brand-700">{item.customerCode ?? '—'}</span>
                   {!hideNames && item.customerName}
                 </div>
               </div>
@@ -183,7 +183,7 @@ export const ProductionEditPage = () => {
               </div>
               <div className="col-span-2 sm:col-span-4">
                 <ErpLabel className="block">Measure</ErpLabel>
-                <div className="mt-0.5 flex flex-wrap items-center gap-1.5 font-ibmmono text-[13px] text-slate-700">
+                <div className="mt-0.5 flex flex-wrap items-center gap-1.5 font-num text-[13px] text-slate-700">
                   {item.measure} <span className="text-slate-400">· {item.material}</span>
                   {item.splitHeight != null && <SplitHeightChip height={item.splitHeight} />}
                 </div>
@@ -213,10 +213,10 @@ export const ProductionEditPage = () => {
                 />
               </Field>
               <Field label="Wt / pc">
-                <input className="input h-9 bg-slate-50 text-sm font-ibmmono" value={item.weightPerPc.toFixed(3)} readOnly />
+                <input className="input h-9 bg-slate-50 text-sm font-num" value={item.weightPerPc.toFixed(3)} readOnly />
               </Field>
               <Field label="Total Weight">
-                <input className="input h-9 bg-slate-50 text-sm font-ibmmono" value={totalWeight ? totalWeight.toFixed(3) : ''} readOnly />
+                <input className="input h-9 bg-slate-50 text-sm font-num" value={totalWeight ? totalWeight.toFixed(3) : ''} readOnly />
               </Field>
             </div>
 
@@ -230,7 +230,7 @@ export const ProductionEditPage = () => {
                   <button
                     type="button"
                     onClick={() => { setIsSplit(false); setSplitHeight(0); }}
-                    className={cn('rounded-[3px] px-2.5 py-1 font-manrope text-[11px] font-extrabold uppercase tracking-wide transition-colors duration-150',
+                    className={cn('rounded-[3px] px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide transition-colors duration-150',
                       !isSplit ? 'bg-brand-900 text-white' : 'text-slate-600 hover:bg-slate-100')}
                   >
                     Whole Piece
@@ -238,7 +238,7 @@ export const ProductionEditPage = () => {
                   <button
                     type="button"
                     onClick={() => setIsSplit(true)}
-                    className={cn('rounded-[3px] px-2.5 py-1 font-manrope text-[11px] font-extrabold uppercase tracking-wide transition-colors duration-150',
+                    className={cn('rounded-[3px] px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide transition-colors duration-150',
                       isSplit ? 'bg-brand-900 text-white' : 'text-slate-600 hover:bg-slate-100')}
                   >
                     Split Width
