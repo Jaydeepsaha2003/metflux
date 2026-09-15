@@ -1,7 +1,9 @@
 // E-mailable artifacts for an outstanding statement: the Excel export and the
 // HTML email body. Shares the StatementInput shape with agingImage.ts (which
 // renders the PNG + the full-detail PDF).
-import * as XLSX from 'xlsx';
+// `xlsx` is ~400 KB and only needed when a statement is actually exported,
+// so it loads on demand rather than weighing down every page that imports
+// this module.
 import type { StatementInput } from '@/lib/agingImage';
 
 const money = (n: number) => Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -10,7 +12,8 @@ const esc = (s: string) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, 
 const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 
 /** Excel (.xlsx) statement — every bill, same shape as the sample export. */
-export const buildStatementXlsxBlob = (i: StatementInput): Blob => {
+export const buildStatementXlsxBlob = async (i: StatementInput): Promise<Blob> => {
+  const XLSX = await import('xlsx');
   const dueLabel = titleCase(i.overdueLabel ?? 'Due');
   const aoa: (string | number)[][] = [
     ['CUSTOMER OUTSTANDING STATEMENT'],

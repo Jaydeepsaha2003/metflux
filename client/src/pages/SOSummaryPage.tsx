@@ -4,13 +4,14 @@
 // item editor. Header tally is server-side across the full filtered dataset.
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import {
   Search, Loader2, BarChart3, Eye, EyeOff, FileText, Activity,
   Download, ChevronDown, ChevronRight, Pencil, Trash2, RotateCcw, LockKeyhole,
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import { useDebounced } from '@/hooks/useDebounced';
 import { cn } from '@/lib/cn';
 import { Pagination } from '@/components/Pagination';
 import { DateRangeFilter } from '@/components/DateRangeFilter';
@@ -134,6 +135,7 @@ const groupByPo = (items: SummaryItem[]): PoGroup[] => {
 export const SOSummaryPage = () => {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounced(search);
   const hideNames = useHideCustomerNames();
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set()); // item test panels
   const [expandedPos, setExpandedPos] = useState<Set<string>>(new Set());     // PO groups
@@ -154,11 +156,14 @@ export const SOSummaryPage = () => {
   useEffect(() => { setPage(1); }, [search, status, from, to]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['po-summary', search, status, page, pageSize, from, to, customerId],
+    queryKey: ['po-summary', debouncedSearch, status, page, pageSize, from, to, customerId],
     queryFn: () =>
       api<{ items: SummaryItem[]; total: number; aggregates: Aggregates }>(
-        `/po-orders/summary?status=${status}&page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}${from ? `&from=${from}` : ''}${to ? `&to=${to}` : ''}${customerId ? `&customerId=${customerId}` : ''}`
+        `/po-orders/summary?status=${status}&page=${page}&pageSize=${pageSize}${debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : ''}${from ? `&from=${from}` : ''}${to ? `&to=${to}` : ''}${customerId ? `&customerId=${customerId}` : ''}`
       ),
+    // Keep the current rows visible while the next result loads, instead of
+    // dropping the table back to "Loading…" on every filter or page change.
+    placeholderData: keepPreviousData,
   });
 
   const items = data?.items ?? [];
@@ -273,7 +278,7 @@ export const SOSummaryPage = () => {
         { h: 'Status',      g: () => '', i: (it) => it.status },
       ];
 
-      downloadGroupedXlsx({
+      await downloadGroupedXlsx({
         filename: `so-summary-${status.toLowerCase()}-${todayStamp()}`,
         sheetName: 'SO Summary',
         headers: cols.map((c) => c.h),

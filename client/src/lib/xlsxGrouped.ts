@@ -3,14 +3,18 @@
 // cannot write fonts/fills/borders. Each group becomes a bold summary row with
 // its detail rows nested one outline level below, so Excel shows +/- controls to
 // group / ungroup by PO.
-import * as XLSX from 'xlsx-js-style';
+// `xlsx-js-style` is ~850 KB and is only needed when someone clicks Export, so
+// it loads on demand rather than being a hard dependency of every page that has
+// an export button. Cached after the first call.
+let xlsxPromise: Promise<typeof import('xlsx-js-style')> | null = null;
+const loadXlsx = () => (xlsxPromise ??= import('xlsx-js-style'));
 
 export type Cell = string | number | null | undefined;
 export type XlsxGroup = { summary: Cell[]; rows: Cell[][] };
 
 const CALIBRI = 'Calibri';
 
-export const downloadGroupedXlsx = (opts: {
+export const downloadGroupedXlsx = async (opts: {
   filename: string;
   sheetName: string;
   headers: string[];
@@ -18,6 +22,7 @@ export const downloadGroupedXlsx = (opts: {
   /** Header fill colour, hex without '#'. Defaults to slate-800. */
   headerHex?: string;
 }) => {
+  const XLSX = await loadXlsx();
   const { filename, sheetName, headers, groups } = opts;
   const headerFill = (opts.headerHex ?? '1F2937').replace('#', '').toUpperCase();
 
@@ -86,13 +91,14 @@ export const downloadGroupedXlsx = (opts: {
 /** Flat (non-grouped) styled export — Calibri, bold banded header, borders,
  *  auto-ish column widths. For a plain "one row per record" download that
  *  still looks properly formatted (not the default SheetJS lookalike). */
-export const downloadStyledXlsx = (opts: {
+export const downloadStyledXlsx = async (opts: {
   filename: string;
   sheetName: string;
   headers: string[];
   rows: Cell[][];
   headerHex?: string;
 }) => {
+  const XLSX = await loadXlsx();
   const { filename, sheetName, headers, rows } = opts;
   const headerFill = (opts.headerHex ?? '1F2937').replace('#', '').toUpperCase();
 

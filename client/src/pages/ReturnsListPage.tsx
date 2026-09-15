@@ -108,7 +108,7 @@ export const ReturnsListPage = () => {
         'Reason':         r.reason ?? '',
         'Logged On':      fmt(r.createdAt),
       }));
-      downloadXlsx(`returns-${status === 'ALL' ? 'all' : status.toLowerCase()}-${todayStamp()}`, 'Returns', rows);
+      await downloadXlsx(`returns-${status === 'ALL' ? 'all' : status.toLowerCase()}-${todayStamp()}`, 'Returns', rows);
     } catch (e) {
       alert({ title: 'Export failed', message: e instanceof Error ? e.message : 'Please try again.', tone: 'danger' });
     } finally {

@@ -740,7 +740,7 @@ const LedgerGrid = ({ bankId, bankName, showBankColumn }: { bankId: string; bank
     try {
       const eqs = new URLSearchParams(qs); eqs.set('all', '1'); eqs.delete('page'); eqs.delete('pageSize');
       const all = await api<EntriesResp>(`/cashbook/entries?${eqs.toString()}`);
-      downloadXlsx(`cashbook-${todayStamp()}`, 'Day Book', (all.items ?? []).map((e) => ({
+      await downloadXlsx(`cashbook-${todayStamp()}`, 'Day Book', (all.items ?? []).map((e) => ({
         Date: e.entryDate ? new Date(e.entryDate).toLocaleDateString('en-GB') : '',
         Particulars: e.account, 'Vch No': e.vch ?? '', Bank: e.bankName ?? '',
         Type: e.type, Category: e.category,

@@ -2,9 +2,10 @@
 // size/measure, pcs, weight and amount. Filter by date range, employee and
 // customer; download the filtered set as Excel.
 import { Fragment, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Factory, Loader2, Download, Search, ChevronDown, ChevronRight, FileText, X } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useDebounced } from '@/hooks/useDebounced';
 import { downloadXlsx, todayStamp } from '@/lib/excel';
 import { downloadReportXlsx, type ReportRow } from '@/lib/xlsxReport';
 import { SearchableSelect } from '@/components/SearchableSelect';
@@ -96,6 +97,7 @@ export const ProductionSummaryPage = () => {
   const [labour, setLabour] = useState('');
   const [customerId, setCustomerId] = useState('');
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounced(search);
   const [view, setView] = useState<'BY_EMPLOYEE' | 'ENTRIES'>('BY_EMPLOYEE');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const toggleEmp = (name: string) => setCollapsed((prev) => {
@@ -109,11 +111,14 @@ export const ProductionSummaryPage = () => {
   if (to) qs.set('to', to);
   if (labour) qs.set('labour', labour);
   if (customerId) qs.set('customerId', customerId);
-  if (search.trim()) qs.set('search', search.trim());
+  if (debouncedSearch.trim()) qs.set('search', debouncedSearch.trim());
 
   const { data, isLoading } = useQuery({
-    queryKey: ['production-summary', from, to, labour, customerId, search],
+    queryKey: ['production-summary', from, to, labour, customerId, debouncedSearch],
     queryFn: () => api<SummaryResp>(`/production/summary?${qs.toString()}`),
+    // Keep the current rows visible while the next result loads, instead of
+    // dropping the table back to "Loading…" on every filter or page change.
+    placeholderData: keepPreviousData,
   });
 
   const brandColor = useBranding((st) => st.brandColor);
@@ -138,7 +143,7 @@ export const ProductionSummaryPage = () => {
      Excel outline levels so it collapses to employees then days exactly like
      the page, real number formats (kg to 3dp, amount as rupees) and a grand
      total. Rows carry their own employee/date so the sheet still pivots. */
-  const onExportByEmployee = () => {
+  const onExportByEmployee = async () => {
     if (!employees.length) return;
     const rows: ReportRow[] = [];
     for (const e of employees) {
@@ -158,7 +163,7 @@ export const ProductionSummaryPage = () => {
     if (labour) bits.push(`Employee: ${labour}`);
     if (search.trim()) bits.push(`Search: ${search.trim()}`);
 
-    downloadReportXlsx({
+    await downloadReportXlsx({
       filename: `production-by-employee-${todayStamp()}`,
       sheetName: 'By Employee',
       title: 'Production by Employee',
@@ -230,7 +235,7 @@ export const ProductionSummaryPage = () => {
     }
   };
 
-  const onExport = () => {
+  const onExport = async () => {
     if (view === 'BY_EMPLOYEE') return onExportByEmployee();
     if (!items.length) return;
     const rows = items.map((r) => ({
@@ -247,7 +252,7 @@ export const ProductionSummaryPage = () => {
       'Weight (kg)': r.totalWeight,
       'Amount (₹)': r.amount ?? '',
     }));
-    downloadXlsx(`production-summary-${todayStamp()}`, 'Production Summary', rows);
+    await downloadXlsx(`production-summary-${todayStamp()}`, 'Production Summary', rows);
   };
 
   const dayCount = new Set(employees.flatMap((e) => e.days.map((d) => d.key))).size;

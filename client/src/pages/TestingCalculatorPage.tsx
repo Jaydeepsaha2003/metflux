@@ -4,11 +4,9 @@
 // lab sheet as Excel or a styled PDF.
 import { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import * as XLSX from 'xlsx';
 import {
   Calculator, Plus, Trash2, Download, FileDown, FileText, X, Search, Loader2, Beaker,
 } from 'lucide-react';
-import html2pdf from 'html2pdf.js';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { fluxTestCalc, rectangularCalc, rectangularFluxTestCalc, nanoTestCalc, toroidalCalc, nanoCalc, round3 } from '@/lib/calc';
@@ -185,7 +183,7 @@ export const TestingCalculatorPage = () => {
   const exportable = exportRows.length > 0 && fluxCols.length > 0;
 
   /* ── Excel export (merged two-row header per the lab sheet) ── */
-  const exportExcel = () => {
+  const exportExcel = async () => {
     if (!exportable) return;
     const head0: (string | number)[] = [...fixedCols];
     const head1: (string | number)[] = fixedCols.map(() => '');
@@ -200,6 +198,7 @@ export const TestingCalculatorPage = () => {
       return r;
     });
 
+    const XLSX = await import('xlsx');
     const ws = XLSX.utils.aoa_to_sheet([head0, head1, ...body]);
     const merges: { s: { r: number; c: number }; e: { r: number; c: number } }[] = [];
     fixedCols.forEach((_, c) => merges.push({ s: { r: 0, c }, e: { r: 1, c } }));
@@ -223,6 +222,7 @@ export const TestingCalculatorPage = () => {
     setGenerating(true);
     await new Promise((r) => requestAnimationFrame(r));
     try {
+      const html2pdf = (await import('html2pdf.js')).default;
       await html2pdf().set({
         margin: 10,
         filename: `testing-report-${todayStamp()}.pdf`,

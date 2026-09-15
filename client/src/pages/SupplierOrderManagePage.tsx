@@ -53,7 +53,7 @@ export const SupplierOrderManagePage = () => {
   /* Export — one row per line item so the spreadsheet has full detail.
      Header columns (PO #, Supplier, Date…) repeat per line so each row stands
      on its own when sorted/filtered in Excel. */
-  const onExport = () => {
+  const onExport = async () => {
     const orders = data?.items ?? [];
     if (!orders.length) return;
     const rows: Record<string, string | number | null> [] = [];
@@ -91,7 +91,7 @@ export const SupplierOrderManagePage = () => {
         });
       }
     }
-    downloadXlsx(`supplier-orders-${todayStamp()}`, 'Supplier POs', rows);
+    await downloadXlsx(`supplier-orders-${todayStamp()}`, 'Supplier POs', rows);
   };
 
   return (

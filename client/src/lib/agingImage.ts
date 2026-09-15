@@ -2,7 +2,11 @@
 // so it uses the app's loaded web fonts (Poppins for text, Calibri Bold → Poppins
 // Bold for figures). Dark card themed in the Metflux brand green. Exported as a
 // PNG (WhatsApp / inline) or a PDF (email attachment).
-import html2pdf from 'html2pdf.js';
+// html2pdf bundles jsPDF + html2canvas (~960 KB). Only the PDF path needs it,
+// so it loads on demand instead of weighing down every page that imports this.
+const importHtml2Pdf = () => import('html2pdf.js');
+let html2pdfPromise: ReturnType<typeof importHtml2Pdf> | null = null;
+const loadHtml2Pdf = async () => (await (html2pdfPromise ??= importHtml2Pdf())).default;
 
 const inr = (n: number) => '₹ ' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const TXT = (px: number, weight = 400) => `${weight} ${px}px "Poppins", ui-sans-serif, sans-serif`;
@@ -234,6 +238,7 @@ export const makeStatementPdfBlob = async (i: StatementInput): Promise<Blob> => 
 
   try {
     await new Promise<void>((res) => { if (img.complete) res(); else img.onload = () => res(); });
+    const html2pdf = await loadHtml2Pdf();
     const worker = html2pdf().set({
       margin: 0,
       image: { type: 'jpeg', quality: 0.98 },

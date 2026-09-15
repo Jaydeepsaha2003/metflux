@@ -1,9 +1,10 @@
 // All dispatch records — flat table with search and per-row edit/delete.
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Pencil, Trash2, Truck, FileText } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useDebounced } from '@/hooks/useDebounced';
 import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
 import { Pagination } from '@/components/Pagination';
@@ -39,6 +40,7 @@ const PAGE_SIZE = 20;
 export const DispatchListPage = () => {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounced(search);
   const [sort, setSort] = useState<'date' | 'customer'>('date');
   const [sp] = useSearchParams();
   const [from, setFrom] = useState(sp.get('from') ?? '');
@@ -52,8 +54,11 @@ export const DispatchListPage = () => {
   const hideNames = useHideCustomerNames();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['dispatch', search, page, pageSize, sort, from, to, customerId],
-    queryFn: () => api<ListResp>(`/dispatch?search=${encodeURIComponent(search)}&page=${page}&pageSize=${pageSize}&sort=${sort}${from ? `&from=${from}` : ''}${to ? `&to=${to}` : ''}${customerId ? `&customerId=${customerId}` : ''}`),
+    queryKey: ['dispatch', debouncedSearch, page, pageSize, sort, from, to, customerId],
+    queryFn: () => api<ListResp>(`/dispatch?search=${encodeURIComponent(debouncedSearch)}&page=${page}&pageSize=${pageSize}&sort=${sort}${from ? `&from=${from}` : ''}${to ? `&to=${to}` : ''}${customerId ? `&customerId=${customerId}` : ''}`),
+    // Keep the current rows visible while the next result loads, instead of
+    // dropping the table back to "Loading…" on every filter or page change.
+    placeholderData: keepPreviousData,
   });
 
   const remove = useMutation({

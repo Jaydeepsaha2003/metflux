@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, MessageCircle, Plus, Pencil, Building2, Link2, Check, Trash2, Loader2, Tag } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useDebounced } from '@/hooks/useDebounced';
 import { useConfirm } from '@/hooks/useConfirm';
 import { cn } from '@/lib/cn';
 import { Pagination } from '@/components/Pagination';
@@ -32,6 +33,7 @@ const PAGE_SIZE = 20;
 
 export const CustomersPage = () => {
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounced(search);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const changePageSize = (n: number) => { setPageSize(n); setPage(1); };
@@ -184,8 +186,11 @@ e.g. Salary, Rent, Freight, Bank Charges`, 'Expense',
   // would show because the result count usually shrinks.
   useEffect(() => { setPage(1); }, [search]);
   const { data, isLoading } = useQuery({
-    queryKey: ['customers', search, page, pageSize],
-    queryFn: () => api<ListResp>(`/customers?search=${encodeURIComponent(search)}&page=${page}&pageSize=${pageSize}`),
+    queryKey: ['customers', debouncedSearch, page, pageSize],
+    queryFn: () => api<ListResp>(`/customers?search=${encodeURIComponent(debouncedSearch)}&page=${page}&pageSize=${pageSize}`),
+    // Keep the current rows visible while the next result loads, instead of
+    // dropping the table back to "Loading…" on every filter or page change.
+    placeholderData: keepPreviousData,
   });
 
   const shareWhatsapp = async (c: Customer) => {

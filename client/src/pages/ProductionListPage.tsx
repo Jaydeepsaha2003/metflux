@@ -7,10 +7,11 @@
 // pagination, search, and the edit/delete actions are unchanged from before.
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Pencil, Trash2, Factory, Download, Loader2, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useConfirm } from '@/hooks/useConfirm';
+import { useDebounced } from '@/hooks/useDebounced';
 import { Pagination } from '@/components/Pagination';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { downloadXlsx, todayStamp } from '@/lib/excel';
@@ -63,26 +64,33 @@ const PAGE_SIZE = 20;
 
 export const ProductionListPage = () => {
   const [search, setSearch] = useState('');
+  // The box stays bound to `search` so typing feels instant; only the settled
+  // value reaches the query key, so one request goes out per pause rather than
+  // one per keystroke.
+  const debouncedSearch = useDebounced(search);
   const [coreType, setCoreType] = useState<CoreFilter>('ALL');
   const [labour, setLabour] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const changePageSize = (n: number) => { setPageSize(n); setPage(1); };
-  useEffect(() => { setPage(1); }, [search, coreType, labour]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, coreType, labour]);
   const queryClient = useQueryClient();
   const { confirm, alert, confirmDialog } = useConfirm();
   const hideNames = useHideCustomerNames();
 
   const qs = new URLSearchParams();
-  qs.set('search', search);
+  qs.set('search', debouncedSearch);
   qs.set('page', String(page));
   qs.set('pageSize', String(pageSize));
   if (coreType !== 'ALL') qs.set('coreType', coreType);
   if (labour) qs.set('labour', labour);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['production', search, coreType, labour, page, pageSize],
+    queryKey: ['production', debouncedSearch, coreType, labour, page, pageSize],
     queryFn: () => api<ListResp>(`/production?${qs.toString()}`),
+    // Keep the previous page on screen while the next one loads instead of
+    // dropping the table back to "Loading…" on every filter or page change.
+    placeholderData: keepPreviousData,
   });
 
   const hasFilters = !!search || coreType !== 'ALL' || !!labour;
@@ -116,7 +124,7 @@ export const ProductionListPage = () => {
         'Total Wt':    p.totalWeight,
         'Amount (₹)':  p.amount,
       }));
-      downloadXlsx(`production-${todayStamp()}`, 'Production', rows);
+      await downloadXlsx(`production-${todayStamp()}`, 'Production', rows);
     } catch (e) {
       alert({ title: 'Export failed', message: e instanceof Error ? e.message : 'Please try again.', tone: 'danger' });
     } finally {

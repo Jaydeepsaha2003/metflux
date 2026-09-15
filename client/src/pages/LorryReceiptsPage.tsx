@@ -125,7 +125,7 @@ export const LorryReceiptsPage = () => {
         r.invNo ?? '', isoDate(r.invDate), r.ewayBillNo ?? '', r.modeOfDispatch ?? '', r.paymentMode, r.valueDeclare,
         r.vehNo ?? '', isoDate(r.dispatchDate), r.remark ?? '',
       ]);
-      downloadStyledXlsx({
+      await downloadStyledXlsx({
         filename: `lorry-receipts-${todayStamp()}`,
         sheetName: 'Lorry Receipts',
         headers: [...FULL_HEADERS],

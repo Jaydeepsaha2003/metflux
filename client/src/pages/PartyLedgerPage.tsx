@@ -58,7 +58,7 @@ export const PartyLedgerPage = () => {
     [parties]
   );
 
-  const onExport = () => {
+  const onExport = async () => {
     if (!ledger) return;
     const rows: Record<string, string | number>[] = [
       { Date: '', Voucher: '', Type: 'Opening Balance', Particulars: '', Debit: '', Credit: '', Balance: drcr(ledger.openingBalance) },
@@ -68,7 +68,7 @@ export const PartyLedgerPage = () => {
       })),
       { Date: '', Voucher: '', Type: 'Closing Balance', Particulars: '', Debit: ledger.totals.debit, Credit: ledger.totals.credit, Balance: drcr(ledger.closingBalance) },
     ];
-    downloadXlsx(`ledger-${ledger.party.name.replace(/[^a-z0-9]+/gi, '-')}-${todayStamp()}`, 'Ledger', rows);
+    await downloadXlsx(`ledger-${ledger.party.name.replace(/[^a-z0-9]+/gi, '-')}-${todayStamp()}`, 'Ledger', rows);
   };
 
   const receivable = (ledger?.closingBalance ?? 0) >= 0;

@@ -103,7 +103,7 @@ export const CashbookSummaryPage = () => {
     && (!mgCat || h.category === mgCat));
   const sortIcon = (k: typeof sort.key) => (sort.key === k ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : '');
 
-  const exportExcel = () => {
+  const exportExcel = async () => {
     if (!items.length && !overview) return;
     const rows: Record<string, string | number>[] = [];
     if (overview) {
@@ -119,7 +119,7 @@ export const CashbookSummaryPage = () => {
     items.forEach((it) => rows.push({
       'Group': it.key, 'Category': it.category, 'Receipts': it.receipts, 'Payments': it.payments, 'Net': it.net,
     }));
-    downloadXlsx(`cashbook-summary-${todayStamp()}`, 'Cashbook Summary', rows);
+    await downloadXlsx(`cashbook-summary-${todayStamp()}`, 'Cashbook Summary', rows);
   };
 
   return (
@@ -395,9 +395,9 @@ const TransactionsView = ({ bankId }: { bankId: string }) => {
   const rows = all.slice((page - 1) * pageSize, page * pageSize);
   const sum = all.reduce((s, r) => s + r.amount, 0);
 
-  const exportExcel = () => {
+  const exportExcel = async () => {
     if (!all.length) return;
-    downloadXlsx(`cashbook-transactions-${todayStamp()}`, 'Transactions', all.map((r) => ({
+    await downloadXlsx(`cashbook-transactions-${todayStamp()}`, 'Transactions', all.map((r) => ({
       Date: r.date ? new Date(r.date).toLocaleDateString('en-GB') : '', Type: TXN_LABEL[r.type] ?? r.type,
       Party: r.party, Ref: r.ref ?? '', Amount: r.amount,
     })));
@@ -708,7 +708,7 @@ const AccountLedgerModal = ({ name, onClose }: { name: string; onClose: () => vo
   };
   const cards: [string, string][] = [['Sales', 'sale'], ['Purchase', 'purchase'], ['Credit Note', 'creditNote'], ['Debit Note', 'debitNote'], ['Receipts', 'receipt'], ['Payments', 'payment']];
 
-  const exportExcel = () => {
+  const exportExcel = async () => {
     if (!items.length) return;
     const rows: Record<string, string | number>[] = [
       { Date: '', Particulars: 'Opening Balance', Vch: '', Debit: '', Credit: '', Balance: '0.00 Dr' },
@@ -721,7 +721,7 @@ const AccountLedgerModal = ({ name, onClose }: { name: string; onClose: () => vo
       { Date: '', Particulars: 'Total', Vch: '', Debit: t.totalDebit, Credit: t.totalCredit, Balance: '' },
       { Date: '', Particulars: 'Closing Balance', Vch: '', Debit: '', Credit: '', Balance: `${t.closing.toFixed(2)} ${t.closingType}` },
     );
-    downloadXlsx(`ledger-${name}-${todayStamp()}`.replace(/[^\w-]+/g, '_'), 'Ledger', rows);
+    await downloadXlsx(`ledger-${name}-${todayStamp()}`.replace(/[^\w-]+/g, '_'), 'Ledger', rows);
   };
 
   return (

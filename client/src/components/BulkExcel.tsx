@@ -37,10 +37,10 @@ export const BulkExcel = ({ config }: { config: BulkExcelConfig }) => {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const onTemplate = () => {
+  const onTemplate = async () => {
     const example: Record<string, string> = {};
     for (const c of config.template) example[c.header] = c.example;
-    downloadXlsx(`${config.filenameBase}-template`, config.sheetName, [example]);
+    await downloadXlsx(`${config.filenameBase}-template`, config.sheetName, [example]);
   };
 
   const onExport = async () => {
@@ -48,7 +48,7 @@ export const BulkExcel = ({ config }: { config: BulkExcelConfig }) => {
     try {
       const rows = await config.fetchExportRows();
       if (!rows.length) { setError('Nothing to export yet.'); return; }
-      downloadXlsx(`${config.filenameBase}-${todayStamp()}`, config.sheetName, rows);
+      await downloadXlsx(`${config.filenameBase}-${todayStamp()}`, config.sheetName, rows);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Export failed.');
     } finally { setBusy(null); }

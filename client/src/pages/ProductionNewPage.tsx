@@ -11,9 +11,10 @@
 // Mirrors the .NET Production form, minus the work_allotment middleware.
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Search, Save, Loader2, Factory, ArrowLeft, CheckCircle2, Check } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import { useDebounced } from '@/hooks/useDebounced';
 import { cn } from '@/lib/cn';
 import { toroidalCalc, rectangularCalc } from '@/lib/calc';
 import { SearchableSelect } from '@/components/SearchableSelect';
@@ -66,6 +67,7 @@ export const ProductionNewPage = () => {
   const { confirm, confirmDialog } = useConfirm();
 
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounced(search);
   const [selected, setSelected] = useState<PendingItem | null>(null);
   // Step follows selection: picking an item advances to step 2, "Back" or a
   // fresh pick returns to step 1. Kept as its own piece of state (rather than
@@ -74,9 +76,12 @@ export const ProductionNewPage = () => {
   const [step, setStep] = useState<1 | 2>(1);
 
   const { data: pendingResp, isLoading } = useQuery({
-    queryKey: ['production-pending', search],
-    queryFn: () => api<{ items: PendingItem[] }>(`/production/pending?search=${encodeURIComponent(search)}`),
+    queryKey: ['production-pending', debouncedSearch],
+    queryFn: () => api<{ items: PendingItem[] }>(`/production/pending?search=${encodeURIComponent(debouncedSearch)}`),
     staleTime: 0,
+    // Keep the current rows visible while the next result loads, instead of
+    // dropping the table back to "Loading…" on every filter or page change.
+    placeholderData: keepPreviousData,
   });
 
   const { data: laboursResp } = useQuery({

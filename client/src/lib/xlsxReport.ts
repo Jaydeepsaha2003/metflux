@@ -8,7 +8,11 @@
 //
 // Uses `xlsx-js-style` — the plain `xlsx` community build cannot write fonts,
 // fills or borders.
-import * as XLSX from 'xlsx-js-style';
+// `xlsx-js-style` is ~850 KB and is only needed when someone clicks Export, so
+// it loads on demand rather than being a hard dependency of every page that has
+// an export button. Cached after the first call.
+let xlsxPromise: Promise<typeof import('xlsx-js-style')> | null = null;
+const loadXlsx = () => (xlsxPromise ??= import('xlsx-js-style'));
 
 export type Cell = string | number | null | undefined;
 
@@ -32,7 +36,7 @@ const GREY = 'D9D9D9';
 // sheet collapses to employees, then to days, exactly like the page does.
 const LEVEL: Record<ReportRowKind, number> = { group: 0, sub: 1, detail: 2, total: 0 };
 
-export const downloadReportXlsx = (opts: {
+export const downloadReportXlsx = async (opts: {
   filename: string;
   sheetName: string;
   title: string;
@@ -42,6 +46,7 @@ export const downloadReportXlsx = (opts: {
   /** Header fill + title colour, hex without '#'. Defaults to slate-800. */
   accentHex?: string;
 }) => {
+  const XLSX = await loadXlsx();
   const { filename, sheetName, title, subtitle, columns, rows } = opts;
   const accent = (opts.accentHex ?? '1F2937').replace('#', '').toUpperCase();
   const nCols = columns.length;

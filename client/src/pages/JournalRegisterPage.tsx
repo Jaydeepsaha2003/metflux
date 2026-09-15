@@ -67,7 +67,7 @@ export const JournalRegisterPage = () => {
   const items = data?.items ?? [];
   const t = data?.totals;
 
-  const exportExcel = () => {
+  const exportExcel = async () => {
     if (!items.length) return;
     const rows: Record<string, string | number>[] = [];
     for (const v of items) {
@@ -78,7 +78,7 @@ export const JournalRegisterPage = () => {
       }));
     }
     if (t) rows.push({ Date: '', 'Vch No': '', Account: 'TOTAL', Debit: t.debit, Credit: t.credit, Taxable: t.taxable, IGST: t.igst, CGST: t.cgst, SGST: t.sgst });
-    downloadXlsx(`journal-register-${todayStamp()}`, 'Journal', rows);
+    await downloadXlsx(`journal-register-${todayStamp()}`, 'Journal', rows);
   };
 
   return (

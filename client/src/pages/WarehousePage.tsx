@@ -106,9 +106,9 @@ export const WarehousePage = () => {
     return rows.filter((s) => [s.warehouseName, coreLabel[s.coreType] ?? s.coreType, s.grade, s.material, s.measure]
       .some((v) => String(v ?? '').toLowerCase().includes(q)));
   })();
-  const exportStock = () => {
+  const exportStock = async () => {
     if (!stockRows.length) return;
-    downloadXlsx(`store-stock-${todayStamp()}`, 'Stock', stockRows.map((s) => ({
+    await downloadXlsx(`store-stock-${todayStamp()}`, 'Stock', stockRows.map((s) => ({
       Store: s.warehouseName, Type: coreLabel[s.coreType] ?? s.coreType, Grade: s.grade,
       Material: s.material, Measure: s.measure, 'Wt / pc (kg)': s.weightPerPc,
       'On hand (pcs)': s.onHand, 'Weight (kg)': s.onHandWeight,

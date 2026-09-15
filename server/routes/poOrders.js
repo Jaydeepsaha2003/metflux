@@ -551,7 +551,29 @@ router.get('/summary', requirePermission('po_summary'), asyncHandler(async (req,
     params.push(like, like, like, like, like);
   }
 
-  const [rows, totalRow] = await Promise.all([
+  // Totals cover the whole filtered set, so they touch every matching item —
+  // by far the most expensive of the three queries. Each row's produced count
+  // is worked out once in the inner query and then summed, rather than
+  // recomputing that whole correlated expression a second time for the
+  // overproduced figure. All three run together instead of the totals waiting
+  // on the page query, since none of them depends on another.
+  const aggSql = `
+    SELECT
+      COALESCE(SUM(t.\`pcs\`), 0) AS totalOrdered,
+      COALESCE(SUM(t.\`produced\`), 0) AS totalProduced,
+      COALESCE(SUM(t.\`dispatched\`), 0) AS totalDispatched,
+      COALESCE(SUM(GREATEST(t.\`produced\` - t.\`pcs\`, 0)), 0) AS totalOverproduced
+    FROM (
+      SELECT it.\`pcs\`,
+             ${PRODUCED_SQ} AS \`produced\`,
+             (SELECT COALESCE(SUM(dd.\`pcs\`),0) FROM \`Dispatch\` dd WHERE dd.\`poOrderItemId\` = it.\`id\`) AS \`dispatched\`
+        FROM \`PoOrderItem\` it
+        INNER JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
+        INNER JOIN \`Customer\` c ON c.\`id\` = po.\`customerId\`
+       WHERE ${where}
+    ) t`;
+
+  const [rows, totalRow, aggRow] = await Promise.all([
     q(
       `${itemRowSql} WHERE ${where} ORDER BY po.\`orderDate\` DESC, it.\`createdAt\` DESC LIMIT ? OFFSET ?`,
       [...params, pageSize, skip]
@@ -563,6 +585,7 @@ router.get('/summary', requirePermission('po_summary'), asyncHandler(async (req,
         WHERE ${where}`,
       params
     ),
+    qOne(aggSql, params),
   ]);
 
   const enriched = rows.map((it) => ({
@@ -602,21 +625,6 @@ router.get('/summary', requirePermission('po_summary'), asyncHandler(async (req,
     status:        it.status,
   }));
 
-  // Aggregate totals for the full filtered dataset (not just the current page).
-  const aggRow = await qOne(
-    `SELECT
-       COALESCE(SUM(it.\`pcs\`), 0) AS totalOrdered,
-       COALESCE(SUM(${PRODUCED_SQ}), 0) AS totalProduced,
-       COALESCE(SUM(
-         (SELECT COALESCE(SUM(dd.\`pcs\`),0) FROM \`Dispatch\` dd WHERE dd.\`poOrderItemId\` = it.\`id\`)
-       ), 0) AS totalDispatched,
-       COALESCE(SUM(GREATEST(${PRODUCED_SQ} - it.\`pcs\`, 0)), 0) AS totalOverproduced
-     FROM \`PoOrderItem\` it
-       INNER JOIN \`PoOrder\` po ON po.\`id\` = it.\`poOrderId\`
-       INNER JOIN \`Customer\` c ON c.\`id\` = po.\`customerId\`
-     WHERE ${where}`,
-    params
-  );
   const aggregates = {
     pcsOrdered:      Number(aggRow?.totalOrdered      ?? 0),
     pcsProduced:     Number(aggRow?.totalProduced     ?? 0),

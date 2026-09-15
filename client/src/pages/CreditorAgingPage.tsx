@@ -52,7 +52,7 @@ export const CreditorAgingPage = () => {
 
   // Excel export — the on-screen summary (one row per supplier, honouring the
   // active filter) plus a per-bill detail sheet and a totals row.
-  const exportExcel = () => {
+  const exportExcel = async () => {
     if (!shownSuppliers.length) return;
     const summary = shownSuppliers.map((s) => ({
       Supplier: s.supplierName,
@@ -71,7 +71,7 @@ export const CreditorAgingPage = () => {
       Balance: i.balance,
       'Age (days)': i.ageDays,
     })));
-    downloadXlsx(`amount-payable-${todayStamp()}`, 'Amount Payable', summary, [{ name: 'Bills', rows: detail }]);
+    await downloadXlsx(`amount-payable-${todayStamp()}`, 'Amount Payable', summary, [{ name: 'Bills', rows: detail }]);
   };
 
   const shareImage = async (s: AgingSupplier) => {

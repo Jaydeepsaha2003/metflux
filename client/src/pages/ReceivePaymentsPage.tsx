@@ -129,8 +129,8 @@ export const ReceivePaymentsPage = () => {
     record.mutate({ customerId, amount: Number(amount), paymentDate, reference: reference || null, mode });
   };
 
-  const downloadTemplate = () => {
-    downloadXlsx('payments-template', 'Payments', [
+  const downloadTemplate = async () => {
+    await downloadXlsx('payments-template', 'Payments', [
       { 'Customer Code': 'AAR-001', 'Customer Name': 'Aarti Steels', 'Amount': 10000, 'Date': '11/06/2026', 'Reference': 'NEFT-12345' },
     ]);
   };

@@ -152,7 +152,7 @@ export const DebtorAgingPage = () => {
 
   // Excel export — the on-screen summary (one row per customer, honouring the
   // active filter and hide-names setting) plus a per-invoice detail sheet.
-  const exportExcel = () => {
+  const exportExcel = async () => {
     if (!shownCustomers.length) return;
     const nameOf = (c: AgingCustomer) => (hideNames ? (c.customerCode ?? 'Customer') : c.customerName);
     const summary: Record<string, string | number>[] = shownCustomers.map((c) => ({
@@ -173,7 +173,7 @@ export const DebtorAgingPage = () => {
       Balance: i.balance,
       Overdue: i.daysOverdue == null ? 'No terms' : i.daysOverdue > 0 ? `${i.daysOverdue}d` : 'Not due',
     })));
-    downloadXlsx(`amount-receivable-${todayStamp()}`, 'Amount Receivable', summary, [{ name: 'Invoices', rows: detail }]);
+    await downloadXlsx(`amount-receivable-${todayStamp()}`, 'Amount Receivable', summary, [{ name: 'Invoices', rows: detail }]);
   };
 
   return (
@@ -367,7 +367,7 @@ const EmailReminderModal = ({
     try {
       const base = `Statement-${(input.partyName || 'customer').replace(/[^\w-]+/g, '_')}`;
       const pdf = await makeStatementPdfBlob(input);
-      const xlsx = buildStatementXlsxBlob(input);
+      const xlsx = await buildStatementXlsxBlob(input);
       const [pdfB64, xlsxB64] = await Promise.all([blobToBase64(pdf), blobToBase64(xlsx)]);
       const html = buildStatementHtml(input); // responsive HTML body; PDF + Excel attached
       await api('/email/reminder', {

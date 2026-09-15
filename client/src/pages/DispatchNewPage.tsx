@@ -50,7 +50,7 @@ export const DispatchNewPage = () => {
   });
 
   /* Export the ready-to-dispatch list as an Excel checklist. */
-  const onExport = () => {
+  const onExport = async () => {
     const items = readyResp?.items ?? [];
     if (!items.length) return;
     const rows = items.map((it) => ({
@@ -70,7 +70,7 @@ export const DispatchNewPage = () => {
       'Ready Wt (kg)':     +(it.readyPcs * it.weightPerPc).toFixed(3),
       'Ready Amount (₹)':  it.readyAmount,
     }));
-    downloadXlsx(`ready-to-dispatch-${todayStamp()}`, 'Ready to Dispatch', rows);
+    await downloadXlsx(`ready-to-dispatch-${todayStamp()}`, 'Ready to Dispatch', rows);
   };
 
   const [dispatchDate, setDispatchDate] = useState(todayISO());

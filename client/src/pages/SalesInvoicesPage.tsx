@@ -3,11 +3,12 @@
 // or compute a due date are flagged for attention and can be fixed inline.
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Receipt, Upload, Loader2, Search, AlertTriangle, X, CheckCircle2, Trash2, Pencil, CalendarClock,
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import { useDebounced } from '@/hooks/useDebounced';
 import { readXlsxMatrix } from '@/lib/excel';
 import { cn } from '@/lib/cn';
 import { Pagination } from '@/components/Pagination';
@@ -54,6 +55,7 @@ export const SalesInvoicesPage = () => {
   const hideNames = useHideCustomerNames();
   const { confirm, confirmDialog } = useConfirm();
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounced(search);
   const [status, setStatus] = useState<StatusFilter>('ALL');
   const [docType, setDocType] = useState<DocFilter>('ALL');
   const [attention, setAttention] = useState(false);
@@ -87,10 +89,13 @@ export const SalesInvoicesPage = () => {
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['sales-invoices', search, status, attention, docType, page, pageSize, due, from, to],
+    queryKey: ['sales-invoices', debouncedSearch, status, attention, docType, page, pageSize, due, from, to],
     queryFn: () => api<ListResp>(
-      `/sales-invoices?status=${status}&filter=${attention ? 'ATTENTION' : 'ALL'}&docType=${docType}&page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}${due ? `&due=${due}` : ''}${from ? `&from=${from}` : ''}${to ? `&to=${to}` : ''}`
+      `/sales-invoices?status=${status}&filter=${attention ? 'ATTENTION' : 'ALL'}&docType=${docType}&page=${page}&pageSize=${pageSize}${debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : ''}${due ? `&due=${due}` : ''}${from ? `&from=${from}` : ''}${to ? `&to=${to}` : ''}`
     ),
+    // Keep the current rows visible while the next result loads, instead of
+    // dropping the table back to "Loading…" on every filter or page change.
+    placeholderData: keepPreviousData,
   });
 
   const refresh = () => {
