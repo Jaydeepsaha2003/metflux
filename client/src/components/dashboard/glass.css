@@ -80,6 +80,13 @@
 .dashboard-glass .dash-employees td:nth-child(2) { font-size: 14px; }
 .dashboard-glass .dash-employees td,
 .dashboard-glass .dash-employees th { padding-top: 16px; padding-bottom: 16px; }
+.dashboard-glass .dash-employees th:not(:last-child),
+.dashboard-glass .dash-employees td:not(:last-child) {
+  border-right: 1px solid var(--d-line-soft);
+}
+.dashboard-glass .dash-employees thead th:not(:last-child) {
+  border-right-color: var(--d-line);
+}
 .dashboard-glass .dash-employees .dash-chip { font-size: 12px; line-height: 1.35; }
 @media (max-width: 639px) {
   .dashboard-glass .dash-hero { padding: 20px; }

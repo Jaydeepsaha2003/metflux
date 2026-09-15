@@ -11,6 +11,7 @@ import { cn } from '@/lib/cn';
 import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc, nanoCalc, nanoTestCalc, isCompositeGrade, compositeRuleFromMaterial, compositeCalc } from '@/lib/calc';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useConfirm } from '@/hooks/useConfirm';
+import './po-order-new.css';
 
 /* ---------- types ---------- */
 type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE';
@@ -430,10 +431,10 @@ export const POOrderNewPage = () => {
   const fmtMoney = (n: number) => Math.round(n).toLocaleString('en-IN');
 
   return (
-    <div className="space-y-4 pb-4 sm:space-y-5">
+    <div className="sales-order-workbench space-y-4 pb-4 sm:space-y-5">
       {/* ============ DRAFT RESTORE BANNER ============ */}
       {!isEdit && draftAvailable && draftData && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+        <div className="sales-order-draft flex items-center justify-between gap-3 px-4 py-3 flex-wrap">
           <div className="text-sm text-amber-800">
             <span className="font-semibold">Unsaved draft found</span>
             {draftData.poNumber && <span className="ml-2 font-mono text-amber-700">{draftData.poNumber}</span>}
@@ -451,23 +452,28 @@ export const POOrderNewPage = () => {
       )}
 
       {/* ============ TITLE ============ */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="flex items-center gap-2 text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
+      <header className="sales-order-header flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <div className="sales-order-eyebrow">Sales / Order entry</div>
+          <h1 className="mt-1 flex items-center gap-2 text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
           <Package className="h-5 w-5 text-brand-600" />
           {isEdit ? 'Edit Sales Order' : 'New Sales Order'}
-        </h1>
+          </h1>
+          <p className="mt-1 text-xs text-slate-500 sm:text-sm">Set the order header, build line items, and review totals before saving.</p>
+        </div>
         {items.length > 0 && (
-          <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500">
+          <div className="sales-order-header-stats hidden sm:flex items-center gap-2 text-xs text-slate-500">
             <Package className="h-3.5 w-3.5" />
             <span>{items.length} item{items.length === 1 ? '' : 's'}</span>
             <span className="text-slate-300">·</span>
             <span>{totalWeight.toFixed(3)} kg</span>
           </div>
         )}
-      </div>
+      </header>
 
       {/* ============ HEADER ============ */}
-      <section className="card p-3 sm:p-4">
+      <section className="sales-order-section sales-order-header-card card p-3 sm:p-4">
+        <div className="sales-order-section-heading"><div><span>01</span><div><h2>Order details</h2><p>Identify the customer and delivery commitment.</p></div></div><b>Required</b></div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <Field label="Sales Order No." icon={Hash} className="col-span-2 sm:col-span-1">
             <input
@@ -512,9 +518,9 @@ export const POOrderNewPage = () => {
       </section>
 
       {/* ============ ITEM ENTRY ============ */}
-      <section className="card p-3 sm:p-4 space-y-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-sm font-semibold text-slate-900">Add line item</h2>
+      <section className="sales-order-section sales-order-entry card p-3 sm:p-4 space-y-3">
+        <div className="sales-order-section-heading flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div><div className="flex items-center gap-2"><span>02</span><h2 className="text-sm font-semibold text-slate-900">Build line item</h2></div><p>Choose a core family, enter dimensions, then add the finished line to the order.</p></div>
           {/* Segmented pill selector — replaces the dropdown for a touchable, visible toggle */}
           <div className="flex flex-wrap gap-0.5 rounded-lg bg-slate-100 p-0.5 text-sm self-start">
             <button
@@ -622,11 +628,11 @@ export const POOrderNewPage = () => {
       </section>
 
       {/* ============ ITEMS LIST ============ */}
-      <section className="card overflow-hidden">
+      <section className="sales-order-section sales-order-items card overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2.5 sm:px-4">
-          <h2 className="text-sm font-semibold text-slate-900">
+          <div><div className="flex items-center gap-2"><span className="sales-order-section-number">03</span><h2 className="text-sm font-semibold text-slate-900">
             Items <span className="font-normal text-slate-400">({items.length})</span>
-          </h2>
+          </h2></div><p className="mt-0.5 text-[11px] text-slate-500">Review, expand, copy, or edit each order line.</p></div>
           <div className="text-xs text-slate-500">
             Total: <span className="font-semibold text-slate-900 tabular-nums">{totalWeight.toFixed(3)} kg</span>
           </div>
@@ -854,7 +860,7 @@ export const POOrderNewPage = () => {
           Only renders when at least one item has a rate. GST applied uses the
           selected customer's gstRate (defaults to 0% when no customer picked). */}
       {subtotal > 0 && (
-        <section className="card p-3 sm:p-4">
+        <section className="sales-order-section sales-order-pricing card p-3 sm:p-4">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-900">Pricing summary</h2>
             <div className="text-[11px] text-slate-500">
@@ -896,7 +902,7 @@ export const POOrderNewPage = () => {
       {/* ============ ACTIONS ============
           On mobile: Submit is full-width and primary, Cancel secondary below.
           On desktop: right-aligned pair. */}
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+      <div className="sales-order-actions flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
         <button
           type="button"
           onClick={() => navigate(isEdit ? '/po/summary' : '/')}

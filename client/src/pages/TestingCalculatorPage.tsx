@@ -182,6 +182,8 @@ export const TestingCalculatorPage = () => {
 
   const exportRows = items.filter((it) => numOk(it) && it.fluxes.length);
   const exportable = exportRows.length > 0 && fluxCols.length > 0;
+  const configuredItems = items.filter(numOk).length;
+  const selectedFluxCount = items.reduce((sum, it) => sum + it.fluxes.length, 0);
 
   /* ── Excel export (merged two-row header per the lab sheet) ── */
   const exportExcel = async () => {
@@ -241,14 +243,15 @@ export const TestingCalculatorPage = () => {
   const addressLine = company?.address?.replace(/\n+/g, ', ').trim() ?? '';
 
   return (
-    <div className="testing-calculator space-y-5">
+    <div className="testing-calculator tc-page space-y-5">
       <div className="tc-header flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight">
+          <div className="tc-eyebrow">Lab operations / Test planning</div>
+          <h1 className="mt-1 flex items-center gap-2.5 text-2xl font-bold tracking-tight">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-50 text-brand-600"><Calculator className="h-5 w-5" /></span>
             Testing Calculator
           </h1>
-          <p className="mt-1 text-sm text-slate-500">Pick a core type per row, set turns &amp; flux levels → get Volt + Ie max, then export the lab sheet.</p>
+          <p className="mt-1 text-sm text-slate-500">Build a mixed-core test sheet, validate the geometry, and export a ready-to-run lab report.</p>
         </div>
         <div className="tc-actions flex flex-wrap items-center gap-2">
           <button onClick={() => setImportOpen(true)} className="btn-ghost border border-slate-300 text-slate-600 hover:bg-slate-50">
@@ -266,25 +269,16 @@ export const TestingCalculatorPage = () => {
         </div>
       </div>
 
-      {/* Summary strip */}
+      {/* Compact ERP status strip */}
       {items.length > 0 && (
-        <div className="tc-summary flex flex-wrap items-center gap-2 text-xs">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-700">
-            {items.length} line{items.length === 1 ? '' : 's'}
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> {exportRows.length} ready to export
-          </span>
-          {items.some((i) => i.coreType === 'TOROIDAL') && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 font-medium text-amber-700">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> {items.filter((i) => i.coreType === 'TOROIDAL').length} toroidal
-            </span>
-          )}
-          {items.some((i) => i.coreType === 'RECTANGULAR') && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1 font-medium text-rose-700">
-              <span className="h-1.5 w-1.5 rounded-full bg-rose-400" /> {items.filter((i) => i.coreType === 'RECTANGULAR').length} rectangular
-            </span>
-          )}
+        <div className="tc-summary">
+          <div className="tc-summary-lead"><span className="tc-eyebrow">Test sheet status</span><strong>{exportable ? 'Ready for export' : 'Needs configuration'}</strong><span>{exportable ? 'All selected flux levels have calculated outputs.' : 'Complete dimensions, turns, grade, and flux levels to continue.'}</span></div>
+          <div className="tc-summary-metrics">
+            <div><span>Lines</span><strong>{items.length}</strong></div>
+            <div><span>Configured</span><strong>{configuredItems}/{items.length}</strong></div>
+            <div><span>Flux points</span><strong>{selectedFluxCount}</strong></div>
+            <div><span>Export rows</span><strong>{exportRows.length}</strong></div>
+          </div>
         </div>
       )}
 
@@ -298,13 +292,12 @@ export const TestingCalculatorPage = () => {
           const accent = it.coreType === 'TOROIDAL' ? 'border-l-amber-400' : it.coreType === 'COMPOSITE' ? 'border-l-teal-400' : it.coreType === 'NANO' ? 'border-l-violet-400' : 'border-l-rose-400';
           return (
             <div key={it.key} className={cn('tc-item card border-l-4 p-4 transition', accent)}>
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="tc-item-header mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-3">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Item {idx + 1}{it.source && <span className="ml-2 rounded bg-brand-50 px-1.5 py-0.5 font-mono text-[10px] text-brand-700">{it.source}</span>}
-                  </span>
+                  <span className="tc-item-index">{String(idx + 1).padStart(2, '0')}</span>
+                  <div className="tc-item-meta"><span>Test line {it.source ? `· ${it.source}` : ''}</span><strong>{coreLabel[it.coreType]}</strong></div>
                   {/* Per-row core type selector */}
-                  <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+                  <div className="tc-core-switch inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5" aria-label={`Core type for item ${idx + 1}`}>
                     {(['TOROIDAL', 'RECTANGULAR', 'NANO'] as CoreType[]).map((ct) => (
                       <button key={ct} onClick={() => setItemCore(it.key, ct)}
                         className={cn('rounded-md px-3 py-1 text-xs font-medium transition',
@@ -314,7 +307,12 @@ export const TestingCalculatorPage = () => {
                     ))}
                   </div>
                 </div>
-                <button onClick={() => remove(it.key)} className="btn-ghost text-red-600 hover:bg-red-50" title="Remove item"><Trash2 className="h-4 w-4" /></button>
+                <div className="flex items-center gap-2">
+                  <span className={cn('tc-item-status', numOk(it) && it.fluxes.length > 0 ? 'is-ready' : 'is-pending')}>
+                    <span className="tc-status-dot" /> {numOk(it) && it.fluxes.length > 0 ? 'Calculated' : 'Needs input'}
+                  </span>
+                  <button onClick={() => remove(it.key)} className="btn-ghost text-red-600 hover:bg-red-50" title="Remove item"><Trash2 className="h-4 w-4" /></button>
+                </div>
               </div>
 
               {it.coreType !== 'RECTANGULAR' ? (

@@ -147,12 +147,16 @@ export const ProductionListPage = () => {
   };
 
   return (
-    <div className="production-workspace max-w-full space-y-3">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="flex items-center gap-2 text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
-          <Factory className="h-5 w-5 text-brand-600" /> Production
-        </h1>
-        <div className="flex items-center gap-2">
+    <div className="production-workspace production-list-page max-w-full space-y-3">
+      <header className="production-page-header flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <div className="production-eyebrow">Operations / Production</div>
+          <h1 className="mt-1 flex items-center gap-2 text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
+            <Factory className="h-5 w-5 text-brand-600" /> Production ledger
+          </h1>
+          <p className="mt-1 max-w-xl text-xs text-slate-500 sm:text-sm">Review output, job value, and worker activity from one compact workspace.</p>
+        </div>
+        <div className="flex items-center gap-2 sm:pb-0.5">
           <button
             onClick={onExport}
             disabled={exporting || isLoading || !data?.items.length}
@@ -166,7 +170,7 @@ export const ProductionListPage = () => {
             <Plus className="h-4 w-4" /> Record<span className="hidden sm:inline"> Production</span>
           </Link>
         </div>
-      </div>
+      </header>
 
       <ProductionTabs />
 
@@ -180,39 +184,44 @@ export const ProductionListPage = () => {
 
       {/* overflow-visible: the Worker picker renders its menu as an
           absolutely-positioned child, and the card below clips by default. */}
-      <ErpCard className="overflow-visible">
-        {/* Filter toolbar — one row, matches the mockup's single-line layout. */}
-        <div className="flex flex-col gap-2.5 p-3 lg:flex-row lg:items-center">
-          <div className="relative min-w-0 flex-1">
+      <ErpCard className="production-records-card overflow-visible">
+        <div className="production-control-panel border-b border-slate-200/80 p-3 sm:p-4">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-end">
+            <div className="min-w-0 flex-1">
+              <ErpLabel className="mb-1.5 block">Find production records</ErpLabel>
+              <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               className="input h-9 pl-9 text-sm"
-              placeholder="PO #, customer, measure, grade, worker"
+              placeholder="Search PO, customer, measure, grade, or worker"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-end gap-2.5">
+              <div>
+                <ErpLabel className="mb-1.5 block">Core type</ErpLabel>
+                <ErpSegmented
+                  value={coreType}
+                  onChange={setCoreType}
+                  options={[{ value: 'ALL', label: 'All' }, { value: 'TOROIDAL', label: 'Toroidal' }, { value: 'RECTANGULAR', label: 'Rect.' }]}
+                />
+              </div>
+              <div className="w-40">
+                <ErpLabel className="mb-1.5 block">Worker</ErpLabel>
+                <SearchableSelect value={labour} onChange={setLabour} options={labourOptions} placeholder="All workers" />
+              </div>
+              {hasFilters && (
+                <button onClick={clearFilters} className="mb-2 flex items-center gap-1 text-[11px] font-extrabold uppercase tracking-wide text-brand-700 hover:text-brand-800">
+                  <X className="h-3 w-3" /> Clear
+                </button>
+              )}
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2.5">
-            <div>
-              <ErpLabel className="mb-1 block">Core Type</ErpLabel>
-              <ErpSegmented
-                value={coreType}
-                onChange={setCoreType}
-                options={[{ value: 'ALL', label: 'All' }, { value: 'TOROIDAL', label: 'Toroidal' }, { value: 'RECTANGULAR', label: 'Rect.' }]}
-              />
-            </div>
-            <div className="w-40">
-              <ErpLabel className="mb-1 block">Worker</ErpLabel>
-              <SearchableSelect value={labour} onChange={setLabour} options={labourOptions} placeholder="All workers" />
-            </div>
-            {hasFilters && (
-              <button onClick={clearFilters} className="mt-4 flex items-center gap-1 text-[11px] font-extrabold uppercase tracking-wide text-brand-700 hover:text-brand-800">
-                <X className="h-3 w-3" /> Clear
-              </button>
-            )}
-            <div className="mt-4 whitespace-nowrap text-[11px] text-slate-400">
-              {data ? `${data.total} record${data.total === 1 ? '' : 's'}` : ''}
-            </div>
+          <div className="mt-2.5 flex items-center justify-between gap-2 text-[11px] text-slate-500">
+            <span>{hasFilters ? 'Filtered production view' : 'All recorded production'}</span>
+            <span className="font-semibold tabular-nums text-slate-700">{data ? `${data.total.toLocaleString('en-IN')} records` : 'Loading records…'}</span>
           </div>
         </div>
 
@@ -228,6 +237,14 @@ export const ProductionListPage = () => {
             />
           </ErpStatStrip>
         )}
+
+        <div className="production-table-heading flex items-center justify-between gap-3 border-t border-slate-100 px-3 py-2.5 sm:px-4">
+          <div>
+            <h2>Production records</h2>
+            <p>Latest entries first · select a row action to edit or remove</p>
+          </div>
+          <span className="hidden rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500 md:inline-flex">Horizontal scroll available</span>
+        </div>
 
         {/* Desktop table */}
         <div className="production-scroll hidden md:block overflow-x-auto border-t border-slate-100" tabIndex={0} role="region" aria-label="Production records">

@@ -210,7 +210,10 @@ export const AppLayout = () => {
     setOpenGroupKey((prev) => (prev === key ? null : key));
 
   return (
-    <div className="flex min-h-screen bg-slate-50 print:block">
+    <div className={cn(
+      'flex min-h-screen bg-slate-50 print:block',
+      location.pathname === '/' ? 'dashboard-shell' : 'square-shell',
+    )}>
       {/* Mobile backdrop — only visible when the drawer is open */}
       {mobileOpen && (
         <div

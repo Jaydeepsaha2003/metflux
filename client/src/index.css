@@ -86,6 +86,16 @@
   }
 }
 
+/* The dashboard keeps its softer glass treatment. Operational pages use a
+   square, print-like edge system so dense tables and forms feel orderly. */
+@media screen {
+  .square-shell *,
+  .square-shell *::before,
+  .square-shell *::after {
+    border-radius: 0 !important;
+  }
+}
+
 /* ── Browser print styles for Packing List ────────────────────── */
 @page { size: A4 portrait; margin: 8mm; }
 
@@ -128,4 +138,3 @@
     appearance: none;
   }
 }
-
