@@ -13,11 +13,11 @@ import { brandColorFor } from '@/lib/brandColor';
 import { downloadPackingListPdf, packingListPdfBlob, type PackingListPdf } from '@/lib/reportPdf';
 
 /* ── Types ────────────────────────────────────────────────────── */
-type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE' | 'CUT_ROUND';
+type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE' | 'CUT_ROUND' | 'CUT_RECT';
 // Short prefix for the description column + section labels for the outer groups.
-const CORE_PREFIX: Record<CoreType, string> = { TOROIDAL: 'TC', RECTANGULAR: 'RC', NANO: 'NC', COMPOSITE: 'CC', CUT_ROUND: 'RCC' };
+const CORE_PREFIX: Record<CoreType, string> = { TOROIDAL: 'TC', RECTANGULAR: 'RC', NANO: 'NC', COMPOSITE: 'CC', CUT_ROUND: 'RCC', CUT_RECT: 'XCC' };
 const CORE_LABEL: Record<CoreType, string> = {
-  TOROIDAL: 'Toroidal Cores', RECTANGULAR: 'Rectangular Cores', NANO: 'Nano Cores', COMPOSITE: 'Composite Cores', CUT_ROUND: 'Round Cut Cores',
+  TOROIDAL: 'Toroidal Cores', RECTANGULAR: 'Rectangular Cores', NANO: 'Nano Cores', COMPOSITE: 'Composite Cores', CUT_ROUND: 'Round Cut Cores', CUT_RECT: 'Rectangular Cut Cores',
 };
 const CORE_ORDER: CoreType[] = ['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE'];
 

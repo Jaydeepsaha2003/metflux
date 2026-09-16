@@ -18,6 +18,7 @@ const TONE = {
   NANO:        { dot: 'bg-violet-500', label: 'text-violet-800', ring: 'border-violet-200' },
   COMPOSITE:   { dot: 'bg-teal-500',   label: 'text-teal-800',   ring: 'border-teal-200' },
   CUT_ROUND:   { dot: 'bg-sky-500',    label: 'text-sky-800',    ring: 'border-sky-200' },
+  CUT_RECT:    { dot: 'bg-cyan-500',   label: 'text-cyan-800',   ring: 'border-cyan-200' },
 } as const;
 
 const TITLE = {
@@ -26,6 +27,7 @@ const TITLE = {
   NANO: 'Nano core',
   COMPOSITE: 'Composite core',
   CUT_ROUND: 'Round cut core',
+  CUT_RECT: 'Rectangular cut core',
 } as const;
 
 /* The stage the model sits on. A soft radial wash rather than a flat fill, so
@@ -267,7 +269,7 @@ const Empty = ({ kind }: { kind: CoreShape['kind'] }) => (
     <Box className="h-7 w-7 text-slate-300" strokeWidth={1.4} />
     <div className="text-[11px] font-medium text-slate-500">Model appears here</div>
     <div className="text-[10px] leading-relaxed text-slate-400">
-      {kind === 'RECTANGULAR'
+      {kind === 'RECTANGULAR' || kind === 'CUT_RECT'
         ? 'Enter ID 1, ID 2, OD 1, OD 2 and HT (outer must exceed inner).'
         : kind === 'CUT_ROUND'
           ? 'Enter ID, OD and HT of the core before it is cut.'

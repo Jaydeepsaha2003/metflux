@@ -16,6 +16,10 @@ export type CoreShape =
    *  the total controlled air gap across both joints, 0 for a plain cut core. */
   | { kind: 'CUT_ROUND'; dims: Tri; gapMm: number }
   | { kind: 'RECTANGULAR'; id1: number; id2: number; od1: number; od2: number; ht: number }
+  /** A rectangular window core sawn straight across both limbs into two C
+   *  halves. Same dimensions as the ring it came from; `gapMm` is the total
+   *  controlled air gap across both joints. */
+  | { kind: 'CUT_RECT'; id1: number; id2: number; od1: number; od2: number; ht: number; gapMm: number }
   | { kind: 'NANO'; dims: Tri; cased: boolean }
   | { kind: 'COMPOSITE'; rule: CompositeRule; crgo: Tri; nano: Tri };
 
@@ -28,6 +32,7 @@ export const shapeIsDrawable = (s: CoreShape): boolean => {
     case 'CUT_ROUND':
       return triOk(s.dims);
     case 'RECTANGULAR':
+    case 'CUT_RECT':
       return s.id1 > 0 && s.id2 > 0 && s.od1 > 0 && s.od2 > 0 && s.ht > 0
         && s.od1 > s.id1 && s.od2 > s.id2;
     case 'COMPOSITE':
@@ -59,12 +64,27 @@ export const shapeExtent = (s: CoreShape): number => {
     case 'TOROIDAL':
     case 'CUT_ROUND': return Math.max(s.dims.od, s.dims.ht);
     case 'NANO':     return Math.max(s.dims.od + 5, s.dims.ht + 5);
-    case 'RECTANGULAR': return Math.max(s.od1, s.od2, s.ht);
+    case 'RECTANGULAR':
+    case 'CUT_RECT': return Math.max(s.od1, s.od2, s.ht);
     case 'COMPOSITE': {
       const { totalHt } = compositeLayout(s.rule, s.crgo, s.nano);
       return Math.max(s.crgo.od, s.nano.od, totalHt);
     }
   }
+};
+
+/**
+ * A cut core written the way the trade writes it: CD strip x build x window
+ * width / window height, as it appears on the customer's own drawing — e.g.
+ * CD 43x43x50/125. The build-up is derived, being half the difference between
+ * the outer and the window on that axis.
+ */
+export const cutCoreCode = (
+  id1: number, id2: number, od1: number, ht: number,
+) => {
+  const n2 = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
+  const build = (od1 - id1) / 2;
+  return `CD ${n2(ht)}x${n2(build)}x${n2(id1)}/${n2(id2)}`;
 };
 
 /** The measure string shown under the viewer — same wording as the form. */
@@ -79,6 +99,11 @@ export const shapeCaption = (s: CoreShape): string => {
         + (s.gapMm > 0 ? ` · gap ${n(s.gapMm)}` : '');
     case 'RECTANGULAR':
       return `${n(s.id1)} × ${n(s.id2)} × ${n(s.od1)} × ${n(s.od2)} × ${n(s.ht)} mm`;
+    case 'CUT_RECT':
+      // The trade writes a cut core as CD strip x build x window x window,
+      // which is how the customer's own drawing will name it.
+      return cutCoreCode(s.id1, s.id2, s.od1, s.ht)
+        + (s.gapMm > 0 ? ` · gap ${n(s.gapMm)}` : '');
     case 'COMPOSITE': {
       const { totalHt } = compositeLayout(s.rule, s.crgo, s.nano);
       const id = Math.min(s.crgo.id, s.nano.id);

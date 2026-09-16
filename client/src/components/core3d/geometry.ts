@@ -161,6 +161,50 @@ export const rectRing = (
   return g;
 };
 
+/**
+ * One half of a rectangular cut core: the window core sawn straight across
+ * both limbs, leaving a C.
+ *
+ * Built as a single C-shaped polygon rather than by clipping the full ring,
+ * because there is no boolean geometry here to clip with. Tracing the outline
+ * by hand is also the only way to keep the cut faces sharp — a saw cut has no
+ * radius — while the outer corners and the window keep theirs.
+ *
+ * `sign` picks the half: +1 keeps the side at positive depth, -1 the other.
+ */
+export const halfRectRing = (
+  id1: number, id2: number, od1: number, od2: number, ht: number, sign: 1 | -1,
+): THREE.BufferGeometry => {
+  const X = od1 / 2, Z = (od2 / 2) * sign;
+  const xi = id1 / 2, zi = (id2 / 2) * sign;
+  const rOuter = Math.min(od1, od2) * 0.04;
+  const rWin = Math.min(id1, id2) * 0.12;
+
+  const sh = new THREE.Shape();
+  // Up the left outer wall from the cut face.
+  sh.moveTo(-X, 0);
+  sh.lineTo(-X, Z - rOuter * sign);
+  sh.quadraticCurveTo(-X, Z, -X + rOuter, Z);
+  // Across the outer end.
+  sh.lineTo(X - rOuter, Z);
+  sh.quadraticCurveTo(X, Z, X, Z - rOuter * sign);
+  // Back down the right outer wall to the cut face.
+  sh.lineTo(X, 0);
+  // In along the cut face to the window, then around the window and back out.
+  sh.lineTo(xi, 0);
+  sh.lineTo(xi, zi - rWin * sign);
+  sh.quadraticCurveTo(xi, zi, xi - rWin, zi);
+  sh.lineTo(-xi + rWin, zi);
+  sh.quadraticCurveTo(-xi, zi, -xi, zi - rWin * sign);
+  sh.lineTo(-xi, 0);
+  sh.closePath();
+
+  const g = new THREE.ExtrudeGeometry(sh, { depth: ht, bevelEnabled: false, curveSegments: 16 });
+  g.rotateX(-Math.PI / 2);
+  g.translate(0, -ht / 2, 0);
+  return g;
+};
+
 /** The SS case around a nano core: a band wrapping the outside and inside, and
  *  a disc top and bottom. Modelled as one annulus slightly larger than the core
  *  in every direction — the viewer draws it translucent, so its job is to show

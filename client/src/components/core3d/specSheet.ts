@@ -12,7 +12,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { TOROIDAL_FACTOR, RECT_STACK_FACTOR, stackOr } from '@/lib/calc';
 import { buildSketch } from './sketch';
-import { compositeLayout, shapeCaption, type CoreShape } from './shape';
+import { compositeLayout, cutCoreCode, shapeCaption, type CoreShape } from './shape';
 
 export type SheetMeta = {
   company?: string | null;
@@ -35,6 +35,7 @@ const TITLE = {
   NANO: 'Nano core',
   COMPOSITE: 'Composite core (Nano + CRGO)',
   CUT_ROUND: 'Round cut core',
+  CUT_RECT: 'Rectangular cut core (C core)',
 } as const;
 
 /** Rows for the dimension table, in the order an operator reads them. */
@@ -52,6 +53,18 @@ const dimensionRows = (shape: CoreShape): [string, string][] => {
         ['Inner diameter (ID)', `${n(shape.dims.id)} mm`],
         ['Outer diameter (OD)', `${n(shape.dims.od)} mm`],
         ['Height (HT)', `${n(shape.dims.ht)} mm`],
+        ['Construction', 'Cut into 2 mating halves'],
+        ['Total air gap', shape.gapMm > 0 ? `${n(shape.gapMm)} mm` : 'None (butt joint)'],
+      ];
+    case 'CUT_RECT':
+      return [
+        ['Trade code', cutCoreCode(shape.id1, shape.id2, shape.od1, shape.ht)],
+        ['Window ID 1', `${n(shape.id1)} mm`],
+        ['Window ID 2', `${n(shape.id2)} mm`],
+        ['Outer OD 1', `${n(shape.od1)} mm`],
+        ['Outer OD 2', `${n(shape.od2)} mm`],
+        ['Strip width (HT)', `${n(shape.ht)} mm`],
+        ['Build-up', `${n((shape.od1 - shape.id1) / 2)} mm`],
         ['Construction', 'Cut into 2 mating halves'],
         ['Total air gap', shape.gapMm > 0 ? `${n(shape.gapMm)} mm` : 'None (butt joint)'],
       ];
@@ -88,6 +101,7 @@ const weightWorking = (shape: CoreShape, meta: SheetMeta): string[] => {
         `F = ${fx} (stacking factor${fx === TOROIDAL_FACTOR ? ', standard' : ', agreed for this customer'})`,
       ];
     }
+    case 'CUT_RECT':
     case 'RECTANGULAR': {
       const { id2, od2, ht } = shape;
       const sf = stackOr(meta.factor, RECT_STACK_FACTOR);

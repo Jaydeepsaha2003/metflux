@@ -18,7 +18,7 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { annulus, halfAnnulus, rectRing, nanoCase } from './geometry';
+import { annulus, halfAnnulus, rectRing, halfRectRing, nanoCase } from './geometry';
 import { compositeLayout, shapeExtent, shapeIsDrawable, type CoreShape } from './shape';
 import { buildDimensions } from './dimensions';
 
@@ -339,6 +339,21 @@ export default function CoreViewer({ shape, resetNonce, showDims }: Props) {
       case 'RECTANGULAR':
         add(rectRing(shape.id1, shape.id2, shape.od1, shape.od2, shape.ht), mk(MATERIALS.rect));
         break;
+      case 'CUT_RECT': {
+        const mat = mk(MATERIALS.rect);
+        const split = shape.gapMm > 0
+          ? shape.gapMm / 2
+          : Math.max(shape.od2 * 0.004, 0.2);
+        const a = add(halfRectRing(shape.id1, shape.id2, shape.od1, shape.od2, shape.ht, 1), mat);
+        const b = add(halfRectRing(shape.id1, shape.id2, shape.od1, shape.od2, shape.ht, -1), mat);
+        // The extrude is laid down with rotateX(-90), which maps the shape's
+        // second axis to world -Z. So the +1 half lives at negative Z and has
+        // to move further negative to open the joint; signing these the
+        // obvious way pushed the halves through each other instead.
+        a.position.z = -split;
+        b.position.z = split;
+        break;
+      }
       case 'CUT_ROUND': {
         /* Two real halves rather than a ring with a line drawn on it. They are
            pushed apart by the specified gap, or by a hairline when there is no

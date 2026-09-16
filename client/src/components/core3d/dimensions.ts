@@ -271,7 +271,8 @@ export const buildDimensions = (shape: CoreShape, extent: number) => {
       annularDims(id, od, totalHt);
       break;
     }
-    case 'RECTANGULAR': {
+    case 'RECTANGULAR':
+    case 'CUT_RECT': {
       const { id1, id2, od1, od2, ht } = shape;
       const x = od1 / 2, z = od2 / 2, xi = id1 / 2, zi = id2 / 2;
       const top = ht / 2, bottom = -ht / 2;

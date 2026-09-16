@@ -19,7 +19,7 @@ import { pool } from '../lib/db.js';
 const ENUM_TABLES = ['PoOrderItem', 'QuotationItem', 'FluxGrade'];
 
 /** The full set after this migration, in the order the UI presents them. */
-const CORE_TYPES = ['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND'];
+const CORE_TYPES = ['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT'];
 
 const columnType = async (table, column) => {
   const [rows] = await pool.query(
@@ -48,8 +48,8 @@ const main = async () => {
       console.log(`[migrate] ${table}.coreType not present — skipping`);
       continue;
     }
-    if (current.includes('CUT_ROUND')) {
-      console.log(`[migrate] ${table}.coreType already allows CUT_ROUND — skipping`);
+    if (CORE_TYPES.every((v) => current.includes(v))) {
+      console.log(`[migrate] ${table}.coreType already has every core type — skipping`);
       continue;
     }
     // Preserve the column's own nullability; FluxGrade and the item tables do
@@ -58,7 +58,7 @@ const main = async () => {
     await pool.query(
       `ALTER TABLE \`${table}\` MODIFY COLUMN \`coreType\` ENUM(${list}) ${nullable ? 'NULL' : 'NOT NULL'}`
     );
-    console.log(`[migrate] ${table}.coreType now allows CUT_ROUND`);
+    console.log(`[migrate] ${table}.coreType core types widened`);
   }
 
   // MaterialGrade.coreTypes is a comma-separated VARCHAR of the types a grade

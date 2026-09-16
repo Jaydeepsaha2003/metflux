@@ -18,7 +18,7 @@ router.use(requireAuth, resolveTenant);
 /* Reuse the exact SO item shape + rate derivation, plus quotation-only
    print fields (HSN/SAC + unit of measure). */
 const itemSchema = z.object({
-  coreType: z.enum(['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND']),
+  coreType: z.enum(['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT']),
   // grade / measure / dimensions are optional so a MANUAL line (free-text
   // description + qty + rate, no core spec) can be quoted when an item isn't in
   // the catalogue. Calculated items still send them all.

@@ -109,6 +109,7 @@ export const buildSketch = (shape: CoreShape, width = 720, height = 340): Sketch
         break;
       }
       case 'RECTANGULAR':
+      case 'CUT_RECT':
         planW = shape.od1; planH = shape.od2;
         sectW = shape.od1; sectH = shape.ht;
         break;
@@ -123,7 +124,7 @@ export const buildSketch = (shape: CoreShape, width = 720, height = 340): Sketch
   const m = (v: number) => v * scale;   // millimetres → drawing units
 
   /* ---- PLAN ---- */
-  if (shape.kind === 'RECTANGULAR') {
+  if (shape.kind === 'RECTANGULAR' || shape.kind === 'CUT_RECT') {
     const { id1, id2, od1, od2 } = shape;
     const W = m(od1), H = m(od2), wI = m(id1), hI = m(id2);
     parts.push(
@@ -147,6 +148,13 @@ export const buildSketch = (shape: CoreShape, width = 720, height = 340): Sketch
         { x: s * 2.4, y: 0 }, `ID2 ${n(id2)}`, s,
       ),
     );
+    // The parting line, labelled the way the customer's drawings label it.
+    if (shape.kind === 'CUT_RECT') {
+      parts.push(
+        `<line x1="${f(planCx - W / 2 - s)}" y1="${f(cy)}" x2="${f(planCx + W / 2 + s * 3.2)}" y2="${f(cy)}" stroke="${INK}" stroke-width="0.9" stroke-dasharray="9 3 2 3"/>`,
+        `<text x="${f(planCx + W / 2 + s * 3.6)}" y="${f(cy)}" fill="${INK}" font-size="${f(s * 0.95)}" dominant-baseline="central">Line of Cut</text>`,
+      );
+    }
   } else {
     const od = shape.kind === 'COMPOSITE'
       ? Math.max(shape.crgo.od, shape.nano.od)
@@ -219,13 +227,14 @@ export const buildSketch = (shape: CoreShape, width = 720, height = 340): Sketch
       { x: s * 2.6, y: 0 }, `HT ${n(totalHt)}`, s,
     ));
   } else {
-    const fill = shape.kind === 'NANO' ? NANO : shape.kind === 'RECTANGULAR' ? '#f6dfe2' : STEEL;
-    const edge = shape.kind === 'NANO' ? NANO_EDGE : shape.kind === 'RECTANGULAR' ? '#b5616c' : STEEL_EDGE;
+    const boxy = shape.kind === 'RECTANGULAR' || shape.kind === 'CUT_RECT';
+    const fill = shape.kind === 'NANO' ? NANO : boxy ? '#f6dfe2' : STEEL;
+    const edge = shape.kind === 'NANO' ? NANO_EDGE : boxy ? '#b5616c' : STEEL_EDGE;
     parts.push(
       `<rect x="${f(sectCx - secW / 2)}" y="${f(secTop)}" width="${f(secW)}" height="${f(secH)}" fill="${fill}" stroke="${edge}" stroke-width="1.3"/>`,
     );
     // Show the bore as a dashed void through the section.
-    if (shape.kind !== 'RECTANGULAR') {
+    if (!boxy) {
       const ri = m(shape.dims.id) / 2;
       parts.push(
         `<rect x="${f(sectCx - ri)}" y="${f(secTop)}" width="${f(ri * 2)}" height="${f(secH)}" fill="#ffffff" stroke="${edge}" stroke-width="0.9" stroke-dasharray="5 3"/>`,
@@ -233,7 +242,7 @@ export const buildSketch = (shape: CoreShape, width = 720, height = 340): Sketch
     }
     parts.push(linearDim(
       { x: sectCx + secW / 2, y: secTop }, { x: sectCx + secW / 2, y: secTop + secH },
-      { x: s * 2.6, y: 0 }, `HT ${n(shape.kind === 'RECTANGULAR' ? shape.ht : shape.dims.ht)}`, s,
+      { x: s * 2.6, y: 0 }, `HT ${n(boxy ? shape.ht : shape.dims.ht)}`, s,
     ));
   }
   parts.push(viewTitle(sectCx, pad * 0.55, 'SECTION', s));

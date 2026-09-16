@@ -19,7 +19,7 @@ import { useAuthStore, activeMembership } from '@/store/auth';
 import './po-order-new.css';
 
 /* ---------- types ---------- */
-type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE' | 'CUT_ROUND';
+type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE' | 'CUT_ROUND' | 'CUT_RECT';
 
 export type Item = {
   /** Set when the item came from the DB (edit mode). Not sent to the server — Zod strips it. */
@@ -141,6 +141,7 @@ const emptyShapeFor = (ct: CoreType): CoreShape => {
   switch (ct) {
     case 'RECTANGULAR': return { kind: 'RECTANGULAR', id1: 0, id2: 0, od1: 0, od2: 0, ht: 0 };
     case 'CUT_ROUND':   return { kind: 'CUT_ROUND', dims: zero, gapMm: 0 };
+    case 'CUT_RECT':    return { kind: 'CUT_RECT', id1: 0, id2: 0, od1: 0, od2: 0, ht: 0, gapMm: 0 };
     case 'NANO':        return { kind: 'NANO', dims: zero, cased: true };
     case 'COMPOSITE':   return { kind: 'COMPOSITE', rule: 'CONTINUOUS_LOOP', crgo: zero, nano: zero };
     default:            return { kind: 'TOROIDAL', dims: zero };
@@ -865,6 +866,19 @@ export const POOrderNewPage = () => {
             >
               Round cut
             </button>
+            <button
+              type="button"
+              onClick={() => pickCore('CUT_RECT')}
+              aria-pressed={coreType === 'CUT_RECT'}
+              className={cn(
+                'rounded-md px-3 py-1.5 font-medium transition',
+                coreType === 'CUT_RECT'
+                  ? 'bg-white text-cyan-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              )}
+            >
+              Rect cut
+            </button>
           </div>
         </div>
 
@@ -941,6 +955,21 @@ export const POOrderNewPage = () => {
             prefill={prefill}
             onPrefillConsumed={() => setPrefill(null)}
             edit={editSeed?.item.coreType === 'CUT_ROUND' ? editSeed : null}
+            onEditConsumed={() => setEditSeed(null)}
+          />
+        )}
+        {coreType === 'CUT_RECT' && (
+          <RectangularForm
+            cut
+            onShape={setReport}
+            customerId={customerId}
+            customerFactor={selectedCustomer?.rectStackFactor}
+            grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'CUT_RECT'))}
+            fluxGrades={fluxRespRect?.grades ?? []}
+            onAdd={(item) => { setItems((prev) => [...prev, item]); }}
+            prefill={prefill}
+            onPrefillConsumed={() => setPrefill(null)}
+            edit={editSeed?.item.coreType === 'CUT_RECT' ? editSeed : null}
             onEditConsumed={() => setEditSeed(null)}
           />
         )}
@@ -1721,13 +1750,16 @@ export const ToroidalForm = ({
 /* ---------- RECTANGULAR ---------- */
 export const RectangularForm = ({
   grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed, hideTesting = false,
-  customerId, customerFactor, onShape,
+  customerId, customerFactor, onShape, cut = false,
 }: {
   grades: GradeRow[];
   fluxGrades: FluxGroup[];
   onAdd: (item: Item) => void;
   /** Reports the live dimensions to the 3D preview. */
   onShape?: (r: ShapeReport) => void;
+  /** Cut-core mode: the same window core, sawn across both limbs into two
+   *  mating C halves, optionally with a controlled air gap. */
+  cut?: boolean;
   /** Whose rate card to consult. Optional: the quotation screen has no
    *  customer, and passing none simply means nothing is filled in. */
   customerId?: string;
@@ -1758,10 +1790,12 @@ export const RectangularForm = ({
   // Stacking factor — seeded from the customer, overridable per line.
   const [stack, setStack] = useState(stackOr(customerFactor, RECT_STACK_FACTOR));
   const [stackTouched, setStackTouched] = useState(false);
+  const [gapMm, setGapMm] = useState(0);
   useEffect(() => {
     if (!stackTouched) setStack(stackOr(customerFactor, RECT_STACK_FACTOR));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerFactor]);
+  const selfCore: CoreType = cut ? 'CUT_RECT' : 'RECTANGULAR';
   const cardRate = useCustomerRate(customerId, grade, 'RECTANGULAR');
   useAutoFillRate(cardRate, rateTouched, (r) => { setRateBasis(r.rateBasis); setRateValue(r.rateValue); });
   const pendingFlux = useRef<number | null>(null);
@@ -1780,7 +1814,7 @@ export const RectangularForm = ({
 
   // Apply a one-shot "copy from row" prefill (grade / material / rate basis).
   useEffect(() => {
-    if (!prefill || prefill.coreType !== 'RECTANGULAR') return;
+    if (!prefill || prefill.coreType !== selfCore) return;
     setGrade(prefill.grade);
     setMaterial(prefill.material);
     setRateBasis(prefill.rateBasis);
@@ -1790,7 +1824,7 @@ export const RectangularForm = ({
 
   // Load a full row for editing.
   useEffect(() => {
-    if (!edit || edit.item.coreType !== 'RECTANGULAR') return;
+    if (!edit || edit.item.coreType !== selfCore) return;
     const it = edit.item;
     setMaterial(it.material);
     setId1(it.id1); setId2(it.id2 ?? 0); setOd1(it.od1); setOd2(it.od2 ?? 0); setHt(it.ht); setPcs(it.pcs);
@@ -1799,6 +1833,7 @@ export const RectangularForm = ({
     setRateTouched(true);   // the line already carries a price; leave it be
     // Re-weigh on the factor the line was BOOKED with, not today's default.
     setStack(stackOr(it.stackFactor, RECT_STACK_FACTOR)); setStackTouched(true);
+    setGapMm(it.gapMm ?? 0);
     pendingFlux.current = it.flux ?? 0;
     setGrade(it.grade);
     onEditConsumed?.();
@@ -1812,10 +1847,12 @@ export const RectangularForm = ({
   useReportShape(
     onShape,
     () => ({
-      shape: { kind: 'RECTANGULAR', id1, id2, od1, od2, ht },
+      shape: cut
+        ? { kind: 'CUT_RECT', id1, id2, od1, od2, ht, gapMm }
+        : { kind: 'RECTANGULAR', id1, id2, od1, od2, ht },
       meta: { grade, material, pcs, factor: stack, weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight },
     }),
-    [id1, id2, od1, od2, ht, grade, material, pcs, stack, calc.weightPerPc, calc.totalWeight],
+    [cut, gapMm, id1, id2, od1, od2, ht, grade, material, pcs, stack, calc.weightPerPc, calc.totalWeight],
   );
   const fluxCalc = useMemo(
     () => rectangularFluxTestCalc({
@@ -1850,6 +1887,7 @@ export const RectangularForm = ({
     setTurns(0); setFlux(0);
     setRateValue(0); setRateTouched(false);
     setStack(stackOr(customerFactor, RECT_STACK_FACTOR)); setStackTouched(false);
+    setGapMm(0);
   };
 
   const add = async () => {
@@ -1862,11 +1900,12 @@ export const RectangularForm = ({
       return;
     }
     onAdd({
-      coreType: 'RECTANGULAR', grade, material, measure: calc.measure,
+      coreType: selfCore, grade, material, measure: calc.measure,
       id1, id2, od1, od2, ht, builtup: calc.builtup, pcs,
       weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight,
       coreAc: calc.coreAc, coreMl: calc.coreMl, d13: calc.d13,
       stackFactor: stack,
+      gapMm: cut && gapMm > 0 ? gapMm : undefined,
       // Flux-test fields — only included when the user filled them.
       turns:       turns > 0 ? turns : undefined,
       flux:        flux  > 0 ? flux  : undefined,
@@ -1884,10 +1923,23 @@ export const RectangularForm = ({
   };
 
   return (
-    <div className="core-entry-form rounded-xl border border-rose-200 bg-rose-50/40 p-3 sm:p-4">
+    <div className={cn(
+      'core-entry-form rounded-xl border p-3 sm:p-4',
+      cut ? 'border-cyan-200 bg-cyan-50/40' : 'border-rose-200 bg-rose-50/40',
+    )}>
       <div className="mb-2 flex items-center gap-2">
-        <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-rose-800">Rectangular</span>
+        <span className={cn('h-1.5 w-1.5 rounded-full', cut ? 'bg-cyan-500' : 'bg-rose-500')} />
+        <span className={cn(
+          'text-[11px] font-semibold uppercase tracking-wider',
+          cut ? 'text-cyan-800' : 'text-rose-800',
+        )}>
+          {cut ? 'Rectangular cut core' : 'Rectangular'}
+        </span>
+        {cut && (
+          <span className="text-[10px] font-medium text-slate-500">
+            dimensions before cutting &middot; 1 pc = 1 complete core (2 halves)
+          </span>
+        )}
       </div>
 
       {/* Identity and price — same rhythm as the toroidal form above. */}
@@ -1934,6 +1986,9 @@ export const RectangularForm = ({
         <NumField label="OD 2" w={FW.dim} value={od2} onChange={setOd2} />
         <NumField label="HT"   w={FW.dim} value={ht}  onChange={setHt} />
         <NumField label="Pcs"  w={FW.qty} align="right" value={pcs} onChange={setPcs} />
+        {cut && (
+          <NumField label="Air gap" w={FW.factor} align="right" value={gapMm} onChange={setGapMm} />
+        )}
         {!hideTesting && (<>
           <NumField label="Turns" w={FW.qty} align="right" value={turns} onChange={setTurns} />
           <Field label="Flux" className={cn('shrink-0', FW.sel)}>
