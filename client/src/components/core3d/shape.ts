@@ -87,6 +87,28 @@ export const cutCoreCode = (
   return `CD ${n2(ht)}x${n2(build)}x${n2(id1)}/${n2(id2)}`;
 };
 
+const KIND_NAME = {
+  TOROIDAL: 'Toroidal core',
+  RECTANGULAR: 'Rectangular core',
+  NANO: 'Nano core',
+  COMPOSITE: 'Composite core',
+  CUT_ROUND: 'Round cut core',
+  CUT_RECT: 'Rectangular cut core',
+} as const;
+
+/**
+ * What to call the product.
+ *
+ * Lives here, with the shape, because a gapped core is a different product from
+ * the plain cut core it is made from and three separate places had started
+ * deciding that for themselves — the form heading, the preview panel and the
+ * spec sheet. Three copies of one rule is two copies too many.
+ */
+export const shapeTitle = (s: CoreShape): string =>
+  (s.kind === 'CUT_ROUND' && s.gapMm > 0) ? 'Round gap core'
+  : (s.kind === 'CUT_RECT' && s.gapMm > 0) ? 'Rectangular gap core'
+  : KIND_NAME[s.kind];
+
 /** The measure string shown under the viewer — same wording as the form. */
 export const shapeCaption = (s: CoreShape): string => {
   const n = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));

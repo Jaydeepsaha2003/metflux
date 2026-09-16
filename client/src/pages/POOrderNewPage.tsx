@@ -988,6 +988,9 @@ export const POOrderNewPage = () => {
                   ...(report?.meta ?? {}),
                   company: companyName,
                   customer: selectedCustomer?.name ?? null,
+                  // The sheet's title block wants the order it belongs to;
+                  // a drawing with no order number on it is hard to file.
+                  orderNo: poNumber || null,
                 }}
                 className="core-model-stage h-[260px] xl:h-[360px]"
               />

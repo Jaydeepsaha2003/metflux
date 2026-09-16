@@ -7,7 +7,7 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { Box, Loader2, RotateCcw, Maximize2, X, Ruler, Download, FileText, Image as ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { shapeIsDrawable, shapeCaption, type CoreShape } from './shape';
+import { shapeIsDrawable, shapeCaption, shapeTitle, type CoreShape } from './shape';
 import type { SheetMeta } from './specSheet';
 
 const CoreViewer = lazy(() => import('./CoreViewer'));
@@ -21,22 +21,9 @@ const TONE = {
   CUT_RECT:    { dot: 'bg-cyan-500',   label: 'text-cyan-800',   ring: 'border-cyan-200' },
 } as const;
 
-const TITLE = {
-  TOROIDAL: 'Toroidal core',
-  RECTANGULAR: 'Rectangular core',
-  NANO: 'Nano core',
-  COMPOSITE: 'Composite core',
-  CUT_ROUND: 'Round cut core',
-  CUT_RECT: 'Rectangular cut core',
-} as const;
-
-/* A gapped core is a different product from the plain cut core it is made from,
-   and the form's own heading already says so. The panel has to agree, or the
-   two headings sitting side by side read as a mistake. */
-const titleOf = (shape: CoreShape) =>
-  (shape.kind === 'CUT_ROUND' && shape.gapMm > 0) ? 'Round gap core'
-  : (shape.kind === 'CUT_RECT' && shape.gapMm > 0) ? 'Rectangular gap core'
-  : TITLE[shape.kind];
+/* The product's name comes from shape.ts, so the panel, the form heading and
+   the spec sheet cannot disagree about what is on the screen. */
+const titleOf = shapeTitle;
 
 /* The stage the model sits on. A soft radial wash rather than a flat fill, so
    the part reads as lit from above and the shadow it casts has something to

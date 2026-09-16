@@ -1,283 +1,183 @@
-// The downloadable core spec sheet: a dimensioned drawing, the dimension
-// table, and the weight calculation written out so it can be checked.
+// The downloadable core spec sheet: a dimensioned drawing, the figures behind
+// every number on the order line, and the working that produced them.
 //
-// Two formats from one drawing. PDF goes through pdfmake, the same path the
-// Packing List and Testing Report already use, so the sketch stays vector and
-// the text stays selectable. JPG rasterises the same SVG for anyone who wants
-// to paste a picture into WhatsApp or an email.
+// Two formats from one model. PDF goes through pdfmake, the same path the
+// Packing List and Testing Report already use, so the drawing stays vector and
+// the text stays selectable. JPG rasterises the same content for anyone who
+// wants to paste a picture into WhatsApp or an email.
 //
-// The weight line is spelled out rather than just stated. A customer querying a
-// weight wants to see which factor produced it, and an operator checking a
-// quote wants to know whether the 5.77 or an agreed figure was used.
+// What is ON the sheet lives in sheetModel.ts; this file only lays it out. The
+// split exists because the two renderers had each grown their own idea of the
+// content, which is how a figure ends up on the PDF and missing from the JPG.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { TOROIDAL_FACTOR, RECT_STACK_FACTOR, stackOr } from '@/lib/calc';
-import { buildSketch } from './sketch';
-import { compositeLayout, cutCoreCode, shapeCaption, type CoreShape } from './shape';
+import { buildSketch, scaleLabel } from './sketch';
+import { buildSheetModel, fileStem, type SheetMeta, type Section } from './sheetModel';
+import type { CoreShape } from './shape';
 
-export type SheetMeta = {
-  company?: string | null;
-  customer?: string | null;
-  grade?: string | null;
-  material?: string | null;
-  pcs?: number | null;
-  /** Stacking factor actually used for this line. */
-  factor?: number | null;
-  weightPerPc?: number | null;
-  totalWeight?: number | null;
-  /* The magnetic test figures, when the line carries them. A gapped core is
-     bought for its ampere-turns as much as its weight, so the sheet has to
-     show how the test voltage and the magnetising current were arrived at —
-     otherwise the customer sees an Ie ten times the ungapped one and no
-     explanation on the paper that travels with the core. */
-  turns?: number | null;
-  flux?: number | null;
-  ateCm?: number | null;
-  testVoltage?: number | null;
-  testCurrent?: number | null;
-  /** Ampere-turns the steel path needs on its own. */
-  steelAt?: number | null;
-  /** Ampere-turns the air gap needs — usually the larger share. */
-  gapAt?: number | null;
-};
+export type { SheetMeta } from './sheetModel';
 
-const n = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(2));
-const kg = (v: number | null | undefined) => (v == null ? '—' : `${v.toFixed(3)} kg`);
+const stamp = () => new Date().toLocaleDateString('en-IN', {
+  day: '2-digit', month: 'short', year: 'numeric',
+});
 
-const TITLE = {
-  TOROIDAL: 'Toroidal core',
-  RECTANGULAR: 'Rectangular core',
-  NANO: 'Nano core',
-  COMPOSITE: 'Composite core (Nano + CRGO)',
-  CUT_ROUND: 'Round cut core',
-  CUT_RECT: 'Rectangular cut core (C core)',
-} as const;
+/* ── JPG ──────────────────────────────────────────────────────────────────
+   Laid out by hand into an SVG and painted to a canvas. The sheet grows to fit
+   what is on it rather than being a fixed height — a toroid quoted on weight
+   alone is half the sheet of a gap core with a full test block, and a fixed
+   canvas either crops the second or leaves the first mostly blank. */
 
-/** A gap core is a distinct product, so the sheet has to name it as one. */
-const titleOf = (shape: CoreShape) =>
-  (shape.kind === 'CUT_ROUND' && shape.gapMm > 0) ? 'Round gap core'
-  : (shape.kind === 'CUT_RECT' && shape.gapMm > 0) ? 'Rectangular gap core (C core)'
-  : TITLE[shape.kind];
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-/** Rows for the dimension table, in the order an operator reads them. */
-const dimensionRows = (shape: CoreShape): [string, string][] => {
-  switch (shape.kind) {
-    case 'TOROIDAL':
-    case 'NANO':
-      return [
-        ['Inner diameter (ID)', `${n(shape.dims.id)} mm`],
-        ['Outer diameter (OD)', `${n(shape.dims.od)} mm`],
-        ['Height (HT)', `${n(shape.dims.ht)} mm`],
-      ];
-    case 'CUT_ROUND':
-      return [
-        ['Inner diameter (ID)', `${n(shape.dims.id)} mm`],
-        ['Outer diameter (OD)', `${n(shape.dims.od)} mm`],
-        ['Height (HT)', `${n(shape.dims.ht)} mm`],
-        ['Construction', 'Cut into 2 mating halves'],
-        ['Total air gap', shape.gapMm > 0 ? `${n(shape.gapMm)} mm` : 'None (butt joint)'],
-      ];
-    case 'CUT_RECT':
-      return [
-        ['Trade code', cutCoreCode(shape.id1, shape.id2, shape.od1, shape.ht)],
-        ['Window ID 1', `${n(shape.id1)} mm`],
-        ['Window ID 2', `${n(shape.id2)} mm`],
-        ['Outer OD 1', `${n(shape.od1)} mm`],
-        ['Outer OD 2', `${n(shape.od2)} mm`],
-        ['Strip width (HT)', `${n(shape.ht)} mm`],
-        ['Build-up', `${n((shape.od1 - shape.id1) / 2)} mm`],
-        ['Construction', 'Cut into 2 mating halves'],
-        ['Total air gap', shape.gapMm > 0 ? `${n(shape.gapMm)} mm` : 'None (butt joint)'],
-      ];
-    case 'RECTANGULAR':
-      return [
-        ['Window ID 1', `${n(shape.id1)} mm`],
-        ['Window ID 2', `${n(shape.id2)} mm`],
-        ['Outer OD 1', `${n(shape.od1)} mm`],
-        ['Outer OD 2', `${n(shape.od2)} mm`],
-        ['Height (HT)', `${n(shape.ht)} mm`],
-        ['Built-up', `${n((shape.od1 - shape.id1) / 2)} mm`],
-      ];
-    case 'COMPOSITE': {
-      const { totalHt } = compositeLayout(shape.rule, shape.crgo, shape.nano);
-      return [
-        ['CRGO  ID / OD / HT', `${n(shape.crgo.id)} / ${n(shape.crgo.od)} / ${n(shape.crgo.ht)} mm`],
-        ['Nano  ID / OD / HT', `${n(shape.nano.id)} / ${n(shape.nano.od)} / ${n(shape.nano.ht)} mm`],
-        ['Join type', shape.rule.replace(/_/g, ' ').toLowerCase()],
-        ['Overall height', `${n(totalHt)} mm`],
-      ];
-    }
-  }
-};
+const T = (
+  x: number, y: number, s: string, size = 19,
+  { weight = 400, fill = '#0f172a', anchor = 'start' } = {},
+) =>
+  `<text x="${x}" y="${y}" font-family="Helvetica, Arial, sans-serif" font-size="${size}"`
+  + ` font-weight="${weight}" fill="${fill}" text-anchor="${anchor}">${esc(s)}</text>`;
 
-/** The weight formula, written with this line's own numbers substituted in. */
-const weightWorking = (shape: CoreShape, meta: SheetMeta): string[] => {
-  switch (shape.kind) {
-    case 'TOROIDAL': {
-      const { id, od, ht } = shape.dims;
-      const fx = stackOr(meta.factor, TOROIDAL_FACTOR);
-      return [
-        'Weight / pc = (OD² − ID²) × HT × F × 1e-6',
-        `= (${n(od)}² − ${n(id)}²) × ${n(ht)} × ${fx} × 1e-6`,
-        `F = ${fx} (stacking factor${fx === TOROIDAL_FACTOR ? ', standard' : ', agreed for this customer'})`,
-      ];
-    }
-    case 'CUT_RECT':
-    case 'RECTANGULAR': {
-      const { id2, od2, ht } = shape;
-      const sf = stackOr(meta.factor, RECT_STACK_FACTOR);
-      return [
-        'Core area  Ac = ((OD2 − ID2) / 2) × HT × S / 100',
-        `= ((${n(od2)} − ${n(id2)}) / 2) × ${n(ht)} × ${sf} / 100`,
-        'Mean length  Ml = 0.2 × (ID1 + ID2) + ((OD2 − ID2) / 20) × π',
-        'Weight / pc = Ac × Ml × 7.65 / 1000',
-        `S = ${sf} (stacking factor${sf === RECT_STACK_FACTOR ? ', standard' : ', agreed for this customer'})`,
-      ];
-    }
-    case 'CUT_ROUND': {
-      const { id, od, ht } = shape.dims;
-      const fx = stackOr(meta.factor, TOROIDAL_FACTOR);
-      return [
-        'Cut from a wound core, so the weight is that of the whole ring:',
-        'Weight / pc = (OD² − ID²) × HT × F × 1e-6',
-        `= (${n(od)}² − ${n(id)}²) × ${n(ht)} × ${fx} × 1e-6`,
-        `F = ${fx} (stacking factor${fx === TOROIDAL_FACTOR ? ', standard' : ', agreed for this customer'})`,
-        'One piece = one complete core, both halves. Cutting loss not deducted.',
-      ];
-    }
-    case 'NANO':
-      return [
-        'Core weight = (OD² − ID²) × HT × 4.5559e-6',
-        'Case weight = (caseOD + caseID) × HT × 3.4876e-5 + (ssOD² − ssID²) × 7.68e-6',
-        'Weight / pc = core + case (case omitted for epoxy / plastic)',
-      ];
-    case 'COMPOSITE': {
-      const fx = stackOr(meta.factor, TOROIDAL_FACTOR);
-      return [
-        'Weight / pc = Nano (core + case) + CRGO',
-        'Nano core = (OD² − ID²) × HT × 4.5559e-6',
-        `CRGO = (OD² − ID²) × HT × ${fx} × 1e-6`,
-        `F = ${fx} (stacking factor for the CRGO half)`,
-      ];
-    }
-  }
-};
+const HEAD_H = 30;      // section heading band
+const ROW_H = 30;       // one key/value row
+const LINE_H = 23;      // one working line
+const SEC_GAP = 26;     // between sections in a column
 
-/**
- * The magnetic test line, written out the way a test certificate reads.
- *
- * Returns nothing at all when the line has no flux figures — most lines are
- * quoted on weight alone, and an empty "MAGNETIC TEST" heading on the sheet
- * would just look like something failed to print.
- */
-const testWorking = (shape: CoreShape, meta: SheetMeta): string[] => {
-  const turns = meta.turns ?? 0;
-  const flux = meta.flux ?? 0;
-  if (!(turns > 0) || !(flux > 0)) return [];
+/* Rough advance width for Helvetica at a given size. Good enough to decide
+   where to break — the alternative is measuring text in a canvas, which means
+   a second rendering pass for the sake of a line break. */
+const widthOf = (str: string, size: number, bold = false) =>
+  str.length * size * (bold ? 0.55 : 0.5);
 
-  const gapMm = shape.kind === 'CUT_ROUND' || shape.kind === 'CUT_RECT' ? shape.gapMm : 0;
-  const steel = meta.steelAt ?? 0;
-  const gap = meta.gapAt ?? 0;
-  const out: string[] = [
-    `At ${turns} turns / 50 Hz, ${flux.toFixed(2)} T:`,
-    `V = 4.44 × 50 × N × B × Ae / 10000 = ${(meta.testVoltage ?? 0).toFixed(3)} V`,
-  ];
-  if (gapMm > 0) {
-    // Spelled out because the gap term is what makes a gap core a gap core.
-    out.push(
-      `Gap AT = 795.7747 × B × gap = 795.7747 × ${flux.toFixed(2)} × ${n(gapMm)} = ${gap.toFixed(0)} AT`,
-      `Steel AT = ${steel.toFixed(0)} AT · total ${(steel + gap).toFixed(0)} AT`,
-    );
-  }
-  out.push(`Ie max = total AT / N × 1000 = ${(meta.testCurrent ?? 0).toFixed(2)} mA`);
+/** Greedy word wrap to a pixel width. */
+const wrap = (str: string, size: number, w: number): string[] => {
+  const words = str.split(' ');
+  const out: string[] = [];
+  let cur = '';
+  words.forEach((word) => {
+    const next = cur ? `${cur} ${word}` : word;
+    if (cur && widthOf(next, size) > w) { out.push(cur); cur = word; } else { cur = next; }
+  });
+  if (cur) out.push(cur);
   return out;
 };
 
-const fileStem = (shape: CoreShape, meta: SheetMeta) => {
-  const bits = [meta.customer, titleOf(shape), shapeCaption(shape)]
-    .filter(Boolean)
-    .join(' ')
-    .replace(/[^\w\s-]/g, '')
-    .replace(/\s+/g, '-');
-  return bits.slice(0, 80) || 'core-spec';
+const drawSection = (sec: Section, x: number, y: number, w: number): [string, number] => {
+  const out: string[] = [T(x, y, sec.heading.toUpperCase(), 15, { weight: 700, fill: '#64748b' })];
+  out.push(`<line x1="${x}" y1="${y + 9}" x2="${x + w}" y2="${y + 9}" stroke="#0f172a" stroke-width="1.1"/>`);
+  let cy = y + HEAD_H;
+
+  (sec.rows ?? []).forEach(([k, v]) => {
+    // A long value drops to its own line rather than being written through the
+    // key. "Construction: 2 mating halves — 1 pc = 1 complete core" is a real
+    // row on a real sheet, and side by side the two overprinted each other.
+    const twoLine = widthOf(k, 18) + widthOf(v, 18, true) + 16 > w;
+    out.push(T(x, cy, k, 18, { fill: '#334155' }));
+    if (twoLine) {
+      cy += 22;
+      wrap(v, 18, w).forEach((l, i) => {
+        if (i) cy += 22;
+        out.push(T(x + w, cy, l, 18, { weight: 700, anchor: 'end' }));
+      });
+    } else {
+      out.push(T(x + w, cy, v, 18, { weight: 700, anchor: 'end' }));
+    }
+    out.push(`<line x1="${x}" y1="${cy + 9}" x2="${x + w}" y2="${cy + 9}" stroke="#e2e8f0"/>`);
+    cy += ROW_H;
+  });
+
+  if (sec.lines?.length) {
+    cy += 10;
+    sec.lines.forEach((l) => {
+      wrap(l, 15.5, w).forEach((part) => {
+        out.push(T(x, cy, part, 15.5, { fill: '#475569' }));
+        cy += LINE_H;
+      });
+    });
+  }
+  return [out.join(''), cy];
 };
 
-/* ── JPG ──────────────────────────────────────────────────────── */
-
-/**
- * Rasterise the whole sheet — drawing, tables and all — by laying it out as one
- * SVG and painting it to a canvas.
- *
- * The SVG is handed to the image decoder as a data URL rather than a blob URL:
- * a tainted canvas cannot be exported, and a same-origin blob is still enough
- * to taint it in some browsers once foreign content is involved. A data URL
- * with no external references keeps the canvas clean, which is the whole
- * requirement for toDataURL to work at all.
- */
 export const downloadSheetJpg = async (shape: CoreShape, meta: SheetMeta) => {
   const W = 1400;
-  const sk = buildSketch(shape, W - 80, 430);
-  const rows = dimensionRows(shape);
-  const working = weightWorking(shape, meta);
+  const M = 44;                                     // sheet margin
+  const model = buildSheetModel(shape, meta);
+  const sk = buildSketch(shape, W - M * 2, 430);
 
-  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const t = (x: number, y: number, s: string, size = 20, weight = 400, fill = '#0f172a', anchor = 'start') =>
-    `<text x="${x}" y="${y}" font-family="Helvetica, Arial, sans-serif" font-size="${size}" font-weight="${weight}" fill="${fill}" text-anchor="${anchor}">${esc(s)}</text>`;
+  // Notes ride along as one more section, so the packing below balances them
+  // with everything else instead of leaving a ragged block at the bottom.
+  const sections: Section[] = [...model.sections, { heading: 'Notes', lines: model.notes }];
 
-  let y = 560;
+  /* Three columns, filled across rather than down: Product · Dimensions ·
+     Geometry on the first line, Weight · Magnetic test · Notes on the second.
+     Dropping each section into whichever column was shortest balanced the page
+     better and scrambled the reading order, which on a document someone checks
+     a figure against is the thing that actually matters. */
+  const COLS = 3;
+  const colW = (W - M * 2 - 40 * (COLS - 1)) / COLS;
+  const colX = Array.from({ length: COLS }, (_, i) => M + i * (colW + 40));
+  const top = 150 + sk.height + 34;
+  const colY = Array.from({ length: COLS }, () => top);
   const body: string[] = [];
-  body.push(t(40, y, 'DIMENSIONS', 15, 700, '#64748b')); y += 28;
-  rows.forEach(([k, v]) => {
-    body.push(t(40, y, k, 19), t(430, y, v, 19, 700));
-    body.push(`<line x1="40" y1="${y + 9}" x2="660" y2="${y + 9}" stroke="#e2e8f0"/>`);
-    y += 32;
+
+  sections.forEach((sec, idx) => {
+    const i = idx % COLS;
+    // Keep a section's working with its rows: never split one across columns.
+    const [svg, end] = drawSection(sec, colX[i], colY[i], colW);
+    body.push(svg);
+    colY[i] = end + SEC_GAP;
   });
 
-  let y2 = 560;
-  body.push(t(720, y2, 'WEIGHT', 15, 700, '#64748b')); y2 += 28;
-  [
-    ['Weight / pc', kg(meta.weightPerPc)],
-    ['Pieces', meta.pcs ? String(meta.pcs) : '—'],
-    ['Total weight', kg(meta.totalWeight)],
-  ].forEach(([k, v]) => {
-    body.push(t(720, y2, k, 19), t(1110, y2, v, 19, 700));
-    body.push(`<line x1="720" y1="${y2 + 9}" x2="1360" y2="${y2 + 9}" stroke="#e2e8f0"/>`);
-    y2 += 32;
+  const bodyBottom = Math.max(...colY);
+
+  /* Title block, as a drawing has one: who, when, at what scale, in what
+     units. Without it the sheet is a picture; with it, it is a document. */
+  const tbH = 62;
+  const tbY = bodyBottom + 10;
+  const cells: [string, string][] = [
+    ['COMPANY', meta.company || '—'],
+    ['CUSTOMER', meta.customer || '—'],
+    ['ORDER', meta.orderNo || '—'],
+    // A raster has no physical size, so there is no honest ratio to print.
+    ['SCALE', 'NTS'],
+    ['UNITS', 'mm'],
+    ['DATE', stamp()],
+  ];
+  const cw = (W - M * 2) / cells.length;
+  const tb: string[] = [
+    `<rect x="${M}" y="${tbY}" width="${W - M * 2}" height="${tbH}" fill="#f8fafc" stroke="#0f172a" stroke-width="1.1"/>`,
+  ];
+  cells.forEach(([k, v], i) => {
+    const x = M + i * cw;
+    if (i > 0) tb.push(`<line x1="${x}" y1="${tbY}" x2="${x}" y2="${tbY + tbH}" stroke="#cbd5e1"/>`);
+    tb.push(
+      T(x + 12, tbY + 22, k, 13, { weight: 700, fill: '#64748b' }),
+      T(x + 12, tbY + 45, v.length > 26 ? `${v.slice(0, 25)}…` : v, 17, { weight: 700 }),
+    );
   });
-  y2 += 12;
-  body.push(t(720, y2, 'CALCULATION', 15, 700, '#64748b')); y2 += 26;
-  working.forEach((line) => { body.push(t(720, y2, line, 16, 400, '#334155')); y2 += 24; });
 
-  const test = testWorking(shape, meta);
-  if (test.length) {
-    y2 += 12;
-    body.push(t(720, y2, 'MAGNETIC TEST', 15, 700, '#64748b')); y2 += 26;
-    test.forEach((line) => { body.push(t(720, y2, line, 16, 400, '#334155')); y2 += 24; });
-  }
-
-  /* The sheet grows to fit what is on it. Fixed at 990 it was long enough for
-     a weight calculation and no more, so the magnetic test block on a gap core
-     ran off the bottom edge and the last line — the magnetising current, the
-     one figure the gap is chosen for — was cropped out of the image. */
-  const H = Math.max(990, Math.ceil(Math.max(y, y2) + 70));
+  const H = Math.ceil(tbY + tbH + M);
 
   const header = [
     `<rect x="0" y="0" width="${W}" height="${H}" fill="#ffffff"/>`,
-    `<rect x="0" y="0" width="${W}" height="6" fill="#0f172a"/>`,
-    t(40, 58, meta.company || 'Core specification', 30, 700),
-    t(40, 88, `${titleOf(shape)} · ${shapeCaption(shape)}`, 19, 400, '#475569'),
-    meta.customer ? t(1360, 58, meta.customer, 20, 700, '#0f172a', 'end') : '',
-    meta.grade ? t(1360, 88, [meta.grade, meta.material].filter(Boolean).join(' · '), 17, 400, '#475569', 'end') : '',
-    `<line x1="40" y1="106" x2="1360" y2="106" stroke="#cbd5e1"/>`,
+    `<rect x="0" y="0" width="${W}" height="7" fill="#0f172a"/>`,
+    T(M, 62, meta.company || 'Core specification', 30, { weight: 700 }),
+    T(M, 94, `${model.title} · ${model.subtitle}`, 19, { fill: '#475569' }),
+    meta.customer ? T(W - M, 62, meta.customer, 21, { weight: 700, anchor: 'end' }) : '',
+    T(W - M, 94, [meta.grade, meta.material].filter(Boolean).join(' · '), 17,
+      { fill: '#475569', anchor: 'end' }),
+    `<line x1="${M}" y1="112" x2="${W - M}" y2="112" stroke="#cbd5e1"/>`,
+    `<rect x="${M}" y="140" width="${W - M * 2}" height="${sk.height + 10}" fill="#ffffff" stroke="#e2e8f0"/>`,
   ].join('');
 
   const sheet =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`
     + header
-    + `<g transform="translate(40,120)">${sk.svg.replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '')}</g>`
+    + `<g transform="translate(${M},145)">${sk.svg.replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '')}</g>`
     + body.join('')
-    + t(40, H - 24, `Generated ${new Date().toLocaleDateString('en-IN')} · all dimensions in mm`, 15, 400, '#94a3b8')
+    + tb.join('')
     + `</svg>`;
 
+  /* The SVG goes to the decoder as a data URL rather than a blob URL: a tainted
+     canvas cannot be exported, and a same-origin blob is still enough to taint
+     it in some browsers once foreign content is involved. */
   const url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(sheet)}`;
   const img = new Image();
   await new Promise<void>((resolve, reject) => {
@@ -300,24 +200,80 @@ export const downloadSheetJpg = async (shape: CoreShape, meta: SheetMeta) => {
   a.click();
 };
 
-/* ── PDF ──────────────────────────────────────────────────────── */
+/* ── PDF ─────────────────────────────────────────────────────────────────── */
+
+const PAGE_W = 531;      // A4 less the margins below
+
+const pdfSection = (sec: Section): any[] => {
+  const out: any[] = [
+    { text: sec.heading.toUpperCase(), fontSize: 8, bold: true, color: '#64748b', margin: [0, 0, 0, 1] },
+    { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 250, y2: 0, lineWidth: 0.8, lineColor: '#0f172a' }], margin: [0, 0, 0, 4] },
+  ];
+  if (sec.rows?.length) {
+    out.push({
+      table: {
+        widths: ['*', 'auto'],
+        body: sec.rows.map(([k, v]) => [
+          { text: k, color: '#334155' },
+          { text: v, bold: true, alignment: 'right' },
+        ]),
+      },
+      layout: {
+        hLineWidth: (i: number, node: any) => (i === node.table.body.length ? 0 : 0.5),
+        vLineWidth: () => 0,
+        hLineColor: () => '#e2e8f0',
+        paddingTop: () => 1.8, paddingBottom: () => 1.8, paddingLeft: () => 0, paddingRight: () => 0,
+      },
+    });
+  }
+  if (sec.lines?.length) {
+    out.push(...sec.lines.map((l, i) => ({
+      text: l, fontSize: 7.5, color: '#475569', margin: [0, i === 0 ? 4 : 0, 0, 1],
+    })));
+  }
+  // A zero-height spacer: an empty text node still takes a full line, which
+  // across six sections was most of the overflow onto a second page.
+  out.push({ text: '', fontSize: 1, margin: [0, 0, 0, 7] });
+  return out;
+};
 
 export const downloadSheetPdf = async (shape: CoreShape, meta: SheetMeta) => {
   const { loadPdfMake } = await import('@/lib/reportPdf');
   const pdfMake = await loadPdfMake();
-  const sk = buildSketch(shape, 740, 360);
-  const rows = dimensionRows(shape);
+  const model = buildSheetModel(shape, meta);
+  // Sized so the whole sheet lands on one page. A spec sheet that runs to two
+  // pages with a title block alone on the second is a sheet somebody prints,
+  // staples and loses half of.
+  const sk = buildSketch(shape, PAGE_W, 198);
+
+  /* Two columns, filled across, so the sheet reads in the same order as the
+     JPG: Product · Dimensions, then Geometry · Weight, then Magnetic · Notes. */
+  const sections: Section[] = [...model.sections, { heading: 'Notes', lines: model.notes }];
+  const colA = sections.filter((_, i) => i % 2 === 0);
+  const colB = sections.filter((_, i) => i % 2 === 1);
+
+  const titleBlock: [string, string][] = [
+    ['COMPANY', meta.company || '—'],
+    ['CUSTOMER', meta.customer || '—'],
+    ['ORDER', meta.orderNo || '—'],
+    // One drawing unit is one point, stretched by however much pdfmake had to
+    // squeeze the SVG into the column; 25.4/72 turns the result into
+    // millimetres on the printed page.
+    ['SCALE', scaleLabel(sk.unitsPerMm, (25.4 / 72) * ((PAGE_W - 8) / sk.width))],
+    ['UNITS', 'mm'],
+    ['DATE', stamp()],
+  ];
 
   const doc: any = {
     pageSize: 'A4',
-    pageMargins: [32, 30, 32, 34],
-    defaultStyle: { font: 'Montserrat', fontSize: 9, color: '#0f172a' },
+    pageMargins: [32, 30, 32, 40],
+    defaultStyle: { font: 'Montserrat', fontSize: 8.5, color: '#0f172a' },
     content: [
       {
         columns: [
           [
             { text: meta.company || 'Core specification', fontSize: 15, bold: true },
-            { text: `${titleOf(shape)} · ${shapeCaption(shape)}`, fontSize: 9, color: '#475569', margin: [0, 2, 0, 0] },
+            { text: `${model.title} · ${model.subtitle}`, fontSize: 9, color: '#475569', margin: [0, 2, 0, 0] },
           ],
           {
             width: 'auto',
@@ -325,73 +281,53 @@ export const downloadSheetPdf = async (shape: CoreShape, meta: SheetMeta) => {
             stack: [
               { text: meta.customer || '', fontSize: 10, bold: true },
               { text: [meta.grade, meta.material].filter(Boolean).join(' · '), fontSize: 8, color: '#475569' },
+              meta.orderNo ? { text: meta.orderNo, fontSize: 8, color: '#475569' } : { text: '' },
             ],
           },
         ],
       },
-      { canvas: [{ type: 'line', x1: 0, y1: 4, x2: 531, y2: 4, lineWidth: 0.7, lineColor: '#cbd5e1' }], margin: [0, 4, 0, 8] },
+      { canvas: [{ type: 'line', x1: 0, y1: 4, x2: PAGE_W, y2: 4, lineWidth: 0.7, lineColor: '#cbd5e1' }], margin: [0, 4, 0, 6] },
       // The drawing stays vector in the PDF — zoom in and the dimension text is
       // still sharp, which a rasterised sketch would not be.
-      { svg: sk.svg, width: 531, margin: [0, 0, 0, 10] },
+      {
+        table: { widths: [PAGE_W - 2], body: [[{ svg: sk.svg, width: PAGE_W - 8, margin: [3, 3, 3, 3] }]] },
+        layout: {
+          hLineWidth: () => 0.5, vLineWidth: () => 0.5,
+          hLineColor: () => '#e2e8f0', vLineColor: () => '#e2e8f0',
+          paddingTop: () => 0, paddingBottom: () => 0, paddingLeft: () => 0, paddingRight: () => 0,
+        },
+        margin: [0, 0, 0, 10],
+      },
       {
         columns: [
-          {
-            width: '*',
-            stack: [
-              { text: 'DIMENSIONS', fontSize: 8, bold: true, color: '#64748b', margin: [0, 0, 0, 4] },
-              {
-                table: { widths: ['*', 'auto'], body: rows.map(([k, v]) => [
-                  { text: k, color: '#334155' },
-                  { text: v, bold: true, alignment: 'right' },
-                ]) },
-                layout: {
-                  hLineWidth: (i: number, node: any) => (i === node.table.body.length ? 0 : 0.5),
-                  vLineWidth: () => 0,
-                  hLineColor: () => '#e2e8f0',
-                  paddingTop: () => 3, paddingBottom: () => 3, paddingLeft: () => 0,
-                },
-              },
-            ],
-          },
-          { width: 16, text: '' },
-          {
-            width: '*',
-            stack: [
-              { text: 'WEIGHT', fontSize: 8, bold: true, color: '#64748b', margin: [0, 0, 0, 4] },
-              {
-                table: { widths: ['*', 'auto'], body: [
-                  [{ text: 'Weight / pc', color: '#334155' }, { text: kg(meta.weightPerPc), bold: true, alignment: 'right' }],
-                  [{ text: 'Pieces', color: '#334155' }, { text: meta.pcs ? String(meta.pcs) : '—', bold: true, alignment: 'right' }],
-                  [{ text: 'Total weight', color: '#334155' }, { text: kg(meta.totalWeight), bold: true, alignment: 'right' }],
-                ] },
-                layout: {
-                  hLineWidth: (i: number, node: any) => (i === node.table.body.length ? 0 : 0.5),
-                  vLineWidth: () => 0,
-                  hLineColor: () => '#e2e8f0',
-                  paddingTop: () => 3, paddingBottom: () => 3, paddingLeft: () => 0,
-                },
-              },
-              { text: 'CALCULATION', fontSize: 8, bold: true, color: '#64748b', margin: [0, 10, 0, 4] },
-              ...weightWorking(shape, meta).map((line) => ({
-                text: line, fontSize: 8, color: '#334155', margin: [0, 0, 0, 2],
-              })),
-              ...(testWorking(shape, meta).length
-                ? [
-                  { text: 'MAGNETIC TEST', fontSize: 8, bold: true, color: '#64748b', margin: [0, 10, 0, 4] },
-                  ...testWorking(shape, meta).map((line) => ({
-                    text: line, fontSize: 8, color: '#334155', margin: [0, 0, 0, 2],
-                  })),
-                ]
-                : []),
-            ],
-          },
+          { width: '*', stack: colA.flatMap(pdfSection) },
+          { width: 18, text: '' },
+          { width: '*', stack: colB.flatMap(pdfSection) },
         ],
       },
+      {
+        table: {
+          widths: titleBlock.map(() => '*'),
+          body: [
+            titleBlock.map(([k]) => ({ text: k, fontSize: 6.5, bold: true, color: '#64748b' })),
+            titleBlock.map(([, v]) => ({ text: v, fontSize: 8.5, bold: true })),
+          ],
+        },
+        layout: {
+          hLineWidth: (i: number, node: any) => (i === 0 || i === node.table.body.length ? 0.8 : 0),
+          vLineWidth: () => 0.5,
+          hLineColor: () => '#0f172a', vLineColor: () => '#cbd5e1',
+          paddingTop: (i: number) => (i === 0 ? 4 : 0), paddingBottom: (i: number) => (i === 0 ? 1 : 4),
+          paddingLeft: () => 5, paddingRight: () => 5,
+          fillColor: () => '#f8fafc',
+        },
+        margin: [0, 6, 0, 0],
+      },
     ],
-    footer: () => ({
+    footer: (page: number, total: number) => ({
       columns: [
-        { text: `Generated ${new Date().toLocaleDateString('en-IN')}`, fontSize: 7, color: '#94a3b8', margin: [32, 0, 0, 0] },
-        { text: 'All dimensions in mm', fontSize: 7, color: '#94a3b8', alignment: 'right', margin: [0, 0, 32, 0] },
+        { text: `${model.title} · ${model.subtitle}`, fontSize: 7, color: '#94a3b8', margin: [32, 0, 0, 0] },
+        { text: `Sheet ${page} of ${total}`, fontSize: 7, color: '#94a3b8', alignment: 'right', margin: [0, 0, 32, 0] },
       ],
     }),
   };
