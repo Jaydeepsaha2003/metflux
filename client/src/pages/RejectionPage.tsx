@@ -13,6 +13,7 @@ import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { InsightMetrics, InsightBreakdown } from '@/components/CommercialInsights';
 
 type Store = { id: string; name: string; isActive: boolean };
 type Rejectable = {
@@ -53,12 +54,15 @@ export const RejectionPage = () => {
     queryKey: ['rejectable', search],
     queryFn: () => api<{ items: Rejectable[] }>(`/warehouses/rejectable${search ? `?search=${encodeURIComponent(search)}` : ''}`),
   });
-  const { data: rejections } = useQuery({ queryKey: ['rejections'], queryFn: () => api<{ items: Rejection[] }>('/warehouses/rejections') });
+  const { data: rejections, isError: rejectionError } = useQuery({ queryKey: ['rejections'], queryFn: () => api<{ items: Rejection[] }>('/warehouses/rejections') });
 
   const activeStores = (stores?.items ?? []).filter((s) => s.isActive);
   const storeOpts = activeStores.map((s) => ({ value: s.id, label: s.name }));
   const items = rejectable?.items ?? [];
   const rejList = rejections?.items ?? [];
+  const breakdown = (key: 'coreType' | 'warehouseName') => Object.entries(rejList.reduce<Record<string,number>>((acc,row)=>{
+    const name = row[key] || 'Unspecified'; acc[name]=(acc[name] || 0)+row.pcs; return acc;
+  },{})).map(([label,value])=>({label,value}));
 
   const invalidate = () => ['rejectable', 'rejections', 'dispatch-ready', 'warehouse-stock'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
 
@@ -105,10 +109,11 @@ export const RejectionPage = () => {
   };
 
   return (
-    <div className="production-workspace max-w-full space-y-4 text-[13px] sm:space-y-5">
+    <div className="commercial-workspace production-workspace max-w-full space-y-4 text-[13px] sm:space-y-5">
       {/* Page header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="commercial-heading flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
+          <p className="commercial-eyebrow">Quality / Rejected production</p>
           <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl">
             <Ban className="h-6 w-6 shrink-0 text-rose-600" /> Rejection
           </h1>
@@ -119,6 +124,21 @@ export const RejectionPage = () => {
       </div>
 
       {/* Tabs */}
+      {rejectionError ? <p role="alert" className="text-red-700">Rejection analysis could not load. Refresh to try again.</p> : !rejections ? <p role="status">Loading rejection analysis…</p> : <>
+        <InsightMetrics title="Rejection overview" scope={`Latest ${rejList.length} records · Up to 200 · Independent of search`} items={[
+          {label:'Rejected pieces',value:rejList.reduce((n,r)=>n+r.pcs,0).toLocaleString('en-IN')},
+          {label:'Rejected weight',value:`${rejList.reduce((n,r)=>n+r.totalWeight,0).toLocaleString('en-IN',{maximumFractionDigits:3})} kg`},
+          {label:'Stores affected',value:String(new Set(rejList.map(r=>r.warehouseName)).size)},
+          {label:'Orders affected',value:String(new Set(rejList.map(r=>r.poNumber).filter(Boolean)).size),note:'Distinct referenced sales orders'},
+        ]} />
+        <details className="commercial-quality-details"><summary className="cursor-pointer p-3 font-semibold">Explore rejection distribution</summary>
+          <div className="commercial-analysis-grid">
+            <InsightBreakdown title="By core type" scope="Latest recorded rejections" items={breakdown('coreType')} unit="pcs" />
+            <InsightBreakdown title="Stores with most rejected pieces" scope="Top 5 · Latest recorded rejections" items={breakdown('warehouseName')} unit="pcs" />
+          </div>
+          <p className="p-3 text-xs text-slate-500">These are recorded rejection quantities, not a rejection rate. Credit notes are tracked separately in the Sales Register.</p>
+        </details>
+      </>}
       <div className="production-rejection-tabs flex gap-1 border-b border-slate-200">
         {(['reject', 'modify'] as const).map((t) => (
           <button key={t} aria-pressed={tab === t} onClick={() => setTab(t)}

@@ -10,6 +10,7 @@ import { useConfirm } from '@/hooks/useConfirm';
 import { Pagination } from '@/components/Pagination';
 import { DateRangeFilter } from '@/components/DateRangeFilter';
 import { downloadXlsx, todayStamp } from '@/lib/excel';
+import { InsightMetrics } from '@/components/CommercialInsights';
 
 type ReturnStatus = 'PENDING' | 'RECEIVED' | 'IN_REWORK' | 'REDISPATCHED' | 'CLOSED' | 'CANCELLED';
 
@@ -127,8 +128,8 @@ export const ReturnsListPage = () => {
   };
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="commercial-workspace space-y-5">
+      <div className="commercial-heading flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
           <RotateCcw className="h-5 w-5 text-brand-600" /> Returns
         </h1>
@@ -150,6 +151,12 @@ export const ReturnsListPage = () => {
       </div>
 
       {/* Filters */}
+      {data && <InsightMetrics title="Returns workload" scope="Current page of matching returns" items={[
+        {label:'Returns on this page',value:String(data.items.length),note:`${data.total} matching records in total`},
+        {label:'Pieces on this page',value:data.items.reduce((n,r)=>n+r.totalPcs,0).toLocaleString('en-IN')},
+        {label:'Awaiting receipt',value:String(data.items.filter(r=>r.status==='PENDING').length)},
+        {label:'In rework',value:String(data.items.filter(r=>r.status==='IN_REWORK').length)},
+      ]} />}
       <div className="card flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:p-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
