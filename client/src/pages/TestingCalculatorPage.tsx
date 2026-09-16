@@ -169,7 +169,7 @@ export const TestingCalculatorPage = () => {
       return { volt: r.testVoltage, leMax: r.testCurrent, mv: r.testVoltageMv, ieA: r.testCurrentA };
     }
     if (it.coreType === 'TOROIDAL') {
-      const r = fluxTestCalc({ id: +it.id, od: +it.od, ht: +it.ht, turns: +it.turns, flux, ateCm });
+      const r = fluxTestCalc({ id: +it.id, od: +it.od, ht: +it.ht, turns: +it.turns, flux, ateCm, factor: stackOf(it) });
       return { volt: r.testVoltage, leMax: r.testCurrent, mv: r.testVoltage * 1000, ieA: r.testCurrent / 1000 };
     }
     const g = rectGeom(it);

@@ -387,8 +387,8 @@ const ToroidalEditor = ({
   const gradeHasFluxData = fluxPoints.length > 0;
   const fluxOptions = fluxPoints.map((p) => ({ value: String(p.flux), label: `${p.flux.toFixed(2)} T` }));
   const fluxCalc = useMemo(
-    () => fluxTestCalc({ id: id1, od: od1, ht, turns, flux, ateCm }),
-    [id1, od1, ht, turns, flux, ateCm]
+    () => fluxTestCalc({ id: id1, od: od1, ht, turns, flux, ateCm, factor: stack }),
+    [id1, od1, ht, turns, flux, ateCm, stack]
   );
 
   const [error, setError] = useState<string | null>(null);

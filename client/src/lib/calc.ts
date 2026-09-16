@@ -16,6 +16,8 @@
 //   weightPerPc = (coreAc × coreMl × 7.65) / 1000
 //   measure     = "{id1} x {id2} x {od1} x {od2} x {ht} x {builtup}"
 
+import { MATERIALS, factorToSF, netArea, testVoltage, magnetisingCurrent } from '@/lib/coreMaterials';
+
 export const round3 = (n: number) => Math.round(n * 1000) / 1000;
 export const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -126,6 +128,26 @@ export const RECT_STACK_FACTOR = 0.95;
 export const stackOr = (factor: number | null | undefined, fallback: number) =>
   (typeof factor === 'number' && Number.isFinite(factor) && factor > 0 ? factor : fallback);
 
+/* ── Toroidal geometry ─────────────────────────────────────────────────────
+   Split out because the same two numbers drive the weight, the test area, the
+   voltage and the magnetising current. Keeping them in one place is what makes
+   a change to the stacking factor move all four together. */
+
+/** Gross cross-section, mm²: radial build × height. */
+export const toroidalGrossArea = (id: number, od: number, ht: number) =>
+  ((od - id) / 2) * ht;
+
+/**
+ * Mean magnetic path, cm: π × mean diameter, i.e. π(OD+ID)/20.
+ *
+ * The 0.157 is that constant as the .NET form rounded it — π/20 is 0.15708.
+ * Kept rounded on purpose: the exact value shifts Ie max by about 0.05%, and
+ * test reports already issued to customers should still reprint with the
+ * figures they were signed off with. The mean path has nothing to do with the
+ * stacking factor, so there is no reason for this change to ride along with it.
+ */
+export const toroidalMeanPath = (id: number, od: number) => 0.157 * (od + id);
+
 export const toroidalCalc = ({ id, od, ht, pcs, factor }: {
   id: number; od: number; ht: number; pcs: number;
   /** Customer's toroidal factor; omitted means the 5.77 house default. */
@@ -133,6 +155,10 @@ export const toroidalCalc = ({ id, od, ht, pcs, factor }: {
 }) => {
   const valid = id > 0 && od > 0 && ht > 0;
   const f = stackOr(factor, TOROIDAL_FACTOR);
+  // Identical arithmetic to the legacy line, deliberately: this is the number
+  // already stored against thousands of order lines.
+  //   (OD² − ID²) × HT × F × 1e-6  ≡  Ae × Lm × ρ / 1000
+  // with F = π/4 × SF × ρ. See coreMaterials.ts for the decomposition.
   const weightPerPc = valid ? round3((od * od - id * id) * ht * f * 1e-6) : 0;
   const totalWeight = pcs > 0 ? round3(pcs * weightPerPc) : 0;
   const measure = `${id || 0} x ${od || 0} x ${ht || 0}`;
@@ -169,32 +195,53 @@ export const numFromInput = (s: string) => {
 //   Ie max  = ATe/cm × 1000 × meanPath / Turns # mA
 // Voltage is grade-independent; only Ie max needs the grade-specific ATe/cm.
 const fluxTestVI = ({
-  area, meanPath, turns, flux, ateCm,
+  area, meanPath, turns, flux, ateCm, gapAt = 0,
 }: {
   area: number; meanPath: number;
   turns: number; flux: number; ateCm: number;
+  /** Ampere-turns absorbed by an air gap, for gapped cores. */
+  gapAt?: number;
 }) => {
-  const testVoltage = area > 0 && flux > 0 && turns > 0
-    ? Math.round((222 * flux * area * turns) / 10000 * 1000) / 1000        // 3 dp
+  // 222 in the old line was 4.44 × 50 Hz with the frequency frozen in.
+  const volts = area > 0 && flux > 0 && turns > 0
+    ? testVoltage(area, turns, flux, 50)
     : 0;
-  const testCurrent = meanPath > 0 && ateCm > 0 && turns > 0
-    ? Math.round((ateCm * 1000 * meanPath / turns) * 100) / 100             // 2 dp, mA
+  const milliamps = meanPath > 0 && (ateCm > 0 || gapAt > 0) && turns > 0
+    ? magnetisingCurrent(ateCm, meanPath, turns, gapAt)
     : 0;
-  return { testVoltage, testCurrent };
+  return {
+    testVoltage: Math.round(volts * 1000) / 1000,       // 3 dp
+    testCurrent: Math.round(milliamps * 100) / 100,     // 2 dp, mA
+  };
 };
 
-// Toroidal flux-test calculation per the calibration spec.
-//   A          = 0.48  × (OD − ID) × HT / 100   # sq.cm  (stacking factor 0.48)
-//   meanPath   = 0.157 × (OD + ID)              # cm     (π / 20)
+/**
+ * Toroidal flux-test calculation.
+ *
+ *   A        = (OD − ID)/2 × HT × SF / 100   sq.cm   (net section)
+ *   meanPath = π × (OD + ID) / 20            cm
+ *
+ * The old constants were 0.48 for the area — which is SF/2 with SF = 0.96 —
+ * and 0.157, which is π/20. Both are now written as what they are, and the
+ * stacking factor comes from the line rather than being frozen at 0.96.
+ *
+ * That last part is the change of behaviour: a customer whose agreed factor
+ * makes the core heavier also has more steel in the section, so the test
+ * voltage for a given flux rises with it. Previously the weight moved and the
+ * voltage did not, which meant the two could disagree about the same core.
+ */
 export const fluxTestCalc = ({
-  id, od, ht, turns, flux, ateCm,
+  id, od, ht, turns, flux, ateCm, factor,
 }: {
   id: number; od: number; ht: number;
   turns: number; flux: number; ateCm: number;
+  /** The line's toroidal factor (the 5.77-style multiplier); default house. */
+  factor?: number | null;
 }) => {
   const geomOk   = id > 0 && od > 0 && ht > 0 && od > id;
-  const area     = geomOk ? round3((0.48 * (od - id) * ht) / 100) : 0;
-  const meanPath = geomOk ? round3(0.157 * (od + id)) : 0;
+  const sf       = factorToSF(stackOr(factor, TOROIDAL_FACTOR), MATERIALS.CRGO.density);
+  const area     = geomOk ? round3(netArea(toroidalGrossArea(id, od, ht), sf)) : 0;
+  const meanPath = geomOk ? round3(toroidalMeanPath(id, od)) : 0;
   const { testVoltage, testCurrent } = fluxTestVI({ area, meanPath, turns, flux, ateCm });
   return { area, meanPath, testVoltage, testCurrent };
 };

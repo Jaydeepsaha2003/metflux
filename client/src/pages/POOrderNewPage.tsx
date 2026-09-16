@@ -1486,8 +1486,10 @@ export const ToroidalForm = ({
     [id, od, ht, grade, material, pcs, stack, calc.weightPerPc, calc.totalWeight],
   );
   const fluxCalc = useMemo(
-    () => fluxTestCalc({ id, od, ht, turns, flux, ateCm }),
-    [id, od, ht, turns, flux, ateCm]
+    // The stacking factor reaches the test figures too: more steel in the
+    // section means more volts for the same flux density.
+    () => fluxTestCalc({ id, od, ht, turns, flux, ateCm, factor: stack }),
+    [id, od, ht, turns, flux, ateCm, stack]
   );
 
   // Derive the OTHER rate + line total locally — must match server's deriveRate.
