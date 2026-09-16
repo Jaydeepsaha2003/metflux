@@ -12,6 +12,8 @@ import { cn } from '@/lib/cn';
 import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc, nanoCalc, nanoTestCalc, isCompositeGrade, compositeRuleFromMaterial, compositeCalc, stackOr, TOROIDAL_FACTOR, RECT_STACK_FACTOR } from '@/lib/calc';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useConfirm } from '@/hooks/useConfirm';
+import CorePreview from '@/components/core3d/CorePreview';
+import type { CoreShape } from '@/components/core3d/shape';
 import './po-order-new.css';
 
 /* ---------- types ---------- */
@@ -108,6 +110,31 @@ const FW = {
   sel:    'w-[150px]',   // short selects — rate basis, flux
   selLg:  'w-[184px]',   // grade / material / type names
 } as const;
+
+/* Publish the current dimensions to the 3D preview beside the form.
+   The callback is held in a ref so the effect depends on the numbers alone:
+   the parent re-renders on every report, which would otherwise re-create the
+   callback, re-run the effect and report again forever. */
+const useReportShape = (onShape: ((s: CoreShape) => void) | undefined, build: () => CoreShape, deps: unknown[]) => {
+  const ref = useRef(onShape);
+  ref.current = onShape;
+  useEffect(() => {
+    ref.current?.(build());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+};
+
+/* The zero-dimension shape a tab starts on. Not drawable, so the preview
+   shows its "enter these fields" prompt rather than a blank stage. */
+const emptyShapeFor = (ct: CoreType): CoreShape => {
+  const zero = { id: 0, od: 0, ht: 0 };
+  switch (ct) {
+    case 'RECTANGULAR': return { kind: 'RECTANGULAR', id1: 0, id2: 0, od1: 0, od2: 0, ht: 0 };
+    case 'NANO':        return { kind: 'NANO', dims: zero, cased: true };
+    case 'COMPOSITE':   return { kind: 'COMPOSITE', rule: 'CONTINUOUS_LOOP', crgo: zero, nano: zero };
+    default:            return { kind: 'TOROIDAL', dims: zero };
+  }
+};
 
 /* A row of fields that wraps rather than squeezing. */
 const FieldRow = ({ children, className }: { children: React.ReactNode; className?: string }) => (
@@ -207,6 +234,11 @@ export const POOrderNewPage = () => {
 
   /* ----- entry state (current item being built) ----- */
   const [coreType, setCoreType] = useState<CoreType | ''>('');
+  // What the 3D dock is drawing. Reported up by whichever line form is
+  // open; cleared on a core-type switch so the old solid never lingers
+  // beside the new form's empty fields.
+  const [shape, setShape] = useState<CoreShape | null>(null);
+  const pickCore = (ct: CoreType) => { setShape(null); setCoreType(ct); };
   const [items, setItems] = useState<Item[]>([]);
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   const toggleExpand = (idx: number) => setExpandedIdx((p) => (p === idx ? null : idx));
@@ -755,7 +787,7 @@ export const POOrderNewPage = () => {
           <div className="flex flex-wrap gap-0.5 rounded-lg bg-slate-100 p-0.5 text-sm self-start">
             <button
               type="button"
-              onClick={() => setCoreType('TOROIDAL')}
+              onClick={() => pickCore('TOROIDAL')}
               className={cn(
                 'rounded-md px-3 py-1.5 font-medium transition',
                 coreType === 'TOROIDAL'
@@ -767,7 +799,7 @@ export const POOrderNewPage = () => {
             </button>
             <button
               type="button"
-              onClick={() => setCoreType('RECTANGULAR')}
+              onClick={() => pickCore('RECTANGULAR')}
               className={cn(
                 'rounded-md px-3 py-1.5 font-medium transition',
                 coreType === 'RECTANGULAR'
@@ -779,7 +811,7 @@ export const POOrderNewPage = () => {
             </button>
             <button
               type="button"
-              onClick={() => setCoreType('NANO')}
+              onClick={() => pickCore('NANO')}
               className={cn(
                 'rounded-md px-3 py-1.5 font-medium transition',
                 coreType === 'NANO'
@@ -791,7 +823,7 @@ export const POOrderNewPage = () => {
             </button>
             <button
               type="button"
-              onClick={() => setCoreType('COMPOSITE')}
+              onClick={() => pickCore('COMPOSITE')}
               className={cn(
                 'rounded-md px-3 py-1.5 font-medium transition',
                 coreType === 'COMPOSITE'
@@ -804,8 +836,15 @@ export const POOrderNewPage = () => {
           </div>
         </div>
 
+        {/* Form on the left, model on the right. The dock is sticky so the
+            solid stays in view while someone works down a long form, and it
+            drops below the fields on a narrow screen rather than squeezing
+            them into a column too thin to type in. */}
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="min-w-0">
         {coreType === 'TOROIDAL' && (
           <ToroidalForm
+            onShape={setShape}
             customerId={customerId}
             customerFactor={selectedCustomer?.toroidalFactor}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'TOROIDAL'))}
@@ -819,6 +858,7 @@ export const POOrderNewPage = () => {
         )}
         {coreType === 'RECTANGULAR' && (
           <RectangularForm
+            onShape={setShape}
             customerId={customerId}
             customerFactor={selectedCustomer?.rectStackFactor}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'RECTANGULAR'))}
@@ -832,6 +872,7 @@ export const POOrderNewPage = () => {
         )}
         {coreType === 'NANO' && (
           <NanoForm
+            onShape={setShape}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'NANO'))}
             fluxGrades={fluxRespNano?.grades ?? []}
             onAdd={(item) => { setItems((prev) => [...prev, item]); }}
@@ -844,6 +885,7 @@ export const POOrderNewPage = () => {
         {coreType === 'COMPOSITE' && (
           <NanoForm
             composite
+            onShape={setShape}
             customerFactor={selectedCustomer?.toroidalFactor}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'NANO'))}
             typeGrades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'COMPOSITE'))}
@@ -860,6 +902,17 @@ export const POOrderNewPage = () => {
             Pick a core type above to start adding items.
           </div>
         )}
+          </div>
+
+          {coreType && (
+            <div className="min-w-0 xl:sticky xl:top-3 xl:self-start">
+              <CorePreview
+                shape={shape ?? emptyShapeFor(coreType)}
+                className="h-[300px] xl:h-[420px]"
+              />
+            </div>
+          )}
+        </div>
       </section>
 
       {/* ============ ITEMS LIST ============ */}
@@ -1315,11 +1368,13 @@ const Stat = ({ label, value, accent }: { label: string; value: string; accent?:
 /* ---------- TOROIDAL ---------- */
 export const ToroidalForm = ({
   grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed, hideTesting = false,
-  customerId, customerFactor,
+  customerId, customerFactor, onShape,
 }: {
   grades: GradeRow[];
   fluxGrades: FluxGroup[];
   onAdd: (item: Item) => void;
+  /** Reports the live dimensions to the 3D preview. */
+  onShape?: (s: CoreShape) => void;
   /** Whose rate card to consult. Optional: the quotation screen has no
    *  customer, and passing none simply means nothing is filled in. */
   customerId?: string;
@@ -1401,6 +1456,7 @@ export const ToroidalForm = ({
   }, [edit?.nonce]);
 
   const calc = useMemo(() => toroidalCalc({ id, od, ht, pcs, factor: stack }), [id, od, ht, pcs, stack]);
+  useReportShape(onShape, () => ({ kind: 'TOROIDAL', dims: { id, od, ht } }), [id, od, ht]);
   const fluxCalc = useMemo(
     () => fluxTestCalc({ id, od, ht, turns, flux, ateCm }),
     [id, od, ht, turns, flux, ateCm]
@@ -1578,11 +1634,13 @@ export const ToroidalForm = ({
 /* ---------- RECTANGULAR ---------- */
 export const RectangularForm = ({
   grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed, hideTesting = false,
-  customerId, customerFactor,
+  customerId, customerFactor, onShape,
 }: {
   grades: GradeRow[];
   fluxGrades: FluxGroup[];
   onAdd: (item: Item) => void;
+  /** Reports the live dimensions to the 3D preview. */
+  onShape?: (s: CoreShape) => void;
   /** Whose rate card to consult. Optional: the quotation screen has no
    *  customer, and passing none simply means nothing is filled in. */
   customerId?: string;
@@ -1664,6 +1722,7 @@ export const RectangularForm = ({
     () => rectangularCalc({ id1, id2, od1, od2, ht, pcs, factor: stack }),
     [id1, id2, od1, od2, ht, pcs, stack]
   );
+  useReportShape(onShape, () => ({ kind: 'RECTANGULAR', id1, id2, od1, od2, ht }), [id1, id2, od1, od2, ht]);
   const fluxCalc = useMemo(
     () => rectangularFluxTestCalc({
       area: calc.coreAc, meanPath: calc.coreMl, turns, flux, ateCm,
@@ -1862,11 +1921,13 @@ export const RectangularForm = ({
 /* ---------- NANO ---------- */
 export const NanoForm = ({
   grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed, composite: compositeMode = false, typeGrades = [], hideTesting = false,
-  customerFactor,
+  customerFactor, onShape,
 }: {
   grades: GradeRow[];
   fluxGrades: FluxGroup[];
   onAdd: (item: Item) => void;
+  /** Reports the live dimensions to the 3D preview. */
+  onShape?: (s: CoreShape) => void;
   /** The customer's toroidal factor, for the CRGO half of a composite.
    *  The nano ribbon and its case have their own constants and are not a
    *  laminated stack, so it never touches those. */
@@ -1978,6 +2039,18 @@ export const NanoForm = ({
   // Epoxy / plastic casing has no SS case — its case weight must NOT count in
   // the piece weight (nor be priced). Detected from the grade / material name.
   const isEpoxy = /epoxy|plastic/i.test(grade) || /epoxy|plastic/i.test(material);
+  useReportShape(
+    onShape,
+    () => (composite
+      ? {
+          kind: 'COMPOSITE',
+          rule: rule ?? 'CONTINUOUS_LOOP',
+          crgo: { id: crgoId, od: crgoOd, ht: crgoHt },
+          nano: { id, od, ht },
+        }
+      : { kind: 'NANO', dims: { id, od, ht }, cased: !isEpoxy }),
+    [composite, rule, crgoId, crgoOd, crgoHt, id, od, ht, isEpoxy],
+  );
   const effCaseWt = isEpoxy ? 0 : calc.caseWeight;
   // Nano part per piece = core (+ SS case unless epoxy). Composite adds CRGO.
   const nanoPieceWt = Math.round((calc.coreWeight + effCaseWt) * 1000) / 1000;
