@@ -30,6 +30,14 @@ const TITLE = {
   CUT_RECT: 'Rectangular cut core',
 } as const;
 
+/* A gapped core is a different product from the plain cut core it is made from,
+   and the form's own heading already says so. The panel has to agree, or the
+   two headings sitting side by side read as a mistake. */
+const titleOf = (shape: CoreShape) =>
+  (shape.kind === 'CUT_ROUND' && shape.gapMm > 0) ? 'Round gap core'
+  : (shape.kind === 'CUT_RECT' && shape.gapMm > 0) ? 'Rectangular gap core'
+  : TITLE[shape.kind];
+
 /* The stage the model sits on. A soft radial wash rather than a flat fill, so
    the part reads as lit from above and the shadow it casts has something to
    fall on. */
@@ -169,7 +177,7 @@ export const CorePreview = ({ shape, className, meta }: {
         <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2">
           <span className={cn('h-2 w-2 shrink-0 rounded-full', tone.dot)} />
           <span className={cn('text-[11px] font-bold uppercase tracking-wider', tone.label)}>
-            {TITLE[shape.kind]}
+            {titleOf(shape)}
           </span>
           <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">
             <Box className="h-3 w-3" /> 3D
@@ -191,7 +199,7 @@ export const CorePreview = ({ shape, className, meta }: {
           >
             <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2">
               <span className={cn('h-2 w-2 rounded-full', tone.dot)} />
-              <span className={cn('text-[11px] font-bold uppercase tracking-wider', tone.label)}>{TITLE[shape.kind]}</span>
+              <span className={cn('text-[11px] font-bold uppercase tracking-wider', tone.label)}>{titleOf(shape)}</span>
               <span className="font-num text-[11px] font-semibold text-slate-500">{caption}</span>
               <button
                 type="button"

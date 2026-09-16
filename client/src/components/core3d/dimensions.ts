@@ -204,6 +204,27 @@ const dimension = (
   ctx.group.add(label);
 };
 
+/**
+ * A leader: one arrowhead on the feature, a short tail, and the value at the
+ * end of it.
+ *
+ * For anything a proper dimension cannot fit inside. An air gap is a millimetre
+ * or two on a part a couple of hundred across, and two extension lines with a
+ * pair of heads pointing at each other inside that space would be a smudge with
+ * a number lost in it. A drawing points at such a feature from outside instead,
+ * so this does too.
+ */
+const leader = (at: THREE.Vector3, dir: THREE.Vector3, text: string, ctx: Ctx) => {
+  const d = dir.clone().normalize();
+  const tail = at.clone().addScaledVector(d, ctx.labelH * 2.4);
+  const head = ctx.labelH * ARROW_LEN;
+  addTube(at.clone().addScaledVector(d, head * 0.9), tail, ctx.labelH * SHAFT_R, ctx);
+  addArrow(at, d, ctx);
+  const label = makeLabel(text, ctx);
+  label.position.copy(tail).addScaledVector(d, ctx.labelH * 0.75);
+  ctx.group.add(label);
+};
+
 const n = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
 
 /**
@@ -256,12 +277,25 @@ export const buildDimensions = (shape: CoreShape, extent: number) => {
 
   switch (shape.kind) {
     case 'TOROIDAL':
-    case 'NANO':
+    case 'NANO': {
+      const { id, od, ht } = shape.dims;
+      annularDims(id, od, ht);
+      break;
+    }
     // A cut core is dimensioned by the ring it came from, so it carries the
-    // same three figures. The gap, when there is one, shows in the caption.
+    // same three figures — plus, on a gap core, the gap itself, which is the
+    // one number the whole product is bought for.
     case 'CUT_ROUND': {
       const { id, od, ht } = shape.dims;
       annularDims(id, od, ht);
+      if (shape.gapMm > 0) {
+        // Pointed at from the left: the height dimension already owns the
+        // right-hand wall, and two annotations on one side is a thicket.
+        leader(
+          new THREE.Vector3(-od / 2, 0, 0), new THREE.Vector3(-1, 0.25, 0),
+          `GAP ${n(shape.gapMm)}`, ctx,
+        );
+      }
       break;
     }
     case 'COMPOSITE': {
@@ -299,6 +333,12 @@ export const buildDimensions = (shape: CoreShape, extent: number) => {
         new THREE.Vector3(x, bottom, -z), new THREE.Vector3(x, top, -z),
         new THREE.Vector3(side, 0, 0), `HT ${n(ht)}`, ctx,
       );
+      if (shape.kind === 'CUT_RECT' && shape.gapMm > 0) {
+        leader(
+          new THREE.Vector3(-x, 0, 0), new THREE.Vector3(-1, 0.25, 0),
+          `GAP ${n(shape.gapMm)}`, ctx,
+        );
+      }
       break;
     }
   }

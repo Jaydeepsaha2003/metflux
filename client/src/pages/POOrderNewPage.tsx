@@ -1544,21 +1544,32 @@ export const ToroidalForm = ({
   }, [edit?.nonce]);
 
   const calc = useMemo(() => toroidalCalc({ id, od, ht, pcs, factor: stack }), [id, od, ht, pcs, stack]);
+  const fluxCalc = useMemo(
+    // The stacking factor reaches the test figures too: more steel in the
+    // section means more volts for the same flux density. So does the air gap,
+    // which on a gapped core usually dominates the magnetising current.
+    () => fluxTestCalc({ id, od, ht, turns, flux, ateCm, factor: stack, gapMm: cut ? gapMm : 0 }),
+    [id, od, ht, turns, flux, ateCm, stack, cut, gapMm]
+  );
+  // Declared after fluxCalc on purpose: the spec sheet carries the test
+  // figures, and a dependency list may not name a const that has not been
+  // reached yet.
   useReportShape(
     onShape,
     () => ({
       shape: cut
         ? { kind: 'CUT_ROUND', dims: { id, od, ht }, gapMm }
         : { kind: 'TOROIDAL', dims: { id, od, ht } },
-      meta: { grade, material, pcs, factor: stack, weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight },
+      meta: {
+        grade, material, pcs, factor: stack,
+        weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight,
+        turns, flux, ateCm,
+        testVoltage: fluxCalc.testVoltage, testCurrent: fluxCalc.testCurrent,
+        steelAt: fluxCalc.steelAt, gapAt: fluxCalc.gapAt,
+      },
     }),
-    [cut, gapMm, id, od, ht, grade, material, pcs, stack, calc.weightPerPc, calc.totalWeight],
-  );
-  const fluxCalc = useMemo(
-    // The stacking factor reaches the test figures too: more steel in the
-    // section means more volts for the same flux density.
-    () => fluxTestCalc({ id, od, ht, turns, flux, ateCm, factor: stack }),
-    [id, od, ht, turns, flux, ateCm, stack]
+    [cut, gapMm, id, od, ht, grade, material, pcs, stack,
+     calc.weightPerPc, calc.totalWeight, turns, flux, ateCm, fluxCalc],
   );
 
   // Derive the OTHER rate + line total locally — must match server's deriveRate.
@@ -1625,11 +1636,12 @@ export const ToroidalForm = ({
           'text-[11px] font-semibold uppercase tracking-wider',
           cut ? 'text-sky-800' : 'text-amber-800',
         )}>
-          {cut ? 'Round cut core' : 'Toroidal'}
+          {cut ? (gapMm > 0 ? 'Round gap core' : 'Round cut core') : 'Toroidal'}
         </span>
         {cut && (
           <span className="text-[10px] font-medium text-slate-500">
             dimensions of the core before cutting &middot; 1 pc = 1 complete core (2 halves)
+            {gapMm > 0 && ' \u00b7 gapped'}
           </span>
         )}
       </div>
@@ -1723,6 +1735,23 @@ export const ToroidalForm = ({
                   ? 'Set ATe/cm'
                   : '—'
             } />
+            {/* On a gapped core the gap is usually most of the magnetising
+                current, so the split is spelled out. A figure that jumps
+                tenfold when someone types a gap needs to say why, or it
+                reads as a bug. */}
+            {cut && gapMm > 0 && fluxCalc.gapAt > 0 && (
+              <div className="col-span-2 mt-0.5 border-t border-slate-100 pt-1.5 text-[10px] leading-relaxed text-slate-500 sm:col-span-6">
+                Ampere-turns:{' '}
+                <span className="font-mono tabular-nums text-slate-700">{fluxCalc.steelAt.toFixed(0)}</span> steel
+                {' + '}
+                <span className="font-mono tabular-nums text-slate-700">{fluxCalc.gapAt.toFixed(0)}</span> gap
+                {' = '}
+                <span className="font-mono tabular-nums font-semibold text-slate-900">
+                  {(fluxCalc.steelAt + fluxCalc.gapAt).toFixed(0)}
+                </span>{' '}
+                AT for {gapMm} mm at {flux.toFixed(2)} T
+              </div>
+            )}
           </>)}
           <div className="col-span-2 sm:col-span-6">
             <Stat label="Measure" value={calc.measure} />
@@ -1739,7 +1768,8 @@ export const ToroidalForm = ({
 
       <div className="mt-3 flex justify-end">
         <button onClick={add} className="btn-primary w-full sm:w-auto" type="button">
-          <Plus className="h-4 w-4" /> Add toroidal item
+          <Plus className="h-4 w-4" />{' '}
+          {cut ? (gapMm > 0 ? 'Add round gap item' : 'Add round cut item') : 'Add toroidal item'}
         </button>
       </div>
       {alertDialog}
@@ -1844,21 +1874,31 @@ export const RectangularForm = ({
     () => rectangularCalc({ id1, id2, od1, od2, ht, pcs, factor: stack }),
     [id1, id2, od1, od2, ht, pcs, stack]
   );
+  const fluxCalc = useMemo(
+    () => rectangularFluxTestCalc({
+      area: calc.coreAc, meanPath: calc.coreMl, turns, flux, ateCm,
+      gapMm: cut ? gapMm : 0,
+    }),
+    [calc.coreAc, calc.coreMl, turns, flux, ateCm, cut, gapMm]
+  );
+  // After fluxCalc, so the sheet can carry the test figures. See the note on
+  // the toroidal form.
   useReportShape(
     onShape,
     () => ({
       shape: cut
         ? { kind: 'CUT_RECT', id1, id2, od1, od2, ht, gapMm }
         : { kind: 'RECTANGULAR', id1, id2, od1, od2, ht },
-      meta: { grade, material, pcs, factor: stack, weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight },
+      meta: {
+        grade, material, pcs, factor: stack,
+        weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight,
+        turns, flux, ateCm,
+        testVoltage: fluxCalc.testVoltage, testCurrent: fluxCalc.testCurrent,
+        steelAt: fluxCalc.steelAt, gapAt: fluxCalc.gapAt,
+      },
     }),
-    [cut, gapMm, id1, id2, od1, od2, ht, grade, material, pcs, stack, calc.weightPerPc, calc.totalWeight],
-  );
-  const fluxCalc = useMemo(
-    () => rectangularFluxTestCalc({
-      area: calc.coreAc, meanPath: calc.coreMl, turns, flux, ateCm,
-    }),
-    [calc.coreAc, calc.coreMl, turns, flux, ateCm]
+    [cut, gapMm, id1, id2, od1, od2, ht, grade, material, pcs, stack,
+     calc.weightPerPc, calc.totalWeight, turns, flux, ateCm, fluxCalc],
   );
 
   // Build-symmetry validation per the spec: (OD-1 − ID-1) must equal (OD-2 − ID-2).
@@ -1933,11 +1973,12 @@ export const RectangularForm = ({
           'text-[11px] font-semibold uppercase tracking-wider',
           cut ? 'text-cyan-800' : 'text-rose-800',
         )}>
-          {cut ? 'Rectangular cut core' : 'Rectangular'}
+          {cut ? (gapMm > 0 ? 'Rectangular gap core' : 'Rectangular cut core') : 'Rectangular'}
         </span>
         {cut && (
           <span className="text-[10px] font-medium text-slate-500">
             dimensions before cutting &middot; 1 pc = 1 complete core (2 halves)
+            {gapMm > 0 && ' \u00b7 gapped'}
           </span>
         )}
       </div>
@@ -2036,6 +2077,23 @@ export const RectangularForm = ({
                   ? 'Set ATe/cm'
                   : '—'
             } />
+            {/* On a gapped core the gap is usually most of the magnetising
+                current, so the split is spelled out. A figure that jumps
+                tenfold when someone types a gap needs to say why, or it
+                reads as a bug. */}
+            {cut && gapMm > 0 && fluxCalc.gapAt > 0 && (
+              <div className="col-span-2 mt-0.5 border-t border-slate-100 pt-1.5 text-[10px] leading-relaxed text-slate-500 sm:col-span-6">
+                Ampere-turns:{' '}
+                <span className="font-mono tabular-nums text-slate-700">{fluxCalc.steelAt.toFixed(0)}</span> steel
+                {' + '}
+                <span className="font-mono tabular-nums text-slate-700">{fluxCalc.gapAt.toFixed(0)}</span> gap
+                {' = '}
+                <span className="font-mono tabular-nums font-semibold text-slate-900">
+                  {(fluxCalc.steelAt + fluxCalc.gapAt).toFixed(0)}
+                </span>{' '}
+                AT for {gapMm} mm at {flux.toFixed(2)} T
+              </div>
+            )}
           </>)}
         </div>
         <div className="mt-1.5 border-t border-rose-100 pt-1.5">
@@ -2052,7 +2110,10 @@ export const RectangularForm = ({
 
       <div className="mt-3 flex justify-end">
         <button onClick={add} className="btn-primary w-full sm:w-auto" type="button">
-          <Plus className="h-4 w-4" /> Add rectangular item
+          <Plus className="h-4 w-4" />{' '}
+          {cut
+            ? (gapMm > 0 ? 'Add rectangular gap item' : 'Add rectangular cut item')
+            : 'Add rectangular item'}
         </button>
       </div>
       {alertDialog}

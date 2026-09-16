@@ -16,7 +16,9 @@
 //   weightPerPc = (coreAc × coreMl × 7.65) / 1000
 //   measure     = "{id1} x {id2} x {od1} x {od2} x {ht} x {builtup}"
 
-import { MATERIALS, factorToSF, netArea, testVoltage, magnetisingCurrent } from '@/lib/coreMaterials';
+import {
+  MATERIALS, factorToSF, netArea, testVoltage, magnetisingCurrent, gapAmpereTurns,
+} from '@/lib/coreMaterials';
 
 export const round3 = (n: number) => Math.round(n * 1000) / 1000;
 export const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -212,6 +214,10 @@ const fluxTestVI = ({
   return {
     testVoltage: Math.round(volts * 1000) / 1000,       // 3 dp
     testCurrent: Math.round(milliamps * 100) / 100,     // 2 dp, mA
+    // Reported separately because on a gapped core it is usually most of the
+    // answer, and a figure that jumps tenfold needs to say why.
+    steelAt: Math.round(ateCm * meanPath * 100) / 100,
+    gapAt: Math.round(gapAt * 100) / 100,
   };
 };
 
@@ -231,19 +237,21 @@ const fluxTestVI = ({
  * voltage did not, which meant the two could disagree about the same core.
  */
 export const fluxTestCalc = ({
-  id, od, ht, turns, flux, ateCm, factor,
+  id, od, ht, turns, flux, ateCm, factor, gapMm = 0,
 }: {
   id: number; od: number; ht: number;
   turns: number; flux: number; ateCm: number;
   /** The line's toroidal factor (the 5.77-style multiplier); default house. */
   factor?: number | null;
+  /** Total controlled air gap across all joints, mm. Cut and gap cores only. */
+  gapMm?: number;
 }) => {
   const geomOk   = id > 0 && od > 0 && ht > 0 && od > id;
   const sf       = factorToSF(stackOr(factor, TOROIDAL_FACTOR), MATERIALS.CRGO.density);
   const area     = geomOk ? round3(netArea(toroidalGrossArea(id, od, ht), sf)) : 0;
   const meanPath = geomOk ? round3(toroidalMeanPath(id, od)) : 0;
-  const { testVoltage, testCurrent } = fluxTestVI({ area, meanPath, turns, flux, ateCm });
-  return { area, meanPath, testVoltage, testCurrent };
+  const gapAt    = gapMm > 0 && flux > 0 ? gapAmpereTurns(flux, gapMm) : 0;
+  return { area, meanPath, ...fluxTestVI({ area, meanPath, turns, flux, ateCm, gapAt }) };
 };
 
 // Nano-core testing parameters — ported from the "nano core tech data" sheet.
@@ -277,8 +285,13 @@ export const nanoTestCalc = ({
 // already computes the area (coreAc) and mean magnetic path (coreMl); we only
 // need to feed those plus turns/flux/ATe-cm into the shared V & Ie-max math.
 export const rectangularFluxTestCalc = ({
-  area, meanPath, turns, flux, ateCm,
+  area, meanPath, turns, flux, ateCm, gapMm = 0,
 }: {
   area: number; meanPath: number;
   turns: number; flux: number; ateCm: number;
-}) => fluxTestVI({ area, meanPath, turns, flux, ateCm });
+  /** Total controlled air gap across all joints, mm. */
+  gapMm?: number;
+}) => fluxTestVI({
+  area, meanPath, turns, flux, ateCm,
+  gapAt: gapMm > 0 && flux > 0 ? gapAmpereTurns(flux, gapMm) : 0,
+});

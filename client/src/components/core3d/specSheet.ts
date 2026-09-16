@@ -24,6 +24,20 @@ export type SheetMeta = {
   factor?: number | null;
   weightPerPc?: number | null;
   totalWeight?: number | null;
+  /* The magnetic test figures, when the line carries them. A gapped core is
+     bought for its ampere-turns as much as its weight, so the sheet has to
+     show how the test voltage and the magnetising current were arrived at —
+     otherwise the customer sees an Ie ten times the ungapped one and no
+     explanation on the paper that travels with the core. */
+  turns?: number | null;
+  flux?: number | null;
+  ateCm?: number | null;
+  testVoltage?: number | null;
+  testCurrent?: number | null;
+  /** Ampere-turns the steel path needs on its own. */
+  steelAt?: number | null;
+  /** Ampere-turns the air gap needs — usually the larger share. */
+  gapAt?: number | null;
 };
 
 const n = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(2));
@@ -37,6 +51,12 @@ const TITLE = {
   CUT_ROUND: 'Round cut core',
   CUT_RECT: 'Rectangular cut core (C core)',
 } as const;
+
+/** A gap core is a distinct product, so the sheet has to name it as one. */
+const titleOf = (shape: CoreShape) =>
+  (shape.kind === 'CUT_ROUND' && shape.gapMm > 0) ? 'Round gap core'
+  : (shape.kind === 'CUT_RECT' && shape.gapMm > 0) ? 'Rectangular gap core (C core)'
+  : TITLE[shape.kind];
 
 /** Rows for the dimension table, in the order an operator reads them. */
 const dimensionRows = (shape: CoreShape): [string, string][] => {
@@ -142,8 +162,38 @@ const weightWorking = (shape: CoreShape, meta: SheetMeta): string[] => {
   }
 };
 
+/**
+ * The magnetic test line, written out the way a test certificate reads.
+ *
+ * Returns nothing at all when the line has no flux figures — most lines are
+ * quoted on weight alone, and an empty "MAGNETIC TEST" heading on the sheet
+ * would just look like something failed to print.
+ */
+const testWorking = (shape: CoreShape, meta: SheetMeta): string[] => {
+  const turns = meta.turns ?? 0;
+  const flux = meta.flux ?? 0;
+  if (!(turns > 0) || !(flux > 0)) return [];
+
+  const gapMm = shape.kind === 'CUT_ROUND' || shape.kind === 'CUT_RECT' ? shape.gapMm : 0;
+  const steel = meta.steelAt ?? 0;
+  const gap = meta.gapAt ?? 0;
+  const out: string[] = [
+    `At ${turns} turns / 50 Hz, ${flux.toFixed(2)} T:`,
+    `V = 4.44 × 50 × N × B × Ae / 10000 = ${(meta.testVoltage ?? 0).toFixed(3)} V`,
+  ];
+  if (gapMm > 0) {
+    // Spelled out because the gap term is what makes a gap core a gap core.
+    out.push(
+      `Gap AT = 795.7747 × B × gap = 795.7747 × ${flux.toFixed(2)} × ${n(gapMm)} = ${gap.toFixed(0)} AT`,
+      `Steel AT = ${steel.toFixed(0)} AT · total ${(steel + gap).toFixed(0)} AT`,
+    );
+  }
+  out.push(`Ie max = total AT / N × 1000 = ${(meta.testCurrent ?? 0).toFixed(2)} mA`);
+  return out;
+};
+
 const fileStem = (shape: CoreShape, meta: SheetMeta) => {
-  const bits = [meta.customer, TITLE[shape.kind], shapeCaption(shape)]
+  const bits = [meta.customer, titleOf(shape), shapeCaption(shape)]
     .filter(Boolean)
     .join(' ')
     .replace(/[^\w\s-]/g, '')
@@ -164,7 +214,7 @@ const fileStem = (shape: CoreShape, meta: SheetMeta) => {
  * requirement for toDataURL to work at all.
  */
 export const downloadSheetJpg = async (shape: CoreShape, meta: SheetMeta) => {
-  const W = 1400, H = 990;
+  const W = 1400;
   const sk = buildSketch(shape, W - 80, 430);
   const rows = dimensionRows(shape);
   const working = weightWorking(shape, meta);
@@ -197,11 +247,24 @@ export const downloadSheetJpg = async (shape: CoreShape, meta: SheetMeta) => {
   body.push(t(720, y2, 'CALCULATION', 15, 700, '#64748b')); y2 += 26;
   working.forEach((line) => { body.push(t(720, y2, line, 16, 400, '#334155')); y2 += 24; });
 
+  const test = testWorking(shape, meta);
+  if (test.length) {
+    y2 += 12;
+    body.push(t(720, y2, 'MAGNETIC TEST', 15, 700, '#64748b')); y2 += 26;
+    test.forEach((line) => { body.push(t(720, y2, line, 16, 400, '#334155')); y2 += 24; });
+  }
+
+  /* The sheet grows to fit what is on it. Fixed at 990 it was long enough for
+     a weight calculation and no more, so the magnetic test block on a gap core
+     ran off the bottom edge and the last line — the magnetising current, the
+     one figure the gap is chosen for — was cropped out of the image. */
+  const H = Math.max(990, Math.ceil(Math.max(y, y2) + 70));
+
   const header = [
     `<rect x="0" y="0" width="${W}" height="${H}" fill="#ffffff"/>`,
     `<rect x="0" y="0" width="${W}" height="6" fill="#0f172a"/>`,
     t(40, 58, meta.company || 'Core specification', 30, 700),
-    t(40, 88, `${TITLE[shape.kind]} · ${shapeCaption(shape)}`, 19, 400, '#475569'),
+    t(40, 88, `${titleOf(shape)} · ${shapeCaption(shape)}`, 19, 400, '#475569'),
     meta.customer ? t(1360, 58, meta.customer, 20, 700, '#0f172a', 'end') : '',
     meta.grade ? t(1360, 88, [meta.grade, meta.material].filter(Boolean).join(' · '), 17, 400, '#475569', 'end') : '',
     `<line x1="40" y1="106" x2="1360" y2="106" stroke="#cbd5e1"/>`,
@@ -254,7 +317,7 @@ export const downloadSheetPdf = async (shape: CoreShape, meta: SheetMeta) => {
         columns: [
           [
             { text: meta.company || 'Core specification', fontSize: 15, bold: true },
-            { text: `${TITLE[shape.kind]} · ${shapeCaption(shape)}`, fontSize: 9, color: '#475569', margin: [0, 2, 0, 0] },
+            { text: `${titleOf(shape)} · ${shapeCaption(shape)}`, fontSize: 9, color: '#475569', margin: [0, 2, 0, 0] },
           ],
           {
             width: 'auto',
@@ -312,6 +375,14 @@ export const downloadSheetPdf = async (shape: CoreShape, meta: SheetMeta) => {
               ...weightWorking(shape, meta).map((line) => ({
                 text: line, fontSize: 8, color: '#334155', margin: [0, 0, 0, 2],
               })),
+              ...(testWorking(shape, meta).length
+                ? [
+                  { text: 'MAGNETIC TEST', fontSize: 8, bold: true, color: '#64748b', margin: [0, 10, 0, 4] },
+                  ...testWorking(shape, meta).map((line) => ({
+                    text: line, fontSize: 8, color: '#334155', margin: [0, 0, 0, 2],
+                  })),
+                ]
+                : []),
             ],
           },
         ],
