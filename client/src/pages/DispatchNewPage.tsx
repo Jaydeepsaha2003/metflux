@@ -254,10 +254,9 @@ export const DispatchNewPage = () => {
         </div>
 
         <div className="hidden md:block overflow-x-auto max-h-72">
-          <table className="w-full text-sm">
+          <table className="w-full text-[13px] font-semibold">
             <thead className="sticky top-0 z-10 border-b-2 border-slate-200 bg-slate-50 text-left text-[10.5px] uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-3 py-2.5 w-8"></th>
                 <th className="px-3 py-2.5 font-semibold">PO #</th>
                 <th className="px-3 py-2.5 font-semibold">Customer</th>
                 <th className="px-3 py-2.5 font-semibold">Due</th>
@@ -274,10 +273,10 @@ export const DispatchNewPage = () => {
             </thead>
             <tbody>
               {isLoading && (
-                <tr><td colSpan={13} className="px-3 py-8 text-center text-slate-400"><Loader2 className="mx-auto mb-1.5 h-4 w-4 animate-spin" /> Loading…</td></tr>
+                <tr><td colSpan={12} className="px-3 py-8 text-center text-slate-400"><Loader2 className="mx-auto mb-1.5 h-4 w-4 animate-spin" /> Loading…</td></tr>
               )}
               {!isLoading && readyResp?.items.length === 0 && (
-                <tr><td colSpan={13} className="px-3 py-8 text-center text-slate-400">
+                <tr><td colSpan={12} className="px-3 py-8 text-center text-slate-400">
                   No items ready to dispatch — produce some stock first.
                 </td></tr>
               )}
@@ -292,22 +291,19 @@ export const DispatchNewPage = () => {
                       isSel ? 'border-l-brand-600 bg-brand-50/70 hover:bg-brand-50' : cn('border-l-transparent hover:bg-brand-50/40', idx % 2 === 1 && 'bg-slate-50/40')
                     )}
                   >
+                    <td className="px-3 py-2.5 font-mono">{it.poNumber}</td>
                     <td className="px-3 py-2.5">
-                      {isSel && <CheckCircle2 className="h-4 w-4 text-brand-600" />}
-                    </td>
-                    <td className="px-3 py-2.5 font-mono text-xs">{it.poNumber}</td>
-                    <td className="px-3 py-2.5">
-                      <div className="font-mono text-xs font-semibold text-brand-700">{it.customerCode ?? '—'}</div>
+                      <div className="font-mono text-brand-700">{it.customerCode ?? '—'}</div>
                       {!hideNames && (
-                        <div className="text-[11px] text-slate-500 truncate max-w-[160px]" title={it.customerName}>
+                        <div className="truncate max-w-[180px] text-slate-500" title={it.customerName}>
                           {it.customerName}
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-2.5 text-slate-600 text-xs">{formatDate(it.deliveryDate)}</td>
+                    <td className="px-3 py-2.5 text-slate-600">{formatDate(it.deliveryDate)}</td>
                     <td className="px-3 py-2.5">
                       <span className={cn(
-                        'rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset',
+                        'rounded-full px-2 py-0.5 ring-1 ring-inset',
                         it.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-rose-50 text-rose-700 ring-rose-200'
                       )}>
                         {it.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
@@ -315,17 +311,17 @@ export const DispatchNewPage = () => {
                     </td>
                     <td className="px-3 py-2.5">{it.grade}</td>
                     <td className="px-3 py-2.5">{it.material}</td>
-                    <td className="px-3 py-2.5 font-mono text-xs">{it.measure}</td>
+                    <td className="px-3 py-2.5 font-mono">{it.measure}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{it.orderedPcs}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">{it.producedPcs}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-slate-500">{it.dispatchedPcs}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">
                       <div className="flex flex-col items-end gap-0.5">
-                        <span className="rounded-md bg-green-50 px-2 py-0.5 font-semibold text-green-800 ring-1 ring-inset ring-green-200">
+                        <span className="rounded-md bg-green-50 px-2 py-0.5 text-green-800 ring-1 ring-inset ring-green-200">
                           {it.readyPcs}
                         </span>
                         {it.excessPcs > 0 && (
-                          <span className="rounded-md bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700 ring-1 ring-inset ring-orange-200">
+                          <span className="rounded-md bg-orange-50 px-1.5 py-0.5 text-orange-700 ring-1 ring-inset ring-orange-200">
                             +{it.excessPcs} excess
                           </span>
                         )}
