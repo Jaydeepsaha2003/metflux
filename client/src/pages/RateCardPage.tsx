@@ -155,6 +155,7 @@ export const RateCardPage = () => {
     <div className="customer-workspace customer-rates max-w-full space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
+          <p className="customer-eyebrow">Customer management / Pricing</p>
           <h1 className="flex items-center gap-2 text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
             <IndianRupee className="h-5 w-5 text-brand-600" /> Customer Rate Card
           </h1>
@@ -170,7 +171,7 @@ export const RateCardPage = () => {
       <CustomerTabs />
       <div className="customer-summary"><span><strong>{data?.items.length ?? 0}</strong> matching rates</span><span><strong>{groups.length}</strong> customers</span><span>Customer + grade + core type → agreed price</span></div>
       {/* Filters */}
-      <div className="flex flex-col gap-2.5 rounded-xl border border-slate-200/70 bg-white p-3 shadow-e1 lg:flex-row lg:items-end">
+      <div className="rate-filter-panel flex flex-col gap-2.5 rounded-xl border border-slate-200/70 bg-white p-3 shadow-e1 lg:flex-row lg:items-end">
         <div className="relative min-w-0 flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
@@ -195,7 +196,7 @@ export const RateCardPage = () => {
 
       {/* Add / edit form */}
       {draft && (
-        <div className="rounded-xl border border-brand-200 bg-gradient-to-b from-brand-50/70 to-white p-3 shadow-e1 sm:p-4">
+        <div className="rate-editor rounded-xl border border-brand-200 bg-gradient-to-b from-brand-50/70 to-white p-3 shadow-e1 sm:p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-[13px] font-extrabold uppercase tracking-[0.08em] text-slate-700">
               {draft.id ? 'Edit rate' : 'New rate'}
@@ -204,7 +205,7 @@ export const RateCardPage = () => {
               <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="rate-fields grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <Field label="Customer">
               <SearchableSelect
                 value={draft.customerId}
@@ -223,9 +224,6 @@ export const RateCardPage = () => {
             </Field>
             <Field label="Core type">
               <SearchableSelect value={draft.coreType} onChange={(value) => setDraft({ ...draft, coreType: value })} options={CORE_TYPES.map(c => ({ value:c, label:coreLabel(c) }))} placeholder="All core types" />
-              <div className="mt-1 text-[11px] text-slate-400">
-                Leave as “All” unless this grade is priced differently by shape.
-              </div>
             </Field>
             <Field label="Basis">
               <SearchableSelect value={draft.rateBasis} onChange={(value) => setDraft({ ...draft, rateBasis: value === 'PER_PCS' ? 'PER_PCS' : 'PER_KG' })} options={[{value:'PER_KG',label:'Per kg'},{value:'PER_PCS',label:'Per piece'}]} placeholder="Per kg" />
@@ -239,6 +237,7 @@ export const RateCardPage = () => {
               />
             </Field>
           </div>
+          <p className="rate-help">Use “All core types” for a standard grade rate, or choose a shape for a specific price.</p>
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Note (optional)">
               <input
@@ -277,8 +276,8 @@ export const RateCardPage = () => {
       ) : (
         <div className="space-y-3">
           {groups.map((g) => (
-            <div key={g.id} className="overflow-hidden rounded-xl border border-slate-200/70 bg-white shadow-e1">
-              <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/70 px-3 py-2">
+            <div key={g.id} className="rate-group overflow-hidden rounded-xl border border-slate-200/70 bg-white shadow-e1">
+              <div className="rate-group-heading flex items-center gap-2 border-b border-slate-100 bg-slate-50/70 px-3 py-2">
                 <span className="font-num text-[12.5px] font-bold text-brand-700">{g.code ?? '—'}</span>
                 {!hideNames && <span className="text-[13px] font-semibold text-slate-800">{g.name}</span>}
                 <span className="ml-auto text-[11px] text-slate-400">
