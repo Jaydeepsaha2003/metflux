@@ -54,6 +54,7 @@ const TABLES_WITH_UPDATED_AT = new Set([
   'User',
   'Membership',
   'Customer',
+  'CustomerRate',
   'FluxGrade',
   'PoOrder',
   'Production',

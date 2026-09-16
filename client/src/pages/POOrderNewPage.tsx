@@ -7,6 +7,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Save, Loader2, Calendar, Hash, User2, Package, Pencil, Copy, ChevronDown, ChevronRight } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import { useCustomerRate, useAutoFillRate } from '@/hooks/useCustomerRate';
 import { cn } from '@/lib/cn';
 import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc, nanoCalc, nanoTestCalc, isCompositeGrade, compositeRuleFromMaterial, compositeCalc } from '@/lib/calc';
 import { SearchableSelect } from '@/components/SearchableSelect';
@@ -576,6 +577,7 @@ export const POOrderNewPage = () => {
 
         {coreType === 'TOROIDAL' && (
           <ToroidalForm
+            customerId={customerId}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'TOROIDAL'))}
             fluxGrades={fluxResp?.grades ?? []}
             onAdd={(item) => { setItems((prev) => [...prev, item]); }}
@@ -587,6 +589,7 @@ export const POOrderNewPage = () => {
         )}
         {coreType === 'RECTANGULAR' && (
           <RectangularForm
+            customerId={customerId}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'RECTANGULAR'))}
             fluxGrades={fluxRespRect?.grades ?? []}
             onAdd={(item) => { setItems((prev) => [...prev, item]); }}
@@ -1020,10 +1023,14 @@ const Stat = ({ label, value, accent }: { label: string; value: string; accent?:
 /* ---------- TOROIDAL ---------- */
 export const ToroidalForm = ({
   grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed, hideTesting = false,
+  customerId,
 }: {
   grades: GradeRow[];
   fluxGrades: FluxGroup[];
   onAdd: (item: Item) => void;
+  /** Whose rate card to consult. Optional: the quotation screen has no
+   *  customer, and passing none simply means nothing is filled in. */
+  customerId?: string;
   prefill?: { coreType: CoreType; grade: string; material: string; rateBasis: 'PER_KG' | 'PER_PCS' } | null;
   onPrefillConsumed?: () => void;
   edit?: { item: Item; nonce: number } | null;
@@ -1042,6 +1049,11 @@ export const ToroidalForm = ({
   // Pricing
   const [rateBasis, setRateBasis] = useState<'PER_KG' | 'PER_PCS'>('PER_KG');
   const [rateValue, setRateValue] = useState(0);
+  // Set as soon as anyone edits the rate, so a lookup that resolves a
+  // moment later can never overwrite a figure typed on purpose.
+  const [rateTouched, setRateTouched] = useState(false);
+  const cardRate = useCustomerRate(customerId, grade, 'TOROIDAL');
+  useAutoFillRate(cardRate, rateTouched, (r) => { setRateBasis(r.rateBasis); setRateValue(r.rateValue); });
   const pendingFlux = useRef<number | null>(null);
 
   // Fluxes available for the currently selected grade — driven entirely by
@@ -1075,6 +1087,7 @@ export const ToroidalForm = ({
     setId(it.id1); setOd(it.od1); setHt(it.ht); setPcs(it.pcs);
     setTurns(it.turns ?? 0);
     setRateBasis(it.rateBasis ?? 'PER_KG'); setRateValue(it.rateValue ?? 0);
+    setRateTouched(true);   // the line already carries a price; leave it be
     pendingFlux.current = it.flux ?? 0;
     setGrade(it.grade);
     onEditConsumed?.();
@@ -1104,7 +1117,7 @@ export const ToroidalForm = ({
     setGrade(''); setMaterial('');
     setId(0); setOd(0); setHt(0); setPcs(0);
     setTurns(0); setFlux(0);
-    setRateValue(0);
+    setRateValue(0); setRateTouched(false);
   };
 
   const add = async () => {
@@ -1161,7 +1174,18 @@ export const ToroidalForm = ({
             <option value="PER_PCS">Per Pcs</option>
           </select>
         </Field>
-        <NumField label={rateBasis === 'PER_KG' ? 'Rate (₹/kg)' : 'Rate (₹/pcs)'} value={rateValue} onChange={setRateValue} />
+        <div>
+          <NumField
+            label={rateBasis === 'PER_KG' ? 'Rate (₹/kg)' : 'Rate (₹/pcs)'}
+            value={rateValue}
+            onChange={(v) => { setRateTouched(true); setRateValue(v); }}
+          />
+          {cardRate && !rateTouched && rateValue > 0 && (
+            <div className="mt-1 text-[11px] font-medium text-brand-700">
+              From the customer&rsquo;s rate card &mdash; change it if this order differs.
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Row 2 — narrow numeric fields: dimensions, pcs, turns, flux.
@@ -1235,10 +1259,14 @@ export const ToroidalForm = ({
 /* ---------- RECTANGULAR ---------- */
 export const RectangularForm = ({
   grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed, hideTesting = false,
+  customerId,
 }: {
   grades: GradeRow[];
   fluxGrades: FluxGroup[];
   onAdd: (item: Item) => void;
+  /** Whose rate card to consult. Optional: the quotation screen has no
+   *  customer, and passing none simply means nothing is filled in. */
+  customerId?: string;
   prefill?: { coreType: CoreType; grade: string; material: string; rateBasis: 'PER_KG' | 'PER_PCS' } | null;
   onPrefillConsumed?: () => void;
   edit?: { item: Item; nonce: number } | null;
@@ -1258,6 +1286,11 @@ export const RectangularForm = ({
   const [flux, setFlux] = useState(0);
   const [rateBasis, setRateBasis] = useState<'PER_KG' | 'PER_PCS'>('PER_KG');
   const [rateValue, setRateValue] = useState(0);
+  // Set as soon as anyone edits the rate, so a lookup that resolves a
+  // moment later can never overwrite a figure typed on purpose.
+  const [rateTouched, setRateTouched] = useState(false);
+  const cardRate = useCustomerRate(customerId, grade, 'RECTANGULAR');
+  useAutoFillRate(cardRate, rateTouched, (r) => { setRateBasis(r.rateBasis); setRateValue(r.rateValue); });
   const pendingFlux = useRef<number | null>(null);
 
   // Rectangular flux table (already filtered to coreType=RECTANGULAR by the query).
@@ -1290,6 +1323,7 @@ export const RectangularForm = ({
     setId1(it.id1); setId2(it.id2 ?? 0); setOd1(it.od1); setOd2(it.od2 ?? 0); setHt(it.ht); setPcs(it.pcs);
     setTurns(it.turns ?? 0);
     setRateBasis(it.rateBasis ?? 'PER_KG'); setRateValue(it.rateValue ?? 0);
+    setRateTouched(true);   // the line already carries a price; leave it be
     pendingFlux.current = it.flux ?? 0;
     setGrade(it.grade);
     onEditConsumed?.();
@@ -1331,7 +1365,7 @@ export const RectangularForm = ({
     setGrade(''); setMaterial('');
     setId1(0); setId2(0); setOd1(0); setOd2(0); setHt(0); setPcs(0);
     setTurns(0); setFlux(0);
-    setRateValue(0);
+    setRateValue(0); setRateTouched(false);
   };
 
   const add = async () => {
@@ -1387,7 +1421,18 @@ export const RectangularForm = ({
             <option value="PER_PCS">Per Pcs</option>
           </select>
         </Field>
-        <NumField label={rateBasis === 'PER_KG' ? 'Rate (₹/kg)' : 'Rate (₹/pcs)'} value={rateValue} onChange={setRateValue} />
+        <div>
+          <NumField
+            label={rateBasis === 'PER_KG' ? 'Rate (₹/kg)' : 'Rate (₹/pcs)'}
+            value={rateValue}
+            onChange={(v) => { setRateTouched(true); setRateValue(v); }}
+          />
+          {cardRate && !rateTouched && rateValue > 0 && (
+            <div className="mt-1 text-[11px] font-medium text-brand-700">
+              From the customer&rsquo;s rate card &mdash; change it if this order differs.
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Row 2 — narrow numeric fields. 8 fields fit cleanly in one line on md+.
