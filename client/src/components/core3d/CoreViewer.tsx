@@ -22,14 +22,23 @@ import { annulus, halfAnnulus, rectRing, nanoCase } from './geometry';
 import { compositeLayout, shapeExtent, shapeIsDrawable, type CoreShape } from './shape';
 import { buildDimensions } from './dimensions';
 
-/* Steel that reads as steel: high metalness, mid roughness, and a colour per
-   core family matching the badge colours used elsewhere in the form so the
-   model is recognisably the thing the tab is about. */
+/* Steel that reads as steel.
+   These were the tab colours — amber, rose, violet — which made the model
+   match the form but look like painted plastic. A wound core is grey metal, so
+   the palette is grey metal, and the tab colour lives on the panel border
+   where it belongs.
+
+   The families still differ, because on a composite you have to be able to
+   tell the two halves apart: CRGO is the lighter, slightly warm silicon steel,
+   nanocrystalline ribbon is noticeably darker and cooler, and the case is
+   brighter stainless. Roughness does as much work as colour here — a rougher
+   surface scatters the studio reflection and reads as a wound stack rather
+   than a machined billet. */
 const MATERIALS = {
-  crgo:  { color: 0xd8b25e, metalness: 0.92, roughness: 0.34 },  // warm silicon steel
-  steel: { color: 0xb9c2cc, metalness: 0.94, roughness: 0.28 },  // bright rolled steel
-  nano:  { color: 0x9d7bd8, metalness: 0.86, roughness: 0.38 },  // nanocrystalline ribbon
-  rect:  { color: 0xd98f92, metalness: 0.90, roughness: 0.32 },
+  crgo:  { color: 0xb6b8b6, metalness: 0.88, roughness: 0.38 },  // silicon steel
+  steel: { color: 0xc6ccd2, metalness: 0.92, roughness: 0.26 },  // stainless case
+  nano:  { color: 0x8d949c, metalness: 0.84, roughness: 0.44 },  // nanocrystalline ribbon
+  rect:  { color: 0xb2b5b8, metalness: 0.88, roughness: 0.38 },  // silicon steel
 } as const;
 
 type Props = {

@@ -20,10 +20,11 @@
 import * as THREE from 'three';
 import { compositeLayout, type CoreShape } from './shape';
 
-/** Drawn in a blueprint blue so the annotation never reads as part of the
- *  metal, and stays legible against both the pale stage and the core itself. */
-const DIM_COLOR = 0x1d4ed8;
-const DIM_TEXT = '#1d4ed8';
+/** Drawn in near-black, the way a drawing is inked. Against grey metal and a
+ *  pale stage this carries further than a colour would, which is what lets the
+ *  lines be thin without disappearing. */
+const DIM_COLOR = 0x111418;
+const DIM_TEXT = '#111418';
 
 /* The label's world height sets the scale of everything else. Arrowheads, row
    spacing and standoff are multiples of IT rather than of the part, so a head
@@ -31,15 +32,15 @@ const DIM_TEXT = '#1d4ed8';
    900mm one alike. Sizing arrows off the part instead is what made them
    invisible on a tall, narrow core. */
 const LABEL_H = 0.15;        // fraction of the part's overall extent
-/* Arrowheads about two-and-a-half times as long as they are wide, which is
-   roughly what a drafted arrow looks like, and a shaft thick enough to read as
-   a stroke rather than a scratch. These were first set far finer and came out
-   at under two pixels on screen — geometry sized in millimetres has to be
-   checked at the size it is actually drawn, not admired in the source. */
-const ARROW_LEN = 0.55;      // of label height
-const ARROW_RAD = 0.125;     // of label height
-const SHAFT_R = 0.055;       // dimension-line thickness, of label height
-const EXT_R = 0.035;         // extension-line thickness, of label height
+/* Fine arrowheads about three times as long as they are wide, on a thin shaft
+   — draughtsman's weight rather than marker pen. Thin only works because the
+   ink is near-black; the same thickness in blue washed out against the metal.
+   Geometry sized in millimetres still has to be judged at the size it is
+   actually drawn, not admired in the source. */
+const ARROW_LEN = 0.5;       // of label height
+const ARROW_RAD = 0.085;     // of label height
+const SHAFT_R = 0.028;       // dimension-line thickness, of label height
+const EXT_R = 0.019;         // extension-line thickness, of label height
 const ROW = 2.3;             // gap between stacked dimension lines
 const STANDOFF = 0.8;        // first dimension line's distance off the feature
 const OVERSHOOT = 0.3;       // how far extension lines pass the dimension line
@@ -73,7 +74,7 @@ const makeLabel = (text: string, ctx: Ctx): THREE.Sprite => {
   // A pill behind the text, so a number never lands on the metal and vanishes.
   c.fillStyle = 'rgba(255,255,255,0.94)';
   c.strokeStyle = DIM_TEXT;
-  c.lineWidth = 3;
+  c.lineWidth = 2.5;
   const r = h / 2;
   c.beginPath();
   c.moveTo(r, 0); c.lineTo(w - r, 0);
