@@ -453,7 +453,6 @@ export const QuotationNewPage = () => {
 
         {coreType === 'TOROIDAL' && (
           <ToroidalForm hideTesting
-            customerId={customerId}
             customerFactor={customer?.toroidalFactor}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'TOROIDAL'))}
             fluxGrades={fluxResp?.grades ?? []}
@@ -463,7 +462,6 @@ export const QuotationNewPage = () => {
         )}
         {coreType === 'RECTANGULAR' && (
           <RectangularForm hideTesting
-            customerId={customerId}
             customerFactor={customer?.rectStackFactor}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'RECTANGULAR'))}
             fluxGrades={fluxRespRect?.grades ?? []}
