@@ -59,6 +59,67 @@ export const annulus = (t: Tri): THREE.BufferGeometry => {
   return merged ?? outerWall;
 };
 
+/**
+ * One half of a cut core: an annulus swept through half a turn.
+ *
+ * A cut core is a wound core sliced across a diameter into two mating C halves.
+ * Drawing it as a whole ring with a line on it would not show the thing that
+ * makes it a different product, so each half is a real solid with real cut
+ * faces — and the pair is drawn with a small separation so the joint is visible
+ * even before a gap is specified.
+ *
+ * `startAngle` picks which half. Built centred on the origin like every other
+ * solid here; see the coordinate-space note in dimensions.ts.
+ */
+export const halfAnnulus = (t: Tri, startAngle: number): THREE.BufferGeometry => {
+  const ri = Math.max(t.id / 2, 0.001);
+  const ro = t.od / 2;
+  const h = t.ht;
+  const seg = Math.max(8, Math.round(RADIAL / 2));
+
+  const outerWall = new THREE.CylinderGeometry(ro, ro, h, seg, 1, true, startAngle, Math.PI);
+  const innerWall = new THREE.CylinderGeometry(ri, ri, h, seg, 1, true, startAngle, Math.PI);
+  // Flip the bore so its surface faces into the hole rather than out through
+  // the metal. Scaling would mirror the arc onto the wrong half, so the winding
+  // is reversed by drawing it back to front instead.
+  innerWall.scale(1, 1, 1);
+  const innerIdx = innerWall.getIndex();
+  if (innerIdx) {
+    const a = Array.from(innerIdx.array);
+    for (let i = 0; i < a.length; i += 3) { const t0 = a[i]; a[i] = a[i + 2]; a[i + 2] = t0; }
+    innerWall.setIndex(a);
+  }
+  const nrm = innerWall.getAttribute('normal');
+  for (let i = 0; i < nrm.count; i += 1) {
+    nrm.setXYZ(i, -nrm.getX(i), -nrm.getY(i), -nrm.getZ(i));
+  }
+  nrm.needsUpdate = true;
+
+  const face = (y: number, up: boolean) => {
+    const g = new THREE.RingGeometry(ri, ro, seg, 1, startAngle, Math.PI);
+    g.rotateX(up ? -Math.PI / 2 : Math.PI / 2);
+    g.translate(0, y, 0);
+    return g;
+  };
+
+  // The two flat cut faces, one at each end of the half turn.
+  const cutFace = (angle: number) => {
+    const g = new THREE.PlaneGeometry(ro - ri, h);
+    g.rotateY(Math.PI / 2);
+    g.translate(0, 0, (ro + ri) / 2);
+    g.rotateY(-angle);
+    return g;
+  };
+
+  const merged = mergeGeometries(
+    [outerWall, innerWall, face(h / 2, true), face(-h / 2, false),
+     cutFace(startAngle), cutFace(startAngle + Math.PI)],
+    false,
+  );
+  [outerWall, innerWall].forEach((g) => g.dispose());
+  return merged ?? outerWall;
+};
+
 /** A rectangular window core: outer rectangle with a rectangular hole,
  *  extruded through the stack height.
  *

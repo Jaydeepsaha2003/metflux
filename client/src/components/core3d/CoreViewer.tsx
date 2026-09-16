@@ -18,7 +18,7 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { annulus, rectRing, nanoCase } from './geometry';
+import { annulus, halfAnnulus, rectRing, nanoCase } from './geometry';
 import { compositeLayout, shapeExtent, shapeIsDrawable, type CoreShape } from './shape';
 import { buildDimensions } from './dimensions';
 
@@ -330,6 +330,20 @@ export default function CoreViewer({ shape, resetNonce, showDims }: Props) {
       case 'RECTANGULAR':
         add(rectRing(shape.id1, shape.id2, shape.od1, shape.od2, shape.ht), mk(MATERIALS.rect));
         break;
+      case 'CUT_ROUND': {
+        /* Two real halves rather than a ring with a line drawn on it. They are
+           pushed apart by the specified gap, or by a hairline when there is no
+           gap, so the joint is visible and the product reads as what it is. */
+        const mat = mk(MATERIALS.crgo);
+        const split = shape.gapMm > 0
+          ? shape.gapMm / 2
+          : Math.max(shape.dims.od * 0.004, 0.2);
+        const top = add(halfAnnulus(shape.dims, 0), mat);
+        const bot = add(halfAnnulus(shape.dims, Math.PI), mat);
+        top.position.z = split;
+        bot.position.z = -split;
+        break;
+      }
       case 'NANO': {
         add(annulus(shape.dims), mk(MATERIALS.nano));
         if (shape.cased) {

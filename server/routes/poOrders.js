@@ -14,7 +14,7 @@ const router = Router();
 router.use(requireAuth, resolveTenant);
 
 const itemSchema = z.object({
-  coreType: z.enum(['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE']),
+  coreType: z.enum(['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND']),
   grade: z.string().trim().min(1).max(80),
   material: z.string().trim().min(1).max(120),
   measure: z.string().trim().min(1).max(160),

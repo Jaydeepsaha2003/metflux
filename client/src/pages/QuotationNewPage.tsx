@@ -15,7 +15,7 @@ import { type Item, ToroidalForm, RectangularForm, NanoForm } from '@/pages/POOr
 /* Local item = SO item + quotation-only print fields (HSN/SAC + unit). */
 type QItem = Item & { hsnCode?: string; unit?: string };
 
-type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE';
+type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE' | 'CUT_ROUND';
 type Customer = {
   id: string; name: string; gstRate?: number;
   toroidalFactor?: number | null; rectStackFactor?: number | null;

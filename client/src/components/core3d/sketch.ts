@@ -97,6 +97,7 @@ export const buildSketch = (shape: CoreShape, width = 720, height = 340): Sketch
     switch (shape.kind) {
       case 'TOROIDAL':
       case 'NANO':
+      case 'CUT_ROUND':
         planW = planH = shape.dims.od;
         sectW = shape.dims.od; sectH = shape.dims.ht;
         break;
@@ -173,6 +174,13 @@ export const buildSketch = (shape: CoreShape, width = 720, height = 340): Sketch
       );
     }
 
+    // The cut itself: a diameter line across the ring, which is the only thing
+    // in plan that distinguishes a cut core from the toroid it came from.
+    if (shape.kind === 'CUT_ROUND') {
+      parts.push(
+        `<line x1="${f(planCx - ro)}" y1="${f(cy)}" x2="${f(planCx + ro)}" y2="${f(cy)}" stroke="${STEEL_EDGE}" stroke-width="1.6"/>`,
+      );
+    }
     parts.push(
       centreMarks(planCx, cy, ro + s * 1.4),
       linearDim(

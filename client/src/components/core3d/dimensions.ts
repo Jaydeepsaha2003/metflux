@@ -223,7 +223,10 @@ export const buildDimensions = (shape: CoreShape, extent: number) => {
 
   switch (shape.kind) {
     case 'TOROIDAL':
-    case 'NANO': {
+    case 'NANO':
+    // A cut core is dimensioned by the ring it came from, so it carries the
+    // same three figures. The gap, when there is one, shows in the caption.
+    case 'CUT_ROUND': {
       const { id, od, ht } = shape.dims;
       annularDims(id, od, ht);
       break;

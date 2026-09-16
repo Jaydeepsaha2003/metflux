@@ -10,7 +10,7 @@ import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
 import { BulkExcel, type BulkExcelConfig } from '@/components/BulkExcel';
 
-type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE';
+type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE' | 'CUT_ROUND';
 type Row = {
   id: string; grade: string; material: string; createdAt: string;
   coreTypes: CoreType[];
@@ -19,12 +19,13 @@ type Row = {
 type Attrs = { coreTypes: CoreType[]; nanoIdOff: number | null; nanoOdOff: number | null; nanoHtOff: number | null };
 
 const ALL_CORES: CoreType[] = ['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE'];
-const CORE_LABEL: Record<CoreType, string> = { TOROIDAL: 'Toroidal', RECTANGULAR: 'Rectangular', NANO: 'Nano', COMPOSITE: 'Composite' };
+const CORE_LABEL: Record<CoreType, string> = { TOROIDAL: 'Toroidal', RECTANGULAR: 'Rectangular', NANO: 'Nano', COMPOSITE: 'Composite', CUT_ROUND: 'Round cut' };
 const CORE_TONE: Record<CoreType, string> = {
   TOROIDAL: 'bg-amber-50 text-amber-700 ring-amber-200',
   RECTANGULAR: 'bg-rose-50 text-rose-700 ring-rose-200',
   NANO: 'bg-violet-50 text-violet-700 ring-violet-200',
   COMPOSITE: 'bg-teal-50 text-teal-700 ring-teal-200',
+  CUT_ROUND: 'bg-sky-50 text-sky-700 ring-sky-200',
 };
 const signed = (n: number | null) => (n == null || n === 0 ? '0' : n > 0 ? `+${n}` : `${n}`);
 

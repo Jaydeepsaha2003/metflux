@@ -12,7 +12,7 @@ import { cn } from '@/lib/cn';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useConfirm } from '@/hooks/useConfirm';
 
-type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE';
+type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE' | 'CUT_ROUND';
 type Row = {
   id: string;
   grade: string;
@@ -29,9 +29,10 @@ const coreBadge: Record<CoreType, string> = {
   RECTANGULAR: 'bg-rose-50 text-rose-700 border border-rose-200',
   NANO:        'bg-violet-50 text-violet-700 border border-violet-200',
   COMPOSITE:   'bg-teal-50 text-teal-700 border border-teal-200',
+  CUT_ROUND:   'bg-sky-50 text-sky-700 border border-sky-200',
 };
-const coreShort: Record<CoreType, string> = { TOROIDAL: 'Toro', RECTANGULAR: 'Rect', NANO: 'Nano', COMPOSITE: 'Comp' };
-const coreName: Record<CoreType, string> = { TOROIDAL: 'Toroidal', RECTANGULAR: 'Rectangular', NANO: 'Nano', COMPOSITE: 'Composite' };
+const coreShort: Record<CoreType, string> = { TOROIDAL: 'Toro', RECTANGULAR: 'Rect', NANO: 'Nano', COMPOSITE: 'Comp', CUT_ROUND: 'Cut R' };
+const coreName: Record<CoreType, string> = { TOROIDAL: 'Toroidal', RECTANGULAR: 'Rectangular', NANO: 'Nano', COMPOSITE: 'Composite', CUT_ROUND: 'Round cut' };
 
 export const FluxGradesPage = () => {
   const queryClient = useQueryClient();

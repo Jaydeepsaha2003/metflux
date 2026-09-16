@@ -17,6 +17,7 @@ const TONE = {
   RECTANGULAR: { dot: 'bg-rose-500',   label: 'text-rose-800',   ring: 'border-rose-200' },
   NANO:        { dot: 'bg-violet-500', label: 'text-violet-800', ring: 'border-violet-200' },
   COMPOSITE:   { dot: 'bg-teal-500',   label: 'text-teal-800',   ring: 'border-teal-200' },
+  CUT_ROUND:   { dot: 'bg-sky-500',    label: 'text-sky-800',    ring: 'border-sky-200' },
 } as const;
 
 const TITLE = {
@@ -24,6 +25,7 @@ const TITLE = {
   RECTANGULAR: 'Rectangular core',
   NANO: 'Nano core',
   COMPOSITE: 'Composite core',
+  CUT_ROUND: 'Round cut core',
 } as const;
 
 /* The stage the model sits on. A soft radial wash rather than a flat fill, so
@@ -267,6 +269,8 @@ const Empty = ({ kind }: { kind: CoreShape['kind'] }) => (
     <div className="text-[10px] leading-relaxed text-slate-400">
       {kind === 'RECTANGULAR'
         ? 'Enter ID 1, ID 2, OD 1, OD 2 and HT (outer must exceed inner).'
+        : kind === 'CUT_ROUND'
+          ? 'Enter ID, OD and HT of the core before it is cut.'
         : kind === 'COMPOSITE'
           ? 'Enter both the CRGO and Nano dimensions, and pick a join type.'
           : 'Enter ID, OD and HT (OD must be greater than ID).'}

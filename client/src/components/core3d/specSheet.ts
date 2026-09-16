@@ -34,6 +34,7 @@ const TITLE = {
   RECTANGULAR: 'Rectangular core',
   NANO: 'Nano core',
   COMPOSITE: 'Composite core (Nano + CRGO)',
+  CUT_ROUND: 'Round cut core',
 } as const;
 
 /** Rows for the dimension table, in the order an operator reads them. */
@@ -45,6 +46,14 @@ const dimensionRows = (shape: CoreShape): [string, string][] => {
         ['Inner diameter (ID)', `${n(shape.dims.id)} mm`],
         ['Outer diameter (OD)', `${n(shape.dims.od)} mm`],
         ['Height (HT)', `${n(shape.dims.ht)} mm`],
+      ];
+    case 'CUT_ROUND':
+      return [
+        ['Inner diameter (ID)', `${n(shape.dims.id)} mm`],
+        ['Outer diameter (OD)', `${n(shape.dims.od)} mm`],
+        ['Height (HT)', `${n(shape.dims.ht)} mm`],
+        ['Construction', 'Cut into 2 mating halves'],
+        ['Total air gap', shape.gapMm > 0 ? `${n(shape.gapMm)} mm` : 'None (butt joint)'],
       ];
     case 'RECTANGULAR':
       return [
@@ -88,6 +97,17 @@ const weightWorking = (shape: CoreShape, meta: SheetMeta): string[] => {
         'Mean length  Ml = 0.2 × (ID1 + ID2) + ((OD2 − ID2) / 20) × π',
         'Weight / pc = Ac × Ml × 7.65 / 1000',
         `S = ${sf} (stacking factor${sf === RECT_STACK_FACTOR ? ', standard' : ', agreed for this customer'})`,
+      ];
+    }
+    case 'CUT_ROUND': {
+      const { id, od, ht } = shape.dims;
+      const fx = stackOr(meta.factor, TOROIDAL_FACTOR);
+      return [
+        'Cut from a wound core, so the weight is that of the whole ring:',
+        'Weight / pc = (OD² − ID²) × HT × F × 1e-6',
+        `= (${n(od)}² − ${n(id)}²) × ${n(ht)} × ${fx} × 1e-6`,
+        `F = ${fx} (stacking factor${fx === TOROIDAL_FACTOR ? ', standard' : ', agreed for this customer'})`,
+        'One piece = one complete core, both halves. Cutting loss not deducted.',
       ];
     }
     case 'NANO':

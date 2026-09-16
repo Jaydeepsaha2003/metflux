@@ -19,7 +19,7 @@ import { useAuthStore, activeMembership } from '@/store/auth';
 import './po-order-new.css';
 
 /* ---------- types ---------- */
-type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE';
+type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE' | 'CUT_ROUND';
 
 export type Item = {
   /** Set when the item came from the DB (edit mode). Not sent to the server — Zod strips it. */
@@ -42,6 +42,8 @@ export type Item = {
    *  later change to the customer's figure can't re-weigh an existing order.
    *  Undefined/null means it used the house default. */
   stackFactor?: number | null;
+  /** Cut cores only: total controlled air gap across both joints, mm. */
+  gapMm?: number;
   // Toroidal flux-test calibration — optional, only set when user fills them.
   turns?: number; flux?: number; ateCm?: number; testVoltage?: number; testCurrent?: number;
   // Pricing — rateBasis + rateValue are user-entered; per-kg / per-pc / total
@@ -138,6 +140,7 @@ const emptyShapeFor = (ct: CoreType): CoreShape => {
   const zero = { id: 0, od: 0, ht: 0 };
   switch (ct) {
     case 'RECTANGULAR': return { kind: 'RECTANGULAR', id1: 0, id2: 0, od1: 0, od2: 0, ht: 0 };
+    case 'CUT_ROUND':   return { kind: 'CUT_ROUND', dims: zero, gapMm: 0 };
     case 'NANO':        return { kind: 'NANO', dims: zero, cased: true };
     case 'COMPOSITE':   return { kind: 'COMPOSITE', rule: 'CONTINUOUS_LOOP', crgo: zero, nano: zero };
     default:            return { kind: 'TOROIDAL', dims: zero };
@@ -849,6 +852,19 @@ export const POOrderNewPage = () => {
             >
               Composite
             </button>
+            <button
+              type="button"
+              onClick={() => pickCore('CUT_ROUND')}
+              aria-pressed={coreType === 'CUT_ROUND'}
+              className={cn(
+                'rounded-md px-3 py-1.5 font-medium transition',
+                coreType === 'CUT_ROUND'
+                  ? 'bg-white text-sky-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              )}
+            >
+              Round cut
+            </button>
           </div>
         </div>
 
@@ -910,6 +926,21 @@ export const POOrderNewPage = () => {
             prefill={prefill}
             onPrefillConsumed={() => setPrefill(null)}
             edit={editSeed?.item.coreType === 'COMPOSITE' ? editSeed : null}
+            onEditConsumed={() => setEditSeed(null)}
+          />
+        )}
+        {coreType === 'CUT_ROUND' && (
+          <ToroidalForm
+            cut
+            onShape={setReport}
+            customerId={customerId}
+            customerFactor={selectedCustomer?.toroidalFactor}
+            grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'CUT_ROUND'))}
+            fluxGrades={fluxResp?.grades ?? []}
+            onAdd={(item) => { setItems((prev) => [...prev, item]); }}
+            prefill={prefill}
+            onPrefillConsumed={() => setPrefill(null)}
+            edit={editSeed?.item.coreType === 'CUT_ROUND' ? editSeed : null}
             onEditConsumed={() => setEditSeed(null)}
           />
         )}
@@ -1389,13 +1420,16 @@ const Stat = ({ label, value, accent }: { label: string; value: string; accent?:
 /* ---------- TOROIDAL ---------- */
 export const ToroidalForm = ({
   grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed, hideTesting = false,
-  customerId, customerFactor, onShape,
+  customerId, customerFactor, onShape, cut = false,
 }: {
   grades: GradeRow[];
   fluxGrades: FluxGroup[];
   onAdd: (item: Item) => void;
   /** Reports the live dimensions to the 3D preview. */
   onShape?: (r: ShapeReport) => void;
+  /** Cut-core mode: same dimensions and the same weight, but the piece ships
+   *  as two mating halves and can carry a controlled air gap. */
+  cut?: boolean;
   /** Whose rate card to consult. Optional: the quotation screen has no
    *  customer, and passing none simply means nothing is filled in. */
   customerId?: string;
@@ -1427,10 +1461,13 @@ export const ToroidalForm = ({
   // customer switch leaves the entered figure alone.
   const [stack, setStack] = useState(stackOr(customerFactor, TOROIDAL_FACTOR));
   const [stackTouched, setStackTouched] = useState(false);
+  // Total controlled air gap across both joints. Cut cores only.
+  const [gapMm, setGapMm] = useState(0);
   useEffect(() => {
     if (!stackTouched) setStack(stackOr(customerFactor, TOROIDAL_FACTOR));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerFactor]);
+  const selfCore: CoreType = cut ? 'CUT_ROUND' : 'TOROIDAL';
   const cardRate = useCustomerRate(customerId, grade, 'TOROIDAL');
   useAutoFillRate(cardRate, rateTouched, (r) => { setRateBasis(r.rateBasis); setRateValue(r.rateValue); });
   const pendingFlux = useRef<number | null>(null);
@@ -1450,7 +1487,7 @@ export const ToroidalForm = ({
 
   // Apply a one-shot "copy from row" prefill (grade / material / rate basis).
   useEffect(() => {
-    if (!prefill || prefill.coreType !== 'TOROIDAL') return;
+    if (!prefill || prefill.coreType !== selfCore) return;
     setGrade(prefill.grade);
     setMaterial(prefill.material);
     setRateBasis(prefill.rateBasis);
@@ -1460,7 +1497,7 @@ export const ToroidalForm = ({
 
   // Load a full row for editing.
   useEffect(() => {
-    if (!edit || edit.item.coreType !== 'TOROIDAL') return;
+    if (!edit || edit.item.coreType !== selfCore) return;
     const it = edit.item;
     setMaterial(it.material);
     setId(it.id1); setOd(it.od1); setHt(it.ht); setPcs(it.pcs);
@@ -1470,6 +1507,7 @@ export const ToroidalForm = ({
     // Re-weigh on the factor the line was BOOKED with, not today's default —
     // otherwise opening a line to fix a typo silently changes its weight.
     setStack(stackOr(it.stackFactor, TOROIDAL_FACTOR)); setStackTouched(true);
+    setGapMm(it.gapMm ?? 0);
     pendingFlux.current = it.flux ?? 0;
     setGrade(it.grade);
     onEditConsumed?.();
@@ -1480,10 +1518,12 @@ export const ToroidalForm = ({
   useReportShape(
     onShape,
     () => ({
-      shape: { kind: 'TOROIDAL', dims: { id, od, ht } },
+      shape: cut
+        ? { kind: 'CUT_ROUND', dims: { id, od, ht }, gapMm }
+        : { kind: 'TOROIDAL', dims: { id, od, ht } },
       meta: { grade, material, pcs, factor: stack, weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight },
     }),
-    [id, od, ht, grade, material, pcs, stack, calc.weightPerPc, calc.totalWeight],
+    [cut, gapMm, id, od, ht, grade, material, pcs, stack, calc.weightPerPc, calc.totalWeight],
   );
   const fluxCalc = useMemo(
     // The stacking factor reaches the test figures too: more steel in the
@@ -1511,6 +1551,7 @@ export const ToroidalForm = ({
     setTurns(0); setFlux(0);
     setRateValue(0); setRateTouched(false);
     setStack(stackOr(customerFactor, TOROIDAL_FACTOR)); setStackTouched(false);
+    setGapMm(0);
   };
 
   const add = async () => {
@@ -1523,10 +1564,11 @@ export const ToroidalForm = ({
       return;
     }
     onAdd({
-      coreType: 'TOROIDAL', grade, material, measure: calc.measure,
+      coreType: selfCore, grade, material, measure: calc.measure,
       id1: id, od1: od, ht, pcs,
       weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight,
       stackFactor: stack,
+      gapMm: cut && gapMm > 0 ? gapMm : undefined,
       // Only attach test-calibration values when the user actually filled them.
       turns:       turns > 0 ? turns : undefined,
       flux:        flux  > 0 ? flux  : undefined,
@@ -1544,10 +1586,23 @@ export const ToroidalForm = ({
   };
 
   return (
-    <div className="core-entry-form rounded-xl border border-amber-200 bg-amber-50/40 p-3 sm:p-4">
+    <div className={cn(
+      'core-entry-form rounded-xl border p-3 sm:p-4',
+      cut ? 'border-sky-200 bg-sky-50/40' : 'border-amber-200 bg-amber-50/40',
+    )}>
       <div className="mb-2 flex items-center gap-2">
-        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-800">Toroidal</span>
+        <span className={cn('h-1.5 w-1.5 rounded-full', cut ? 'bg-sky-500' : 'bg-amber-500')} />
+        <span className={cn(
+          'text-[11px] font-semibold uppercase tracking-wider',
+          cut ? 'text-sky-800' : 'text-amber-800',
+        )}>
+          {cut ? 'Round cut core' : 'Toroidal'}
+        </span>
+        {cut && (
+          <span className="text-[10px] font-medium text-slate-500">
+            dimensions of the core before cutting &middot; 1 pc = 1 complete core (2 halves)
+          </span>
+        )}
       </div>
 
       {/* What is being made and what it costs. Names need reading width; the
@@ -1594,6 +1649,15 @@ export const ToroidalForm = ({
         <NumField label="OD" w={FW.dim} value={od} onChange={setOd} />
         <NumField label="HT" w={FW.dim} value={ht} onChange={setHt} />
         <NumField label="Pcs" w={FW.qty} align="right" value={pcs} onChange={setPcs} />
+        {cut && (
+          <NumField
+            label="Air gap"
+            w={FW.factor}
+            align="right"
+            value={gapMm}
+            onChange={setGapMm}
+          />
+        )}
         {!hideTesting && (<>
           <NumField label="Turns" w={FW.qty} align="right" value={turns} onChange={setTurns} />
           <Field label="Flux" className={cn('shrink-0', FW.sel)}>
