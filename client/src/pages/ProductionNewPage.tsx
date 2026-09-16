@@ -1,4 +1,5 @@
 import '@/components/production/workspace.css';
+import './production-receive.css';
 // Record new production — a two-step wizard: pick a pending PO item, then
 // fill in labour + pcs. Total weight auto-calcs from pcs × wt/pc.
 //
@@ -426,17 +427,17 @@ export const ProductionNewPage = () => {
             remember a figure or guess the outcome before saving. The old
             centred, capped layout left half a wide monitor empty. */}
         {step === 2 && selected && (
-          <div className="grid grid-cols-1 gap-0 xl:grid-cols-[290px_minmax(0,1fr)_330px]">
+          <div className="receive-entry-layout">
 
             {/* Spec rail — the order being produced against. */}
-            <aside className="border-b border-slate-200/70 bg-gradient-to-b from-slate-50 to-slate-100/70 p-4 xl:border-b-0 xl:border-r">
-              <ErpLabel>Selected Order</ErpLabel>
+            <aside className="receive-order-context">
+              <div className="receive-order-spec"><ErpLabel>Selected order</ErpLabel>
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
                 <CoreTypeChip coreType={selected.coreType} />
                 <span className="text-[11.5px] font-semibold text-slate-600">{selected.grade}</span>
               </div>
               <div className="mt-2.5 font-num text-[17px] font-bold tracking-tight text-slate-900">{selected.measure}</div>
-              <div className="mt-0.5 text-[11.5px] text-slate-500">{selected.material}</div>
+              <div className="mt-0.5 text-[11.5px] text-slate-500">{selected.material}</div></div>
 
               <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-3">
                 <SummaryField label="Sales Order" value={selected.poNumber} mono />
@@ -448,7 +449,7 @@ export const ProductionNewPage = () => {
 
               {/* Where the order stands, and where this entry takes it — the
                   lighter segment is what is about to be added. */}
-              <div className="mt-4">
+              <div className="receive-order-progress">
                 <div className="flex items-baseline justify-between">
                   <ErpLabel>Order Progress</ErpLabel>
                   <span className="font-num text-[11px] font-bold tabular-nums text-slate-500">
@@ -468,7 +469,7 @@ export const ProductionNewPage = () => {
             </aside>
 
             {/* The form itself. */}
-            <div className="space-y-4 p-4">
+            <div className="receive-entry-form"><h2 className="receive-section-title">Production details<span>Record this batch</span></h2>
               <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
                 <Field label="Production Date">
                   <input className="input h-10 text-sm" type="date" value={prodDate} onChange={(e) => setProdDate(e.target.value)} />
@@ -526,7 +527,7 @@ export const ProductionNewPage = () => {
                   on the sales order line itself (the order still just states the
                   full height). See lib/splitProduction.js for the matching rule. */}
               <div className={cn(
-                'rounded-xl border px-3.5 py-3 shadow-e1 transition-colors duration-200 motion-reduce:transition-none',
+                'receive-production-mode rounded-xl border px-3.5 py-3 shadow-e1 transition-colors duration-200 motion-reduce:transition-none',
                 isSplit ? 'border-amber-200 bg-gradient-to-b from-amber-50 to-amber-100/50' : 'border-slate-200/80 bg-white',
               )}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -627,8 +628,8 @@ export const ProductionNewPage = () => {
             </div>
 
             {/* Outcome rail — what saving this will do, and the actions. */}
-            <aside className="flex flex-col gap-3 border-t border-slate-200/70 bg-gradient-to-b from-slate-50 to-slate-100/70 p-4 xl:border-l xl:border-t-0">
-              <ErpLabel>This Entry</ErpLabel>
+            <aside className="receive-entry-outcome">
+              <h2 className="receive-section-title">Entry summary<span>Preview before saving</span></h2>
 
               <div className="production-surface rounded-xl border border-slate-200/80 bg-white px-3.5 py-3 shadow-e1">
                 <ErpLabel>Total Weight</ErpLabel>

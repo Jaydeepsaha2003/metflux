@@ -1,4 +1,5 @@
 import '@/components/production/workspace.css';
+import './work-allotment.css';
 // Work Allotment landing page — top half is pending PO items (selectable),
 // bottom half is the recently generated allotments (auto-deleted after 7 days
 // by the server). Columns mirror exactly what the user asked for:
@@ -105,15 +106,16 @@ export const WorkAllotmentPage = () => {
   const someChecked = selected.size > 0;
 
   return (
-    <div className="production-workspace space-y-4 sm:space-y-5 max-w-full">
+    <div className="production-workspace work-allotment-page space-y-4 sm:space-y-5 max-w-full">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex items-center gap-2">
           <ClipboardList className="h-6 w-6 text-brand-600" /> Work Allotment
         </h1>
-        <div className="relative w-full sm:w-72">
+        <div className="wa-search relative w-full sm:w-72">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
           <input
             className="input pl-9"
+            aria-label="Search work allotments"
             placeholder="Search customer, PO no., measure, grade, worker…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -121,21 +123,28 @@ export const WorkAllotmentPage = () => {
         </div>
       </div>
 
+      <div className="wa-overview" aria-label="Current search results">
+        <div><span>Pending items</span><strong>{loadingPending ? '—' : (pending?.items.length ?? 0).toLocaleString('en-IN')}</strong></div>
+        <div><span>Pieces to produce</span><strong>{loadingPending ? '—' : (pending?.items.reduce((sum, item) => sum + item.remainingPcs, 0) ?? 0).toLocaleString('en-IN')}</strong></div>
+        <div><span>Generated allotments</span><strong>{loadingGenerated ? '—' : (generated?.items.length ?? 0).toLocaleString('en-IN')}</strong></div>
+        <div className="wa-selection-count"><span>Selected across searches</span><strong>{selected.size}</strong></div>
+      </div>
       {/* ── Pending items ── */}
-      <section>
+      <section className="wa-register">
         <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
             Pending Production Items
           </h2>
-          {someChecked && (
-            <button
+          <div className="wa-toolbar-actions">
+            {someChecked && <button className="btn-ghost" onClick={() => setSelected(new Set())}>Clear selection</button>}
+            <button disabled={!someChecked}
               onClick={() => navigate('/work-allotment/new', { state: { poItemIds: [...selected] } })}
               className="btn-primary text-sm w-full sm:w-auto"
             >
               <FileText className="h-4 w-4" />
-              Build allotment for {selected.size} selected
+              {someChecked ? `Build allotment · ${selected.size} selected` : 'Build allotment'}
             </button>
-          )}
+          </div>
         </div>
         <div className="production-surface rounded-xl border border-slate-200 bg-white overflow-hidden">
           {loadingPending ? (
@@ -149,7 +158,7 @@ export const WorkAllotmentPage = () => {
           ) : (
             <>
               {/* Desktop / tablet — table */}
-              <div className="production-scroll hidden md:block overflow-x-auto" tabIndex={0} role="region" aria-label="Production records">
+              <div className="production-scroll hidden md:block overflow-x-auto" tabIndex={0} role="region" aria-label="Pending production items">
                 <table className="w-full text-sm whitespace-nowrap">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -157,7 +166,7 @@ export const WorkAllotmentPage = () => {
                         <input type="checkbox" aria-label="Select all pending items" checked={allChecked} onChange={toggleAll}
                           className="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
                       </th>
-                      <th className="px-4 py-3 text-left">Cust Code</th>
+                      <th className="px-4 py-3 text-left">Customer / sales order</th>
                       <th className="px-4 py-3 text-left">SO Date</th>
                       <th className="px-4 py-3 text-left">Measure</th>
                       <th className="px-4 py-3 text-left">Grade</th>
@@ -180,7 +189,7 @@ export const WorkAllotmentPage = () => {
                               onChange={() => toggleRow(it.id)} onClick={(e) => e.stopPropagation()}
                               className="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
                           </td>
-                          <td className="px-4 py-3 font-medium">{it.customerCode}</td>
+                          <td className="px-4 py-3 font-medium"><div className="wa-customer">{it.customerCode}</div><div className="wa-order-reference">{it.poNumber}</div></td>
                           <td className="px-4 py-3 text-slate-600">{fmt(it.orderDate)}</td>
                           <td className="px-4 py-3 text-slate-600">{it.measure}</td>
                           <td className="px-4 py-3 text-slate-600">{it.grade}</td>
@@ -201,7 +210,7 @@ export const WorkAllotmentPage = () => {
               <div className="md:hidden divide-y divide-slate-100">
                 {/* Select-all helper */}
                 <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200">
-                  <input type="checkbox" checked={allChecked} onChange={toggleAll}
+                  <input type="checkbox" aria-label="Select all pending items" checked={allChecked} onChange={toggleAll}
                     className="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
                   <span className="text-xs font-medium text-slate-600">
                     {allChecked ? 'Deselect all' : 'Select all'} ({pending.items.length})
@@ -230,7 +239,7 @@ export const WorkAllotmentPage = () => {
                         </div>
                         {/* SO date + measure */}
                         <div className="mt-0.5 text-[11px] text-slate-500">
-                          {fmt(it.orderDate)} · {it.measure}
+                          {it.poNumber} · {fmt(it.orderDate)} · {it.measure}
                         </div>
                         {/* Grade + material chips */}
                         <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -267,8 +276,8 @@ export const WorkAllotmentPage = () => {
       </section>
 
       {/* ── Generated work allotments (≤ 7 days) ── */}
-      <section>
-        <div className="mb-3 flex items-center gap-2">
+      <section className="wa-register">
+        <div className="wa-generated-heading mb-3 flex items-center gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
             Generated Work Allotments
           </h2>
@@ -286,7 +295,7 @@ export const WorkAllotmentPage = () => {
           ) : (
             <>
               {/* Desktop / tablet — table */}
-              <div className="production-scroll hidden md:block overflow-x-auto" tabIndex={0} role="region" aria-label="Production records">
+              <div className="production-scroll hidden md:block overflow-x-auto" tabIndex={0} role="region" aria-label="Generated work allotments">
                 <table className="w-full text-sm whitespace-nowrap">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
