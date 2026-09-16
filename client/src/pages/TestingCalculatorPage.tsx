@@ -13,7 +13,7 @@ import { fluxTestCalc, rectangularCalc, rectangularFluxTestCalc, nanoTestCalc, t
 import { todayStamp } from '@/lib/excel';
 import './testing-calculator.css';
 
-import { coreBadge } from '@/lib/coreTypes';
+import { coreBadge, coreLabel, type CoreType } from '@/lib/coreTypes';
 
 /* Spelled out rather than derived from the badge tint: Tailwind only ships a
    class it can find as a literal in the source, so a name built at runtime
@@ -26,13 +26,23 @@ const CORE_ACCENT: Record<string, string> = {
   CUT_ROUND: 'border-l-sky-400',
   CUT_RECT: 'border-l-cyan-400',
 };
-type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE';
-const coreLabel: Record<CoreType, string> = { TOROIDAL: 'Toroidal', RECTANGULAR: 'Rectangular', NANO: 'Nano', COMPOSITE: 'Composite' };
+/* A cut core tests as the core it was cut from — the round one on toroidal
+   geometry and toroidal flux grades, the rectangular one on window geometry —
+   plus the ampere-turns its air gap needs. Before this the screen had four
+   families in its type and sent anything it did not recognise to the NANO
+   branch, so a cut core imported from a sales order was offered nano flux
+   grades and no stacking factor at all. */
+const isRoundLike = (ct: string) => ct === 'TOROIDAL' || ct === 'CUT_ROUND';
+const isRectLike = (ct: string) => ct === 'RECTANGULAR' || ct === 'CUT_RECT';
+const isNanoLike = (ct: string) => ct === 'NANO' || ct === 'COMPOSITE';
+const isCut = (ct: string) => ct === 'CUT_ROUND' || ct === 'CUT_RECT';
 type FluxPoint = { flux: number; ateCm: number };
 type FluxGroup = { grade: string; points: FluxPoint[] };
 type Item = {
   key: string;
   coreType: CoreType;
+  /** Total air gap across both joints, mm. Cut and gap cores only. */
+  gapMm: string;
   // toroidal dims
   id: string; od: string; ht: string;
   // rectangular dims
@@ -53,6 +63,7 @@ type Item = {
 type PoSummaryItem = {
   id: string; poNumber: string; coreType: CoreType;
   grade: string; measure: string; turns: number | null;
+  gapMm?: number | null;
 };
 type CompanyDetail = {
   name: string; address: string | null; phone: string | null;
@@ -62,20 +73,21 @@ type CompanyDetail = {
 
 let seq = 0;
 const mkItem = (p: Partial<Item> = {}): Item => ({
-  key: `it_${++seq}`, coreType: 'TOROIDAL', id: '', od: '', ht: '',
+  key: `it_${++seq}`, coreType: 'TOROIDAL', id: '', od: '', ht: '', gapMm: '',
   id1: '', id2: '', od1: '', od2: '', turns: '', grade: '', fluxes: [], freq: '', sfac: '', stack: '', ...p,
 });
 
-// Toroidal + Nano share the OD/ID/HT geometry; only Rectangular differs.
-const numOk = (it: Item) => it.coreType === 'RECTANGULAR'
+// Toroidal, Nano and the round cut core share the OD/ID/HT geometry; only the
+// window families differ.
+const numOk = (it: Item) => isRectLike(it.coreType)
   ? (+it.id1 > 0 && +it.id2 > 0 && +it.od1 > 0 && +it.od2 > 0 && +it.ht > 0 && +it.turns > 0 && +it.od1 > +it.id1 && +it.od2 > +it.id2)
   : (+it.id > 0 && +it.od > 0 && +it.ht > 0 && +it.turns > 0 && +it.od > +it.id);
 
 /** The factor a freshly-switched row starts on — blank for nano, which has
  *  no laminated stack and derives its weight from the ribbon constants. */
 const defaultStackFor = (ct: CoreType) =>
-  ct === 'TOROIDAL' ? String(TOROIDAL_FACTOR)
-  : ct === 'RECTANGULAR' ? String(RECT_STACK_FACTOR)
+  isRoundLike(ct) ? String(TOROIDAL_FACTOR)
+  : isRectLike(ct) ? String(RECT_STACK_FACTOR)
   : '';
 
 const stackOf = (it: Item) => stackOr(
@@ -86,9 +98,12 @@ const stackOf = (it: Item) => stackOr(
 const rectGeom = (it: Item) =>
   rectangularCalc({ id1: +it.id1, id2: +it.id2, od1: +it.od1, od2: +it.od2, ht: +it.ht, pcs: 0, factor: stackOf(it) });
 
-const measureOf = (it: Item) => it.coreType === 'RECTANGULAR'
-  ? rectGeom(it).measure
-  : `${+it.id} x ${+it.od} x ${+it.ht}`;
+const measureOf = (it: Item) => {
+  const base = isRectLike(it.coreType)
+    ? rectGeom(it).measure
+    : `${+it.id} x ${+it.od} x ${+it.ht}`;
+  return isCut(it.coreType) && +it.gapMm > 0 ? `${base} gap ${+it.gapMm}` : base;
+};
 
 // Epoxy / plastic casing has no separate SS case — same rule as the New
 // Sales Order form (POOrderNewPage's `isEpoxy`), so a Nano/Composite item's
@@ -99,8 +114,8 @@ const isEpoxyGrade = (grade: string) => /epoxy|plastic/i.test(grade || '');
 // Weight per piece (kg) from the dimensions — same math as the New Sales Order form.
 const weightOf = (it: Item): number => {
   if (!numOk(it)) return 0;
-  if (it.coreType === 'RECTANGULAR') return rectGeom(it).weightPerPc;
-  if (it.coreType === 'NANO' || it.coreType === 'COMPOSITE') {
+  if (isRectLike(it.coreType)) return rectGeom(it).weightPerPc;
+  if (isNanoLike(it.coreType)) {
     const c = nanoCalc({ id: +it.id, od: +it.od, ht: +it.ht, pcs: 0 });
     const caseWt = isEpoxyGrade(it.grade) ? 0 : c.caseWeight;
     return round3(c.coreWeight + caseWt);
@@ -142,7 +157,8 @@ export const TestingCalculatorPage = () => {
     queryFn: () => api<CompanyDetail>('/companies/me'),
   });
 
-  const gradesFor = (ct: CoreType) => (ct === 'TOROIDAL' ? torQ.data?.grades : ct === 'RECTANGULAR' ? rectQ.data?.grades : nanoQ.data?.grades) ?? [];
+  const gradesFor = (ct: CoreType) =>
+    (isRoundLike(ct) ? torQ.data?.grades : isRectLike(ct) ? rectQ.data?.grades : nanoQ.data?.grades) ?? [];
   const pointsFor = (ct: CoreType, grade: string) => gradesFor(ct).find((g) => g.grade === grade)?.points ?? [];
   const ateFor = (ct: CoreType, grade: string, flux: number) => pointsFor(ct, grade).find((p) => p.flux === flux)?.ateCm ?? 0;
 
@@ -177,23 +193,24 @@ export const TestingCalculatorPage = () => {
   const cell = (it: Item, flux: number) => {
     if (!numOk(it) || !it.fluxes.includes(flux)) return null;
     const ateCm = ateFor(it.coreType, it.grade, flux);
-    if (it.coreType === 'NANO' || it.coreType === 'COMPOSITE') {
+    const gapMm = isCut(it.coreType) ? +it.gapMm || 0 : 0;
+    if (isNanoLike(it.coreType)) {
       const r = nanoTestCalc({ id: +it.id, od: +it.od, ht: +it.ht, turns: +it.turns, flux, ateCm, freq: +it.freq || 50, sfac: +it.sfac || 0.8 });
       return { volt: r.testVoltage, leMax: r.testCurrent, mv: r.testVoltageMv, ieA: r.testCurrentA };
     }
-    if (it.coreType === 'TOROIDAL') {
-      const r = fluxTestCalc({ id: +it.id, od: +it.od, ht: +it.ht, turns: +it.turns, flux, ateCm, factor: stackOf(it) });
+    if (isRoundLike(it.coreType)) {
+      const r = fluxTestCalc({ id: +it.id, od: +it.od, ht: +it.ht, turns: +it.turns, flux, ateCm, factor: stackOf(it), gapMm });
       return { volt: r.testVoltage, leMax: r.testCurrent, mv: r.testVoltage * 1000, ieA: r.testCurrent / 1000 };
     }
     const g = rectGeom(it);
-    const r = rectangularFluxTestCalc({ area: g.coreAc, meanPath: g.coreMl, turns: +it.turns, flux, ateCm });
+    const r = rectangularFluxTestCalc({ area: g.coreAc, meanPath: g.coreMl, turns: +it.turns, flux, ateCm, gapMm });
     return { volt: r.testVoltage, leMax: r.testCurrent, mv: r.testVoltage * 1000, ieA: r.testCurrent / 1000 };
   };
 
   // Unified export columns — a Core + Measure pair keeps mixed rows aligned.
   const fixedCols = ['CORE', 'MEASURE', 'TURNS', 'GRADE', 'WT/PC (KG)'];
   const dimsOf = (it: Item): (string | number)[] => [
-    coreLabel[it.coreType],
+    coreLabel(it.coreType),
     measureOf(it),
     +it.turns,
     it.grade || '—',
@@ -203,9 +220,10 @@ export const TestingCalculatorPage = () => {
   const addFromPo = (po: PoSummaryItem) => {
     const ct = po.coreType;
     const grade = gradesFor(ct).some((g) => g.grade === po.grade) ? po.grade : '';
-    const dims = ct === 'RECTANGULAR' ? parseRectangular(po.measure) : parseToroidal(po.measure);
+    const dims = isRectLike(ct) ? parseRectangular(po.measure) : parseToroidal(po.measure);
     setItems((its) => [...its, mkItem({
       coreType: ct, ...dims,
+      gapMm: po.gapMm ? String(po.gapMm) : '',
       turns: po.turns != null ? String(po.turns) : '',
       freq: ct === 'NANO' ? '50' : '', sfac: ct === 'NANO' ? '0.8' : '',
       stack: defaultStackFor(ct),
@@ -323,21 +341,22 @@ export const TestingCalculatorPage = () => {
           const pts = pointsFor(it.coreType, it.grade);
           const rowGrades = gradesFor(it.coreType);
           const g = it.coreType === 'RECTANGULAR' && numOk(it) ? rectGeom(it) : null;
-          const isNano = it.coreType === 'NANO' || it.coreType === 'COMPOSITE';
+          const isNano = isNanoLike(it.coreType);
+          const rowIsCut = isCut(it.coreType);
           const accent = CORE_ACCENT[it.coreType] ?? 'border-l-slate-300';
           return (
             <div key={it.key} className={cn('tc-item card border-l-4 p-4 transition', accent)}>
               <div className="tc-item-header mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-3">
                   <span className="tc-item-index">{String(idx + 1).padStart(2, '0')}</span>
-                  <div className="tc-item-meta"><span>Test line {it.source ? `· ${it.source}` : ''}</span><strong>{coreLabel[it.coreType]}</strong></div>
+                  <div className="tc-item-meta"><span>Test line {it.source ? `· ${it.source}` : ''}</span><strong>{coreLabel(it.coreType)}</strong></div>
                   {/* Per-row core type selector */}
                   <div className="tc-core-switch inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5" aria-label={`Core type for item ${idx + 1}`}>
-                    {(['TOROIDAL', 'RECTANGULAR', 'NANO'] as CoreType[]).map((ct) => (
+                    {(['TOROIDAL', 'RECTANGULAR', 'NANO', 'CUT_ROUND', 'CUT_RECT'] as CoreType[]).map((ct) => (
                       <button key={ct} onClick={() => setItemCore(it.key, ct)}
-                        className={cn('rounded-md px-3 py-1 text-xs font-medium transition',
+                        className={cn('rounded-md px-2.5 py-1 text-xs font-medium transition',
                           it.coreType === ct ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900')}>
-                        {coreLabel[ct]}
+                        {coreLabel(ct)}
                       </button>
                     ))}
                   </div>
@@ -350,7 +369,7 @@ export const TestingCalculatorPage = () => {
                 </div>
               </div>
 
-              {it.coreType !== 'RECTANGULAR' ? (
+              {!isRectLike(it.coreType) ? (
                 <>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                     <Field label="ID (mm)"><input className="input" type="number" inputMode="decimal" value={it.id} onChange={(e) => patch(it.key, { id: e.target.value })} /></Field>
@@ -371,6 +390,12 @@ export const TestingCalculatorPage = () => {
                           placeholder={String(TOROIDAL_FACTOR)}
                           value={it.stack} onChange={(e) => patch(it.key, { stack: e.target.value })} />
                       </Field>
+                      {rowIsCut && (
+                        <Field label="Air gap (mm, total)">
+                          <input className="input" type="number" inputMode="decimal" placeholder="0"
+                            value={it.gapMm} onChange={(e) => patch(it.key, { gapMm: e.target.value })} />
+                        </Field>
+                      )}
                     </div>
                   )}
                   {isNano && (
@@ -400,6 +425,12 @@ export const TestingCalculatorPage = () => {
                         placeholder={String(RECT_STACK_FACTOR)}
                         value={it.stack} onChange={(e) => patch(it.key, { stack: e.target.value })} />
                     </Field>
+                    {rowIsCut && (
+                      <Field label="Air gap (mm, total)">
+                        <input className="input" type="number" inputMode="decimal" placeholder="0"
+                          value={it.gapMm} onChange={(e) => patch(it.key, { gapMm: e.target.value })} />
+                      </Field>
+                    )}
                   </div>
                   {g && (
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
@@ -413,7 +444,7 @@ export const TestingCalculatorPage = () => {
 
               {rowGrades.length === 0 && (
                 <p className="mt-2 text-xs text-amber-600">
-                  No {coreLabel[it.coreType].toLowerCase()} flux grades yet — add them under Settings → Flux Grades (Volt still computes without a grade).
+                  No {coreLabel(it.coreType).toLowerCase()} flux grades yet — add them under Settings → Flux Grades (Volt still computes without a grade).
                 </p>
               )}
 
@@ -482,7 +513,7 @@ export const TestingCalculatorPage = () => {
       <div style={{ position: 'fixed', left: -10000, top: 0, width: 1040 }} aria-hidden>
         <div ref={printRef} style={{ width: 1040, fontFamily: 'Poppins, sans-serif', color: '#000', background: '#fff' }}>
           {exportRows.map((it, idx) => {
-            const core = coreLabel[it.coreType];
+            const core = coreLabel(it.coreType);
             const measure = measureOf(it);
             const n = it.fluxes.length;
             return (
@@ -601,7 +632,7 @@ const ImportDialog = ({ onClose, onAdd }: { onClose: () => void; onAdd: (po: PoS
               <span className="flex shrink-0 items-center gap-2">
                 <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium',
                   coreBadge(i.coreType))}>
-                  {coreLabel[i.coreType]}
+                  {coreLabel(i.coreType)}
                 </span>
                 <Plus className="h-4 w-4 text-brand-600" />
               </span>
