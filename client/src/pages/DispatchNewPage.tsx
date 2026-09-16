@@ -33,7 +33,10 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 const formatDate = (iso: string) => {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}-${mm}-${yy}`;
 };
 
 export const DispatchNewPage = () => {
@@ -257,7 +260,7 @@ export const DispatchNewPage = () => {
           <table className="w-full text-[13px] font-semibold">
             <thead className="sticky top-0 z-10 border-b-2 border-slate-200 bg-slate-50 text-left text-[10.5px] uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-3 py-2.5 font-semibold">PO #</th>
+                <th className="w-px whitespace-nowrap px-3 py-2.5 font-semibold">PO #</th>
                 <th className="px-3 py-2.5 font-semibold">Customer</th>
                 <th className="px-3 py-2.5 font-semibold">Due</th>
                 <th className="px-3 py-2.5 font-semibold">Type</th>
@@ -291,16 +294,16 @@ export const DispatchNewPage = () => {
                       isSel ? 'border-l-brand-600 bg-brand-50/70 hover:bg-brand-50' : cn('border-l-transparent hover:bg-brand-50/40', idx % 2 === 1 && 'bg-slate-50/40')
                     )}
                   >
-                    <td className="px-3 py-2.5 font-mono">{it.poNumber}</td>
+                    <td className="w-px whitespace-nowrap px-3 py-2.5 font-mono">{it.poNumber}</td>
                     <td className="px-3 py-2.5">
                       <div className="font-mono text-brand-700">{it.customerCode ?? '—'}</div>
                       {!hideNames && (
-                        <div className="truncate max-w-[180px] text-slate-500" title={it.customerName}>
+                        <div className="truncate text-slate-500" title={it.customerName}>
                           {it.customerName}
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-2.5 text-slate-600">{formatDate(it.deliveryDate)}</td>
+                    <td className="w-px whitespace-nowrap px-3 py-2.5 text-slate-600">{formatDate(it.deliveryDate)}</td>
                     <td className="px-3 py-2.5">
                       <span className={cn(
                         'rounded-full px-2 py-0.5 ring-1 ring-inset',
@@ -311,7 +314,7 @@ export const DispatchNewPage = () => {
                     </td>
                     <td className="px-3 py-2.5">{it.grade}</td>
                     <td className="px-3 py-2.5">{it.material}</td>
-                    <td className="px-3 py-2.5 font-mono">{it.measure}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 font-mono">{it.measure}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{it.orderedPcs}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">{it.producedPcs}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-slate-500">{it.dispatchedPcs}</td>
