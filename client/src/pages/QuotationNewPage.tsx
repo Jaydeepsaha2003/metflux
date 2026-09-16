@@ -478,7 +478,7 @@ export const QuotationNewPage = () => {
           />
         )}
         {coreType === 'COMPOSITE' && (
-          <NanoForm composite hideTesting
+          <NanoForm composite hideTesting customerFactor={customer?.toroidalFactor}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'NANO'))}
             typeGrades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'COMPOSITE'))}
             fluxGrades={fluxRespNano?.grades ?? []}

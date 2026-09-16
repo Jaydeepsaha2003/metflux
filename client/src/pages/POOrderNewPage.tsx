@@ -324,7 +324,9 @@ export const POOrderNewPage = () => {
      thing is best-effort and navigation continues regardless. */
   const offerToKeepTerms = async () => {
     if (!customerId) return;
-    const lines = items.filter((i) => i.coreType === 'TOROIDAL' || i.coreType === 'RECTANGULAR');
+    const lines = items.filter(
+      (i) => i.coreType === 'TOROIDAL' || i.coreType === 'RECTANGULAR' || i.coreType === 'COMPOSITE'
+    );
     if (!lines.length) return;
 
     /* ---- rate changes ---- */
@@ -332,6 +334,7 @@ export const POOrderNewPage = () => {
     // one order the last line is the one that stands.
     const byScope = new Map<string, { grade: string; coreType: string; rateBasis: 'PER_KG' | 'PER_PCS'; rateValue: number }>();
     for (const i of lines) {
+      if (i.coreType !== 'TOROIDAL' && i.coreType !== 'RECTANGULAR') continue;
       if (!i.grade || !((i.rateValue ?? 0) > 0) || !i.rateBasis) continue;
       byScope.set(`${i.grade}|${i.coreType}`, {
         grade: i.grade, coreType: i.coreType,
@@ -365,12 +368,12 @@ export const POOrderNewPage = () => {
     type FactorChange = { field: 'toroidalFactor' | 'rectStackFactor'; label: string; value: number; previous: number; wasDefault: boolean };
     const factorChanges: FactorChange[] = [];
     const factorSpecs = [
-      { coreType: 'TOROIDAL',    field: 'toroidalFactor'  as const, label: 'Toroidal',    stored: selectedCustomer?.toroidalFactor,  house: TOROIDAL_FACTOR },
-      { coreType: 'RECTANGULAR', field: 'rectStackFactor' as const, label: 'Rectangular', stored: selectedCustomer?.rectStackFactor, house: RECT_STACK_FACTOR },
+      { coreTypes: ['TOROIDAL', 'COMPOSITE'], field: 'toroidalFactor'  as const, label: 'Toroidal',    stored: selectedCustomer?.toroidalFactor,  house: TOROIDAL_FACTOR },
+      { coreTypes: ['RECTANGULAR'],           field: 'rectStackFactor' as const, label: 'Rectangular', stored: selectedCustomer?.rectStackFactor, house: RECT_STACK_FACTOR },
     ];
     for (const spec of factorSpecs) {
       // Last line of that shape wins, same rule as the rate.
-      const used = lines.filter((i) => i.coreType === spec.coreType && (i.stackFactor ?? 0) > 0).pop()?.stackFactor;
+      const used = lines.filter((i) => spec.coreTypes.includes(i.coreType) && (i.stackFactor ?? 0) > 0).pop()?.stackFactor;
       if (!used) continue;
       const current = stackOr(spec.stored, spec.house);
       if (Math.abs(used - current) < 1e-9) continue;
@@ -787,6 +790,7 @@ export const POOrderNewPage = () => {
         {coreType === 'COMPOSITE' && (
           <NanoForm
             composite
+            customerFactor={selectedCustomer?.toroidalFactor}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'NANO'))}
             typeGrades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'COMPOSITE'))}
             fluxGrades={fluxRespNano?.grades ?? []}
@@ -1787,10 +1791,15 @@ export const RectangularForm = ({
 /* ---------- NANO ---------- */
 export const NanoForm = ({
   grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed, composite: compositeMode = false, typeGrades = [], hideTesting = false,
+  customerFactor,
 }: {
   grades: GradeRow[];
   fluxGrades: FluxGroup[];
   onAdd: (item: Item) => void;
+  /** The customer's toroidal factor, for the CRGO half of a composite.
+   *  The nano ribbon and its case have their own constants and are not a
+   *  laminated stack, so it never touches those. */
+  customerFactor?: number | null;
   prefill?: { coreType: CoreType; grade: string; material: string; rateBasis: 'PER_KG' | 'PER_PCS' } | null;
   onPrefillConsumed?: () => void;
   edit?: { item: Item; nonce: number } | null;
@@ -1816,6 +1825,16 @@ export const NanoForm = ({
   // Composite: the CRGO part is rated separately, either per-kg or per-pc.
   const [crgoRate, setCrgoRate] = useState(0);
   const [crgoBasis, setCrgoBasis] = useState<'PER_KG' | 'PER_PCS'>('PER_KG');
+  // Stacking factor for the CRGO half — the same agreed figure a plain
+  // toroidal line uses, because that half IS a toroidal core. Without this
+  // the same customer's same core would weigh differently depending on
+  // whether it was booked on its own or inside a composite.
+  const [stack, setStack] = useState(stackOr(customerFactor, TOROIDAL_FACTOR));
+  const [stackTouched, setStackTouched] = useState(false);
+  useEffect(() => {
+    if (!stackTouched) setStack(stackOr(customerFactor, TOROIDAL_FACTOR));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerFactor]);
   // Composite join type (Continuous Loop / Exact Split / Variable Height).
   const [compType, setCompType] = useState('');
   // Optional manual SO rate per piece. Blank → the Nano+Case price is used.
@@ -1848,6 +1867,7 @@ export const NanoForm = ({
     setPcs(it.pcs);
     setNanoPrice(it.nanoPrice ?? 0); setCasePrice(it.casePrice ?? 0);
     setSoRate(it.nanoSoRate ?? 0); setTurns(it.turns ?? 0);
+    setStack(stackOr(it.stackFactor, TOROIDAL_FACTOR)); setStackTouched(true);
     pendingFlux.current = it.flux ?? 0;
     setGrade(it.grade);
     onEditConsumed?.();
@@ -1876,7 +1896,7 @@ export const NanoForm = ({
   const rule = composite ? (compositeRuleFromMaterial(compType) || compositeRuleFromMaterial(grade) || compositeRuleFromMaterial(material)) : null;
   const nanoOk = id > 0 && od > 0 && ht > 0 && od > id;
   const crgoOk = crgoId > 0 && crgoOd > 0 && crgoHt > 0 && crgoOd > crgoId;
-  const comp = composite && rule ? compositeCalc({ rule, crgo: { id: crgoId, od: crgoOd, ht: crgoHt }, nano: { id, od, ht }, pcs }) : null;
+  const comp = composite && rule ? compositeCalc({ rule, crgo: { id: crgoId, od: crgoOd, ht: crgoHt }, nano: { id, od, ht }, pcs, factor: stack }) : null;
 
   const geomOk = composite ? (nanoOk && crgoOk && !!rule) : nanoOk;
   // Final identity dims + measure (composite → derived; else the nano dims).
@@ -1917,6 +1937,7 @@ export const NanoForm = ({
     setGrade(''); setMaterial('');
     setId(0); setOd(0); setHt(0); setPcs(0);
     setCrgoId(0); setCrgoOd(0); setCrgoHt(0); setCrgoRate(0); setCrgoBasis('PER_KG'); setCompType('');
+    setStack(stackOr(customerFactor, TOROIDAL_FACTOR)); setStackTouched(false);
     setNanoPrice(0); setCasePrice(0);
     setSoRate(0); setTurns(0); setFlux(0);
   };
@@ -1945,6 +1966,7 @@ export const NanoForm = ({
       measure: finalMeasure,
       id1: finalId, od1: finalOd, ht: finalHt, pcs,
       weightPerPc: pieceWeight, totalWeight: totalWt,
+      stackFactor: composite ? stack : undefined,
       // Per-piece: manual SO rate if given, else the Nano+Case price.
       rateBasis: effRate > 0 ? 'PER_PCS' : undefined,
       rateValue: effRate > 0 ? +effRate.toFixed(4) : undefined,
@@ -1996,10 +2018,28 @@ export const NanoForm = ({
                 <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-amber-700">
                   <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> CRGO core
                 </div>
-                <div className="grid grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-4 gap-2.5">
                   <NumField label="ID" value={crgoId} onChange={setCrgoId} />
                   <NumField label="OD" value={crgoOd} onChange={setCrgoOd} />
                   <NumField label="HT" value={crgoHt} onChange={setCrgoHt} />
+                  <div>
+                    <NumField
+                      label="Stack factor"
+                      value={stack}
+                      onChange={(v) => { setStackTouched(true); setStack(v); }}
+                    />
+                    {Math.abs(stack - stackOr(customerFactor, TOROIDAL_FACTOR)) > 1e-9 ? (
+                      <button
+                        type="button"
+                        onClick={() => { setStackTouched(false); setStack(stackOr(customerFactor, TOROIDAL_FACTOR)); }}
+                        className="mt-1 text-[10px] font-medium text-amber-700 underline-offset-2 hover:underline"
+                      >
+                        Back to {stackOr(customerFactor, TOROIDAL_FACTOR)}
+                      </button>
+                    ) : stackOr(customerFactor, TOROIDAL_FACTOR) !== TOROIDAL_FACTOR ? (
+                      <div className="mt-1 text-[10px] font-medium text-brand-700">Customer&rsquo;s figure</div>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="mt-2.5 grid grid-cols-3 gap-2.5">
                   <Field label="Rate basis">
