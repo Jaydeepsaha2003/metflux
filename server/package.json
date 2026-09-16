@@ -57,6 +57,7 @@
     "migrate:stack-factor": "node scripts/migrate-stack-factor.js",
     "migrate:cut-cores": "node scripts/migrate-cut-cores.js",
     "migrate:gap-core": "node scripts/migrate-gap-core.js",
+    "migrate:cut-core-grades": "node scripts/migrate-cut-core-grades.js",
     "migrate:customer-index": "node scripts/migrate-customer-index.js"
   },
   "dependencies": {

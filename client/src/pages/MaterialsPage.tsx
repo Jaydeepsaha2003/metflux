@@ -18,7 +18,14 @@ type Row = {
 };
 type Attrs = { coreTypes: CoreType[]; nanoIdOff: number | null; nanoOdOff: number | null; nanoHtOff: number | null };
 
-const ALL_CORES: CoreType[] = ['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE'];
+/* Every family, because this list IS the gate. A grade whose coreTypes do not
+   name a family is filtered out of that family's grade dropdown on the order
+   form, so leaving the two cut families off here meant the Round cut and Rect
+   cut tabs opened onto an empty "Select grade…" and could not be used at all —
+   with nowhere in the UI to put that right. */
+const ALL_CORES: CoreType[] = [
+  'TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT',
+];
 const CORE_LABEL: Record<CoreType, string> = { TOROIDAL: 'Toroidal', RECTANGULAR: 'Rectangular', NANO: 'Nano', COMPOSITE: 'Composite', CUT_ROUND: 'Round cut', CUT_RECT: 'Rect cut' };
 const CORE_TONE: Record<CoreType, string> = {
   TOROIDAL: 'bg-amber-50 text-amber-700 ring-amber-200',

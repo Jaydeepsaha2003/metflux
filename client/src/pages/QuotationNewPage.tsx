@@ -12,6 +12,7 @@ import { cn } from '@/lib/cn';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { type Item, ToroidalForm, RectangularForm, NanoForm } from '@/pages/POOrderNewPage';
 
+import { coreShort, coreLabel } from '@/lib/coreTypes';
 /* Local item = SO item + quotation-only print fields (HSN/SAC + unit). */
 type QItem = Item & { hsnCode?: string; unit?: string };
 
@@ -41,7 +42,7 @@ const coreBadge = (ct: CoreType) =>
   : ct === 'RECTANGULAR' ? 'bg-rose-50 text-rose-700'
   : ct === 'COMPOSITE' ? 'bg-teal-50 text-teal-700'
   : 'bg-violet-50 text-violet-700';
-const coreShort = (ct: CoreType) => (ct === 'TOROIDAL' ? 'Toro' : ct === 'RECTANGULAR' ? 'Rect' : ct === 'COMPOSITE' ? 'Comp' : 'Nano');
+
 
 const cellInput =
   'h-7 w-full rounded-md border border-slate-300 bg-white px-2 text-[13px] outline-none ' +
@@ -435,11 +436,11 @@ export const QuotationNewPage = () => {
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span className="text-sm font-semibold text-slate-900">Add item</span>
           <div className="inline-flex rounded-lg bg-slate-100 p-0.5 text-sm">
-            {(['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE'] as CoreType[]).map((ct) => (
+            {(['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT'] as CoreType[]).map((ct) => (
               <button key={ct} type="button" onClick={() => setCoreType(ct)}
-                className={cn('rounded-md px-3 py-1.5 font-medium transition',
+                className={cn('rounded-md px-2.5 py-1.5 font-medium transition whitespace-nowrap',
                   coreType === ct ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-600 hover:text-slate-900')}>
-                {ct === 'TOROIDAL' ? 'Toroidal' : ct === 'RECTANGULAR' ? 'Rectangular' : ct === 'NANO' ? 'Nano' : 'Composite'}
+                {coreLabel(ct)}
               </button>
             ))}
           </div>
@@ -484,6 +485,24 @@ export const QuotationNewPage = () => {
             fluxGrades={fluxRespNano?.grades ?? []}
             onAdd={addItem} prefill={prefill} onPrefillConsumed={() => setPrefill(null)}
             edit={editSeed?.item.coreType === 'COMPOSITE' ? editSeed : null} onEditConsumed={() => setEditSeed(null)}
+          />
+        )}
+        {coreType === 'CUT_ROUND' && (
+          <ToroidalForm cut hideTesting
+            customerFactor={customer?.toroidalFactor}
+            grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'CUT_ROUND'))}
+            fluxGrades={fluxResp?.grades ?? []}
+            onAdd={addItem} prefill={prefill} onPrefillConsumed={() => setPrefill(null)}
+            edit={editSeed?.item.coreType === 'CUT_ROUND' ? editSeed : null} onEditConsumed={() => setEditSeed(null)}
+          />
+        )}
+        {coreType === 'CUT_RECT' && (
+          <RectangularForm cut hideTesting
+            customerFactor={customer?.rectStackFactor}
+            grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'CUT_RECT'))}
+            fluxGrades={fluxRespRect?.grades ?? []}
+            onAdd={addItem} prefill={prefill} onPrefillConsumed={() => setPrefill(null)}
+            edit={editSeed?.item.coreType === 'CUT_RECT' ? editSeed : null} onEditConsumed={() => setEditSeed(null)}
           />
         )}
         {coreType === 'MANUAL' && <ManualLineForm onAdd={addManual} />}
