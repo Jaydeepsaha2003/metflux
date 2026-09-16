@@ -192,6 +192,7 @@ export const App = () => {
 
       <Route path="/customers"      element={<CustomersPage />} />
       <Route path="/customers/new"  element={<CustomerFormPage />} />
+      <Route path="/customers/rates" element={<RateCardPage />} />
       <Route path="/customers/:id"  element={<CustomerFormPage />} />
 
       {/* Settings group */}

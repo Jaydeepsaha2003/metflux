@@ -198,9 +198,13 @@ router.get('/', asyncHandler(async (req, res) => {
     params.push(like, like, like);
   }
 
+  // Keep the list query narrow. `SELECT *` also pulls portal credential and
+  // notes columns for every row, even though the register only renders these
+  // summary fields. This matters on slower MySQL hosts and on mobile links.
+  const listColumns = '`id`,`customerCode`,`name`,`email`,`phone`,`state`,`gstNumber`,`gstRate`,`dueDays`,`address`,`notes`,`shareToken`,`portalShortCode`,`portalInitialPassword`,`portalPasswordSet`,`createdAt`';
   const [items, totalRow] = await Promise.all([
     q(
-      `SELECT * FROM \`Customer\` WHERE ${where} ORDER BY \`createdAt\` DESC LIMIT ? OFFSET ?`,
+      `SELECT ${listColumns} FROM \`Customer\` WHERE ${where} ORDER BY \`createdAt\` DESC LIMIT ? OFFSET ?`,
       [...params, pageSize, skip]
     ),
     qOne(`SELECT COUNT(*) AS n FROM \`Customer\` WHERE ${where}`, params),

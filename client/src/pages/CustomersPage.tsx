@@ -8,7 +8,8 @@ import { useConfirm } from '@/hooks/useConfirm';
 import { cn } from '@/lib/cn';
 import { Pagination } from '@/components/Pagination';
 import { BulkExcel, type BulkExcelConfig } from '@/components/BulkExcel';
-import { useHideCustomerNames } from '@/store/auth';
+import { useHideCustomerNames, useCan } from '@/store/auth';
+import { CustomerTabs } from '@/components/CustomerTabs';
 
 type Customer = {
   id: string;
@@ -32,6 +33,7 @@ type ListResp = { items: Customer[]; total: number; page: number; pageSize: numb
 const PAGE_SIZE = 20;
 
 export const CustomersPage = () => {
+  const canViewRates = useCan('view_po');
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounced(search);
   const [page, setPage] = useState(1);
@@ -185,12 +187,14 @@ e.g. Salary, Rent, Freight, Bank Charges`, 'Expense',
   // Reset to page 1 when the user changes the search — otherwise an empty page
   // would show because the result count usually shrinks.
   useEffect(() => { setPage(1); }, [search]);
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: ['customers', debouncedSearch, page, pageSize],
     queryFn: () => api<ListResp>(`/customers?search=${encodeURIComponent(debouncedSearch)}&page=${page}&pageSize=${pageSize}`),
     // Keep the current rows visible while the next result loads, instead of
     // dropping the table back to "Loading…" on every filter or page change.
     placeholderData: keepPreviousData,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
 
   const shareWhatsapp = async (c: Customer) => {
@@ -242,9 +246,9 @@ e.g. Salary, Rent, Freight, Bank Charges`, 'Expense',
   };
 
   return (
-    <div className="space-y-5">
+    <div className="customer-workspace space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Customers</h1>
+        <div><p className="customer-eyebrow">Customer management</p><h1 className="text-2xl font-bold tracking-tight">Customers</h1><p className="customer-description">Contact details, portal access and agreed pricing.</p></div>
         <div className="flex items-center gap-2">
           <BulkExcel config={bulkConfig} />
           <Link to="/customers/new" className="btn-primary">
@@ -253,6 +257,7 @@ e.g. Salary, Rent, Freight, Bank Charges`, 'Expense',
         </div>
       </div>
 
+      <CustomerTabs />
       <div className="card overflow-hidden">
         <div className="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
           <div className="relative flex-1 max-w-sm">
@@ -264,7 +269,10 @@ e.g. Salary, Rent, Freight, Bank Charges`, 'Expense',
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <div className="text-xs text-slate-500">{data ? `${data.total} customer${data.total === 1 ? '' : 's'}` : ''}</div>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            {isFetching && data && <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-600" aria-label="Refreshing customers" />}
+            {data ? `${data.total} customer${data.total === 1 ? '' : 's'}` : ''}
+          </div>
         </div>
 
         {isLoading ? (
@@ -310,6 +318,7 @@ e.g. Salary, Rent, Freight, Bank Charges`, 'Expense',
                       <td className="px-4 py-3 text-slate-600">{c.state ?? '—'}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="inline-flex items-center gap-1">
+                          {canViewRates && <Link to={`/customers/rates?customerId=${encodeURIComponent(c.id)}`} className="btn-ghost text-brand-700" title="Customer rate card">Rates</Link>}
                           {c.phone && (
                             <button onClick={() => shareWhatsapp(c)} className="btn-ghost text-emerald-700 hover:bg-emerald-50" title="Share via WhatsApp">
                               <MessageCircle className="h-4 w-4" />
@@ -393,6 +402,7 @@ e.g. Salary, Rent, Freight, Bank Charges`, 'Expense',
                     {c.state && <Detail label="State" value={c.state} />}
                     {c.email && <Detail label="Email" value={c.email} full />}
                   </dl>
+                  {canViewRates && <Link to={`/customers/rates?customerId=${encodeURIComponent(c.id)}`} className="customer-rate-link">View customer rates →</Link>}
 
                   {(c.shareToken || c.portalShortCode || c.phone) && (
                     <div className="mt-3 flex flex-wrap gap-2">

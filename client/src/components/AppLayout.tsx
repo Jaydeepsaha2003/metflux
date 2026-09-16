@@ -96,8 +96,10 @@ const NAV: NavItem[] = [
       { kind: 'leaf', to: '/supplier-po/manage', label: 'Modify PO', icon: ListChecks, perm: 'view_supplier_po' },
     ],
   },
-  { kind: 'leaf', to: '/customers', label: 'Customers', icon: Users, perm: 'add_customer' },
-  { kind: 'leaf', to: '/rate-card', label: 'Rate Card', icon: IndianRupee, perm: 'view_po' },
+  { kind: 'group', key: 'customers', label: 'Customers', icon: Users, children: [
+    { kind: 'leaf', to: '/customers', label: 'Customer directory', icon: Users, perm: 'add_customer', end: true },
+    { kind: 'leaf', to: '/customers/rates', label: 'Rate card', icon: IndianRupee, perm: 'view_po' },
+  ] },
   {
     kind: 'group', key: 'settings', label: 'Settings', icon: SettingsIcon,
     children: [
@@ -213,7 +215,7 @@ export const AppLayout = () => {
   return (
     <div className={cn(
       'flex min-h-screen bg-slate-50 print:block',
-      location.pathname === '/' ? 'dashboard-shell' : 'square-shell',
+      ['/', '/analysis'].includes(location.pathname) ? 'dashboard-shell' : 'square-shell',
     )}>
       {/* Mobile backdrop — only visible when the drawer is open */}
       {mobileOpen && (

@@ -10,6 +10,9 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
+import '@/components/dashboard/glass.css';
+import './business-analysis.css';
+import { dashVars } from '@/components/dashboard/theme';
 
 /* ── Types (mirror /api/dashboard/analysis) ─────────────────── */
 type Analysis = {
@@ -69,68 +72,85 @@ export const BusinessAnalysisPage = () => {
     [preset, customFrom, customTo]
   );
 
-  const { data, isLoading, isError } = useQuery({
+  const validRange = !!range.from && !!range.to && range.from <= range.to;
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['business-analysis', range.from, range.to],
     queryFn: () => api<Analysis>(`/dashboard/analysis?from=${range.from}&to=${range.to}`),
     staleTime: 60_000,
+    enabled: validRange,
   });
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="dashboard-glass analysis-glass -m-4 min-h-[calc(100vh-4rem)] p-4 text-[var(--d-text)] sm:-m-6 sm:p-6 lg:p-8" style={dashVars('light')}>
+      <div className="analysis-shell space-y-5">
+      <div className="analysis-hero dash-panel flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <div>
+        <p className="analysis-eyebrow">Business intelligence</p>
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <BarChart3 className="h-5 w-5 text-brand-600" /> Business Analysis
         </h1>
-        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-1 rounded-lg border border-slate-200 p-1 text-xs">
+        <p className="analysis-subtitle">Revenue, collections and operations in one clear view.</p>
+        </div>
+        <div className="analysis-controls">
+          <div className="analysis-presets" aria-label="Reporting period">
             {([['MONTH', 'This Month'], ['FY', 'This FY'], ['YEAR', 'Last 12 Months'], ['CUSTOM', 'Custom']] as const).map(([p, label]) => (
-              <button key={p} onClick={() => setPreset(p)}
+              <button key={p} aria-pressed={preset === p} onClick={() => setPreset(p)}
                 className={cn('rounded-md px-3 py-1.5 font-medium transition', preset === p ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100')}>
                 {label}
               </button>
             ))}
           </div>
           {preset === 'CUSTOM' && (
-            <div className="flex items-center gap-1.5 text-xs">
-              <input type="date" value={customFrom} max={customTo} onChange={(e) => setCustomFrom(e.target.value)} className="input py-1.5 text-xs" />
+            <div className="analysis-dates">
+              <input aria-label="From date" type="date" value={customFrom} max={customTo} onChange={(e) => setCustomFrom(e.target.value)} className="input py-1.5 text-xs" />
               <span className="text-slate-400">→</span>
-              <input type="date" value={customTo} min={customFrom} max={todayISO()} onChange={(e) => setCustomTo(e.target.value)} className="input py-1.5 text-xs" />
+              <input aria-label="To date" type="date" value={customTo} min={customFrom} max={todayISO()} onChange={(e) => setCustomTo(e.target.value)} className="input py-1.5 text-xs" />
             </div>
           )}
+          <button className="analysis-refresh" disabled={isFetching || !validRange} onClick={() => refetch()}><RotateCcw size={14} />{isFetching ? 'Updating…' : 'Refresh'}</button>
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="card p-16 text-center text-slate-400"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></div>
+      <p className="analysis-scope">Financial totals use the selected period. Receivables, fulfilment and returns show the current position. Monthly charts always show the trailing 12 months.</p>
+      {!validRange ? <div className="card p-5" role="alert">Choose a valid start and end date to load analysis.</div> : isLoading ? (
+        <div className="card p-16 text-center text-slate-400" role="status"><Loader2 className="mx-auto h-6 w-6 animate-spin" />Loading business analysis…</div>
       ) : isError || !data ? (
-        <div className="card p-12 text-center text-sm text-slate-400">Could not load analysis. You may not have invoice access.</div>
+        <div className="card p-12 text-center text-sm text-slate-400" role="alert">Could not load analysis. <button className="underline" onClick={() => refetch()}>Try again</button></div>
       ) : (
         <AnalysisBody data={data} />
       )}
+      </div>
     </div>
   );
 };
 
 const AnalysisBody = ({ data }: { data: Analysis }) => {
   const h = data.headline;
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerSort, setCustomerSort] = useState<'invoiced' | 'outstanding'>('invoiced');
+  const customers = data.topCustomers.filter(c => `${c.name} ${c.code ?? ''}`.toLowerCase().includes(customerSearch.toLowerCase())).sort((a,b) => b[customerSort] - a[customerSort]);
   return (
-    <div className="space-y-5">
+    <div className="analysis-body space-y-5">
       {/* ── KPI grid ── */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi icon={ReceiptText} tone="brand"   label="Invoiced"        value={cr(h.invoiced)}  sub={`${nf(h.invoiceCount)} invoices`} />
         <Kpi icon={Wallet}      tone="emerald" label="Collected"       value={cr(h.received)}  sub={`${h.collectionRate}% of invoiced`} />
         <Kpi icon={Clock}       tone="amber"   label="Outstanding"     value={cr(h.outstanding)} sub={`${nf(h.openInvoices)} open`} />
         <Kpi icon={AlertTriangle} tone="rose"  label="Overdue"         value={cr(h.overdue)}   sub="past due date" />
-        <Kpi icon={IndianRupee} tone="slate"   label="GST collected"   value={cr(h.gst)}       sub={`on ${cr(h.taxable)} taxable`} />
+        <Kpi icon={IndianRupee} tone="slate"   label="GST invoiced"   value={cr(h.gst)}       sub={`on ${cr(h.taxable)} taxable`} />
         <Kpi icon={Users}       tone="sky"     label="Active customers" value={nf(h.customers)} sub="billed in range" />
         <Kpi icon={TrendingUp}  tone="violet"  label="Avg invoice"     value={cr(h.avgInvoice)} sub="per bill" />
         <Kpi icon={RotateCcw}   tone="slate"   label="Open returns"    value={nf(data.returns.open)} sub={`${nf(data.returns.total)} all-time`} />
       </div>
+      <AdvancedInsights data={data} />
 
       {/* ── Revenue trend ── */}
       <div className="card p-5">
-        <SectionTitle icon={TrendingUp} title="Revenue & collections" subtitle="Last 12 months — invoiced vs received" />
+        <SectionTitle icon={TrendingUp} title="Revenue & collections" subtitle="Trailing 12 months · receipts may settle invoices from earlier periods" />
         <TrendChart trend={data.trend} />
+        <details className="analysis-monthly"><summary>Explore monthly figures</summary>
+          <div className="analysis-table-scroll" tabIndex={0} role="region" aria-label="Monthly figures"><table><thead><tr><th>Month</th><th>Invoiced</th><th>Received</th><th>Invoiced − received</th><th>Produced pcs</th></tr></thead><tbody>{data.trend.map(t => <tr key={t.month}><td>{t.month}</td><td>{inr(t.invoiced)}</td><td>{inr(t.received)}</td><td>{inr(t.invoiced-t.received)}</td><td>{nf(t.produced)}</td></tr>)}</tbody></table></div>
+        </details>
       </div>
 
       {/* ── Aging + Funnel ── */}
@@ -149,14 +169,15 @@ const AnalysisBody = ({ data }: { data: Analysis }) => {
       <div className="grid gap-5 lg:grid-cols-2">
         <div className="card p-5">
           <SectionTitle icon={Users} title="Customers" subtitle={`${data.topCustomers.length} billed in range · by invoiced value`} />
-          <div className="mt-3 max-h-96 overflow-auto rounded-lg border border-slate-100">
+          <div className="analysis-customer-controls"><input aria-label="Find customer" placeholder="Find customer or code…" value={customerSearch} onChange={e=>setCustomerSearch(e.target.value)} /><select aria-label="Sort customers" value={customerSort} onChange={e=>setCustomerSort(e.target.value as 'invoiced' | 'outstanding')}><option value="invoiced">Highest invoiced</option><option value="outstanding">Highest outstanding</option></select></div>
+          <div className="analysis-table-scroll mt-3 max-h-96 overflow-auto" tabIndex={0} role="region" aria-label="Customer analysis">
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-10 bg-white text-left text-[11px] uppercase tracking-wide text-slate-400 shadow-[0_1px_0_0_#e2e8f0]">
                 <tr><th className="px-2 py-2">Customer</th><th className="px-2 py-2 text-right">Invoiced</th><th className="px-2 py-2 text-right">Outstanding</th><th className="px-2 py-2 w-24">Share</th></tr>
               </thead>
               <tbody>
-                {data.topCustomers.length === 0 && <tr><td colSpan={4} className="py-6 text-center text-slate-400">No invoices in range.</td></tr>}
-                {data.topCustomers.map((c) => (
+                {customers.length === 0 && <tr><td colSpan={4} className="py-6 text-center text-slate-400">{customerSearch ? 'No matching customers.' : 'No invoices in range.'}</td></tr>}
+                {customers.map((c) => (
                   <tr key={c.id || c.name} className="border-t border-slate-100 hover:bg-slate-50/60">
                     <td className="px-2 py-2 font-medium text-slate-800 truncate max-w-[160px]">{c.name}{c.code && <span className="ml-1 font-mono text-[10px] text-slate-400">{c.code}</span>}</td>
                     <td className="px-2 py-2 text-right tabular-nums">{cr(c.invoiced)}</td>
@@ -169,7 +190,7 @@ const AnalysisBody = ({ data }: { data: Analysis }) => {
           </div>
         </div>
         <div className="card p-5">
-          <SectionTitle icon={Package} title="Revenue by state" subtitle="Geographic concentration" />
+          <SectionTitle icon={Package} title="Revenue by state" subtitle="Top 8 states · shares are relative to the displayed states" />
           <BarList items={data.byState.map((s) => ({ label: s.state, value: s.amount, share: s.share }))} />
         </div>
       </div>
@@ -212,6 +233,22 @@ const AnalysisBody = ({ data }: { data: Analysis }) => {
   );
 };
 
+const AdvancedInsights = ({ data }: { data: Analysis }) => {
+  const pct = (value: number, total: number) => total > 0 ? `${(value / total * 100).toFixed(1)}%` : '—';
+  const topThree = [...data.topCustomers].sort((a,b)=>b.invoiced-a.invoiced).slice(0,3);
+  const olderDebt = data.aging.d61_90 + data.aging.d90;
+  const lastComplete = data.trend.at(-2);
+  const previous = data.trend.at(-3);
+  const change = lastComplete && previous && previous.invoiced > 0 ? (lastComplete.invoiced-previous.invoiced)/previous.invoiced*100 : null;
+  const insights = [
+    { label:'Overdue exposure', value:pct(data.headline.overdue, data.headline.outstanding), detail:`${inr(data.headline.overdue)} overdue out of ${inr(data.headline.outstanding)} currently outstanding.`, note:'Current receivables', tone:'risk' },
+    { label:'Debt overdue 61+ days', value:cr(olderDebt), detail:`${pct(olderDebt,data.aging.total)} of open receivables. ${inr(data.aging.noTerms)} has no due date.`, note:'Current aging', tone:'risk' },
+    { label:'Top 3 customer share', value:pct(topThree.reduce((s,c)=>s+c.invoiced,0),data.headline.invoiced), detail:topThree.length ? topThree.map(c=>c.code || c.name).join(' · ') : 'No customer invoices in this period.', note:'Selected period', tone:'normal' },
+    { label:'Completed-month revenue', value:change == null ? '—' : `${change >= 0 ? '+' : ''}${change.toFixed(1)}%`, detail:lastComplete && previous ? `${lastComplete.month}: ${inr(lastComplete.invoiced)} vs ${previous.month}: ${inr(previous.invoiced)}. A zero prior month has no percentage comparison.` : 'Two completed months are needed for comparison.', note:'Excludes the current partial month', tone:'normal' },
+  ];
+  return <section className="card analysis-insights"><SectionTitle icon={BarChart3} title="Business signals" subtitle="Calculated from your invoices, balances and monthly history" /><div className="analysis-signal-grid">{insights.map(i=><article key={i.label} data-tone={i.tone}><span>{i.note}</span><h3>{i.label}</h3><strong>{i.value}</strong><p>{i.detail}</p></article>)}</div></section>;
+};
+
 /* ── Small components ───────────────────────────────────────── */
 const TONES: Record<string, { bg: string; text: string }> = {
   brand:   { bg: 'bg-brand-50',   text: 'text-brand-700' },
@@ -228,12 +265,12 @@ const Kpi = ({ icon: Icon, tone, label, value, sub }: {
 }) => {
   const t = TONES[tone] ?? TONES.slate;
   return (
-    <div className="card p-4">
+    <div className="card dash-kpi analysis-kpi p-4">
       <div className="flex items-center gap-2">
         <div className={cn('flex h-8 w-8 items-center justify-center rounded-lg', t.bg, t.text)}><Icon className="h-4 w-4" /></div>
         <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</span>
       </div>
-      <div className="mt-2 text-xl font-bold tabular-nums text-slate-900">{value}</div>
+      <div className="dash-kpi-figure mt-2 text-xl font-bold tabular-nums text-slate-900">{value}</div>
       {sub && <div className="mt-0.5 text-[11px] text-slate-400">{sub}</div>}
     </div>
   );
@@ -243,7 +280,7 @@ const SectionTitle = ({ icon: Icon, title, subtitle }: { icon: typeof Wallet; ti
   <div className="flex items-center gap-2">
     <Icon className="h-4 w-4 text-slate-400" />
     <div>
-      <div className="text-sm font-semibold text-slate-700">{title}</div>
+      <h2 className="text-sm font-semibold text-slate-700">{title}</h2>
       {subtitle && <div className="text-[11px] text-slate-400">{subtitle}</div>}
     </div>
   </div>
@@ -324,7 +361,7 @@ const AgingBars = ({ aging }: { aging: Analysis['aging'] }) => {
 const Funnel = ({ f }: { f: Analysis['fulfillment'] }) => {
   const base = Math.max(1, f.ordered);
   const rows = [
-    { label: 'Ordered',    value: f.ordered,    color: 'bg-slate-400',   pct: 100 },
+    { label: 'Ordered',    value: f.ordered,    color: 'bg-slate-400',   pct: f.ordered > 0 ? 100 : 0 },
     { label: 'Produced',   value: f.produced,   color: 'bg-amber-500',   pct: Math.min(Math.round((f.produced / base) * 100), 100) },
     { label: 'Dispatched', value: f.dispatched, color: 'bg-emerald-500', pct: Math.min(Math.round((f.dispatched / base) * 100), 100) },
     { label: 'Pending',    value: f.pending,    color: 'bg-rose-400',    pct: Math.min(Math.round((f.pending / base) * 100), 100) },
@@ -352,29 +389,31 @@ const TrendChart = ({ trend }: { trend: Analysis['trend'] }) => {
   const innerW = W - padL - padR, innerH = H - padT - padB;
   const max = Math.max(1, ...trend.map((t) => Math.max(t.invoiced, t.received)));
   const n = trend.length;
-  const slot = innerW / n;
+  const slot = innerW / Math.max(1,n);
   const barW = slot * 0.5;
   const y = (v: number) => padT + innerH - (v / max) * innerH;
   const cx = (i: number) => padL + slot * i + slot / 2;
   const linePts = trend.map((t, i) => `${cx(i)},${y(t.received)}`).join(' ');
 
   return (
-    <div className="mt-3 w-full overflow-x-auto">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full min-w-[640px]" preserveAspectRatio="xMidYMid meet">
+    <div className="analysis-trend mt-3 w-full">
+      {!trend.some(t=>t.invoiced || t.received) && <p className="analysis-chart-empty">No invoices or receipts in the trailing 12 months.</p>}
+      <div className="analysis-chart-scroll" tabIndex={0} role="region" aria-label="Revenue chart, scroll for all months">
+      <svg role="img" aria-label="Monthly invoiced revenue and received payments. Exact amounts are available in Explore monthly figures." viewBox={`0 0 ${W} ${H}`} className="w-full min-w-[520px]" preserveAspectRatio="xMidYMid meet">
         {/* gridlines */}
         {[0.25, 0.5, 0.75, 1].map((g) => (
-          <line key={g} x1={padL} x2={W - padR} y1={padT + innerH - g * innerH} y2={padT + innerH - g * innerH} stroke="#f1f5f9" strokeWidth={1} />
+          <line key={g} x1={padL} x2={W - padR} y1={padT + innerH - g * innerH} y2={padT + innerH - g * innerH} stroke="var(--d-grid)" strokeWidth={1} />
         ))}
         {/* invoiced bars (hover shows the figures) */}
         {trend.map((t, i) => (
-          <rect key={i} x={cx(i) - barW / 2} y={y(t.invoiced)} width={barW} height={Math.max(0, padT + innerH - y(t.invoiced))} rx={2} fill="#6366f1" opacity={0.85}>
+          <rect key={i} x={cx(i) - barW / 2} y={y(t.invoiced)} width={barW} height={Math.max(0, padT + innerH - y(t.invoiced))} rx={2} fill="var(--d-accent)" opacity={0.65}>
             <title>{`${monthLabel(t.month)} — Invoiced ${inr(t.invoiced)} · Received ${inr(t.received)}`}</title>
           </rect>
         ))}
         {/* received line + dots */}
-        <polyline points={linePts} fill="none" stroke="#059669" strokeWidth={2} />
+        <polyline points={linePts} fill="none" stroke="var(--d-rect)" strokeWidth={2.5} />
         {trend.map((t, i) => (
-          <circle key={i} cx={cx(i)} cy={y(t.received)} r={2.5} fill="#059669">
+          <circle key={i} cx={cx(i)} cy={y(t.received)} r={3} fill="var(--d-rect)">
             <title>{`${monthLabel(t.month)} — Received ${inr(t.received)}`}</title>
           </circle>
         ))}
@@ -383,9 +422,10 @@ const TrendChart = ({ trend }: { trend: Analysis['trend'] }) => {
           <text key={i} x={cx(i)} y={H - 8} textAnchor="middle" fontSize={9} fill="#94a3b8">{monthLabel(t.month)}</text>
         ))}
       </svg>
+      </div>
       <div className="mt-1 flex items-center gap-4 text-[11px] text-slate-500">
-        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: '#6366f1' }} /> Invoiced</span>
-        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm" style={{ background: '#059669' }} /> Received</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: 'var(--d-accent)' }} /> Invoiced</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm" style={{ background: 'var(--d-rect)' }} /> Received</span>
       </div>
     </div>
   );
@@ -398,7 +438,7 @@ const ProductionSpark = ({ trend }: { trend: Analysis['trend'] }) => {
     <div className="mt-3 flex h-20 items-end gap-1">
       {trend.map((t) => (
         <div key={t.month} className="flex flex-1 flex-col items-center gap-1" title={`${monthLabel(t.month)}: ${nf(t.produced)} pcs`}>
-          <div className="w-full rounded-t bg-sky-400" style={{ height: `${(t.produced / max) * 100}%`, minHeight: t.produced > 0 ? 2 : 0 }} />
+          <div className="w-full rounded-t bg-sky-400" style={{ height: `${(t.produced / max) * 60}px`, minHeight: t.produced > 0 ? 2 : 0 }} />
           <span className="text-[7px] text-slate-400">{monthLabel(t.month).slice(0, 1)}</span>
         </div>
       ))}
@@ -412,7 +452,7 @@ const CoreDonut = ({ toroidal, rectangular }: { toroidal: number; rectangular: n
   const r = 52, c = 2 * Math.PI * r;
   const toroPct = total > 0 ? toroidal / total : 0;
   return (
-    <div className="mt-3 flex items-center gap-5">
+    <div className="analysis-core-mix mt-3 flex items-center gap-5">
       <svg viewBox="0 0 140 140" className="h-32 w-32 shrink-0">
         <circle cx={70} cy={70} r={r} fill="none" stroke="#e2e8f0" strokeWidth={18}>
           <title>{`Rectangular: ${nf(rectangular)} pcs`}</title>
