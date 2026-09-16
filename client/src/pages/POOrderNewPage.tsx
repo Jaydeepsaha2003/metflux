@@ -138,7 +138,7 @@ const emptyShapeFor = (ct: CoreType): CoreShape => {
 
 /* A row of fields that wraps rather than squeezing. */
 const FieldRow = ({ children, className }: { children: React.ReactNode; className?: string }) => (
-  <div className={cn('flex flex-wrap items-start gap-x-2.5 gap-y-2', className)}>{children}</div>
+  <div className={cn('core-field-row flex flex-wrap items-start gap-x-2.5 gap-y-2', className)}>{children}</div>
 );
 
 /* A figure carried up into a card header. Greyed until it has a real value, so
@@ -156,10 +156,10 @@ const HeadStat = ({ label, value, on }: { label: string; value: string; on: bool
 /* A read-only computed figure sitting in a field row, sized and aligned like
    the inputs beside it so the row keeps one baseline. */
 const ReadOut = ({ label, value, w, tone }: { label: string; value: string; w?: string; tone?: 'amber' | 'violet' }) => (
-  <div className={cn('shrink-0', w)}>
+  <div className={cn('core-readout shrink-0', w)}>
     <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</div>
     <div className={cn(
-      'flex h-7 items-center justify-end rounded-md border px-2 font-num text-[13px] font-semibold',
+      'core-readout-value flex h-7 items-center justify-end rounded-md border px-2 font-num text-[13px] font-semibold',
       tone === 'amber' ? 'border-amber-200 bg-amber-50/70 text-amber-900'
         : tone === 'violet' ? 'border-violet-200 bg-violet-50/70 text-violet-900'
         : 'border-slate-200 bg-slate-50 text-slate-800'
@@ -780,14 +780,15 @@ export const POOrderNewPage = () => {
       </section>
 
       {/* ============ ITEM ENTRY ============ */}
-      <section className="sales-order-section sales-order-entry card p-3 sm:p-4 space-y-3">
+      <section data-core={coreType || 'TOROIDAL'} className="sales-order-section sales-order-entry card p-3 sm:p-4 space-y-3">
         <div className="sales-order-section-heading flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div><div className="flex items-center gap-2"><span>02</span><h2 className="text-sm font-semibold text-slate-900">Build line item</h2></div><p>Choose a core family, enter dimensions, then add the finished line to the order.</p></div>
+          <div><div className="flex items-center gap-2"><span>02</span><h2 className="text-sm font-semibold text-slate-900">Build line item</h2></div></div>
           {/* Segmented pill selector — replaces the dropdown for a touchable, visible toggle */}
-          <div className="flex flex-wrap gap-0.5 rounded-lg bg-slate-100 p-0.5 text-sm self-start">
+          <div className="core-family-selector flex flex-wrap gap-0.5 rounded-lg bg-slate-100 p-0.5 text-sm self-start" aria-label="Core family">
             <button
               type="button"
               onClick={() => pickCore('TOROIDAL')}
+              aria-pressed={coreType === 'TOROIDAL'}
               className={cn(
                 'rounded-md px-3 py-1.5 font-medium transition',
                 coreType === 'TOROIDAL'
@@ -800,6 +801,7 @@ export const POOrderNewPage = () => {
             <button
               type="button"
               onClick={() => pickCore('RECTANGULAR')}
+              aria-pressed={coreType === 'RECTANGULAR'}
               className={cn(
                 'rounded-md px-3 py-1.5 font-medium transition',
                 coreType === 'RECTANGULAR'
@@ -812,6 +814,7 @@ export const POOrderNewPage = () => {
             <button
               type="button"
               onClick={() => pickCore('NANO')}
+              aria-pressed={coreType === 'NANO'}
               className={cn(
                 'rounded-md px-3 py-1.5 font-medium transition',
                 coreType === 'NANO'
@@ -824,6 +827,7 @@ export const POOrderNewPage = () => {
             <button
               type="button"
               onClick={() => pickCore('COMPOSITE')}
+              aria-pressed={coreType === 'COMPOSITE'}
               className={cn(
                 'rounded-md px-3 py-1.5 font-medium transition',
                 coreType === 'COMPOSITE'
@@ -840,7 +844,7 @@ export const POOrderNewPage = () => {
             solid stays in view while someone works down a long form, and it
             drops below the fields on a narrow screen rather than squeezing
             them into a column too thin to type in. */}
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="core-builder-layout grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="min-w-0">
         {coreType === 'TOROIDAL' && (
           <ToroidalForm
@@ -908,7 +912,7 @@ export const POOrderNewPage = () => {
             <div className="min-w-0 xl:sticky xl:top-3 xl:self-start">
               <CorePreview
                 shape={shape ?? emptyShapeFor(coreType)}
-                className="h-[300px] xl:h-[420px]"
+                className="core-model-stage h-[260px] xl:h-[360px]"
               />
             </div>
           )}
@@ -1354,7 +1358,7 @@ const GradeMaterialPicker = ({
    Labels render in their natural case so engineering conventions like
    "Flux ( T )", "ATe/cm", "V (Volts)", "Ie max (mA)" survive verbatim. */
 const Stat = ({ label, value, accent }: { label: string; value: string; accent?: 'primary' }) => (
-  <div className="min-w-0">
+  <div className="core-result min-w-0">
     <div className="text-[10px] font-medium tracking-wide text-slate-500">{label}</div>
     <div className={cn(
       'truncate font-mono tabular-nums leading-tight',
@@ -1514,7 +1518,7 @@ export const ToroidalForm = ({
   };
 
   return (
-    <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-3 sm:p-4">
+    <div className="core-entry-form rounded-xl border border-amber-200 bg-amber-50/40 p-3 sm:p-4">
       <div className="mb-2 flex items-center gap-2">
         <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
         <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-800">Toroidal</span>
@@ -1531,14 +1535,7 @@ export const ToroidalForm = ({
           />
         </div>
         <Field label="Rate Basis" className={cn('shrink-0', FW.sel)}>
-          <select
-            className={inputCls}
-            value={rateBasis}
-            onChange={(e) => setRateBasis(e.target.value as 'PER_KG' | 'PER_PCS')}
-          >
-            <option value="PER_KG">Per Kg</option>
-            <option value="PER_PCS">Per Pcs</option>
-          </select>
+          <SearchableSelect dense value={rateBasis} onChange={(value) => setRateBasis(value === 'PER_PCS' ? 'PER_PCS' : 'PER_KG')} options={[{value:'PER_KG',label:'Per Kg'},{value:'PER_PCS',label:'Per Pcs'}]} />
         </Field>
         <div className={cn('shrink-0', FW.rate)}>
           <NumField
@@ -1790,7 +1787,7 @@ export const RectangularForm = ({
   };
 
   return (
-    <div className="rounded-xl border border-rose-200 bg-rose-50/40 p-3 sm:p-4">
+    <div className="core-entry-form rounded-xl border border-rose-200 bg-rose-50/40 p-3 sm:p-4">
       <div className="mb-2 flex items-center gap-2">
         <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
         <span className="text-[11px] font-semibold uppercase tracking-wider text-rose-800">Rectangular</span>
@@ -1805,14 +1802,7 @@ export const RectangularForm = ({
           />
         </div>
         <Field label="Rate Basis" className={cn('shrink-0', FW.sel)}>
-          <select
-            className={inputCls}
-            value={rateBasis}
-            onChange={(e) => setRateBasis(e.target.value as 'PER_KG' | 'PER_PCS')}
-          >
-            <option value="PER_KG">Per Kg</option>
-            <option value="PER_PCS">Per Pcs</option>
-          </select>
+          <SearchableSelect dense value={rateBasis} onChange={(value) => setRateBasis(value === 'PER_PCS' ? 'PER_PCS' : 'PER_KG')} options={[{value:'PER_KG',label:'Per Kg'},{value:'PER_PCS',label:'Per Pcs'}]} />
         </Field>
         <div className={cn('shrink-0', FW.rate)}>
           <NumField
@@ -2131,7 +2121,7 @@ export const NanoForm = ({
   };
 
   return (
-    <div className={cn('overflow-hidden rounded-xl border bg-white shadow-sm', composite ? 'border-teal-200' : 'border-violet-200')}>
+    <div className={cn('core-entry-form overflow-hidden rounded-xl border bg-white shadow-sm', composite ? 'border-teal-200' : 'border-violet-200')}>
       {/* Header. The running weight and line total live here rather than only
           at the foot of the card: they are the two numbers an operator checks
           against the customer's order, and on a laptop the foot of a long form
@@ -2174,7 +2164,7 @@ export const NanoForm = ({
                 monitor, which is what made the old layout read as a web form
                 rather than a data-entry screen. */}
             <div className="flex flex-wrap gap-2.5">
-              <section className="min-w-[290px] flex-1 basis-[420px] rounded-lg border border-amber-200 bg-amber-50/40 p-2.5 lg:max-w-[560px]">
+              <section className="core-component-panel min-w-0 flex-1 basis-[420px] rounded-lg border border-amber-200 bg-amber-50/40 p-2.5 lg:max-w-[560px]">
                 <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-amber-700">
                   <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> CRGO core
                 </div>
@@ -2204,10 +2194,7 @@ export const NanoForm = ({
                 </FieldRow>
                 <FieldRow className="mt-2">
                   <Field label="Rate basis" className={cn('shrink-0', FW.sel)}>
-                    <select className={inputCls} value={crgoBasis} onChange={(e) => setCrgoBasis(e.target.value as 'PER_KG' | 'PER_PCS')}>
-                      <option value="PER_KG">Per Kg</option>
-                      <option value="PER_PCS">Per Pcs</option>
-                    </select>
+                    <SearchableSelect dense value={crgoBasis} onChange={(value) => setCrgoBasis(value === 'PER_PCS' ? 'PER_PCS' : 'PER_KG')} options={[{value:'PER_KG',label:'Per Kg'},{value:'PER_PCS',label:'Per Pcs'}]} />
                   </Field>
                   <NumField
                     label={crgoBasis === 'PER_KG' ? 'Rate ₹/kg' : 'Rate ₹/pc'}
@@ -2217,7 +2204,7 @@ export const NanoForm = ({
                 </FieldRow>
               </section>
 
-              <section className="min-w-[290px] flex-1 basis-[420px] rounded-lg border border-violet-200 bg-violet-50/40 p-2.5 lg:max-w-[560px]">
+              <section className="core-component-panel min-w-0 flex-1 basis-[420px] rounded-lg border border-violet-200 bg-violet-50/40 p-2.5 lg:max-w-[560px]">
                 <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-violet-700">
                   <span className="h-1.5 w-1.5 rounded-full bg-violet-500" /> Nano core
                 </div>
