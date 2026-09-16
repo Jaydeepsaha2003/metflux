@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Save, Loader2, Hash, User2, Pencil, X } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
-import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc } from '@/lib/calc';
+import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc, stackOr, TOROIDAL_FACTOR, RECT_STACK_FACTOR } from '@/lib/calc';
 import { SearchableSelect } from '@/components/SearchableSelect';
 
 type GradeRow = { grade: string; materials: { id: string; material: string }[] };
@@ -34,6 +34,8 @@ type Item = {
   pcs: number;
   totalWeight: number;
   coreAc: number | null; coreMl: number | null; d13: number | null;
+  /** Stacking factor this line was booked with; null = house default. */
+  stackFactor: number | null;
   rateBasis: 'PER_KG' | 'PER_PCS' | null;
   rateValue: number | null;
   ratePerKg: number | null;
@@ -166,7 +168,10 @@ export const POEditPage = () => {
    to expand the form for SO#, customer, order date, delivery date, notes.
    Hits PATCH /po-orders/:id, which itself blocks if any line in this SO has
    any production logged. */
-type Customer = { id: string; name: string };
+type Customer = {
+  id: string; name: string;
+  toroidalFactor?: number | null; rectStackFactor?: number | null;
+};
 type CustomerListResp = { items: Customer[] };
 type POHeader = {
   id: string;
@@ -364,8 +369,13 @@ const ToroidalEditor = ({
   const [turns, setTurns] = useState(item.turns ?? 0);
   const [flux,  setFlux]  = useState(item.flux  ?? 0);
 
+  // Seeded from what this line was BOOKED with, never from the customer's
+  // current figure -- opening an old line to fix a typo must not re-weigh it
+  // against a factor agreed years later.
+  const [stack, setStack] = useState(stackOr(item.stackFactor, TOROIDAL_FACTOR));
+
   const minPcs = Math.max(item.pcsProduced ?? 0, item.pcsDispatched ?? 0);
-  const calc = useMemo(() => toroidalCalc({ id: id1, od: od1, ht, pcs }), [id1, od1, ht, pcs]);
+  const calc = useMemo(() => toroidalCalc({ id: id1, od: od1, ht, pcs, factor: stack }), [id1, od1, ht, pcs, stack]);
   const matchingMaterials = grades.find((g) => g.grade === grade)?.materials ?? [];
   const derived = deriveRate({ rateBasis, rateValue, weightPerPc: calc.weightPerPc, pcs, totalWeight: calc.totalWeight });
 
@@ -398,6 +408,7 @@ const ToroidalEditor = ({
           measure: calc.measure,
           id1, od1, ht, pcs,
           weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight,
+          stackFactor: stack,
           rateBasis: rateValue > 0 ? rateBasis : null,
           rateValue: rateValue > 0 ? rateValue : null,
           // Flux-test fields — send null when the user has cleared them.
@@ -464,6 +475,18 @@ const ToroidalEditor = ({
           </select>
         </Field>
         <NumField label={rateBasis === 'PER_KG' ? 'Rate (₹/kg)' : 'Rate (₹/pcs)'} value={rateValue} onChange={setRateValue} />
+        <div>
+          <NumField label="Stacking factor" value={stack} onChange={setStack} />
+          {Math.abs(stack - stackOr(item.stackFactor, TOROIDAL_FACTOR)) > 1e-9 && (
+            <button
+              type="button"
+              onClick={() => setStack(stackOr(item.stackFactor, TOROIDAL_FACTOR))}
+              className="mt-1 text-[11px] font-medium text-amber-700 underline-offset-2 hover:underline"
+            >
+              Back to {stackOr(item.stackFactor, TOROIDAL_FACTOR)}, as booked
+            </button>
+          )}
+        </div>
       </div>
 
       <ComputedRow stats={[
@@ -504,10 +527,15 @@ const RectangularEditor = ({
   const [turns, setTurns] = useState(item.turns ?? 0);
   const [flux,  setFlux]  = useState(item.flux  ?? 0);
 
+  // Seeded from what this line was BOOKED with, never from the customer's
+  // current figure -- opening an old line to fix a typo must not re-weigh it
+  // against a factor agreed years later.
+  const [stack, setStack] = useState(stackOr(item.stackFactor, RECT_STACK_FACTOR));
+
   const minPcs = Math.max(item.pcsProduced ?? 0, item.pcsDispatched ?? 0);
   const calc = useMemo(
-    () => rectangularCalc({ id1, id2, od1, od2, ht, pcs }),
-    [id1, id2, od1, od2, ht, pcs]
+    () => rectangularCalc({ id1, id2, od1, od2, ht, pcs, factor: stack }),
+    [id1, id2, od1, od2, ht, pcs, stack]
   );
   const matchingMaterials = grades.find((g) => g.grade === grade)?.materials ?? [];
   const derived = deriveRate({ rateBasis, rateValue, weightPerPc: calc.weightPerPc, pcs, totalWeight: calc.totalWeight });
@@ -540,6 +568,7 @@ const RectangularEditor = ({
           weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight,
           pcs,
           coreAc: calc.coreAc, coreMl: calc.coreMl, d13: calc.d13,
+          stackFactor: stack,
           rateBasis: rateValue > 0 ? rateBasis : null,
           rateValue: rateValue > 0 ? rateValue : null,
           turns:       turns > 0 ? turns : null,
@@ -607,6 +636,18 @@ const RectangularEditor = ({
           </select>
         </Field>
         <NumField label={rateBasis === 'PER_KG' ? 'Rate (₹/kg)' : 'Rate (₹/pcs)'} value={rateValue} onChange={setRateValue} />
+        <div>
+          <NumField label="Stacking factor" value={stack} onChange={setStack} />
+          {Math.abs(stack - stackOr(item.stackFactor, RECT_STACK_FACTOR)) > 1e-9 && (
+            <button
+              type="button"
+              onClick={() => setStack(stackOr(item.stackFactor, RECT_STACK_FACTOR))}
+              className="mt-1 text-[11px] font-medium text-amber-700 underline-offset-2 hover:underline"
+            >
+              Back to {stackOr(item.stackFactor, RECT_STACK_FACTOR)}, as booked
+            </button>
+          )}
+        </div>
       </div>
 
       <ComputedRow stats={[

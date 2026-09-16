@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
-import { fluxTestCalc, rectangularCalc, rectangularFluxTestCalc, nanoTestCalc, toroidalCalc, nanoCalc, round3 } from '@/lib/calc';
+import { fluxTestCalc, rectangularCalc, rectangularFluxTestCalc, nanoTestCalc, toroidalCalc, nanoCalc, round3, stackOr, TOROIDAL_FACTOR, RECT_STACK_FACTOR } from '@/lib/calc';
 import { todayStamp } from '@/lib/excel';
 import './testing-calculator.css';
 
@@ -28,7 +28,13 @@ type Item = {
   grade: string;
   fluxes: number[];      // selected flux levels (T)
   freq: string;          // nano only — frequency (Hz)
-  sfac: string;          // nano only — stacking factor
+  sfac: string;          // nano only — stacking factor for the TEST voltage
+  // Toroidal/rectangular — the stacking factor for the WEIGHT calculation.
+  // Distinct from `sfac` above, which belongs to the nano voltage formula.
+  // Blank means the house default (5.77 / 0.95); this screen has no
+  // customer to inherit from, so anyone testing a core made to a
+  // different specification types the figure in here.
+  stack: string;
   source?: string;       // e.g. PO number when imported
 };
 type PoSummaryItem = {
@@ -44,7 +50,7 @@ type CompanyDetail = {
 let seq = 0;
 const mkItem = (p: Partial<Item> = {}): Item => ({
   key: `it_${++seq}`, coreType: 'TOROIDAL', id: '', od: '', ht: '',
-  id1: '', id2: '', od1: '', od2: '', turns: '', grade: '', fluxes: [], freq: '', sfac: '', ...p,
+  id1: '', id2: '', od1: '', od2: '', turns: '', grade: '', fluxes: [], freq: '', sfac: '', stack: '', ...p,
 });
 
 // Toroidal + Nano share the OD/ID/HT geometry; only Rectangular differs.
@@ -52,8 +58,20 @@ const numOk = (it: Item) => it.coreType === 'RECTANGULAR'
   ? (+it.id1 > 0 && +it.id2 > 0 && +it.od1 > 0 && +it.od2 > 0 && +it.ht > 0 && +it.turns > 0 && +it.od1 > +it.id1 && +it.od2 > +it.id2)
   : (+it.id > 0 && +it.od > 0 && +it.ht > 0 && +it.turns > 0 && +it.od > +it.id);
 
+/** The factor a freshly-switched row starts on — blank for nano, which has
+ *  no laminated stack and derives its weight from the ribbon constants. */
+const defaultStackFor = (ct: CoreType) =>
+  ct === 'TOROIDAL' ? String(TOROIDAL_FACTOR)
+  : ct === 'RECTANGULAR' ? String(RECT_STACK_FACTOR)
+  : '';
+
+const stackOf = (it: Item) => stackOr(
+  it.stack === '' ? null : +it.stack,
+  it.coreType === 'RECTANGULAR' ? RECT_STACK_FACTOR : TOROIDAL_FACTOR,
+);
+
 const rectGeom = (it: Item) =>
-  rectangularCalc({ id1: +it.id1, id2: +it.id2, od1: +it.od1, od2: +it.od2, ht: +it.ht, pcs: 0 });
+  rectangularCalc({ id1: +it.id1, id2: +it.id2, od1: +it.od1, od2: +it.od2, ht: +it.ht, pcs: 0, factor: stackOf(it) });
 
 const measureOf = (it: Item) => it.coreType === 'RECTANGULAR'
   ? rectGeom(it).measure
@@ -74,7 +92,7 @@ const weightOf = (it: Item): number => {
     const caseWt = isEpoxyGrade(it.grade) ? 0 : c.caseWeight;
     return round3(c.coreWeight + caseWt);
   }
-  return toroidalCalc({ id: +it.id, od: +it.od, ht: +it.ht, pcs: 0 }).weightPerPc;
+  return toroidalCalc({ id: +it.id, od: +it.od, ht: +it.ht, pcs: 0, factor: stackOf(it) }).weightPerPc;
 };
 
 /* Parse a toroidal measure "180 x 110 x 200" → { id, od, ht }. */
@@ -123,7 +141,8 @@ export const TestingCalculatorPage = () => {
   const setItemCore = (key: string, coreType: CoreType) => setItems((its) => its.map((i) => (
     i.key === key
       ? { ...i, coreType, id: '', od: '', ht: '', id1: '', id2: '', od1: '', od2: '', grade: '', fluxes: [],
-          freq: coreType === 'NANO' ? '50' : '', sfac: coreType === 'NANO' ? '0.8' : '' }
+          freq: coreType === 'NANO' ? '50' : '', sfac: coreType === 'NANO' ? '0.8' : '',
+          stack: defaultStackFor(coreType) }
       : i
   )));
 
@@ -176,6 +195,7 @@ export const TestingCalculatorPage = () => {
       coreType: ct, ...dims,
       turns: po.turns != null ? String(po.turns) : '',
       freq: ct === 'NANO' ? '50' : '', sfac: ct === 'NANO' ? '0.8' : '',
+      stack: defaultStackFor(ct),
       grade, fluxes: grade ? pointsFor(ct, grade).map((p) => p.flux) : [], source: po.poNumber,
     })]);
   };
@@ -331,6 +351,15 @@ export const TestingCalculatorPage = () => {
                       </select>
                     </Field>
                   </div>
+                  {!isNano && (
+                    <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <Field label="Stacking factor">
+                        <input className="input" type="number" inputMode="decimal"
+                          placeholder={String(TOROIDAL_FACTOR)}
+                          value={it.stack} onChange={(e) => patch(it.key, { stack: e.target.value })} />
+                      </Field>
+                    </div>
+                  )}
                   {isNano && (
                     <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
                       <Field label="Frequency (Hz)"><input className="input" type="number" inputMode="decimal" value={it.freq} onChange={(e) => patch(it.key, { freq: e.target.value })} /></Field>
@@ -352,6 +381,11 @@ export const TestingCalculatorPage = () => {
                         <option value="">— Select —</option>
                         {rowGrades.map((gr) => <option key={gr.grade} value={gr.grade}>{gr.grade}</option>)}
                       </select>
+                    </Field>
+                    <Field label="Stacking factor">
+                      <input className="input" type="number" inputMode="decimal"
+                        placeholder={String(RECT_STACK_FACTOR)}
+                        value={it.stack} onChange={(e) => patch(it.key, { stack: e.target.value })} />
                     </Field>
                   </div>
                   {g && (

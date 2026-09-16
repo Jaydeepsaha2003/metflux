@@ -205,6 +205,9 @@ router.get('/pending', requirePermission('rec_production'), asyncHandler(async (
       // already computes it for the full piece.
       id1: it.id1, id2: it.id2, od1: it.od1, od2: it.od2, ht: it.ht,
       weightPerPc: it.weightPerPc,
+      // Needed so a split-height run re-weighs on the factor this line was
+      // booked with rather than the house default.
+      stackFactor: it.stackFactor ?? null,
       orderedPcs: it.pcs,
       producedPcs: produced,
       remainingPcs: remaining,

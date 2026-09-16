@@ -32,6 +32,10 @@ const itemSchema = z.object({
   coreAc: z.coerce.number().nonnegative().optional().nullable(),
   coreMl: z.coerce.number().nonnegative().optional().nullable(),
   d13: z.coerce.number().nonnegative().optional().nullable(),
+  // The stacking factor this line was weighed with. Recorded per line so a
+  // later change to the customer's figure can never re-weigh an existing
+  // order; NULL means it used the house default.
+  stackFactor: z.coerce.number().positive().max(100).optional().nullable(),
   turns:       z.coerce.number().positive().transform((v) => Math.round(v)).optional().nullable(),
   flux:        z.coerce.number().positive().optional().nullable(),
   ateCm:       z.coerce.number().nonnegative().optional().nullable(),
@@ -150,6 +154,7 @@ router.post('/', requirePermission('add_po'), asyncHandler(async (req, res) => {
         ht: it.ht, builtup: it.builtup ?? null,
         weightPerPc: it.weightPerPc, pcs: it.pcs, totalWeight: it.totalWeight,
         coreAc: it.coreAc ?? null, coreMl: it.coreMl ?? null, d13: it.d13 ?? null,
+        stackFactor: it.stackFactor ?? null,
         turns:       it.turns       ?? null,
         flux:        it.flux        ?? null,
         ateCm:       it.ateCm       ?? null,
@@ -265,6 +270,7 @@ const flattenItem = (it) => {
     pcs: it.pcs,
     totalWeight: it.totalWeight,
     coreAc: it.coreAc, coreMl: it.coreMl, d13: it.d13,
+    stackFactor: it.stackFactor ?? null,
     rateBasis:   it.rateBasis   ?? null,
     rateValue:   it.rateValue   ?? null,
     ratePerKg:   it.ratePerKg   ?? null,
@@ -608,6 +614,9 @@ router.get('/summary', requirePermission('po_summary'), asyncHandler(async (req,
     pcsPending:    Math.max(it.pcs - Number(it.pcsProduced ?? 0), 0),
     weightPerPc:   it.weightPerPc,
     totalWeight:   it.totalWeight,
+    // Carried so a split-height run re-weighs on the SAME factor the line was
+    // booked with, not on whatever the customer's figure says today.
+    stackFactor:   it.stackFactor ?? null,
     turns:         it.turns       ?? null,
     flux:          it.flux        ?? null,
     ateCm:         it.ateCm       ?? null,
@@ -743,6 +752,7 @@ router.post('/:poId/items', requirePermission('add_po'), asyncHandler(async (req
     ht: data.ht,   builtup: data.builtup ?? null,
     weightPerPc: data.weightPerPc, pcs: data.pcs, totalWeight: data.totalWeight,
     coreAc: data.coreAc ?? null, coreMl: data.coreMl ?? null, d13: data.d13 ?? null,
+    stackFactor: data.stackFactor ?? null,
     turns:       data.turns       ?? null,
     flux:        data.flux        ?? null,
     ateCm:       data.ateCm       ?? null,

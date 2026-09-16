@@ -60,6 +60,13 @@ const customerInputBase = z.object({
   // Credit terms — payment due `dueDays` days after the invoice date. NULL =
   // not set (Sales Invoices flags those). Coerced from the form's string input.
   dueDays: z.coerce.number().int().min(0).max(3650).optional().nullable(),
+  // Weight-calculation stacking factors. NULL = use the house defaults (5.77
+  // toroidal / 0.95 rectangular). Bounded loosely rather than tightly: these
+  // are specification figures, and a bound that rejects a legitimate agreed
+  // value is worse than one that lets an obvious typo through to a number the
+  // operator can see on screen before saving.
+  toroidalFactor:  z.coerce.number().positive().max(100).optional().nullable(),
+  rectStackFactor: z.coerce.number().positive().max(100).optional().nullable(),
   notes: z.string().trim().max(2000).optional().nullable(),
 });
 
@@ -201,7 +208,7 @@ router.get('/', asyncHandler(async (req, res) => {
   // Keep the list query narrow. `SELECT *` also pulls portal credential and
   // notes columns for every row, even though the register only renders these
   // summary fields. This matters on slower MySQL hosts and on mobile links.
-  const listColumns = '`id`,`customerCode`,`name`,`email`,`phone`,`state`,`gstNumber`,`gstRate`,`dueDays`,`address`,`notes`,`shareToken`,`portalShortCode`,`portalInitialPassword`,`portalPasswordSet`,`createdAt`';
+  const listColumns = '`id`,`customerCode`,`name`,`email`,`phone`,`state`,`gstNumber`,`gstRate`,`dueDays`,`toroidalFactor`,`rectStackFactor`,`address`,`notes`,`shareToken`,`portalShortCode`,`portalInitialPassword`,`portalPasswordSet`,`createdAt`';
   const [items, totalRow] = await Promise.all([
     q(
       `SELECT ${listColumns} FROM \`Customer\` WHERE ${where} ORDER BY \`createdAt\` DESC LIMIT ? OFFSET ?`,

@@ -1,6 +1,9 @@
 // Pure calculation helpers — ported verbatim from .NET New_PO_Order.vb so
 // numbers stay identical to your existing PO records.
 //
+// The 5.77 and 0.95 below are DEFAULTS. Both are stacking factors and both can
+// be overridden per customer — see TOROIDAL_FACTOR / RECT_STACK_FACTOR.
+//
 // Toroidal:
 //   weightPerPc = (od² − id²) × ht × 5.77 × 1e-6
 //   measure     = "{id} x {od} x {ht}"
@@ -71,10 +74,13 @@ export const compositeRuleFromMaterial = (material: string): CompositeRule | nul
 
 type Tri = { id: number; od: number; ht: number };
 export const compositeCalc = ({
-  rule, crgo, nano, pcs = 0,
-}: { rule: CompositeRule; crgo: Tri; nano: Tri; pcs?: number }) => {
+  rule, crgo, nano, pcs = 0, factor,
+}: { rule: CompositeRule; crgo: Tri; nano: Tri; pcs?: number;
+  /** Applies to the CRGO half only — the nano ribbon and its case have their
+   *  own constants and are not a laminated stack. */
+  factor?: number | null }) => {
   const nanoC = nanoCalc({ id: nano.id, od: nano.od, ht: nano.ht, pcs: 0 });
-  const crgoC = toroidalCalc({ id: crgo.id, od: crgo.od, ht: crgo.ht, pcs: 0 });
+  const crgoC = toroidalCalc({ id: crgo.id, od: crgo.od, ht: crgo.ht, pcs: 0, factor });
   const nanoWeight = round3(nanoC.coreWeight + nanoC.caseWeight);
   const crgoWeight = crgoC.weightPerPc;
   const weightPerPc = round3(nanoWeight + crgoWeight);
@@ -99,19 +105,50 @@ export const compositeCalc = ({
   };
 };
 
-export const toroidalCalc = ({ id, od, ht, pcs }: { id: number; od: number; ht: number; pcs: number }) => {
+// ── Stacking factor ───────────────────────────────────────────────────────
+// A wound core is steel plus the air between its laminations, so its weight is
+// geometry x density x the fraction that is actually steel. The two shapes
+// express that fraction differently, inherited verbatim from the .NET form:
+//
+//   TOROIDAL_FACTOR 5.77 is the whole multiplier, not a bare fraction —
+//     pi/4 (0.7854) x 7.65 (density) x 0.9604 (stacking) = 5.77
+//   RECT_STACK_FACTOR 0.95 is the bare fraction, applied to the area, with
+//     the 7.65 density kept separate in the weight line below.
+//
+// So the two already run at slightly different stacking (~96% vs 95%). Both
+// are defaults: a customer whose specification differs carries their own
+// figure, and every line records the one it was priced with.
+export const TOROIDAL_FACTOR = 5.77;
+export const RECT_STACK_FACTOR = 0.95;
+
+/** A stored/entered factor, falling back to the house default when absent.
+ *  Zero and NaN fall back too — an empty input must not weigh a core at nil. */
+export const stackOr = (factor: number | null | undefined, fallback: number) =>
+  (typeof factor === 'number' && Number.isFinite(factor) && factor > 0 ? factor : fallback);
+
+export const toroidalCalc = ({ id, od, ht, pcs, factor }: {
+  id: number; od: number; ht: number; pcs: number;
+  /** Customer's toroidal factor; omitted means the 5.77 house default. */
+  factor?: number | null;
+}) => {
   const valid = id > 0 && od > 0 && ht > 0;
-  const weightPerPc = valid ? round3((od * od - id * id) * ht * 5.77 * 1e-6) : 0;
+  const f = stackOr(factor, TOROIDAL_FACTOR);
+  const weightPerPc = valid ? round3((od * od - id * id) * ht * f * 1e-6) : 0;
   const totalWeight = pcs > 0 ? round3(pcs * weightPerPc) : 0;
   const measure = `${id || 0} x ${od || 0} x ${ht || 0}`;
   return { weightPerPc, totalWeight, measure };
 };
 
 export const rectangularCalc = ({
-  id1, id2, od1, od2, ht, pcs,
-}: { id1: number; id2: number; od1: number; od2: number; ht: number; pcs: number }) => {
+  id1, id2, od1, od2, ht, pcs, factor,
+}: {
+  id1: number; id2: number; od1: number; od2: number; ht: number; pcs: number;
+  /** Customer's rectangular stacking factor; omitted means the 0.95 default. */
+  factor?: number | null;
+}) => {
+  const s = stackOr(factor, RECT_STACK_FACTOR);
   const builtup = od1 > 0 && id1 > 0 ? round3((od1 - id1) / 2) : 0;
-  const coreAc  = od2 > 0 && id2 > 0 && ht > 0 ? round3(((od2 - id2) / 2) * ht * 0.95 / 100) : 0;
+  const coreAc  = od2 > 0 && id2 > 0 && ht > 0 ? round3(((od2 - id2) / 2) * ht * s / 100) : 0;
   // Match the legacy 3.14 multiplier used by the .NET form.
   const d13     = od2 > 0 && id2 > 0 ? round3(((od2 - id2) / 20) * 3.14) : 0;
   const coreMl  = id1 > 0 && id2 > 0 ? round3(0.2 * (id1 + id2) + d13) : 0;

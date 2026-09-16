@@ -41,6 +41,8 @@ type PendingItem = {
   od2: number | null;
   ht: number | null;
   weightPerPc: number;
+  /** Stacking factor the SO line was booked with; null = house default. */
+  stackFactor: number | null;
   orderedPcs: number;
   producedPcs: number;
   remainingPcs: number;
@@ -126,14 +128,21 @@ export const ProductionNewPage = () => {
   // piece — both toroidalCalc and rectangularCalc take `ht` directly and are
   // linear in it — just substituting the entered split height for the item's
   // full ordered height. No new calc.ts helper needed.
+  //
+  // The factor comes off the ORDER LINE, not the customer: a split has to add
+  // up to the piece it is part of, and the customer's figure may have moved
+  // since the order was booked.
   const splitWeightPerPc = useMemo(() => {
     if (!selected || !isSplit || splitHeight <= 0) return null;
     if (selected.coreType === 'TOROIDAL') {
-      return toroidalCalc({ id: selected.id1 ?? 0, od: selected.od1 ?? 0, ht: splitHeight, pcs: 0 }).weightPerPc;
+      return toroidalCalc({
+        id: selected.id1 ?? 0, od: selected.od1 ?? 0, ht: splitHeight, pcs: 0,
+        factor: selected.stackFactor,
+      }).weightPerPc;
     }
     return rectangularCalc({
       id1: selected.id1 ?? 0, id2: selected.id2 ?? 0, od1: selected.od1 ?? 0, od2: selected.od2 ?? 0,
-      ht: splitHeight, pcs: 0,
+      ht: splitHeight, pcs: 0, factor: selected.stackFactor,
     }).weightPerPc;
   }, [selected, isSplit, splitHeight]);
   const effectiveWeightPerPc = isSplit ? (splitWeightPerPc ?? 0) : (selected?.weightPerPc ?? 0);

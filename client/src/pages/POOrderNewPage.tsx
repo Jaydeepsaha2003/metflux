@@ -9,7 +9,7 @@ import { Plus, Trash2, Save, Loader2, Calendar, Hash, User2, Package, Pencil, Co
 import { api, ApiError } from '@/lib/api';
 import { useCustomerRate, useAutoFillRate, type CardRate } from '@/hooks/useCustomerRate';
 import { cn } from '@/lib/cn';
-import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc, nanoCalc, nanoTestCalc, isCompositeGrade, compositeRuleFromMaterial, compositeCalc } from '@/lib/calc';
+import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc, nanoCalc, nanoTestCalc, isCompositeGrade, compositeRuleFromMaterial, compositeCalc, stackOr, TOROIDAL_FACTOR, RECT_STACK_FACTOR } from '@/lib/calc';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useConfirm } from '@/hooks/useConfirm';
 import './po-order-new.css';
@@ -34,6 +34,10 @@ export type Item = {
   pcs: number;
   totalWeight: number;
   coreAc?: number; coreMl?: number; d13?: number;
+  /** Stacking factor this line was weighed with. Recorded on the line so a
+   *  later change to the customer's figure can't re-weigh an existing order.
+   *  Undefined/null means it used the house default. */
+  stackFactor?: number | null;
   // Toroidal flux-test calibration — optional, only set when user fills them.
   turns?: number; flux?: number; ateCm?: number; testVoltage?: number; testCurrent?: number;
   // Pricing — rateBasis + rateValue are user-entered; per-kg / per-pc / total
@@ -50,7 +54,11 @@ export type Item = {
   nanoSoRate?: number; // manual SO rate/pc (overrides Nano+Case); null = auto
 };
 
-type Customer = { id: string; name: string; gstRate?: number };
+type Customer = {
+  id: string; name: string; gstRate?: number;
+  /** Per-customer weight-calc stacking factors; null = the house defaults. */
+  toroidalFactor?: number | null; rectStackFactor?: number | null;
+};
 type GradeRow = {
   grade: string;
   materials: { id: string; material: string }[];
@@ -129,7 +137,7 @@ export const POOrderNewPage = () => {
   const queryClient = useQueryClient();
   // The page's own dialog, for the post-save "keep this rate?" prompt.
   // The item forms below have their own; these do not collide.
-  const { confirm, confirmDialog } = useConfirm();
+  const { confirm, alert: showAlert, confirmDialog } = useConfirm();
   const { poId } = useParams<{ poId?: string }>();
   const isEdit = !!poId;
 
@@ -297,9 +305,15 @@ export const POOrderNewPage = () => {
     setEditLoaded(true);
   }, [isEdit, existingPo, existingItemsResp, editLoaded]);
 
-  /* After a Sales Order saves, offer to keep any rate that differs from what
-     the customer's card says — the agreed behaviour is to ask rather than
-     silently rewrite a negotiated price, or silently forget it.
+  /* After a Sales Order saves, offer to keep anything the operator changed
+     away from what this customer's record says -- the agreed behaviour is to
+     ask rather than silently rewrite a negotiated figure, or silently forget
+     it. Two things can drift: the rate (from the rate card) and the stacking
+     factor (from the customer record).
+
+     Both are offered in ONE dialog. Two popups in a row after a save is the
+     kind of thing people learn to dismiss without reading, which defeats the
+     point of asking at all.
 
      Only Toroidal and Rectangular lines are considered, matching where the
      card auto-fills: Nano and Composite lines derive their price from the
@@ -308,26 +322,25 @@ export const POOrderNewPage = () => {
 
      A failure here must never strand the user on a saved order, so the whole
      thing is best-effort and navigation continues regardless. */
-  const offerToKeepRates = async () => {
+  const offerToKeepTerms = async () => {
     if (!customerId) return;
-    const priced = items.filter(
-      (i) => (i.coreType === 'TOROIDAL' || i.coreType === 'RECTANGULAR')
-        && i.grade && (i.rateValue ?? 0) > 0 && i.rateBasis
-    );
-    if (!priced.length) return;
+    const lines = items.filter((i) => i.coreType === 'TOROIDAL' || i.coreType === 'RECTANGULAR');
+    if (!lines.length) return;
 
+    /* ---- rate changes ---- */
     // One entry per grade + core type; if the same scope was priced twice in
     // one order the last line is the one that stands.
     const byScope = new Map<string, { grade: string; coreType: string; rateBasis: 'PER_KG' | 'PER_PCS'; rateValue: number }>();
-    for (const i of priced) {
+    for (const i of lines) {
+      if (!i.grade || !((i.rateValue ?? 0) > 0) || !i.rateBasis) continue;
       byScope.set(`${i.grade}|${i.coreType}`, {
         grade: i.grade, coreType: i.coreType,
         rateBasis: i.rateBasis as 'PER_KG' | 'PER_PCS', rateValue: i.rateValue as number,
       });
     }
 
-    type Change = { grade: string; coreType: string; targetCoreType: string; rateBasis: 'PER_KG' | 'PER_PCS'; rateValue: number; previous: CardRate | null };
-    const changes: Change[] = [];
+    type RateChange = { grade: string; coreType: string; targetCoreType: string; rateBasis: 'PER_KG' | 'PER_PCS'; rateValue: number; previous: CardRate | null };
+    const rateChanges: RateChange[] = [];
     try {
       for (const e of byScope.values()) {
         const res = await api<{ rate: CardRate | null }>(
@@ -337,54 +350,118 @@ export const POOrderNewPage = () => {
         const card = res.rate;
         const same = card && card.rateBasis === e.rateBasis && Math.abs(Number(card.rateValue) - e.rateValue) < 0.0001;
         if (same) continue;
-        // Update whichever row actually governs this line — the blanket row if
-        // that is what matched — rather than quietly creating a narrower one.
-        changes.push({ ...e, targetCoreType: card?.coreType ?? '', previous: card ?? null });
+        // Update whichever row actually governs this line -- the blanket row if
+        // that is what matched -- rather than quietly creating a narrower one.
+        rateChanges.push({ ...e, targetCoreType: card?.coreType ?? '', previous: card ?? null });
       }
     } catch {
-      return;   // lookup unavailable — say nothing rather than guess
+      /* lookup unavailable -- carry on and offer the factor alone, if anything */
     }
-    if (!changes.length) return;
+
+    /* ---- stacking-factor changes ---- */
+    // Compared against what the customer's record says today (falling back to
+    // the house default), so booking on a different factor is offered whether
+    // or not the customer already had one recorded.
+    type FactorChange = { field: 'toroidalFactor' | 'rectStackFactor'; label: string; value: number; previous: number; wasDefault: boolean };
+    const factorChanges: FactorChange[] = [];
+    const factorSpecs = [
+      { coreType: 'TOROIDAL',    field: 'toroidalFactor'  as const, label: 'Toroidal',    stored: selectedCustomer?.toroidalFactor,  house: TOROIDAL_FACTOR },
+      { coreType: 'RECTANGULAR', field: 'rectStackFactor' as const, label: 'Rectangular', stored: selectedCustomer?.rectStackFactor, house: RECT_STACK_FACTOR },
+    ];
+    for (const spec of factorSpecs) {
+      // Last line of that shape wins, same rule as the rate.
+      const used = lines.filter((i) => i.coreType === spec.coreType && (i.stackFactor ?? 0) > 0).pop()?.stackFactor;
+      if (!used) continue;
+      const current = stackOr(spec.stored, spec.house);
+      if (Math.abs(used - current) < 1e-9) continue;
+      factorChanges.push({
+        field: spec.field, label: spec.label, value: used,
+        previous: current, wasDefault: spec.stored == null,
+      });
+    }
+
+    if (!rateChanges.length && !factorChanges.length) return;
 
     const unit = (b: string) => (b === 'PER_KG' ? '/kg' : '/pc');
+    const both = rateChanges.length > 0 && factorChanges.length > 0;
+    const title = both
+      ? 'Keep these for next time?'
+      : factorChanges.length
+        ? (factorChanges.length === 1 ? 'Keep this stacking factor?' : 'Keep these stacking factors?')
+        : (rateChanges.length === 1 ? 'Keep this rate for next time?' : 'Keep these rates for next time?');
+
     const ok = await confirm({
-      title: changes.length === 1 ? 'Keep this rate for next time?' : 'Keep these rates for next time?',
+      title,
       confirmLabel: 'Keep',
       cancelLabel: 'Just this order',
       message: (
         <div className="space-y-2 text-sm">
-          <p>Save on {selectedCustomer?.name ?? 'this customer'}&rsquo;s rate card, so future orders fill in automatically?</p>
-          <ul className="space-y-1">
-            {changes.map((c) => (
-              <li key={`${c.grade}|${c.coreType}`} className="flex flex-wrap items-baseline gap-x-1.5">
-                <strong>{c.grade}</strong>
-                <span className="text-slate-500">{c.targetCoreType ? `(${c.targetCoreType.toLowerCase()})` : ''}</span>
-                <span className="tabular-nums">₹{c.rateValue}{unit(c.rateBasis)}</span>
-                {c.previous && (
+          <p>
+            Save on {selectedCustomer?.name ?? 'this customer'}&rsquo;s record, so future orders
+            fill in automatically?
+          </p>
+          {rateChanges.length > 0 && (
+            <ul className="space-y-1">
+              {both && <li className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Rate</li>}
+              {rateChanges.map((c) => (
+                <li key={`r:${c.grade}|${c.coreType}`} className="flex flex-wrap items-baseline gap-x-1.5">
+                  <strong>{c.grade}</strong>
+                  <span className="text-slate-500">{c.targetCoreType ? `(${c.targetCoreType.toLowerCase()})` : ''}</span>
+                  <span className="tabular-nums">&#8377;{c.rateValue}{unit(c.rateBasis)}</span>
+                  {c.previous && (
+                    <span className="text-slate-400">
+                      (was &#8377;{Number(c.previous.rateValue)}{unit(c.previous.rateBasis)})
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {factorChanges.length > 0 && (
+            <ul className="space-y-1">
+              {both && <li className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Stacking factor</li>}
+              {factorChanges.map((c) => (
+                <li key={`f:${c.field}`} className="flex flex-wrap items-baseline gap-x-1.5">
+                  <strong>{c.label}</strong>
+                  <span className="tabular-nums">{c.value}</span>
                   <span className="text-slate-400">
-                    (was ₹{Number(c.previous.rateValue)}{unit(c.previous.rateBasis)})
+                    (was {c.previous}{c.wasDefault ? ', the standard' : ''})
                   </span>
-                )}
-              </li>
-            ))}
-          </ul>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       ),
     });
     if (!ok) return;
 
     try {
-      await Promise.all(changes.map((c) => api('/customer-rates', {
+      await Promise.all(rateChanges.map((c) => api('/customer-rates', {
         method: 'POST',
         json: {
           customerId, grade: c.grade, coreType: c.targetCoreType,
           rateBasis: c.rateBasis, rateValue: c.rateValue,
         },
       })));
+      if (factorChanges.length) {
+        await api(`/customers/${customerId}`, {
+          method: 'PATCH',
+          json: Object.fromEntries(factorChanges.map((c) => [c.field, c.value])),
+        });
+        queryClient.invalidateQueries({ queryKey: ['customers'] });
+      }
       queryClient.invalidateQueries({ queryKey: ['customer-rate'] });
       queryClient.invalidateQueries({ queryKey: ['customer-rates'] });
     } catch {
-      /* The order is already saved; a failed card update is not worth blocking on. */
+      // The order is saved either way, so this must not block. But staying
+      // silent would leave someone believing a figure stuck when it did not --
+      // most likely because saving a customer needs a permission they lack.
+      await showAlert({
+        title: 'Saved the order, not the customer',
+        message: 'The Sales Order is saved. Updating the customer\u2019s stored figures failed \u2014 you may not have permission to edit customers. The order itself keeps the values you entered.',
+        tone: 'warning',
+      });
     }
   };
 
@@ -395,7 +472,7 @@ export const POOrderNewPage = () => {
     onSuccess: async () => {
       localStorage.removeItem(DRAFT_KEY);
       queryClient.invalidateQueries({ queryKey: ['po-orders'] });
-      await offerToKeepRates();
+      await offerToKeepTerms();
       navigate('/po/manage');
     },
     onError: (e) => {
@@ -673,6 +750,7 @@ export const POOrderNewPage = () => {
         {coreType === 'TOROIDAL' && (
           <ToroidalForm
             customerId={customerId}
+            customerFactor={selectedCustomer?.toroidalFactor}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'TOROIDAL'))}
             fluxGrades={fluxResp?.grades ?? []}
             onAdd={(item) => { setItems((prev) => [...prev, item]); }}
@@ -685,6 +763,7 @@ export const POOrderNewPage = () => {
         {coreType === 'RECTANGULAR' && (
           <RectangularForm
             customerId={customerId}
+            customerFactor={selectedCustomer?.rectStackFactor}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'RECTANGULAR'))}
             fluxGrades={fluxRespRect?.grades ?? []}
             onAdd={(item) => { setItems((prev) => [...prev, item]); }}
@@ -1062,6 +1141,55 @@ const NumField = ({
   </Field>
 );
 
+/* The stacking factor that turns geometry into weight.
+   Shown on every toroidal/rectangular line because it is the one number in the
+   weight calculation that varies by agreement rather than by physics, and an
+   operator who cannot see it cannot tell a 5.77 core from a 5.80 one.
+
+   `base` is what this line started from — the customer's figure if they have
+   one, otherwise the house default. The reset link only appears once the value
+   has actually been moved off `base`, so the common case stays quiet. */
+const StackFactorField = ({
+  value, onChange, onReset, base, houseDefault, fromCustomer,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  onReset: () => void;
+  base: number;
+  houseDefault: number;
+  fromCustomer: boolean;
+}) => {
+  const overridden = Math.abs(value - base) > 1e-9;
+  return (
+    <div>
+      <Field label="Stacking factor">
+        <input
+          className={cn(inputCls, overridden && 'border-amber-400 bg-amber-50/60')}
+          type="number"
+          inputMode="decimal"
+          step="any"
+          value={value === 0 ? '' : value}
+          onChange={(e) => onChange(numFromInput(e.target.value))}
+          placeholder={String(houseDefault)}
+        />
+      </Field>
+      {overridden ? (
+        <button
+          type="button"
+          onClick={onReset}
+          className="mt-1 text-[11px] font-medium text-amber-700 underline-offset-2 hover:underline"
+        >
+          This line only &mdash; back to {base}
+        </button>
+      ) : fromCustomer ? (
+        <div className="mt-1 text-[11px] font-medium text-brand-700">
+          The customer&rsquo;s agreed factor (standard {houseDefault}).
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 const GradeMaterialPicker = ({
   grades, grade, material, onGrade, onMaterial,
 }: {
@@ -1119,7 +1247,7 @@ const Stat = ({ label, value, accent }: { label: string; value: string; accent?:
 /* ---------- TOROIDAL ---------- */
 export const ToroidalForm = ({
   grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed, hideTesting = false,
-  customerId,
+  customerId, customerFactor,
 }: {
   grades: GradeRow[];
   fluxGrades: FluxGroup[];
@@ -1127,6 +1255,8 @@ export const ToroidalForm = ({
   /** Whose rate card to consult. Optional: the quotation screen has no
    *  customer, and passing none simply means nothing is filled in. */
   customerId?: string;
+  /** The customer's agreed toroidal factor. Undefined/null = house default. */
+  customerFactor?: number | null;
   prefill?: { coreType: CoreType; grade: string; material: string; rateBasis: 'PER_KG' | 'PER_PCS' } | null;
   onPrefillConsumed?: () => void;
   edit?: { item: Item; nonce: number } | null;
@@ -1148,6 +1278,15 @@ export const ToroidalForm = ({
   // Set as soon as anyone edits the rate, so a lookup that resolves a
   // moment later can never overwrite a figure typed on purpose.
   const [rateTouched, setRateTouched] = useState(false);
+  // Stacking factor — seeded from the customer, overridable per line. Same
+  // "don't clobber what someone typed" rule as the rate: once touched, a
+  // customer switch leaves the entered figure alone.
+  const [stack, setStack] = useState(stackOr(customerFactor, TOROIDAL_FACTOR));
+  const [stackTouched, setStackTouched] = useState(false);
+  useEffect(() => {
+    if (!stackTouched) setStack(stackOr(customerFactor, TOROIDAL_FACTOR));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerFactor]);
   const cardRate = useCustomerRate(customerId, grade, 'TOROIDAL');
   useAutoFillRate(cardRate, rateTouched, (r) => { setRateBasis(r.rateBasis); setRateValue(r.rateValue); });
   const pendingFlux = useRef<number | null>(null);
@@ -1184,13 +1323,16 @@ export const ToroidalForm = ({
     setTurns(it.turns ?? 0);
     setRateBasis(it.rateBasis ?? 'PER_KG'); setRateValue(it.rateValue ?? 0);
     setRateTouched(true);   // the line already carries a price; leave it be
+    // Re-weigh on the factor the line was BOOKED with, not today's default —
+    // otherwise opening a line to fix a typo silently changes its weight.
+    setStack(stackOr(it.stackFactor, TOROIDAL_FACTOR)); setStackTouched(true);
     pendingFlux.current = it.flux ?? 0;
     setGrade(it.grade);
     onEditConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [edit?.nonce]);
 
-  const calc = useMemo(() => toroidalCalc({ id, od, ht, pcs }), [id, od, ht, pcs]);
+  const calc = useMemo(() => toroidalCalc({ id, od, ht, pcs, factor: stack }), [id, od, ht, pcs, stack]);
   const fluxCalc = useMemo(
     () => fluxTestCalc({ id, od, ht, turns, flux, ateCm }),
     [id, od, ht, turns, flux, ateCm]
@@ -1214,6 +1356,7 @@ export const ToroidalForm = ({
     setId(0); setOd(0); setHt(0); setPcs(0);
     setTurns(0); setFlux(0);
     setRateValue(0); setRateTouched(false);
+    setStack(stackOr(customerFactor, TOROIDAL_FACTOR)); setStackTouched(false);
   };
 
   const add = async () => {
@@ -1229,6 +1372,7 @@ export const ToroidalForm = ({
       coreType: 'TOROIDAL', grade, material, measure: calc.measure,
       id1: id, od1: od, ht, pcs,
       weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight,
+      stackFactor: stack,
       // Only attach test-calibration values when the user actually filled them.
       turns:       turns > 0 ? turns : undefined,
       flux:        flux  > 0 ? flux  : undefined,
@@ -1255,7 +1399,7 @@ export const ToroidalForm = ({
       {/* Row 1 — wider fields: Grade · Material · Rate Basis · Rate.
           On md+ screens these four sit on a single line so the dropdowns
           have room to breathe; on mobile they stack 2-up. */}
-      <div className="grid grid-cols-2 gap-x-2 gap-y-2 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-x-2 gap-y-2 md:grid-cols-5">
         <GradeMaterialPicker
           grades={grades} grade={grade} material={material}
           onGrade={setGrade} onMaterial={setMaterial} listIdSuffix="toro"
@@ -1282,6 +1426,14 @@ export const ToroidalForm = ({
             </div>
           )}
         </div>
+        <StackFactorField
+          value={stack}
+          onChange={(v) => { setStackTouched(true); setStack(v); }}
+          onReset={() => { setStackTouched(false); setStack(stackOr(customerFactor, TOROIDAL_FACTOR)); }}
+          base={stackOr(customerFactor, TOROIDAL_FACTOR)}
+          houseDefault={TOROIDAL_FACTOR}
+          fromCustomer={stackOr(customerFactor, TOROIDAL_FACTOR) !== TOROIDAL_FACTOR}
+        />
       </div>
 
       {/* Row 2 — narrow numeric fields: dimensions, pcs, turns, flux.
@@ -1355,7 +1507,7 @@ export const ToroidalForm = ({
 /* ---------- RECTANGULAR ---------- */
 export const RectangularForm = ({
   grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed, hideTesting = false,
-  customerId,
+  customerId, customerFactor,
 }: {
   grades: GradeRow[];
   fluxGrades: FluxGroup[];
@@ -1363,6 +1515,8 @@ export const RectangularForm = ({
   /** Whose rate card to consult. Optional: the quotation screen has no
    *  customer, and passing none simply means nothing is filled in. */
   customerId?: string;
+  /** The customer's agreed rectangular stacking factor; null = house default. */
+  customerFactor?: number | null;
   prefill?: { coreType: CoreType; grade: string; material: string; rateBasis: 'PER_KG' | 'PER_PCS' } | null;
   onPrefillConsumed?: () => void;
   edit?: { item: Item; nonce: number } | null;
@@ -1385,6 +1539,13 @@ export const RectangularForm = ({
   // Set as soon as anyone edits the rate, so a lookup that resolves a
   // moment later can never overwrite a figure typed on purpose.
   const [rateTouched, setRateTouched] = useState(false);
+  // Stacking factor — seeded from the customer, overridable per line.
+  const [stack, setStack] = useState(stackOr(customerFactor, RECT_STACK_FACTOR));
+  const [stackTouched, setStackTouched] = useState(false);
+  useEffect(() => {
+    if (!stackTouched) setStack(stackOr(customerFactor, RECT_STACK_FACTOR));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerFactor]);
   const cardRate = useCustomerRate(customerId, grade, 'RECTANGULAR');
   useAutoFillRate(cardRate, rateTouched, (r) => { setRateBasis(r.rateBasis); setRateValue(r.rateValue); });
   const pendingFlux = useRef<number | null>(null);
@@ -1420,6 +1581,8 @@ export const RectangularForm = ({
     setTurns(it.turns ?? 0);
     setRateBasis(it.rateBasis ?? 'PER_KG'); setRateValue(it.rateValue ?? 0);
     setRateTouched(true);   // the line already carries a price; leave it be
+    // Re-weigh on the factor the line was BOOKED with, not today's default.
+    setStack(stackOr(it.stackFactor, RECT_STACK_FACTOR)); setStackTouched(true);
     pendingFlux.current = it.flux ?? 0;
     setGrade(it.grade);
     onEditConsumed?.();
@@ -1427,8 +1590,8 @@ export const RectangularForm = ({
   }, [edit?.nonce]);
 
   const calc = useMemo(
-    () => rectangularCalc({ id1, id2, od1, od2, ht, pcs }),
-    [id1, id2, od1, od2, ht, pcs]
+    () => rectangularCalc({ id1, id2, od1, od2, ht, pcs, factor: stack }),
+    [id1, id2, od1, od2, ht, pcs, stack]
   );
   const fluxCalc = useMemo(
     () => rectangularFluxTestCalc({
@@ -1462,6 +1625,7 @@ export const RectangularForm = ({
     setId1(0); setId2(0); setOd1(0); setOd2(0); setHt(0); setPcs(0);
     setTurns(0); setFlux(0);
     setRateValue(0); setRateTouched(false);
+    setStack(stackOr(customerFactor, RECT_STACK_FACTOR)); setStackTouched(false);
   };
 
   const add = async () => {
@@ -1478,6 +1642,7 @@ export const RectangularForm = ({
       id1, id2, od1, od2, ht, builtup: calc.builtup, pcs,
       weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight,
       coreAc: calc.coreAc, coreMl: calc.coreMl, d13: calc.d13,
+      stackFactor: stack,
       // Flux-test fields — only included when the user filled them.
       turns:       turns > 0 ? turns : undefined,
       flux:        flux  > 0 ? flux  : undefined,
@@ -1502,7 +1667,7 @@ export const RectangularForm = ({
       </div>
 
       {/* Row 1 — wider fields: Grade · Material · Rate Basis · Rate. */}
-      <div className="grid grid-cols-2 gap-x-2 gap-y-2 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-x-2 gap-y-2 md:grid-cols-5">
         <GradeMaterialPicker
           grades={grades} grade={grade} material={material}
           onGrade={setGrade} onMaterial={setMaterial} listIdSuffix="rect"
@@ -1529,6 +1694,14 @@ export const RectangularForm = ({
             </div>
           )}
         </div>
+        <StackFactorField
+          value={stack}
+          onChange={(v) => { setStackTouched(true); setStack(v); }}
+          onReset={() => { setStackTouched(false); setStack(stackOr(customerFactor, RECT_STACK_FACTOR)); }}
+          base={stackOr(customerFactor, RECT_STACK_FACTOR)}
+          houseDefault={RECT_STACK_FACTOR}
+          fromCustomer={stackOr(customerFactor, RECT_STACK_FACTOR) !== RECT_STACK_FACTOR}
+        />
       </div>
 
       {/* Row 2 — narrow numeric fields. 8 fields fit cleanly in one line on md+.

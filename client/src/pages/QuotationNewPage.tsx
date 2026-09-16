@@ -16,7 +16,10 @@ import { type Item, ToroidalForm, RectangularForm, NanoForm } from '@/pages/POOr
 type QItem = Item & { hsnCode?: string; unit?: string };
 
 type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE';
-type Customer = { id: string; name: string; gstRate?: number };
+type Customer = {
+  id: string; name: string; gstRate?: number;
+  toroidalFactor?: number | null; rectStackFactor?: number | null;
+};
 type GradeRow = { grade: string; materials: { id: string; material: string }[]; coreTypes?: CoreType[] };
 type FluxGroup = { grade: string; points: { flux: number; ateCm: number }[] };
 
@@ -450,6 +453,8 @@ export const QuotationNewPage = () => {
 
         {coreType === 'TOROIDAL' && (
           <ToroidalForm hideTesting
+            customerId={customerId}
+            customerFactor={customer?.toroidalFactor}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'TOROIDAL'))}
             fluxGrades={fluxResp?.grades ?? []}
             onAdd={addItem} prefill={prefill} onPrefillConsumed={() => setPrefill(null)}
@@ -458,6 +463,8 @@ export const QuotationNewPage = () => {
         )}
         {coreType === 'RECTANGULAR' && (
           <RectangularForm hideTesting
+            customerId={customerId}
+            customerFactor={customer?.rectStackFactor}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'RECTANGULAR'))}
             fluxGrades={fluxRespRect?.grades ?? []}
             onAdd={addItem} prefill={prefill} onPrefillConsumed={() => setPrefill(null)}
