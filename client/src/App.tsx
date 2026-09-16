@@ -36,6 +36,7 @@ const UsersListPage       = page(() => import('@/pages/UsersListPage'), 'UsersLi
 const UserFormPage        = page(() => import('@/pages/UserFormPage'), 'UserFormPage');
 const MaterialsPage       = page(() => import('@/pages/MaterialsPage'), 'MaterialsPage');
 const FluxGradesPage      = page(() => import('@/pages/FluxGradesPage'), 'FluxGradesPage');
+const RateCardPage        = page(() => import('@/pages/RateCardPage'), 'RateCardPage');
 const CompaniesListPage   = page(() => import('@/pages/CompaniesListPage'), 'CompaniesListPage');
 const CompanyFormPage     = page(() => import('@/pages/CompanyFormPage'), 'CompanyFormPage');
 const POOrderNewPage      = page(() => import('@/pages/POOrderNewPage'), 'POOrderNewPage');
@@ -199,6 +200,7 @@ export const App = () => {
       <Route path="/settings/users/:id"  element={<UserFormPage />} />
       <Route path="/settings/materials"     element={<MaterialsPage />} />
       <Route path="/settings/flux-grades"   element={<FluxGradesPage />} />
+      <Route path="/rate-card"              element={<RateCardPage />} />
       <Route path="/settings/labours"        element={<LaboursPage />} />
       <Route path="/settings/labours/new"    element={<LabourFormPage />} />
       <Route path="/settings/labours/:id"    element={<LabourFormPage />} />

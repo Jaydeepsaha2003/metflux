@@ -7,7 +7,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Save, Loader2, Calendar, Hash, User2, Package, Pencil, Copy, ChevronDown, ChevronRight } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
-import { useCustomerRate, useAutoFillRate } from '@/hooks/useCustomerRate';
+import { useCustomerRate, useAutoFillRate, type CardRate } from '@/hooks/useCustomerRate';
 import { cn } from '@/lib/cn';
 import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc, nanoCalc, nanoTestCalc, isCompositeGrade, compositeRuleFromMaterial, compositeCalc } from '@/lib/calc';
 import { SearchableSelect } from '@/components/SearchableSelect';
@@ -127,6 +127,9 @@ const ItemDetails = ({ it }: { it: Item }) => {
 export const POOrderNewPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  // The page's own dialog, for the post-save "keep this rate?" prompt.
+  // The item forms below have their own; these do not collide.
+  const { confirm, confirmDialog } = useConfirm();
   const { poId } = useParams<{ poId?: string }>();
   const isEdit = !!poId;
 
@@ -294,13 +297,105 @@ export const POOrderNewPage = () => {
     setEditLoaded(true);
   }, [isEdit, existingPo, existingItemsResp, editLoaded]);
 
+  /* After a Sales Order saves, offer to keep any rate that differs from what
+     the customer's card says — the agreed behaviour is to ask rather than
+     silently rewrite a negotiated price, or silently forget it.
+
+     Only Toroidal and Rectangular lines are considered, matching where the
+     card auto-fills: Nano and Composite lines derive their price from the
+     nano/case prices, so a per-kg figure stored against the grade would not
+     mean the same thing on the way back in.
+
+     A failure here must never strand the user on a saved order, so the whole
+     thing is best-effort and navigation continues regardless. */
+  const offerToKeepRates = async () => {
+    if (!customerId) return;
+    const priced = items.filter(
+      (i) => (i.coreType === 'TOROIDAL' || i.coreType === 'RECTANGULAR')
+        && i.grade && (i.rateValue ?? 0) > 0 && i.rateBasis
+    );
+    if (!priced.length) return;
+
+    // One entry per grade + core type; if the same scope was priced twice in
+    // one order the last line is the one that stands.
+    const byScope = new Map<string, { grade: string; coreType: string; rateBasis: 'PER_KG' | 'PER_PCS'; rateValue: number }>();
+    for (const i of priced) {
+      byScope.set(`${i.grade}|${i.coreType}`, {
+        grade: i.grade, coreType: i.coreType,
+        rateBasis: i.rateBasis as 'PER_KG' | 'PER_PCS', rateValue: i.rateValue as number,
+      });
+    }
+
+    type Change = { grade: string; coreType: string; targetCoreType: string; rateBasis: 'PER_KG' | 'PER_PCS'; rateValue: number; previous: CardRate | null };
+    const changes: Change[] = [];
+    try {
+      for (const e of byScope.values()) {
+        const res = await api<{ rate: CardRate | null }>(
+          `/customer-rates/lookup?customerId=${encodeURIComponent(customerId)}`
+          + `&grade=${encodeURIComponent(e.grade)}&coreType=${encodeURIComponent(e.coreType)}`
+        );
+        const card = res.rate;
+        const same = card && card.rateBasis === e.rateBasis && Math.abs(Number(card.rateValue) - e.rateValue) < 0.0001;
+        if (same) continue;
+        // Update whichever row actually governs this line — the blanket row if
+        // that is what matched — rather than quietly creating a narrower one.
+        changes.push({ ...e, targetCoreType: card?.coreType ?? '', previous: card ?? null });
+      }
+    } catch {
+      return;   // lookup unavailable — say nothing rather than guess
+    }
+    if (!changes.length) return;
+
+    const unit = (b: string) => (b === 'PER_KG' ? '/kg' : '/pc');
+    const ok = await confirm({
+      title: changes.length === 1 ? 'Keep this rate for next time?' : 'Keep these rates for next time?',
+      confirmLabel: 'Keep',
+      cancelLabel: 'Just this order',
+      message: (
+        <div className="space-y-2 text-sm">
+          <p>Save on {selectedCustomer?.name ?? 'this customer'}&rsquo;s rate card, so future orders fill in automatically?</p>
+          <ul className="space-y-1">
+            {changes.map((c) => (
+              <li key={`${c.grade}|${c.coreType}`} className="flex flex-wrap items-baseline gap-x-1.5">
+                <strong>{c.grade}</strong>
+                <span className="text-slate-500">{c.targetCoreType ? `(${c.targetCoreType.toLowerCase()})` : ''}</span>
+                <span className="tabular-nums">₹{c.rateValue}{unit(c.rateBasis)}</span>
+                {c.previous && (
+                  <span className="text-slate-400">
+                    (was ₹{Number(c.previous.rateValue)}{unit(c.previous.rateBasis)})
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ),
+    });
+    if (!ok) return;
+
+    try {
+      await Promise.all(changes.map((c) => api('/customer-rates', {
+        method: 'POST',
+        json: {
+          customerId, grade: c.grade, coreType: c.targetCoreType,
+          rateBasis: c.rateBasis, rateValue: c.rateValue,
+        },
+      })));
+      queryClient.invalidateQueries({ queryKey: ['customer-rate'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-rates'] });
+    } catch {
+      /* The order is already saved; a failed card update is not worth blocking on. */
+    }
+  };
+
   /* ----- submit mutation ----- */
   const [error, setError] = useState<{ message: string; details?: string[] } | null>(null);
   const submit = useMutation({
     mutationFn: (body: unknown) => api('/po-orders', { method: 'POST', json: body }),
-    onSuccess: () => {
+    onSuccess: async () => {
       localStorage.removeItem(DRAFT_KEY);
       queryClient.invalidateQueries({ queryKey: ['po-orders'] });
+      await offerToKeepRates();
       navigate('/po/manage');
     },
     onError: (e) => {
@@ -925,6 +1020,7 @@ export const POOrderNewPage = () => {
           {isEdit ? 'Save Changes' : 'Submit Sales Order'}
         </button>
       </div>
+      {confirmDialog}
     </div>
   );
 };

@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, Suspense } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, Users, LogOut, ChevronDown, FileText, Settings as SettingsIcon,
+  LayoutDashboard, Users, IndianRupee, LogOut, ChevronDown, FileText, Settings as SettingsIcon,
   Plus, ListChecks, BarChart3, Layers, Building2, Factory, Inbox, ClipboardList,
   PanelLeftClose, Users2, Truck, PackageCheck, ShoppingCart, Activity, RotateCcw, Menu, X, ShieldAlert,
   Receipt, Clock, Wallet, TrendingUp, Calculator, Warehouse, MonitorSmartphone, History,
@@ -97,6 +97,7 @@ const NAV: NavItem[] = [
     ],
   },
   { kind: 'leaf', to: '/customers', label: 'Customers', icon: Users, perm: 'add_customer' },
+  { kind: 'leaf', to: '/rate-card', label: 'Rate Card', icon: IndianRupee, perm: 'view_po' },
   {
     kind: 'group', key: 'settings', label: 'Settings', icon: SettingsIcon,
     children: [

@@ -25,7 +25,25 @@ const tableExists = async (table) => {
   return rows.length > 0;
 };
 
+const collationOf = async (table) => {
+  const [rows] = await pool.query(
+    `SELECT TABLE_COLLATION AS c FROM information_schema.TABLES
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? LIMIT 1`,
+    [table]
+  );
+  return rows[0]?.c ?? null;
+};
+
 const main = async () => {
+  // Inherit Customer's collation rather than taking the server default. This
+  // table joins to Customer on a VARCHAR id, and MySQL refuses to compare two
+  // strings of different collations — "Illegal mix of collations". A fresh
+  // MySQL 8 defaults to utf8mb4_0900_ai_ci while these tables are
+  // utf8mb4_unicode_ci, and MariaDB defaults differently again, so the only
+  // safe answer is whatever the rest of the schema is already using.
+  const target = (await collationOf('Customer')) || 'utf8mb4_unicode_ci';
+  const charset = target.split('_')[0];
+
   if (!(await tableExists('CustomerRate'))) {
     await pool.query(`
       CREATE TABLE \`CustomerRate\` (
@@ -42,11 +60,19 @@ const main = async () => {
         PRIMARY KEY (\`id\`),
         UNIQUE KEY \`CustomerRate_scope_key\` (\`companyId\`,\`customerId\`,\`grade\`,\`coreType\`),
         KEY \`CustomerRate_company_customer_idx\` (\`companyId\`,\`customerId\`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      ) ENGINE=InnoDB DEFAULT CHARSET=${charset} COLLATE=${target}
     `);
-    console.log('[migrate] created CustomerRate');
+    console.log(`[migrate] created CustomerRate (${target})`);
   } else {
-    console.log('[migrate] CustomerRate already present — skipping');
+    const current = await collationOf('CustomerRate');
+    if (current && current !== target) {
+      // An earlier run of this script created the table on the server default.
+      // Convert rather than leave every join to Customer throwing.
+      await pool.query(`ALTER TABLE \`CustomerRate\` CONVERT TO CHARACTER SET ${charset} COLLATE ${target}`);
+      console.log(`[migrate] CustomerRate collation ${current} -> ${target}`);
+    } else {
+      console.log('[migrate] CustomerRate already present — skipping');
+    }
   }
   console.log('[migrate] Customer rate card ready.');
 };
