@@ -145,7 +145,11 @@ export const SearchableSelect = ({
           open && 'border-brand-500 ring-2 ring-brand-500/20'
         )}
       >
-        <span className="truncate flex-1">{selectedLabel ?? placeholder}</span>
+        {/* The chosen value is styled to match the list it came from; the
+            placeholder is not a value, so it keeps the ordinary field type. */}
+        <span className={cn('truncate flex-1', selectedLabel && 'text-xs font-semibold uppercase tracking-wide')}>
+          {selectedLabel ?? placeholder}
+        </span>
         <span className="flex items-center gap-0.5 shrink-0">
           {selectedLabel && (
             <span
@@ -207,9 +211,16 @@ export const SearchableSelect = ({
                   onClick={() => select(opt)}
                   onMouseEnter={() => setHighlighted(i)}
                   className={cn(
-                    'searchable-select-option flex w-full items-center gap-2.5 px-3 py-2 text-sm transition',
+                    // Options render smaller, semibold and upper-case: these are
+                    // record names (customers, grades, materials) that are
+                    // entered inconsistently, and the casing is normalised here
+                    // so a list of them scans as one column rather than a jumble
+                    // of ALL CAPS, Title Case and Mixed. Transformed in CSS, so
+                    // the stored value keeps whatever the user typed.
+                    'searchable-select-option flex w-full items-center gap-2.5 px-3 py-2',
+                    'text-xs font-semibold uppercase tracking-wide transition',
                     i === highlighted && 'is-highlighted',
-                    opt.value === value && 'is-selected font-medium'
+                    opt.value === value && 'is-selected'
                   )}
                 >
                   <span className="flex-1 text-left">{opt.label}</span>
