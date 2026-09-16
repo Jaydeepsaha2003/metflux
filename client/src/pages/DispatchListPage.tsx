@@ -116,20 +116,20 @@ export const DispatchListPage = () => {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-sm whitespace-nowrap">
-            <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500">
+          <table className="w-full whitespace-nowrap text-[13px] font-semibold">
+            <thead className="bg-slate-50 text-left text-[10.5px] uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-3 py-2.5 font-medium">Date</th>
-                <th className="px-3 py-2.5 font-medium">PO #</th>
-                <th className="px-3 py-2.5 font-medium">Customer</th>
-                <th className="px-3 py-2.5 font-medium">Type</th>
-                <th className="px-3 py-2.5 font-medium">Grade</th>
-                <th className="px-3 py-2.5 font-medium">Material</th>
-                <th className="px-3 py-2.5 font-medium">Measure</th>
-                <th className="px-3 py-2.5 font-medium">Vehicle</th>
-                <th className="px-3 py-2.5 font-medium text-right">Pcs</th>
-                <th className="px-3 py-2.5 font-medium text-right">Total Wt</th>
-                <th className="px-3 py-2.5 font-medium text-right">Amount</th>
+                <th className="px-3 py-2.5 font-semibold">Date</th>
+                <th className="px-3 py-2.5 font-semibold">PO #</th>
+                <th className="px-3 py-2.5 font-semibold">Customer</th>
+                <th className="px-3 py-2.5 font-semibold">Type</th>
+                <th className="px-3 py-2.5 font-semibold">Grade</th>
+                <th className="px-3 py-2.5 font-semibold">Material</th>
+                <th className="px-3 py-2.5 font-semibold">Measure</th>
+                <th className="px-3 py-2.5 font-semibold">Vehicle</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Pcs</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Total Wt</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Amount</th>
                 <th className="w-24 px-3 py-2.5"></th>
               </tr>
             </thead>
@@ -154,16 +154,16 @@ export const DispatchListPage = () => {
                 return (
                 <tr key={d.id} className={cn('hover:bg-slate-50/60', newGroup ? 'border-t-2 border-slate-300' : 'border-t border-slate-100')}>
                   <td data-label="Date" className="px-3 py-2 text-slate-600">{formatDate(d.dispatchDate)}</td>
-                  <td data-label="PO #" className="px-3 py-2 font-mono text-xs">{d.poNumber}</td>
+                  <td data-label="PO #" className="px-3 py-2 font-mono">{d.poNumber}</td>
                   <td data-label="Customer" className="px-3 py-2">
-                    <div className="font-mono text-xs font-semibold text-brand-700">{d.customerCode ?? '—'}</div>
+                    <div className="font-mono text-brand-700">{d.customerCode ?? '—'}</div>
                     {!hideNames && (
-                      <div className="text-[11px] text-slate-500">{d.customerName}</div>
+                      <div className="text-slate-500">{d.customerName}</div>
                     )}
                   </td>
                   <td data-label="Type" className="px-3 py-2">
                     <span className={cn(
-                      'rounded-full px-2 py-0.5 text-[11px] font-medium',
+                      'rounded-full px-2 py-0.5',
                       d.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
                     )}>
                       {d.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
@@ -171,10 +171,10 @@ export const DispatchListPage = () => {
                   </td>
                   <td data-label="Grade" className="px-3 py-2">{d.grade}</td>
                   <td data-label="Material" className="px-3 py-2">{d.material}</td>
-                  <td data-label="Measure" className="px-3 py-2 font-mono text-xs">{d.measure}</td>
+                  <td data-label="Measure" className="px-3 py-2 font-mono">{d.measure}</td>
                   <td data-label="Vehicle" className="px-3 py-2 text-slate-600">{d.vehicleNo ?? '—'}</td>
-                  <td data-label="Pcs" className="px-3 py-2 text-right tabular-nums font-semibold">{d.pcs}</td>
-                  <td data-label="Total Wt" className="px-3 py-2 text-right font-mono font-semibold tabular-nums">{d.totalWeight.toFixed(3)}</td>
+                  <td data-label="Pcs" className="px-3 py-2 text-right tabular-nums">{d.pcs}</td>
+                  <td data-label="Total Wt" className="px-3 py-2 text-right font-mono tabular-nums">{d.totalWeight.toFixed(3)}</td>
                   <td data-label="Amount" className="px-3 py-2 text-right font-mono tabular-nums text-brand-700">
                     {d.amount != null ? `₹${d.amount.toFixed(2)}` : '—'}
                   </td>
