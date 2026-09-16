@@ -20,6 +20,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { annulus, rectRing, nanoCase } from './geometry';
 import { compositeLayout, shapeExtent, shapeIsDrawable, type CoreShape } from './shape';
+import { buildDimensions } from './dimensions';
 
 /* Steel that reads as steel: high metalness, mid roughness, and a colour per
    core family matching the badge colours used elsewhere in the form so the
@@ -35,6 +36,8 @@ type Props = {
   shape: CoreShape;
   /** Re-frames the camera when this changes — used by the Reset view button. */
   resetNonce: number;
+  /** Draw dimension lines and values over the part. */
+  showDims: boolean;
 };
 
 /** The default three-quarter view: front, right, slightly above. */
@@ -48,6 +51,7 @@ type Kit = {
   camera: THREE.PerspectiveCamera;
   controls: OrbitControls;
   group: THREE.Group;
+  dims: THREE.Group;
   render: () => void;
 };
 
@@ -71,8 +75,19 @@ type Kit = {
  * chose. Reset passes false to return to the default three-quarter.
  */
 const frame = (k: Kit, { keepAngle }: { keepAngle: boolean }) => {
+  // Fit the part AND its dimension lines. Those lines stand off the metal by
+  // design, so framing the solid alone would crop them.
+  //
+  // The value labels are excluded: they are sprites whose world size is chosen
+  // for legibility, and letting a long piece of text shrink the part it is
+  // annotating gets the priority backwards. A label may overhang; the fit
+  // margin leaves it room.
   const box = new THREE.Box3().setFromObject(k.group);
   if (box.isEmpty()) return;
+  k.dims.traverse((o) => {
+    if (o.userData.noFit || o === k.dims) return;
+    box.expandByObject(o);
+  });
   const sphere = box.getBoundingSphere(new THREE.Sphere());
   if (!Number.isFinite(sphere.radius) || sphere.radius <= 0) return;
 
@@ -104,8 +119,10 @@ const frame = (k: Kit, { keepAngle }: { keepAngle: boolean }) => {
   k.render();
 };
 
-export default function CoreViewer({ shape, resetNonce }: Props) {
+export default function CoreViewer({ shape, resetNonce, showDims }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  // Releases the current annotation's geometry, materials and label textures.
+  const disposeDims = useRef<(() => void) | null>(null);
 
   // Everything three.js owns lives in a ref, not state: touching it must never
   // trigger a React render, and it has to survive prop changes.
@@ -115,6 +132,7 @@ export default function CoreViewer({ shape, resetNonce }: Props) {
     camera: THREE.PerspectiveCamera;
     controls: OrbitControls;
     group: THREE.Group;
+    dims: THREE.Group;
     ground: THREE.Mesh;
     grid: THREE.GridHelper;
     render: () => void;
@@ -210,6 +228,11 @@ export default function CoreViewer({ shape, resetNonce }: Props) {
     const group = new THREE.Group();
     scene.add(group);
 
+    // Dimensions sit in their own group: toggling them must not rebuild the
+    // solids, and rebuilding the solids must not strand their geometry.
+    const dims = new THREE.Group();
+    scene.add(dims);
+
     const render = () => renderer.render(scene, camera);
 
     // On-demand drawing: a frame per control change, plus a short damped tail
@@ -256,7 +279,7 @@ export default function CoreViewer({ shape, resetNonce }: Props) {
       group.clear();
     };
 
-    kit.current = { renderer, scene, camera, controls, group, ground, grid, render, disposeContents };
+    kit.current = { renderer, scene, camera, controls, group, dims, ground, grid, render, disposeContents };
 
     return () => {
       if (raf) cancelAnimationFrame(raf);
@@ -264,6 +287,8 @@ export default function CoreViewer({ shape, resetNonce }: Props) {
       ro.disconnect();
       controls.dispose();
       disposeContents();
+      disposeDims.current?.();
+      disposeDims.current = null;
       ground.geometry.dispose();
       (ground.material as THREE.Material).dispose();
       grid.geometry.dispose();
@@ -340,6 +365,27 @@ export default function CoreViewer({ shape, resetNonce }: Props) {
 
     frame(k, { keepAngle: true });
   }, [shape]);
+
+  /* ---- dimension annotation ---- */
+  useEffect(() => {
+    const k = kit.current;
+    if (!k) return;
+    disposeDims.current?.();
+    disposeDims.current = null;
+    k.dims.clear();
+
+    if (showDims && shapeIsDrawable(shape)) {
+      const built = buildDimensions(shape, shapeExtent(shape) || 1);
+      // Match the offset that drops the part onto the floor, so the annotation
+      // sits against the feature it measures rather than floating below it.
+      built.group.position.y = k.group.position.y;
+      k.dims.add(built.group);
+      disposeDims.current = built.dispose;
+    }
+    // Re-fit: turning the annotation on grows what has to be in shot, and
+    // turning it off should let the part fill the frame again.
+    frame(k, { keepAngle: true });
+  }, [shape, showDims]);
 
   /* ---- explicit "reset view" ---- */
   useEffect(() => {

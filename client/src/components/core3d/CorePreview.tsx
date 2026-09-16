@@ -5,7 +5,7 @@
 // typed a set of dimensions worth drawing — an operator who never opens a line
 // form never pays for it, and it never lands in the main bundle.
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
-import { Box, Loader2, RotateCcw, Maximize2, X } from 'lucide-react';
+import { Box, Loader2, RotateCcw, Maximize2, X, Ruler } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { shapeIsDrawable, shapeCaption, type CoreShape } from './shape';
 
@@ -33,6 +33,9 @@ const STAGE = 'bg-[radial-gradient(120%_90%_at_50%_0%,#ffffff_0%,#eef2f7_45%,#dd
 export const CorePreview = ({ shape, className }: { shape: CoreShape; className?: string }) => {
   const [resetNonce, setResetNonce] = useState(0);
   const [full, setFull] = useState(false);
+  // Dimensions are on by default: the reason to look at the model at all is to
+  // check the numbers, and an unlabelled solid answers a different question.
+  const [showDims, setShowDims] = useState(true);
   const drawable = shapeIsDrawable(shape);
   const tone = TONE[shape.kind];
   const caption = useMemo(() => (drawable ? shapeCaption(shape) : null), [shape, drawable]);
@@ -50,7 +53,7 @@ export const CorePreview = ({ shape, className }: { shape: CoreShape; className?
     <div className={cn('relative flex-1 overflow-hidden', STAGE)}>
       {drawable ? (
         <Suspense fallback={<Waiting label="Loading viewer…" />}>
-          <CoreViewer shape={shape} resetNonce={resetNonce} />
+          <CoreViewer shape={shape} resetNonce={resetNonce} showDims={showDims} />
         </Suspense>
       ) : (
         <Empty kind={shape.kind} />
@@ -60,6 +63,13 @@ export const CorePreview = ({ shape, className }: { shape: CoreShape; className?
         <>
           {/* Controls float over the stage so the model keeps the full frame. */}
           <div className="absolute right-2 top-2 flex gap-1">
+            <GlassBtn
+              title={showDims ? 'Hide dimensions' : 'Show dimensions'}
+              active={showDims}
+              onClick={() => setShowDims((v) => !v)}
+            >
+              <Ruler className="h-3.5 w-3.5" />
+            </GlassBtn>
             <GlassBtn title="Reset view" onClick={() => setResetNonce((n) => n + 1)}>
               <RotateCcw className="h-3.5 w-3.5" />
             </GlassBtn>
@@ -130,7 +140,7 @@ export const CorePreview = ({ shape, className }: { shape: CoreShape; className?
             </div>
             <div className={cn('relative min-h-0 flex-1', STAGE)}>
               <Suspense fallback={<Waiting label="Loading viewer…" />}>
-                <CoreViewer shape={shape} resetNonce={resetNonce} />
+                <CoreViewer shape={shape} resetNonce={resetNonce} showDims={showDims} />
               </Suspense>
             </div>
           </div>
@@ -140,13 +150,21 @@ export const CorePreview = ({ shape, className }: { shape: CoreShape; className?
   );
 };
 
-const GlassBtn = ({ title, onClick, children }: { title: string; onClick: () => void; children: React.ReactNode }) => (
+const GlassBtn = ({ title, onClick, children, active }: {
+  title: string; onClick: () => void; children: React.ReactNode; active?: boolean;
+}) => (
   <button
     type="button"
     title={title}
     aria-label={title}
+    aria-pressed={active}
     onClick={onClick}
-    className="rounded-md border border-white/70 bg-white/70 p-1.5 text-slate-600 shadow-sm backdrop-blur-sm transition hover:bg-white hover:text-slate-900"
+    className={cn(
+      'rounded-md border p-1.5 shadow-sm backdrop-blur-sm transition',
+      active
+        ? 'border-blue-300 bg-blue-50/90 text-blue-700 hover:bg-blue-100'
+        : 'border-white/70 bg-white/70 text-slate-600 hover:bg-white hover:text-slate-900'
+    )}
   >
     {children}
   </button>
