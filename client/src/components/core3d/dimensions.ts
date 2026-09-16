@@ -31,8 +31,15 @@ const DIM_TEXT = '#1d4ed8';
    900mm one alike. Sizing arrows off the part instead is what made them
    invisible on a tall, narrow core. */
 const LABEL_H = 0.15;        // fraction of the part's overall extent
-const ARROW_LEN = 0.44;      // of label height
-const ARROW_RAD = 0.16;      // of label height
+/* Arrowheads about two-and-a-half times as long as they are wide, which is
+   roughly what a drafted arrow looks like, and a shaft thick enough to read as
+   a stroke rather than a scratch. These were first set far finer and came out
+   at under two pixels on screen — geometry sized in millimetres has to be
+   checked at the size it is actually drawn, not admired in the source. */
+const ARROW_LEN = 0.55;      // of label height
+const ARROW_RAD = 0.125;     // of label height
+const SHAFT_R = 0.055;       // dimension-line thickness, of label height
+const EXT_R = 0.035;         // extension-line thickness, of label height
 const ROW = 2.3;             // gap between stacked dimension lines
 const STANDOFF = 0.8;        // first dimension line's distance off the feature
 const OVERSHOOT = 0.3;       // how far extension lines pass the dimension line
@@ -42,6 +49,8 @@ const SIDE = 1.5;            // how far the height dimension stands off the wall
 type Ctx = {
   group: THREE.Group;
   labelH: number;
+  /** One material for every line and head in this annotation. */
+  ink: THREE.MeshBasicMaterial;
   disposables: Disposable[];
 };
 type Disposable = { dispose: () => void };
@@ -91,9 +100,7 @@ const makeLabel = (text: string, ctx: Ctx): THREE.Sprite => {
     transparent: true,
   });
   const sprite = new THREE.Sprite(mat);
-  const worldW = (ctx.labelH * w) / h;
-  sprite.scale.set(worldW, ctx.labelH, 1);
-  sprite.userData.worldWidth = worldW;
+  sprite.scale.set((ctx.labelH * w) / h, ctx.labelH, 1);
   sprite.renderOrder = 12;
   // Excluded from camera framing — see fitBox() in CoreViewer. A label is
   // allowed to overhang; shrinking the part to fit its text would be backwards.
@@ -102,13 +109,28 @@ const makeLabel = (text: string, ctx: Ctx): THREE.Sprite => {
   return sprite;
 };
 
-const addLine = (pts: THREE.Vector3[], ctx: Ctx) => {
-  const g = new THREE.BufferGeometry().setFromPoints(pts);
-  const m = new THREE.LineBasicMaterial({ color: DIM_COLOR, depthTest: false, transparent: true });
-  const l = new THREE.Line(g, m);
-  l.renderOrder = 10;
-  ctx.disposables.push(g, m);
-  ctx.group.add(l);
+/**
+ * A line with real thickness, drawn as a slim cylinder.
+ *
+ * Not a THREE.Line: WebGL ignores LineBasicMaterial's linewidth entirely — every
+ * line is one device pixel whatever you ask for — so dimension lines came out as
+ * hairlines that vanished against the metal and made the arrowheads look like
+ * specks floating in space. Geometry is the only way to get a stroke you can
+ * actually see, and it has the side benefit of thickening correctly as the user
+ * zooms in rather than staying stubbornly 1px.
+ */
+const addTube = (from: THREE.Vector3, to: THREE.Vector3, radius: number, ctx: Ctx) => {
+  const span = to.clone().sub(from);
+  const len = span.length();
+  if (len < 1e-6) return;
+  const geo = new THREE.CylinderGeometry(radius, radius, len, 8, 1, true);
+  const mesh = new THREE.Mesh(geo, ctx.ink);
+  // Cylinders run up their own +Y, centred on their middle.
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), span.clone().normalize());
+  mesh.position.copy(from).addScaledVector(span, 0.5);
+  mesh.renderOrder = 10;
+  ctx.disposables.push(geo);
+  ctx.group.add(mesh);
 };
 
 /**
@@ -121,13 +143,14 @@ const addLine = (pts: THREE.Vector3[], ctx: Ctx) => {
 const addArrow = (tip: THREE.Vector3, back: THREE.Vector3, ctx: Ctx) => {
   const len = ctx.labelH * ARROW_LEN;
   const dir = back.clone().normalize();
-  const geo = new THREE.ConeGeometry(ctx.labelH * ARROW_RAD, len, 16);
-  const mat = new THREE.MeshBasicMaterial({ color: DIM_COLOR, depthTest: false, transparent: true });
-  const cone = new THREE.Mesh(geo, mat);
+  // Closed at the base, so the head reads as a solid triangle from behind as
+  // well as in front — it is seen from every angle as the part is rotated.
+  const geo = new THREE.ConeGeometry(ctx.labelH * ARROW_RAD, len, 18, 1, false);
+  const cone = new THREE.Mesh(geo, ctx.ink);
   cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
   cone.position.copy(tip).addScaledVector(dir, len / 2);
   cone.renderOrder = 11;
-  ctx.disposables.push(geo, mat);
+  ctx.disposables.push(geo);
   ctx.group.add(cone);
 };
 
@@ -148,32 +171,35 @@ const dimension = (
   const clear = dir.clone().multiplyScalar(ctx.labelH * CLEAR);
   const over = dir.clone().multiplyScalar(ctx.labelH * OVERSHOOT);
 
-  addLine([a.clone().add(clear), A.clone().add(over)], ctx);
-  addLine([b.clone().add(clear), B.clone().add(over)], ctx);
-  addLine([A, B], ctx);
+  const extR = ctx.labelH * EXT_R;
+  addTube(a.clone().add(clear), A.clone().add(over), extR, ctx);
+  addTube(b.clone().add(clear), B.clone().add(over), extR, ctx);
 
-  // Heads sit at each end of the dimension line, pointing outwards at the
-  // extension lines, as a drawing has them.
+  /* The shaft runs between the two heads rather than the full span, so it
+     stops where the cones begin instead of poking out through their points —
+     which is what turns a line with two blobs on it into <--------->. */
   const along = B.clone().sub(A).normalize();
+  const head = ctx.labelH * ARROW_LEN;
+  const shaftA = A.clone().addScaledVector(along, head * 0.9);
+  const shaftB = B.clone().addScaledVector(along, -head * 0.9);
+  if (shaftB.clone().sub(shaftA).dot(along) > 0) {
+    addTube(shaftA, shaftB, ctx.labelH * SHAFT_R, ctx);
+  }
+
   addArrow(A, along, ctx);
   addArrow(B, along.clone().negate(), ctx);
 
-  /* Where the value goes.
-     Centred on the dimension line normally. But on a short span — a 10mm bore
-     with "ID 10" beside it — the pill is wider than the line it sits on, hides
-     both arrowheads and reads as a label floating in space. Drafting practice
-     is to move the value outside the arrows and that is what happens here:
-     past the B end, on the line's own axis, still unambiguously attached. */
+  /* The value sits just OFF the dimension line, not on it — the side away from
+     the part, as a drawing places it.
+
+     Centring it on the line looked tidier in the abstract and was wrong in
+     practice: the pill is opaque, so on anything but a very long span it
+     covered the shaft and both arrowheads, leaving a number floating between
+     two stubs. Nudged clear, the whole <-----> is visible and the number still
+     reads as belonging to it. */
   const label = makeLabel(text, ctx);
-  const span = B.clone().sub(A);
-  const fits = (label.userData.worldWidth as number) < span.length() * 0.95;
-  label.position.copy(A).add(B).multiplyScalar(0.5);
-  if (!fits) {
-    label.position.addScaledVector(
-      span.clone().normalize(),
-      span.length() / 2 + (label.userData.worldWidth as number) / 2 + ctx.labelH * 0.5,
-    );
-  }
+  label.position.copy(A).add(B).multiplyScalar(0.5)
+    .addScaledVector(dir, ctx.labelH * 0.72);
   ctx.group.add(label);
 };
 
@@ -188,7 +214,13 @@ export const buildDimensions = (shape: CoreShape, extent: number) => {
   const group = new THREE.Group();
   const disposables: Disposable[] = [];
   const labelH = extent * LABEL_H;
-  const ctx: Ctx = { group, labelH, disposables };
+  // Drawn over the part rather than buried inside it: a dimension that
+  // disappears behind the metal when you rotate is worse than none.
+  const ink = new THREE.MeshBasicMaterial({
+    color: DIM_COLOR, depthTest: false, transparent: true,
+  });
+  disposables.push(ink);
+  const ctx: Ctx = { group, labelH, ink, disposables };
 
   const stand = labelH * STANDOFF;
   const row = labelH * ROW;
