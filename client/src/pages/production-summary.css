@@ -1,0 +1,37 @@
+/* Summary-specific density and hierarchy, including both report views. */
+.production-summary .summary-filters { display: grid; grid-template-columns: 140px 140px minmax(150px, .8fr) minmax(170px, 1fr) minmax(180px, 1.5fr) auto auto; align-items: end; gap: 8px; padding: 10px 12px; background: #fff; }
+.production-summary .summary-filters > div { width: auto; min-width: 0; }
+.production-summary .summary-filters .input { height: 34px; min-height: 34px; padding-top: 5px; padding-bottom: 5px; font-size: 13px; font-weight: 600; }
+.production-summary .production-stat-strip { padding: 0; gap: 0; background: #f6f9f8; border-block: 1px solid #dce7e1; }
+.production-summary .production-stat-strip > .production-stat { border: 0; border-right: 1px solid #dce7e1; padding: 9px 14px; background: transparent; }
+.production-summary .production-stat-strip > .production-stat:last-child { border-right: 0; background: rgb(var(--brand-50)); }
+.production-summary .production-stat > div:first-of-type { font-size: 21px; margin-top: 2px; }
+.production-summary .production-scroll { max-height: 68vh; }
+.production-summary .summary-tree { table-layout: fixed; min-width: 980px; }
+.production-summary .summary-tree thead th:first-child { width: 30%; }
+.production-summary .summary-tree thead th:nth-child(2) { width: 10%; }
+.production-summary .summary-tree thead th:nth-child(3) { width: 15%; }
+.production-summary .summary-tree thead th:nth-child(4) { width: 18%; }
+.production-summary .summary-tree thead th:nth-child(n+5) { width: 9%; }
+.production-summary table th, .production-summary table td { border-right: 1px solid #e6edf0; }
+.production-summary table th:last-child, .production-summary table td:last-child { border-right: 0; }
+.production-summary table tbody td { padding-top: 6px; padding-bottom: 6px; border-bottom: 1px solid #edf1f4; }
+.production-summary table tbody td.text-right { font-size: 13px; font-weight: 600; }
+.production-summary table .summary-employee > td { background: rgb(var(--brand-50)); border-top: 1px solid rgb(var(--brand-200)); border-bottom: 1px solid rgb(var(--brand-200)); }
+.production-summary table .summary-employee > td:first-child { border-left: 3px solid rgb(var(--brand-600)); }
+.production-summary table .summary-employee button { min-height: 42px; }
+.production-summary table .summary-day > * { background: #f3f6f9; padding-top: 5px; padding-bottom: 5px; }
+.production-summary table .production-chip { padding: 3px 5px; font-size: 10px; }
+.production-summary table tfoot td { padding-block: 9px; }
+/* Keep the full report structure when horizontally scrolling on phones. */
+.production-summary .summary-tree th, .production-summary .summary-tree td { display: table-cell; }
+.production-summary .summary-tree td { overflow-wrap: anywhere; white-space: normal; }
+@media (max-width: 1199px) {
+  .production-summary .summary-filters { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .production-summary .summary-filters > div:nth-child(5) { grid-column: span 2; }
+}
+@media (max-width: 639px) {
+  .production-summary .summary-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .production-summary .summary-filters > button { justify-content: center; margin-left: 0; }
+  .production-summary .production-mobile-header { padding: 12px; }
+}

@@ -1,3 +1,4 @@
+import '@/components/dispatch-workspace.css';
 // All dispatch records — flat table with search and per-row edit/delete.
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -68,10 +69,10 @@ export const DispatchListPage = () => {
   const { confirm, confirmDialog } = useConfirm();
 
   return (
-    <div className="space-y-4 max-w-[1400px]">
+    <div className="dispatch-workspace dispatch-register space-y-4">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <Truck className="h-5 w-5 text-brand-600" /> Dispatch
+          <Truck className="h-5 w-5 text-brand-600" /> Modify Dispatch
         </h1>
         <Link to="/dispatch/new" className="btn-primary">
           <Plus className="h-4 w-4" /> New Dispatch
@@ -79,7 +80,7 @@ export const DispatchListPage = () => {
       </div>
 
       <div className="card overflow-hidden">
-        <div className="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
+        <div className="dispatch-filterbar flex flex-wrap items-center gap-3 border-b border-slate-200 px-4 py-3">
           <div className="relative flex-1 max-w-md">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
@@ -134,11 +135,11 @@ export const DispatchListPage = () => {
             </thead>
             <tbody>
               {isLoading && (
-                <tr><td colSpan={12} className="px-3 py-10 text-center text-slate-400">Loading…</td></tr>
+                <tr><td data-label="Details" colSpan={12} className="px-3 py-10 text-center text-slate-400">Loading…</td></tr>
               )}
               {!isLoading && data?.items.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="px-3 py-10 text-center text-slate-400">
+                  <td data-label="Details" colSpan={12} className="px-3 py-10 text-center text-slate-400">
                     No dispatch records yet.{' '}
                     <Link to="/dispatch/new" className="text-brand-700 hover:text-brand-800 font-medium">
                       Create your first dispatch →
@@ -152,15 +153,15 @@ export const DispatchListPage = () => {
                 const newGroup = sort === 'customer' && idx > 0 && arr[idx - 1].customerName !== d.customerName;
                 return (
                 <tr key={d.id} className={cn('hover:bg-slate-50/60', newGroup ? 'border-t-2 border-slate-300' : 'border-t border-slate-100')}>
-                  <td className="px-3 py-2 text-slate-600">{formatDate(d.dispatchDate)}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{d.poNumber}</td>
-                  <td className="px-3 py-2">
+                  <td data-label="Date" className="px-3 py-2 text-slate-600">{formatDate(d.dispatchDate)}</td>
+                  <td data-label="PO #" className="px-3 py-2 font-mono text-xs">{d.poNumber}</td>
+                  <td data-label="Customer" className="px-3 py-2">
                     <div className="font-mono text-xs font-semibold text-brand-700">{d.customerCode ?? '—'}</div>
                     {!hideNames && (
                       <div className="text-[11px] text-slate-500">{d.customerName}</div>
                     )}
                   </td>
-                  <td className="px-3 py-2">
+                  <td data-label="Type" className="px-3 py-2">
                     <span className={cn(
                       'rounded-full px-2 py-0.5 text-[11px] font-medium',
                       d.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
@@ -168,16 +169,16 @@ export const DispatchListPage = () => {
                       {d.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
                     </span>
                   </td>
-                  <td className="px-3 py-2">{d.grade}</td>
-                  <td className="px-3 py-2">{d.material}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{d.measure}</td>
-                  <td className="px-3 py-2 text-slate-600">{d.vehicleNo ?? '—'}</td>
-                  <td className="px-3 py-2 text-right tabular-nums font-semibold">{d.pcs}</td>
-                  <td className="px-3 py-2 text-right font-mono font-semibold tabular-nums">{d.totalWeight.toFixed(3)}</td>
-                  <td className="px-3 py-2 text-right font-mono tabular-nums text-brand-700">
+                  <td data-label="Grade" className="px-3 py-2">{d.grade}</td>
+                  <td data-label="Material" className="px-3 py-2">{d.material}</td>
+                  <td data-label="Measure" className="px-3 py-2 font-mono text-xs">{d.measure}</td>
+                  <td data-label="Vehicle" className="px-3 py-2 text-slate-600">{d.vehicleNo ?? '—'}</td>
+                  <td data-label="Pcs" className="px-3 py-2 text-right tabular-nums font-semibold">{d.pcs}</td>
+                  <td data-label="Total Wt" className="px-3 py-2 text-right font-mono font-semibold tabular-nums">{d.totalWeight.toFixed(3)}</td>
+                  <td data-label="Amount" className="px-3 py-2 text-right font-mono tabular-nums text-brand-700">
                     {d.amount != null ? `₹${d.amount.toFixed(2)}` : '—'}
                   </td>
-                  <td className="px-3 py-2 text-right">
+                  <td data-label="Actions" className="px-3 py-2 text-right">
                     <div className="inline-flex items-center gap-1">
                       <button onClick={() => navigate('/packing-list', { state: { dispatchIds: [d.id] } })} className="btn-ghost text-emerald-700 hover:bg-emerald-50" title="Packing List">
                         <FileText className="h-4 w-4" />

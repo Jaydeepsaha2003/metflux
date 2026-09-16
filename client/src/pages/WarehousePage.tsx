@@ -1,3 +1,4 @@
+import '@/components/dispatch-workspace.css';
 // Store / Warehouse — manage named stores and the finished-goods stock that was
 // sent in from overproduction. "Stock Out" dispatches stock to a customer's
 // sales-order line, creating a normal dispatch that flows into packing & invoices.
@@ -124,7 +125,7 @@ export const WarehousePage = () => {
   };
 
   return (
-    <div className="space-y-5 max-w-[1400px]">
+    <div className="dispatch-workspace dispatch-register space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <Warehouse className="h-5 w-5 text-brand-600" /> Store / Warehouse
@@ -239,20 +240,20 @@ export const WarehousePage = () => {
                   return (
                     <Fragment key={key}>
                       <tr className="border-t border-slate-100 hover:bg-slate-50/60 cursor-pointer" onClick={() => toggleExpand(key)}>
-                        <td className="px-2 py-2.5 text-center text-slate-400">{open ? <ChevronDown className="inline h-4 w-4" /> : <ChevronRight className="inline h-4 w-4" />}</td>
-                        <td className="px-3 py-2.5 text-slate-600">{s.warehouseName}</td>
-                        <td className="px-3 py-2.5">
+                        <td data-label="Details" className="px-2 py-2.5 text-center text-slate-400">{open ? <ChevronDown className="inline h-4 w-4" /> : <ChevronRight className="inline h-4 w-4" />}</td>
+                        <td data-label="Store" className="px-3 py-2.5 text-slate-600">{s.warehouseName}</td>
+                        <td data-label="Type" className="px-3 py-2.5">
                           <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', s.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : s.coreType === 'NANO' ? 'bg-violet-50 text-violet-700' : 'bg-rose-50 text-rose-700')}>
                             {coreShort(s.coreType)}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5">{s.grade}</td>
-                        <td className="px-3 py-2.5 text-slate-600">{s.material}</td>
-                        <td className="px-3 py-2.5 font-mono text-xs">{s.measure}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums text-slate-500">{s.weightPerPc.toFixed(3)}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-slate-900">{s.onHand}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums font-mono text-slate-600">{s.onHandWeight.toFixed(3)}</td>
-                        <td className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                        <td data-label="Grade" className="px-3 py-2.5">{s.grade}</td>
+                        <td data-label="Material" className="px-3 py-2.5 text-slate-600">{s.material}</td>
+                        <td data-label="Measure" className="px-3 py-2.5 font-mono text-xs">{s.measure}</td>
+                        <td data-label="Wt / pc" className="px-3 py-2.5 text-right tabular-nums text-slate-500">{s.weightPerPc.toFixed(3)}</td>
+                        <td data-label="On hand" className="px-3 py-2.5 text-right tabular-nums font-semibold text-slate-900">{s.onHand}</td>
+                        <td data-label="Weight" className="px-3 py-2.5 text-right tabular-nums font-mono text-slate-600">{s.onHandWeight.toFixed(3)}</td>
+                        <td data-label="Actions" className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
                           <button onClick={() => setStockOut(s)} className="inline-flex items-center gap-1 rounded-lg bg-brand-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-brand-700">
                             <Truck className="h-3.5 w-3.5" /> Stock Out
                           </button>
@@ -261,7 +262,7 @@ export const WarehousePage = () => {
                       {open && (
                         <tr className="bg-slate-50/60">
                           <td />
-                          <td colSpan={9} className="px-3 py-2">
+                          <td data-label="Details" colSpan={9} className="px-3 py-2">
                             <MovementsPanel warehouseId={s.warehouseId} specKey={s.specKey} />
                           </td>
                         </tr>
@@ -326,15 +327,15 @@ const MovementsPanel = ({ warehouseId, specKey }: { warehouseId: string; specKey
         <tbody className="divide-y divide-slate-100">
           {items.map((m) => (
             <tr key={m.id}>
-              <td className="px-2 py-1 text-slate-600">{fmtDate(m.movementDate)}</td>
-              <td className="px-2 py-1">
+              <td data-label="Date" className="px-2 py-1 text-slate-600">{fmtDate(m.movementDate)}</td>
+              <td data-label="Movement" className="px-2 py-1">
                 <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', m.direction === 'IN' ? 'bg-emerald-50 text-emerald-700' : 'bg-brand-50 text-brand-700')}>
                   {m.direction === 'IN' ? 'Stock In' : 'Stock Out'}
                 </span>
               </td>
-              <td className="px-2 py-1 text-right font-semibold tabular-nums">{m.direction === 'IN' ? '+' : '−'}{m.pcs}</td>
-              <td className="px-2 py-1 text-slate-700">{m.notes || '—'}</td>
-              <td className="px-2 py-1 text-slate-500">{[m.customerName, m.poNumber, m.vehicleNo].filter(Boolean).join(' · ') || '—'}</td>
+              <td data-label="Pcs" className="px-2 py-1 text-right font-semibold tabular-nums">{m.direction === 'IN' ? '+' : '−'}{m.pcs}</td>
+              <td data-label="Note" className="px-2 py-1 text-slate-700">{m.notes || '—'}</td>
+              <td data-label="Reference" className="px-2 py-1 text-slate-500">{[m.customerName, m.poNumber, m.vehicleNo].filter(Boolean).join(' · ') || '—'}</td>
             </tr>
           ))}
         </tbody>

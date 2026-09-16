@@ -385,7 +385,7 @@ export const DashboardPage = () => {
 
         {/* ── Employee performance ───────────────────────────────── */}
         <DashPanel className="dash-employees overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-3 p-5 sm:p-6">
+          <div className="employee-toolbar flex flex-wrap items-center justify-between gap-3 p-5 sm:p-6">
             <div>
               <h2 className="text-[15px] font-extrabold tracking-tight">Employee performance</h2>
               <DashCaption className="mt-0.5">Production entries in range, ranked by weight</DashCaption>
@@ -409,7 +409,7 @@ export const DashboardPage = () => {
           ) : (
             <>
               {/* Desktop table */}
-              <div className="hidden overflow-x-auto md:block">
+              <div className="employee-table-scroll hidden overflow-x-auto md:block" tabIndex={0} role="region" aria-label="Employee performance">
                 <table className="w-full min-w-[940px] whitespace-nowrap text-[14px]">
                   <thead>
                     <tr className="border-y border-[var(--d-line)]">

@@ -10,7 +10,7 @@
 }
 .dashboard-glass[data-mode="dark"] { color-scheme: dark; }
 .dashboard-glass .dash-panel, .dashboard-glass .dash-kpi {
-  border-radius: 22px;
+  border-radius: 10px;
   background: linear-gradient(135deg, var(--d-sheen), transparent 65%), var(--d-panel);
   border: 1px solid var(--d-line);
   box-shadow: var(--d-shadow);
@@ -63,7 +63,14 @@
 .dashboard-glass tbody tr:hover { background: var(--d-accent-dim); }
 
 /* Match the KPI typography while keeping tabular figures aligned. */
-.dashboard-glass .dash-employees table { line-height: 1.5; }
+.dashboard-glass .dash-employees table { line-height: 1.4; }
+.dashboard-glass .employee-toolbar { padding: 14px 18px; border-bottom: 1px solid var(--d-line-soft); }
+.dashboard-glass .employee-table-scroll { max-height: 560px; scrollbar-width: thin; }
+.dashboard-glass .employee-table-scroll:focus-visible { outline: 2px solid var(--d-accent); outline-offset: -2px; }
+.dashboard-glass .dash-employees thead th { position: sticky; top: 0; z-index: 1; background: var(--d-raised); box-shadow: inset 0 -1px var(--d-line-soft); }
+.dashboard-glass .dash-employees tbody tr:nth-child(even) { background: var(--d-sheen); }
+.dashboard-glass .dash-employees tbody tr:hover { background: var(--d-accent-dim); }
+.dashboard-glass .dash-employees .dash-bar { height: 6px; }
 .dashboard-glass .dash-employees th { text-align: left; }
 .dashboard-glass .dash-employees th.text-right { text-align: right; }
 .dashboard-glass .dash-employees th.text-center { text-align: center; }
@@ -79,7 +86,8 @@
 .dashboard-glass .dash-employees td.font-semibold { font-weight: 650; }
 .dashboard-glass .dash-employees td:nth-child(2) { font-size: 14px; }
 .dashboard-glass .dash-employees td,
-.dashboard-glass .dash-employees th { padding-top: 16px; padding-bottom: 16px; }
+.dashboard-glass .dash-employees th { padding: 10px 12px; }
+.dashboard-glass .dash-employees tfoot td { font-weight: 700; border-top: 1px solid var(--d-accent-line); }
 .dashboard-glass .dash-employees th:not(:last-child),
 .dashboard-glass .dash-employees td:not(:last-child) {
   border-right: 1px solid var(--d-line-soft);
@@ -91,7 +99,7 @@
 @media (max-width: 639px) {
   .dashboard-glass .dash-hero { padding: 20px; }
   .dashboard-glass .dash-kpi { padding: 15px; }
-  .dashboard-glass .dash-panel, .dashboard-glass .dash-kpi { border-radius: 17px; }
+  .dashboard-glass .dash-panel, .dashboard-glass .dash-kpi { border-radius: 8px; }
   .dashboard-glass .dash-kpi-heading { align-items: flex-start; }
   .dashboard-glass .dash-kpi-heading > div:first-child { line-height: 1.5; }
   .dashboard-glass .dash-kpi-icon { width: 26px; height: 26px; border-radius: 8px; }
@@ -101,7 +109,7 @@
 }
 
 /* Analytics surfaces share the dashboard's brand palette in both appearances. */
-.dash-inset { border: 1px solid var(--d-line-soft); border-radius: 15px; background: var(--d-sheen); }
+.dash-inset { border: 1px solid var(--d-line-soft); border-radius: 8px; background: var(--d-sheen); }
 .dash-delta { display: inline-flex; align-items: center; gap: 4px; border-radius: 99px; padding: 6px 9px; font-size: 11px; font-weight: 600; background: var(--d-accent-dim); color: var(--d-text); }
 .dash-orbit { flex-shrink: 0; display: grid; place-items: center; height: 126px; width: 126px; border-radius: 50%; background: conic-gradient(var(--d-accent) var(--ring-share), var(--d-line-soft) 0); padding: 9px; box-shadow: 0 0 28px var(--d-accent-dim); }
 .dash-orbit > div { display: flex; align-items: center; justify-content: center; flex-direction: column; border-radius: inherit; width: 100%; height: 100%; background: var(--d-raised); box-shadow: inset 0 1px 4px var(--d-line-soft); }

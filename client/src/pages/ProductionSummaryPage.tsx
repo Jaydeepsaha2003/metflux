@@ -1,4 +1,5 @@
 import '@/components/production/workspace.css';
+import './production-summary.css';
 // Production Summary — filterable report of production by employee, with type,
 // size/measure, pcs, weight and amount. Filter by date range, employee and
 // customer; download the filtered set as Excel.
@@ -272,7 +273,7 @@ export const ProductionSummaryPage = () => {
   const clearFilters = () => { setFrom(''); setTo(''); setLabour(''); setCustomerId(''); setSearch(''); };
 
   return (
-    <div className="production-workspace max-w-full space-y-3">
+    <div className="production-workspace production-summary max-w-full space-y-3">
       {/* Title bar */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="flex items-center gap-2 text-xl font-extrabold tracking-tight text-slate-900 sm:text-2xl">
@@ -317,7 +318,7 @@ export const ProductionSummaryPage = () => {
           an absolutely-positioned child, and the card below clips by default. */}
       <ErpCard className="overflow-visible">
         {/* Filter toolbar — one row, matches Modify's layout. */}
-        <div className="flex flex-col gap-2.5 p-3 lg:flex-row lg:items-end lg:flex-wrap">
+        <div className="summary-filters flex flex-col gap-2.5 p-3 lg:flex-row lg:items-end lg:flex-wrap">
           <div className="w-32">
             <ErpLabel className="mb-1 block">From</ErpLabel>
             <input type="date" className="input h-9 text-sm" value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -388,7 +389,7 @@ export const ProductionSummaryPage = () => {
             a printed ERP report readable. */}
         {!isLoading && items.length > 0 && view === 'BY_EMPLOYEE' && (
           <div className="production-scroll overflow-x-auto border-t border-slate-100" tabIndex={0} role="region" aria-label="Production records">
-            <table className="w-full min-w-[680px] border-collapse text-[13px]">
+            <table className="summary-tree w-full min-w-[680px] border-collapse text-[13px]">
               <thead>
                 <tr>
                   <ErpTh className="pl-3">Employee / Date / Size</ErpTh>
@@ -408,7 +409,7 @@ export const ProductionSummaryPage = () => {
                 return (
                   <tbody key={e.name} className="border-b-2 border-slate-100 last:border-b-0">
                     {/* Employee band */}
-                    <tr className="bg-slate-50">
+                    <tr className="summary-employee bg-slate-50">
                       <td className="p-0" colSpan={4}>
                         <button
                           onClick={() => toggleEmp(e.name)}
@@ -439,7 +440,7 @@ export const ProductionSummaryPage = () => {
                     {open && e.days.map((d) => (
                       <Fragment key={d.key}>
                         {/* Day sub-total */}
-                        <tr className="bg-white">
+                        <tr className="summary-day bg-white">
                           <th scope="rowgroup" className="whitespace-nowrap border-b border-slate-100 py-1 pl-7 pr-2 text-left text-[13px] font-bold text-slate-700 sm:pl-9">{fmt(d.iso)}</th>
                           <td className="hidden border-b border-slate-100 px-2.5 py-1.5 text-[10px] uppercase tracking-wider text-slate-400 sm:table-cell" colSpan={3}>Day total</td>
                           <td className="border-b border-slate-100 px-2.5 py-1.5 text-right font-num text-[13px] font-semibold tabular-nums text-slate-700">{pcsFmt(d.pcs)}</td>

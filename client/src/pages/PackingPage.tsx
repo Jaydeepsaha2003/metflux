@@ -1,3 +1,4 @@
+import '@/components/dispatch-workspace.css';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -190,7 +191,7 @@ export const PackingPage = () => {
   const someChecked = selected.size > 0;
 
   return (
-    <div className="space-y-6 max-w-full">
+    <div className="dispatch-workspace dispatch-register space-y-4">
       {editing && (
         <EditModal
           item={editing}
@@ -275,30 +276,30 @@ export const PackingPage = () => {
                     return (
                       <tr key={d.id} onClick={() => toggleRow(d.id)}
                         className={cn('cursor-pointer transition-colors', isChecked ? 'bg-brand-50 hover:bg-brand-100' : 'hover:bg-slate-50')}>
-                        <td className="px-3 py-3 text-center">
+                        <td data-label="Select / details" className="px-3 py-3 text-center">
                           <input type="checkbox" checked={isChecked}
                             onChange={() => toggleRow(d.id)} onClick={(e) => e.stopPropagation()}
                             className="rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
                         </td>
-                        <td className="px-4 py-3 font-medium">
+                        <td data-label="Customer" className="px-4 py-3 font-medium">
                           {hideNames
                             ? <span className="font-mono text-xs font-semibold text-brand-700">{d.customerCode ?? '••••'}</span>
                             : d.customerName}
                         </td>
-                        <td className="px-4 py-3 text-slate-600 font-mono text-xs">{d.poNumber}</td>
-                        <td className="px-4 py-3">
+                        <td data-label="PO Number" className="px-4 py-3 text-slate-600 font-mono text-xs">{d.poNumber}</td>
+                        <td data-label="Type" className="px-4 py-3">
                           <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium',
                             d.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700')}>
                             {d.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-slate-600">{d.grade}</td>
-                        <td className="px-4 py-3 font-mono text-xs text-slate-600">{d.measure ?? '—'}</td>
-                        <td className="px-4 py-3 text-slate-600">{fmt(d.dispatchDate)}</td>
-                        <td className="px-4 py-3 text-right tabular-nums font-semibold">{d.pcs}</td>
-                        <td className="px-4 py-3 text-right tabular-nums font-mono">{d.totalWeight.toFixed(3)}</td>
-                        <td className="px-4 py-3 text-slate-500 text-xs">{d.vehicleNo ?? '—'}</td>
-                        <td className="px-4 py-3 text-right">
+                        <td data-label="Grade" className="px-4 py-3 text-slate-600">{d.grade}</td>
+                        <td data-label="Measure" className="px-4 py-3 font-mono text-xs text-slate-600">{d.measure ?? '—'}</td>
+                        <td data-label="Dispatch Date" className="px-4 py-3 text-slate-600">{fmt(d.dispatchDate)}</td>
+                        <td data-label="Pcs" className="px-4 py-3 text-right tabular-nums font-semibold">{d.pcs}</td>
+                        <td data-label="Weight (kg)" className="px-4 py-3 text-right tabular-nums font-mono">{d.totalWeight.toFixed(3)}</td>
+                        <td data-label="Vehicle" className="px-4 py-3 text-slate-500 text-xs">{d.vehicleNo ?? '—'}</td>
+                        <td data-label="Actions" className="px-4 py-3 text-right">
                           <div className="inline-flex items-center gap-1.5">
                             <button
                               onClick={(e) => { e.stopPropagation(); navigate('/testing-report', { state: { dispatchIds: [d.id] } }); }}
@@ -377,26 +378,26 @@ export const PackingPage = () => {
                 <tbody className="divide-y divide-slate-100">
                   {generated.items.map((pl) => (
                     <tr key={pl.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-4 py-3 font-semibold text-brand-700">{pl.plNumber}</td>
-                      <td className="px-4 py-3 text-slate-600">{fmt(pl.plDate)}</td>
-                      <td className="px-4 py-3 font-medium">
+                      <td data-label="Invoice / PL No." className="px-4 py-3 font-semibold text-brand-700">{pl.plNumber}</td>
+                      <td data-label="Invoice Date" className="px-4 py-3 text-slate-600">{fmt(pl.plDate)}</td>
+                      <td data-label="Customer" className="px-4 py-3 font-medium">
                         {hideNames
                           ? <span className="font-mono text-xs font-semibold text-brand-700">{pl.customerCode ?? '••••'}</span>
                           : (pl.customerName ?? '—')}
                       </td>
-                      <td className="px-4 py-3 text-slate-600 font-mono text-xs">{pl.poNumber ?? '—'}</td>
-                      <td className="px-4 py-3 text-slate-600">{fmt(pl.dispatchDate)}</td>
-                      <td className="px-4 py-3 text-center">
+                      <td data-label="PO Number" className="px-4 py-3 text-slate-600 font-mono text-xs">{pl.poNumber ?? '—'}</td>
+                      <td data-label="Dispatch Date" className="px-4 py-3 text-slate-600">{fmt(pl.dispatchDate)}</td>
+                      <td data-label="Dispatches" className="px-4 py-3 text-center">
                         <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
                           {pl.itemCount}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums font-semibold">{pl.totalPcs}</td>
-                      <td className="px-4 py-3 text-right tabular-nums font-mono">{pl.totalWeight.toFixed(3)}</td>
-                      <td className="px-4 py-3 text-slate-600">{pl.testedBy ?? '—'}</td>
-                      <td className="px-4 py-3 text-slate-600">{pl.approvedBy ?? '—'}</td>
+                      <td data-label="Total Pcs" className="px-4 py-3 text-right tabular-nums font-semibold">{pl.totalPcs}</td>
+                      <td data-label="Total Wt (kg)" className="px-4 py-3 text-right tabular-nums font-mono">{pl.totalWeight.toFixed(3)}</td>
+                      <td data-label="Tested By" className="px-4 py-3 text-slate-600">{pl.testedBy ?? '—'}</td>
+                      <td data-label="Approved By" className="px-4 py-3 text-slate-600">{pl.approvedBy ?? '—'}</td>
                       {/* sticky action column */}
-                      <td className="sticky right-0 bg-white px-4 py-3 shadow-[-8px_0_12px_-4px_rgba(0,0,0,0.06)]">
+                      <td data-label="Actions" className="sticky right-0 bg-white px-4 py-3 shadow-[-8px_0_12px_-4px_rgba(0,0,0,0.06)]">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => navigate('/testing-report', { state: { plId: pl.id } })}

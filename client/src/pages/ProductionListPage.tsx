@@ -243,7 +243,10 @@ export const ProductionListPage = () => {
             <h2>Production records</h2>
             <p>Latest entries first · select a row action to edit or remove</p>
           </div>
-          <span className="hidden rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500 md:inline-flex">Horizontal scroll available</span>
+          <div className="production-table-meta hidden items-center gap-2 md:flex">
+            <span className="production-table-count">{data?.total.toLocaleString('en-IN')} rows</span>
+            <span className="production-scroll-hint">Horizontal scroll</span>
+          </div>
         </div>
 
         {/* Desktop table */}

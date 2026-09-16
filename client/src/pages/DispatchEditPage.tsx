@@ -1,3 +1,4 @@
+import '@/components/dispatch-workspace.css';
 // Edit a dispatch record — pcs constrained to available (produced − other dispatches).
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -99,7 +100,7 @@ export const DispatchEditPage = () => {
   };
 
   return (
-    <div className="space-y-4 max-w-4xl">
+    <div className="dispatch-workspace dispatch-entry space-y-4">
       <div className="flex items-center gap-3">
         <Link to="/dispatch" className="btn-ghost text-slate-600">
           <ArrowLeft className="h-4 w-4" /> Back

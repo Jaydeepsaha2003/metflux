@@ -1,3 +1,4 @@
+import '@/components/dispatch-workspace.css';
 // Create a dispatch record: pick a ready-to-dispatch PO item from the list,
 // fill in dispatch date, vehicle number and pcs. Total weight auto-calcs.
 import { useEffect, useMemo, useState } from 'react';
@@ -150,7 +151,7 @@ export const DispatchNewPage = () => {
   };
 
   return (
-    <div className="space-y-5 max-w-[1400px]">
+    <div className="dispatch-workspace dispatch-entry space-y-4">
       <div className="flex items-center gap-3">
         <Link to="/dispatch" className="btn-ghost text-slate-600">
           <ArrowLeft className="h-4 w-4" /> Back
