@@ -14,7 +14,9 @@ import {
   TOROIDAL_FACTOR, RECT_STACK_FACTOR, stackOr,
   toroidalGrossArea, toroidalMeanPath,
 } from '@/lib/calc';
-import { MATERIALS, factorToSF, netArea } from '@/lib/coreMaterials';
+import {
+  MATERIALS, factorToSF, netArea, testVoltage, gapAmpereTurns,
+} from '@/lib/coreMaterials';
 import {
   compositeLayout, cutCoreCode, shapeCaption, shapeTitle, type CoreShape,
 } from './shape';
@@ -42,12 +44,17 @@ export type SheetMeta = {
   steelAt?: number | null;
   /** Ampere-turns the air gap needs — usually the larger share. */
   gapAt?: number | null;
+  /** The grade's whole ATe/cm curve, so the sheet can tabulate every test
+   *  level rather than only the one this line happens to be booked at. */
+  fluxPoints?: { flux: number; ateCm: number }[] | null;
 };
 
 export type Section = {
   heading: string;
   rows?: [string, string][];
-  /** Free lines — a formula with this line's own numbers substituted in. */
+  /** A columnar table — the test figures at each flux level. */
+  table?: { head: string[]; rows: string[][] };
+  /** Free lines. Notes only: the sheet carries no formulas. */
   lines?: string[];
 };
 
@@ -61,7 +68,6 @@ export type SheetModel = {
 /* ── formatting ──────────────────────────────────────────────────────────── */
 
 const n = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(2));
-const n1 = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
 const mm = (v: number) => `${n(v)} mm`;
 const kg = (v: number | null | undefined) => (v == null ? '—' : `${v.toFixed(3)} kg`);
 const cm2 = (v: number) => `${v.toFixed(3)} cm²`;
@@ -141,12 +147,14 @@ const dimensions = (shape: CoreShape): Section => {
 };
 
 /**
- * The geometry the formulas actually run on.
+ * The geometry behind the testing table.
  *
- * Gross section, stacking factor, net area and mean path are the four numbers
- * every other figure on the sheet is derived from, and none of them appear on
- * an order line. Printing them is what lets a customer's own engineer check the
- * weight and the test voltage without asking us for the working.
+ * Net area and mean path are what a reader needs to check the test voltage and
+ * the magnetising current for themselves. The stacking factor and the density
+ * used to sit here too and have been taken out: they are inputs to the weight
+ * calculation and to nothing else on this sheet, and the stacking factor in
+ * particular is the figure agreed with this one customer — not something to
+ * print on a drawing that gets passed around.
  */
 const geometry = (shape: CoreShape, meta: SheetMeta): Section | null => {
   switch (shape.kind) {
@@ -161,12 +169,9 @@ const geometry = (shape: CoreShape, meta: SheetMeta): Section | null => {
         heading: 'Geometry',
         rows: [
           ['Gross section  Ag', mm2(ag)],
-          ['Stacking factor', `${(sf * 100).toFixed(2)} %`],
-          ['Weight factor  F', `${fx}`],
           ['Net core area  Ae', cm2(netArea(ag, sf))],
           ['Mean path  Lm', `${toroidalMeanPath(id, od).toFixed(2)} cm`],
           ['Window area', mm2((Math.PI / 4) * id * id)],
-          ['Density', `${MATERIALS.CRGO.density} g/cm³`],
         ],
       };
     }
@@ -181,12 +186,10 @@ const geometry = (shape: CoreShape, meta: SheetMeta): Section | null => {
         heading: 'Geometry',
         rows: [
           ['Gross section  Ag', mm2(ag)],
-          ['Stacking factor  S', `${(s * 100).toFixed(2)} %`],
           ['Net core area  Ac', cm2((ag * s) / 100)],
           ['Mean path  Ml', `${(0.2 * (id1 + id2) + d13).toFixed(2)} cm`],
           ['Corner term  D13', `${d13.toFixed(3)} cm`],
           ['Window area', mm2(id1 * id2)],
-          ['Density', `${MATERIALS.CRGO.density} g/cm³`],
         ],
       };
     }
@@ -199,10 +202,8 @@ const geometry = (shape: CoreShape, meta: SheetMeta): Section | null => {
         heading: 'Geometry',
         rows: [
           ['Gross section  Ag', mm2(ag)],
-          ['Stacking factor', `${(sf * 100).toFixed(2)} %`],
           ['Net core area  Ae', cm2(netArea(ag, sf))],
           ['Mean path  Lm', `${toroidalMeanPath(id, od).toFixed(2)} cm`],
-          ['Density', `${MATERIALS.NANOCRYSTALLINE.density} g/cm³`],
         ],
       };
     }
@@ -219,121 +220,132 @@ const geometry = (shape: CoreShape, meta: SheetMeta): Section | null => {
           ['CRGO  mean path', `${toroidalMeanPath(shape.crgo.id, shape.crgo.od).toFixed(2)} cm`],
           ['Nano  net area', cm2(netArea(agN, sfN))],
           ['Nano  mean path', `${toroidalMeanPath(shape.nano.id, shape.nano.od).toFixed(2)} cm`],
-          ['Densities', `CRGO ${MATERIALS.CRGO.density} · Nano ${MATERIALS.NANOCRYSTALLINE.density} g/cm³`],
         ],
       };
     }
   }
 };
 
-/** The weight, with the formula written out using this line's own numbers. */
-const weight = (shape: CoreShape, meta: SheetMeta): Section => {
-  const rows: [string, string][] = [
+/**
+ * The weight, as figures only.
+ *
+ * The working used to be printed underneath — the formula with this line's own
+ * numbers substituted in. It is gone deliberately: the sheet goes to a
+ * customer, and the weight formula carries the stacking factor that was agreed
+ * with them, which is commercial information and not something to hand over on
+ * every drawing.
+ */
+const weight = (_shape: CoreShape, meta: SheetMeta): Section => ({
+  heading: 'Weight',
+  rows: [
     ['Weight / pc', kg(meta.weightPerPc)],
     ['Pieces', meta.pcs ? String(meta.pcs) : '—'],
     ['Total weight', kg(meta.totalWeight)],
-  ];
-
-  const lines: string[] = (() => {
-    switch (shape.kind) {
-      case 'TOROIDAL':
-      case 'CUT_ROUND': {
-        const { id, od, ht } = shape.dims;
-        const fx = stackOr(meta.factor, TOROIDAL_FACTOR);
-        return [
-          'W = (OD² − ID²) × HT × F × 1e-6',
-          `  = (${n1(od)}² − ${n1(id)}²) × ${n1(ht)} × ${fx} × 1e-6`,
-          `F = ${fx} — π/4 × density × stacking`
-            + (fx === TOROIDAL_FACTOR ? ' (house standard)' : ' (agreed for this customer)'),
-          ...(shape.kind === 'CUT_ROUND'
-            ? ['Cut from a wound ring, so this is the weight of the whole ring.',
-              'One piece = one complete core, both halves. Cutting loss not deducted.']
-            : []),
-        ];
-      }
-      case 'RECTANGULAR':
-      case 'CUT_RECT': {
-        const { id1, id2, od2, ht } = shape;
-        const s = stackOr(meta.factor, RECT_STACK_FACTOR);
-        return [
-          'Ac = ((OD2 − ID2) / 2) × HT × S / 100',
-          `   = ((${n1(od2)} − ${n1(id2)}) / 2) × ${n1(ht)} × ${s} / 100`,
-          'Ml = 0.2 × (ID1 + ID2) + ((OD2 − ID2) / 20) × π',
-          `   = 0.2 × (${n1(id1)} + ${n1(id2)}) + …`,
-          'W  = Ac × Ml × 7.65 / 1000',
-          `S = ${s}`
-            + (s === RECT_STACK_FACTOR ? ' (house standard)' : ' (agreed for this customer)'),
-          ...(shape.kind === 'CUT_RECT'
-            ? ['One piece = one complete core, both halves. Cutting loss not deducted.']
-            : []),
-        ];
-      }
-      case 'NANO':
-        return [
-          'Core = (OD² − ID²) × HT × 4.5559e-6',
-          'Case = (caseOD + caseID) × HT × 3.4876e-5',
-          '     + (ssOD² − ssID²) × 7.68e-6',
-          'W    = core + case (case omitted for epoxy / plastic)',
-        ];
-      case 'COMPOSITE': {
-        const fx = stackOr(meta.factor, TOROIDAL_FACTOR);
-        return [
-          'W = Nano (core + case) + CRGO',
-          'Nano core = (OD² − ID²) × HT × 4.5559e-6',
-          `CRGO      = (OD² − ID²) × HT × ${fx} × 1e-6`,
-          `F = ${fx} — applies to the CRGO half only`,
-        ];
-      }
-    }
-  })();
-
-  return { heading: 'Weight', rows, lines };
-};
+  ],
+});
 
 /**
- * The magnetic test, written the way a test certificate reads.
+ * Net core area and mean magnetic path — the two numbers the test figures are
+ * computed from.
  *
- * Absent entirely when the line carries no flux figures — most lines are quoted
- * on weight alone, and an empty heading looks like something failed to print.
+ * Pulled out of geometry() so the test table can work them out for itself at
+ * any flux level, rather than being limited to the single point this order line
+ * happens to be booked at.
  */
-const magnetic = (shape: CoreShape, meta: SheetMeta): Section | null => {
-  const turns = meta.turns ?? 0;
-  const flux = meta.flux ?? 0;
-  if (!(turns > 0) || !(flux > 0)) return null;
+const electrical = (shape: CoreShape, meta: SheetMeta) => {
+  switch (shape.kind) {
+    case 'TOROIDAL':
+    case 'CUT_ROUND': {
+      const { id, od, ht } = shape.dims;
+      if (!(od > id && ht > 0)) return null;
+      const sf = factorToSF(stackOr(meta.factor, TOROIDAL_FACTOR), MATERIALS.CRGO.density);
+      return {
+        areaCm2: netArea(toroidalGrossArea(id, od, ht), sf),
+        meanPathCm: toroidalMeanPath(id, od),
+      };
+    }
+    case 'RECTANGULAR':
+    case 'CUT_RECT': {
+      const { id1, id2, od2, ht } = shape;
+      if (!(od2 > id2 && ht > 0)) return null;
+      const sfac = stackOr(meta.factor, RECT_STACK_FACTOR);
+      return {
+        areaCm2: (((od2 - id2) / 2) * ht * sfac) / 100,
+        meanPathCm: 0.2 * (id1 + id2) + ((od2 - id2) / 20) * 3.14,
+      };
+    }
+    default:
+      return null;
+  }
+};
 
-  const gap = meta.gapAt ?? 0;
-  const steel = meta.steelAt ?? 0;
+/** The flux levels every test sheet is written at. */
+const TEST_FLUX = [0.5, 1.0, 1.5];
+
+/**
+ * The testing parameters, as a table.
+ *
+ * One row per standard flux level, in volts and amps — not millivolts and
+ * milliamps, which is how the figures are carried internally but not how a
+ * test bench is set up or how a certificate reads.
+ *
+ * The voltage needs no grade data, so it is given at every level even when the
+ * grade has an ATe/cm figure for only one of them; the current is left blank
+ * rather than guessed. A blank is a question someone can answer. A number
+ * pulled from the wrong flux level is not.
+ */
+const testing = (shape: CoreShape, meta: SheetMeta): Section | null => {
+  const turns = meta.turns ?? 0;
+  if (!(turns > 0)) return null;
+
+  const e = electrical(shape, meta);
   const gapMm = gapOf(shape);
 
-  const rows: [string, string][] = [
-    ['Test turns  N', String(turns)],
-    ['Flux density  B', `${flux.toFixed(2)} T`],
-    ['Frequency', '50 Hz'],
-    ['ATe / cm', meta.ateCm ? meta.ateCm.toFixed(3) : '—'],
-    ['Test voltage  V', `${(meta.testVoltage ?? 0).toFixed(3)} V`],
-  ];
-  if (gapMm > 0) {
-    rows.push(
-      ['Steel ampere-turns', `${steel.toFixed(0)} AT`],
-      ['Gap ampere-turns', `${gap.toFixed(0)} AT`],
-      ['Total ampere-turns', `${(steel + gap).toFixed(0)} AT`],
-    );
+  // Nano and composite run their own voltage formula, with a frequency and a
+  // stacking factor of their own. Rather than tabulate them on the CRGO one,
+  // they keep the single point the line was booked at.
+  if (!e) {
+    if (!(meta.flux && meta.flux > 0)) return null;
+    return {
+      heading: 'Testing parameters',
+      rows: [
+        ['Test turns  N', String(turns)],
+        ['Frequency', '50 Hz'],
+        ['Flux density  B', `${meta.flux.toFixed(2)} T`],
+        ['Test voltage', `${(meta.testVoltage ?? 0).toFixed(3)} V`],
+        ['Ie max', `${((meta.testCurrent ?? 0) / 1000).toFixed(4)} A`],
+      ],
+    };
   }
-  rows.push(['Ie max', `${(meta.testCurrent ?? 0).toFixed(2)} mA`]);
 
-  const lines = [
-    'V = 4.44 × f × N × B × Ae / 10000',
-    ...(gapMm > 0
-      ? [
-        `Gap AT = 795.7747 × B × gap = 795.7747 × ${flux.toFixed(2)} × ${n1(gapMm)}`,
-        `       = ${gap.toFixed(0)} AT`,
-        'Steel AT = ATe/cm × Lm',
-      ]
-      : ['AT = ATe/cm × Lm']),
-    'Ie = AT / N × 1000  (mA)',
+  const ateAt = (flux: number) =>
+    (meta.fluxPoints ?? []).find((pt) => Math.abs(pt.flux - flux) < 1e-6)?.ateCm
+    ?? (meta.flux != null && Math.abs(meta.flux - flux) < 1e-6 ? meta.ateCm ?? null : null);
+
+  const rows = TEST_FLUX.map((flux) => {
+    const volts = testVoltage(e.areaCm2, turns, flux);
+    const ate = ateAt(flux);
+    const amps = ate == null
+      ? null
+      : (ate * e.meanPathCm + (gapMm > 0 ? gapAmpereTurns(flux, gapMm) : 0)) / turns;
+    return [
+      flux.toFixed(2),
+      volts.toFixed(3),
+      amps == null ? '—' : amps.toFixed(4),
+    ];
+  });
+
+  const head: [string, string][] = [
+    ['Test turns  N', String(turns)],
+    ['Frequency', '50 Hz'],
   ];
+  if (gapMm > 0) head.push(['Air gap', mm(gapMm)]);
 
-  return { heading: 'Magnetic test', rows, lines };
+  return {
+    heading: 'Testing parameters',
+    rows: head,
+    table: { head: ['Flux (T)', 'Volts (V)', 'Amps (A)'], rows },
+  };
 };
 
 /** Standing notes. Short, and only the ones that apply to this shape. */
@@ -364,8 +376,8 @@ export const buildSheetModel = (shape: CoreShape, meta: SheetMeta): SheetModel =
   const geo = geometry(shape, meta);
   if (geo) sections.push(geo);
   sections.push(weight(shape, meta));
-  const mag = magnetic(shape, meta);
-  if (mag) sections.push(mag);
+  const test = testing(shape, meta);
+  if (test) sections.push(test);
 
   return {
     title: titleOf(shape),

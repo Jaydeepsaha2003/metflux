@@ -1581,10 +1581,13 @@ export const ToroidalForm = ({
         turns, flux, ateCm,
         testVoltage: fluxCalc.testVoltage, testCurrent: fluxCalc.testCurrent,
         steelAt: fluxCalc.steelAt, gapAt: fluxCalc.gapAt,
+        // The whole curve, not just the level this line is booked at: the spec
+        // sheet tabulates 0.5 / 1.0 / 1.5 T and needs an ATe/cm for each.
+        fluxPoints,
       },
     }),
     [cut, gapMm, id, od, ht, grade, material, pcs, stack,
-     calc.weightPerPc, calc.totalWeight, turns, flux, ateCm, fluxCalc],
+     calc.weightPerPc, calc.totalWeight, turns, flux, ateCm, fluxCalc, fluxPoints],
   );
 
   // Derive the OTHER rate + line total locally — must match server's deriveRate.
@@ -1911,10 +1914,13 @@ export const RectangularForm = ({
         turns, flux, ateCm,
         testVoltage: fluxCalc.testVoltage, testCurrent: fluxCalc.testCurrent,
         steelAt: fluxCalc.steelAt, gapAt: fluxCalc.gapAt,
+        // The whole curve, not just the level this line is booked at: the spec
+        // sheet tabulates 0.5 / 1.0 / 1.5 T and needs an ATe/cm for each.
+        fluxPoints,
       },
     }),
     [cut, gapMm, id1, id2, od1, od2, ht, grade, material, pcs, stack,
-     calc.weightPerPc, calc.totalWeight, turns, flux, ateCm, fluxCalc],
+     calc.weightPerPc, calc.totalWeight, turns, flux, ateCm, fluxCalc, fluxPoints],
   );
 
   // Build-symmetry validation per the spec: (OD-1 − ID-1) must equal (OD-2 − ID-2).

@@ -83,6 +83,30 @@ const drawSection = (sec: Section, x: number, y: number, w: number): [string, nu
     cy += ROW_H;
   });
 
+  if (sec.table) {
+    const cols = sec.table.head.length;
+    const colW = w / cols;
+    // Right-aligned but for the first column: these are all numbers, and
+    // numbers that do not line up at the decimal point are numbers nobody
+    // checks.
+    const at = (i: number) => (i === 0 ? x + 4 : x + colW * (i + 1) - 4);
+    const anchor = (i: number) => (i === 0 ? 'start' : 'end');
+
+    cy += 12;
+    out.push(`<rect x="${x}" y="${cy - 14}" width="${w}" height="26" fill="#f1f5f9"/>`);
+    sec.table.head.forEach((h, i) => {
+      out.push(T(at(i), cy, h.toUpperCase(), 14, { weight: 700, fill: '#475569', anchor: anchor(i) }));
+    });
+    cy += 24;
+    sec.table.rows.forEach((row) => {
+      row.forEach((v, i) => {
+        out.push(T(at(i), cy, v, 18, { weight: i === 0 ? 700 : 400, anchor: anchor(i) }));
+      });
+      out.push(`<line x1="${x}" y1="${cy + 9}" x2="${x + w}" y2="${cy + 9}" stroke="#e2e8f0"/>`);
+      cy += ROW_H;
+    });
+  }
+
   if (sec.lines?.length) {
     cy += 10;
     sec.lines.forEach((l) => {
@@ -226,6 +250,32 @@ const pdfSection = (sec: Section): any[] => {
       },
     });
   }
+  if (sec.table) {
+    out.push({
+      table: {
+        headerRows: 1,
+        widths: sec.table.head.map((_, i) => (i === 0 ? 'auto' : '*')),
+        body: [
+          sec.table.head.map((h, i) => ({
+            text: h.toUpperCase(), fontSize: 6.5, bold: true, color: '#475569',
+            alignment: i === 0 ? 'left' : 'right',
+          })),
+          ...sec.table.rows.map((row) => row.map((v, i) => ({
+            text: v, bold: i === 0, alignment: i === 0 ? 'left' : 'right',
+          }))),
+        ],
+      },
+      layout: {
+        hLineWidth: (i: number, node: any) => (i === 1 ? 0.8 : i === node.table.body.length ? 0 : 0.5),
+        vLineWidth: () => 0,
+        hLineColor: (i: number) => (i === 1 ? '#0f172a' : '#e2e8f0'),
+        fillColor: (i: number) => (i === 0 ? '#f1f5f9' : null),
+        paddingTop: () => 2.5, paddingBottom: () => 2.5, paddingLeft: () => 3, paddingRight: () => 3,
+      },
+      margin: [0, 5, 0, 0],
+    });
+  }
+
   if (sec.lines?.length) {
     out.push(...sec.lines.map((l, i) => ({
       text: l, fontSize: 7.5, color: '#475569', margin: [0, i === 0 ? 4 : 0, 0, 1],
