@@ -37,6 +37,73 @@ type Props = {
   resetNonce: number;
 };
 
+/** The default three-quarter view: front, right, slightly above. */
+const DEFAULT_DIR = new THREE.Vector3(0.62, 0.52, 0.78).normalize();
+
+/** How much empty space to leave around the part, as a multiple of the
+ *  distance that would make it exactly touch the edges. */
+const FIT_MARGIN = 1.22;
+
+type Kit = {
+  camera: THREE.PerspectiveCamera;
+  controls: OrbitControls;
+  group: THREE.Group;
+  render: () => void;
+};
+
+/**
+ * Put the whole part in frame, whatever its size.
+ *
+ * Cores in this app run from a 10mm bore to something you need two people to
+ * lift, so no fixed camera distance works: the distance has to come from the
+ * geometry every time. This takes the part's bounding sphere and solves for the
+ * distance at which it fits, then backs off by a margin so it is not jammed
+ * against the edges.
+ *
+ * Both fields of view matter. The vertical one is fixed by the lens, but the
+ * horizontal follows the panel's aspect ratio, and in a dock that is wider than
+ * it is tall the vertical is the tighter of the two. Fitting to the vertical
+ * alone leaves a tall core cropped top and bottom, which is exactly what a
+ * 10 x 20 x 30 core did.
+ *
+ * `keepAngle` preserves wherever the user has rotated to and changes only the
+ * distance — so typing a dimension re-fits without throwing away the view they
+ * chose. Reset passes false to return to the default three-quarter.
+ */
+const frame = (k: Kit, { keepAngle }: { keepAngle: boolean }) => {
+  const box = new THREE.Box3().setFromObject(k.group);
+  if (box.isEmpty()) return;
+  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  if (!Number.isFinite(sphere.radius) || sphere.radius <= 0) return;
+
+  const vFov = (k.camera.fov * Math.PI) / 180;
+  const hFov = 2 * Math.atan(Math.tan(vFov / 2) * k.camera.aspect);
+  const dist = (sphere.radius / Math.sin(Math.min(vFov, hFov) / 2)) * FIT_MARGIN;
+
+  // Keep the direction the user is looking from, if they have moved at all.
+  const dir = keepAngle
+    ? k.camera.position.clone().sub(k.controls.target).normalize()
+    : DEFAULT_DIR.clone();
+  if (!keepAngle || dir.lengthSq() < 1e-6) dir.copy(DEFAULT_DIR);
+
+  k.controls.target.copy(sphere.center);
+  k.camera.position.copy(sphere.center).addScaledVector(dir, dist);
+
+  // Clipping planes scaled to the part, so a 10mm core does not vanish into
+  // the near plane and a 900mm one is not sliced by the far plane.
+  k.camera.near = Math.max(sphere.radius / 500, 0.01);
+  k.camera.far = dist + sphere.radius * 10;
+  k.camera.updateProjectionMatrix();
+
+  // Zoom limits that stop the user getting lost inside the metal or losing the
+  // part to a speck in the distance.
+  k.controls.minDistance = sphere.radius * 1.05;
+  k.controls.maxDistance = dist * 3;
+
+  k.controls.update();
+  k.render();
+};
+
 export default function CoreViewer({ shape, resetNonce }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
 
@@ -170,7 +237,11 @@ export default function CoreViewer({ shape, resetNonce }: Props) {
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
-      render();
+      // Re-fit, not just re-render: the horizontal field of view follows the
+      // aspect ratio, so a panel that narrows would crop the part at the sides
+      // unless the camera backs off to match.
+      if (kit.current && group.children.length) frame(kit.current, { keepAngle: true });
+      else render();
     });
     ro.observe(host);
 
@@ -254,10 +325,11 @@ export default function CoreViewer({ shape, resetNonce }: Props) {
       }
     }
 
-    // Frame the part: sit it on the floor, size the grid to it, and pull the
-    // camera back to whatever distance actually fits the bounding sphere.
+    // Sit the part on the floor and size the floor and grid to it, so the
+    // shadow has somewhere to land and the grid reads as scale rather than
+    // wallpaper. Measured before framing, because dropping the group changes
+    // where its centre is.
     const box = new THREE.Box3().setFromObject(k.group);
-    const sphere = box.getBoundingSphere(new THREE.Sphere());
     const extent = shapeExtent(shape) || 1;
 
     k.group.position.y = -box.min.y;
@@ -266,35 +338,14 @@ export default function CoreViewer({ shape, resetNonce }: Props) {
     k.grid.position.y = 0.01;
     k.grid.scale.setScalar(extent * 3);
 
-    const fitDist = sphere.radius / Math.sin((k.camera.fov * Math.PI) / 180 / 2);
-    k.controls.target.set(0, box.max.y - box.min.y > 0 ? (box.max.y - box.min.y) / 2 : 0, 0);
-    k.controls.minDistance = sphere.radius * 1.1;
-    k.controls.maxDistance = fitDist * 4;
-    k.camera.near = Math.max(0.1, sphere.radius / 100);
-    k.camera.far = fitDist * 20;
-    k.camera.updateProjectionMatrix();
-
-    // Only re-seat the camera when it has nothing sensible to keep — otherwise
-    // typing a dimension would yank the view back and undo the user's rotation.
-    if (k.camera.position.length() <= 2.01) {
-      k.camera.position.set(fitDist * 0.62, fitDist * 0.52, fitDist * 0.78);
-    }
-    k.controls.update();
-    k.render();
+    frame(k, { keepAngle: true });
   }, [shape]);
 
   /* ---- explicit "reset view" ---- */
   useEffect(() => {
     const k = kit.current;
-    if (!k || !shapeIsDrawable(shape)) return;
-    const box = new THREE.Box3().setFromObject(k.group);
-    const sphere = box.getBoundingSphere(new THREE.Sphere());
-    if (!Number.isFinite(sphere.radius) || sphere.radius <= 0) return;
-    const fitDist = sphere.radius / Math.sin((k.camera.fov * Math.PI) / 180 / 2);
-    k.camera.position.set(fitDist * 0.62, fitDist * 0.52, fitDist * 0.78);
-    k.controls.target.set(0, (box.max.y - box.min.y) / 2, 0);
-    k.controls.update();
-    k.render();
+    if (!k || !shapeIsDrawable(shape) || k.group.children.length === 0) return;
+    frame(k, { keepAngle: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetNonce]);
 
