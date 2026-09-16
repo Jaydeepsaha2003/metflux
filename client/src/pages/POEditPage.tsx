@@ -10,6 +10,7 @@ import { cn } from '@/lib/cn';
 import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc, stackOr, TOROIDAL_FACTOR, RECT_STACK_FACTOR } from '@/lib/calc';
 import { SearchableSelect } from '@/components/SearchableSelect';
 
+import { coreBadge } from '@/lib/coreTypes';
 type GradeRow = { grade: string; materials: { id: string; material: string }[] };
 type FluxPoint = { flux: number; ateCm: number };
 type FluxGroup = { grade: string; points: FluxPoint[] };
@@ -263,7 +264,7 @@ const SOHeaderEditor = ({ item }: { item: Item }) => {
         <span className="text-xs text-slate-500">
           <span className={cn(
             'rounded-full px-2 py-0.5 font-medium',
-            item.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
+            coreBadge(item.coreType)
           )}>
             {item.coreType}
           </span>

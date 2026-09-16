@@ -10,6 +10,7 @@ import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
 import { useHideCustomerNames } from '@/store/auth';
 
+import { coreShort, coreBadge } from '@/lib/coreTypes';
 type PendingDispatch = {
   id: string;
   poNumber: string;
@@ -289,8 +290,8 @@ export const PackingPage = () => {
                         <td data-label="PO Number" className="px-4 py-3 text-slate-600 font-mono text-xs">{d.poNumber}</td>
                         <td data-label="Type" className="px-4 py-3">
                           <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium',
-                            d.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700')}>
-                            {d.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
+                            coreBadge(d.coreType))}>
+                            {coreShort(d.coreType)}
                           </span>
                         </td>
                         <td data-label="Grade" className="px-4 py-3 text-slate-600">{d.grade}</td>

@@ -10,6 +10,7 @@ import { cn } from '@/lib/cn';
 import { downloadXlsx, todayStamp } from '@/lib/excel';
 import { useHideCustomerNames } from '@/store/auth';
 
+import { coreShort, coreBadge, coreBadgeRing } from '@/lib/coreTypes';
 type ReadyItem = {
   id: string;
   poNumber: string;
@@ -221,9 +222,9 @@ export const DispatchNewPage = () => {
                       )}
                       <span className={cn(
                         'rounded-full px-1.5 py-0.5 text-[10px] font-medium shrink-0',
-                        it.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
+                        coreBadge(it.coreType)
                       )}>
-                        {it.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
+                        {coreShort(it.coreType)}
                       </span>
                     </div>
                     <div className="mt-0.5 text-[11px] text-slate-500 font-mono truncate">{it.poNumber} · {it.measure}</div>
@@ -307,9 +308,9 @@ export const DispatchNewPage = () => {
                     <td className="px-3 py-2.5">
                       <span className={cn(
                         'rounded-full px-2 py-0.5 ring-1 ring-inset',
-                        it.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-rose-50 text-rose-700 ring-rose-200'
+                        coreBadgeRing(it.coreType)
                       )}>
-                        {it.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
+                        {coreShort(it.coreType)}
                       </span>
                     </td>
                     <td className="px-3 py-2.5">{it.grade}</td>
@@ -515,7 +516,7 @@ const StockInModal = ({ item, onClose, onDone }: { item: ReadyItem; onClose: () 
         ) : (
           <div className="px-5 py-4 space-y-4">
             <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
-              {item.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'} · {item.grade} · {item.measure} · ready <strong className="text-slate-900">{item.readyPcs}</strong>
+              {coreShort(item.coreType)} · {item.grade} · {item.measure} · ready <strong className="text-slate-900">{item.readyPcs}</strong>
               {item.excessPcs > 0 && <span className="ml-1 text-orange-700">(+{item.excessPcs} excess)</span>}
             </div>
             <label className="block">

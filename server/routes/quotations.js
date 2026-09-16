@@ -42,6 +42,10 @@ const itemSchema = z.object({
   coreMl: z.coerce.number().nonnegative().optional().nullable(),
   d13: z.coerce.number().nonnegative().optional().nullable(),
   // Stacking factor this line was weighed with; NULL = house default.
+  // Total controlled air gap across both joints, mm. Cut and gap cores only;
+  // NULL on everything else, because "no gap" and "a gap of zero" are not the
+  // same statement about a product.
+  gapMm:       z.coerce.number().nonnegative().max(100).optional().nullable(),
   stackFactor: z.coerce.number().positive().max(100).optional().nullable(),
   turns:       z.coerce.number().positive().transform((v) => Math.round(v)).optional().nullable(),
   flux:        z.coerce.number().positive().optional().nullable(),
@@ -271,6 +275,7 @@ router.post('/', requireAnyPermission('add_quotation', 'add_po'), asyncHandler(a
         id1: it.id1, id2: it.id2 ?? null,
         od1: it.od1, od2: it.od2 ?? null,
         ht: it.ht, builtup: it.builtup ?? null,
+        gapMm: it.gapMm ?? null,
         weightPerPc: it.weightPerPc, pcs: it.pcs, totalWeight: it.totalWeight,
         coreAc: it.coreAc ?? null, coreMl: it.coreMl ?? null, d13: it.d13 ?? null,
         stackFactor: it.stackFactor ?? null,
@@ -357,6 +362,7 @@ router.put('/:id', requireAnyPermission('add_quotation', 'add_po'), asyncHandler
         hsnCode: it.hsnCode ?? null, unit: it.unit ?? 'Pcs',
         id1: it.id1, id2: it.id2 ?? null, od1: it.od1, od2: it.od2 ?? null,
         ht: it.ht, builtup: it.builtup ?? null,
+        gapMm: it.gapMm ?? null,
         weightPerPc: it.weightPerPc, pcs: it.pcs, totalWeight: it.totalWeight,
         coreAc: it.coreAc ?? null, coreMl: it.coreMl ?? null, d13: it.d13 ?? null,
         stackFactor: it.stackFactor ?? null,
@@ -481,6 +487,7 @@ router.post('/:id/convert', requireAnyPermission('add_quotation', 'add_po'), asy
         poOrderId: po.id,
         coreType: it.coreType, grade: it.grade, material: it.material, measure: it.measure,
         id1: it.id1, id2: it.id2, od1: it.od1, od2: it.od2, ht: it.ht, builtup: it.builtup,
+        gapMm: it.gapMm ?? null,
         weightPerPc: it.weightPerPc, pcs: it.pcs, totalWeight: it.totalWeight,
         coreAc: it.coreAc, coreMl: it.coreMl, d13: it.d13,
         stackFactor: it.stackFactor ?? null,

@@ -181,12 +181,23 @@ const ReadOut = ({ label, value, w, tone }: { label: string; value: string; w?: 
   </div>
 );
 
-const coreBadge = (ct: CoreType) =>
-  ct === 'TOROIDAL' ? 'bg-amber-50 text-amber-700'
-  : ct === 'RECTANGULAR' ? 'bg-rose-50 text-rose-700'
-  : ct === 'COMPOSITE' ? 'bg-teal-50 text-teal-700'
-  : 'bg-violet-50 text-violet-700';
-const coreShort = (ct: CoreType) => (ct === 'TOROIDAL' ? 'Toro' : ct === 'RECTANGULAR' ? 'Rect' : ct === 'COMPOSITE' ? 'Comp' : 'Nano');
+/* Keyed rather than chained: the chain ended in a bare else, so the two cut
+   families added later fell through it and every cut core in the items list
+   was badged violet "Nano". A map has no fall-through to fall through. */
+const CORE_BADGE: Record<CoreType, string> = {
+  TOROIDAL:    'bg-amber-50 text-amber-700',
+  RECTANGULAR: 'bg-rose-50 text-rose-700',
+  COMPOSITE:   'bg-teal-50 text-teal-700',
+  NANO:        'bg-violet-50 text-violet-700',
+  CUT_ROUND:   'bg-sky-50 text-sky-700',
+  CUT_RECT:    'bg-cyan-50 text-cyan-700',
+};
+const CORE_SHORT: Record<CoreType, string> = {
+  TOROIDAL: 'Toro', RECTANGULAR: 'Rect', COMPOSITE: 'Comp', NANO: 'Nano',
+  CUT_ROUND: 'Cut R', CUT_RECT: 'Cut X',
+};
+const coreBadge = (ct: CoreType) => CORE_BADGE[ct] ?? 'bg-slate-100 text-slate-700';
+const coreShort = (ct: CoreType) => CORE_SHORT[ct] ?? ct;
 // Prices are shown as whole rupees (no decimals).
 const money0 = (n: number | undefined | null) => Math.round(Number(n) || 0).toLocaleString('en-IN');
 
@@ -204,6 +215,7 @@ const ItemDetails = ({ it }: { it: Item }) => {
     rows.push(['Wt / pc (kg)', (it.weightPerPc ?? 0).toFixed(3)]);
     rows.push(['Total Wt (kg)', (it.totalWeight ?? 0).toFixed(3)]);
     if (it.builtup != null) rows.push(['Built-up', it.builtup.toFixed(3)]);
+    if (it.gapMm) rows.push(['Air gap', `${it.gapMm} mm (total, both joints)`]);
     if (it.coreAc != null) rows.push(['Core A/C', it.coreAc.toFixed(3)]);
   }
   if (it.turns) rows.push(['Turns', String(it.turns)]);
@@ -1607,7 +1619,8 @@ export const ToroidalForm = ({
       return;
     }
     onAdd({
-      coreType: selfCore, grade, material, measure: calc.measure,
+      coreType: selfCore, grade, material,
+      measure: cut && gapMm > 0 ? `${calc.measure} gap ${gapMm}` : calc.measure,
       id1: id, od1: od, ht, pcs,
       weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight,
       stackFactor: stack,
@@ -1943,7 +1956,8 @@ export const RectangularForm = ({
       return;
     }
     onAdd({
-      coreType: selfCore, grade, material, measure: calc.measure,
+      coreType: selfCore, grade, material,
+      measure: cut && gapMm > 0 ? `${calc.measure} gap ${gapMm}` : calc.measure,
       id1, id2, od1, od2, ht, builtup: calc.builtup, pcs,
       weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight,
       coreAc: calc.coreAc, coreMl: calc.coreMl, d13: calc.d13,

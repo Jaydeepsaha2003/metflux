@@ -15,6 +15,7 @@ import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
 import { toroidalCalc, rectangularCalc, nanoCalc, round3, compositeRuleFromMaterial, compositeCalc } from '@/lib/calc';
 
+import { coreShort, coreBadge, coreLabel } from '@/lib/coreTypes';
 type GradeRow = { grade: string; materials: { material: string }[]; coreTypes?: string[] };
 // Dimensions the user types; core-type formula turns them into weight + measure.
 type Dims = { id1: number; id2: number; od1: number; od2: number; ht: number };
@@ -48,9 +49,9 @@ type SoLine = {
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const fmtDate = (iso: string | null) => { if (!iso) return '—'; const d = new Date(iso); return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); };
-const coreShort = (ct: string) => (ct === 'TOROIDAL' ? 'Toro' : ct === 'NANO' ? 'Nano' : ct === 'COMPOSITE' ? 'Comp' : 'Rect');
-const coreLabel: Record<string, string> = { TOROIDAL: 'Toroidal', RECTANGULAR: 'Rectangular', NANO: 'Nano', COMPOSITE: 'Composite' };
-const coreBadge: Record<string, string> = { TOROIDAL: 'bg-amber-50 text-amber-700', NANO: 'bg-violet-50 text-violet-700', RECTANGULAR: 'bg-rose-50 text-rose-700', COMPOSITE: 'bg-teal-50 text-teal-700' };
+
+
+
 const CORE_TYPES = ['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE'] as const;
 type CoreType = (typeof CORE_TYPES)[number];
 const specLabel = (s: StockLine) => `${coreShort(s.coreType)} · ${s.grade} · ${s.measure}`;
@@ -104,13 +105,13 @@ export const WarehousePage = () => {
     const q = search.trim().toLowerCase();
     const rows = stock?.items ?? [];
     if (!q) return rows;
-    return rows.filter((s) => [s.warehouseName, coreLabel[s.coreType] ?? s.coreType, s.grade, s.material, s.measure]
+    return rows.filter((s) => [s.warehouseName, coreLabel(s.coreType), s.grade, s.material, s.measure]
       .some((v) => String(v ?? '').toLowerCase().includes(q)));
   })();
   const exportStock = async () => {
     if (!stockRows.length) return;
     await downloadXlsx(`store-stock-${todayStamp()}`, 'Stock', stockRows.map((s) => ({
-      Store: s.warehouseName, Type: coreLabel[s.coreType] ?? s.coreType, Grade: s.grade,
+      Store: s.warehouseName, Type: coreLabel(s.coreType), Grade: s.grade,
       Material: s.material, Measure: s.measure, 'Wt / pc (kg)': s.weightPerPc,
       'On hand (pcs)': s.onHand, 'Weight (kg)': s.onHandWeight,
     })));
@@ -243,7 +244,7 @@ export const WarehousePage = () => {
                         <td data-label="Details" className="px-2 py-2.5 text-center text-slate-400">{open ? <ChevronDown className="inline h-4 w-4" /> : <ChevronRight className="inline h-4 w-4" />}</td>
                         <td data-label="Store" className="px-3 py-2.5 text-slate-600">{s.warehouseName}</td>
                         <td data-label="Type" className="px-3 py-2.5">
-                          <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', s.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : s.coreType === 'NANO' ? 'bg-violet-50 text-violet-700' : 'bg-rose-50 text-rose-700')}>
+                          <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', coreBadge(s.coreType))}>
                             {coreShort(s.coreType)}
                           </span>
                         </td>
@@ -441,7 +442,7 @@ const OpeningStockModal = ({
                   <button key={ct} onClick={() => { setCoreType(ct); setGrade(''); setMaterial(''); }}
                     className={cn('rounded-md px-3.5 py-1.5 text-sm font-medium transition',
                       coreType === ct ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900')}>
-                    {coreLabel[ct]}
+                    {coreLabel(ct)}
                   </button>
                 ))}
               </div>
@@ -521,7 +522,7 @@ const OpeningStockModal = ({
             {/* Live preview card — mirrors the New Order form's computed section */}
             <div className="overflow-hidden rounded-xl border border-slate-200">
               <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2">
-                <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', coreBadge[coreType])}>{coreLabel[coreType]}</span>
+                <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', coreBadge(coreType))}>{coreLabel(coreType)}</span>
                 <span className="text-sm font-semibold text-slate-800">{grade || '—'}</span>
                 {material && <span className="text-xs text-slate-500">· {material}</span>}
               </div>

@@ -9,6 +9,7 @@ import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { SearchableSelect } from '@/components/SearchableSelect';
 
+import { coreShort, coreBadge } from '@/lib/coreTypes';
 type ReturnStatus = 'PENDING' | 'RECEIVED' | 'IN_REWORK' | 'REDISPATCHED' | 'CLOSED' | 'CANCELLED';
 type ReferenceType = 'SO_NUMBER' | 'INVOICE_NUMBER' | 'WO_NUMBER';
 
@@ -506,9 +507,9 @@ export const ReturnFormPage = () => {
                   <td className="px-4 py-3">
                     <span className={cn(
                       'rounded-full px-2 py-0.5 text-[11px] font-medium',
-                      it.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
+                      coreBadge(it.coreType)
                     )}>
-                      {it.coreType === 'TOROIDAL' ? 'Toro' : it.coreType === 'RECTANGULAR' ? 'Rect' : '—'}
+                      {coreShort(it.coreType)}
                     </span>
                   </td>
                   <td className="px-4 py-3">{it.grade ?? '—'}</td>

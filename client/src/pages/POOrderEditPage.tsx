@@ -14,6 +14,7 @@ import { SearchableSelect } from '@/components/SearchableSelect';
 import { ToroidalForm, RectangularForm } from '@/pages/POOrderNewPage';
 import type { Item as POItemNew } from '@/pages/POOrderNewPage';
 
+import { coreShort, coreBadge } from '@/lib/coreTypes';
 /* ---------- types ---------- */
 type CoreType = 'TOROIDAL' | 'RECTANGULAR';
 
@@ -224,9 +225,9 @@ export const POOrderEditPage = () => {
                       <td className="px-3 py-2.5">
                         <span className={cn(
                           'rounded-full px-2 py-0.5 text-[10px] font-medium',
-                          it.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
+                          coreBadge(it.coreType)
                         )}>
-                          {it.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
+                          {coreShort(it.coreType)}
                         </span>
                       </td>
                       <td className="px-3 py-2.5 text-slate-700">{it.grade}</td>
@@ -303,9 +304,9 @@ export const POOrderEditPage = () => {
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span className={cn(
                           'rounded-full px-1.5 py-0.5 text-[10px] font-medium',
-                          it.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
+                          coreBadge(it.coreType)
                         )}>
-                          {it.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
+                          {coreShort(it.coreType)}
                         </span>
                         <span className="text-xs font-medium text-slate-700">{it.grade}</span>
                         <span className="text-xs text-slate-500">{it.material}</span>

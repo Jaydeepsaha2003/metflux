@@ -16,6 +16,7 @@ import { downloadProductionPdf, type ProductionPdf } from '@/lib/reportPdf';
 import { brandColorFor } from '@/lib/brandColor';
 import { useBranding } from '@/store/branding';
 import { useHideCustomerNames } from '@/store/auth';
+import { coreShort, coreLabel } from '@/lib/coreTypes';
 import {
   ErpCard, ErpLabel, ErpStat, ErpStatStrip, ErpTh, ErpSegmented, CoreTypeChip, SplitHeightChip, ProductionTabs, ErpMobileHeader,
 } from '@/components/production/erp';
@@ -163,7 +164,7 @@ export const ProductionSummaryPage = () => {
       for (const d of e.days) {
         rows.push({ kind: 'sub', cells: [`   ${fmt(d.iso)}`, 'Day total', '', '', '', d.pcs, d.weight, d.amount] });
         for (const z of d.sizes) {
-          rows.push({ kind: 'detail', cells: [`      ${z.measure}`, z.coreType === 'TOROIDAL' ? 'Toroidal' : 'Rectangular', z.grade, z.material, fmt(d.iso), z.pcs, z.weight, z.amount] });
+          rows.push({ kind: 'detail', cells: [`      ${z.measure}`, coreLabel(z.coreType), z.grade, z.material, fmt(d.iso), z.pcs, z.weight, z.amount] });
         }
       }
     }
@@ -233,7 +234,7 @@ export const ProductionSummaryPage = () => {
             { kind: 'day' as const, label: fmt(d.iso), pcs: d.pcs, weight: d.weight, amount: d.amount },
             ...d.sizes.map((z) => ({
               kind: 'size' as const, label: z.measure,
-              type: z.coreType === 'TOROIDAL' ? 'Toro' : 'Rect',
+              type: coreShort(z.coreType),
               grade: z.grade, material: z.material,
               pcs: z.pcs, weight: z.weight, amount: z.amount,
             })),

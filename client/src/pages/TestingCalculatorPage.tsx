@@ -13,6 +13,19 @@ import { fluxTestCalc, rectangularCalc, rectangularFluxTestCalc, nanoTestCalc, t
 import { todayStamp } from '@/lib/excel';
 import './testing-calculator.css';
 
+import { coreBadge } from '@/lib/coreTypes';
+
+/* Spelled out rather than derived from the badge tint: Tailwind only ships a
+   class it can find as a literal in the source, so a name built at runtime
+   compiles to no CSS at all. */
+const CORE_ACCENT: Record<string, string> = {
+  TOROIDAL: 'border-l-amber-400',
+  RECTANGULAR: 'border-l-rose-400',
+  NANO: 'border-l-violet-400',
+  COMPOSITE: 'border-l-teal-400',
+  CUT_ROUND: 'border-l-sky-400',
+  CUT_RECT: 'border-l-cyan-400',
+};
 type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE';
 const coreLabel: Record<CoreType, string> = { TOROIDAL: 'Toroidal', RECTANGULAR: 'Rectangular', NANO: 'Nano', COMPOSITE: 'Composite' };
 type FluxPoint = { flux: number; ateCm: number };
@@ -311,7 +324,7 @@ export const TestingCalculatorPage = () => {
           const rowGrades = gradesFor(it.coreType);
           const g = it.coreType === 'RECTANGULAR' && numOk(it) ? rectGeom(it) : null;
           const isNano = it.coreType === 'NANO' || it.coreType === 'COMPOSITE';
-          const accent = it.coreType === 'TOROIDAL' ? 'border-l-amber-400' : it.coreType === 'COMPOSITE' ? 'border-l-teal-400' : it.coreType === 'NANO' ? 'border-l-violet-400' : 'border-l-rose-400';
+          const accent = CORE_ACCENT[it.coreType] ?? 'border-l-slate-300';
           return (
             <div key={it.key} className={cn('tc-item card border-l-4 p-4 transition', accent)}>
               <div className="tc-item-header mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -587,7 +600,7 @@ const ImportDialog = ({ onClose, onAdd }: { onClose: () => void; onAdd: (po: PoS
               </div>
               <span className="flex shrink-0 items-center gap-2">
                 <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium',
-                  i.coreType === 'TOROIDAL' ? 'bg-sky-50 text-sky-700' : i.coreType === 'COMPOSITE' ? 'bg-teal-50 text-teal-700' : i.coreType === 'RECTANGULAR' ? 'bg-rose-50 text-rose-700' : 'bg-violet-50 text-violet-700')}>
+                  coreBadge(i.coreType))}>
                   {coreLabel[i.coreType]}
                 </span>
                 <Plus className="h-4 w-4 text-brand-600" />

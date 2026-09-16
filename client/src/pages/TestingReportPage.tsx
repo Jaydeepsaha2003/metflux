@@ -18,6 +18,7 @@ import { useBranding } from '@/store/branding';
 import { brandColorFor } from '@/lib/brandColor';
 import { downloadTestingReportPdf, testingReportPdfBlob, type TestingReportPdf } from '@/lib/reportPdf';
 
+import { coreCode } from '@/lib/coreTypes';
 /* ── Types ────────────────────────────────────────────────────── */
 type DispatchDetail = {
   id: string; poOrderId: string | null; poOrderItemId: string;
@@ -102,13 +103,13 @@ type GroupForm = {
 };
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
-// Report No. format: TR-TC001 (Toroidal) / TR-RC001 (Rectangular) / TR-NC001 (Nano).
-// The 3-digit serial is the 1-indexed position of this group in the current
-// report batch so each PO gets a unique, readable identifier.
-const autoReportNo = (coreType: 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE', groupIdx: number) => {
-  const prefix = coreType === 'TOROIDAL' ? 'TC' : coreType === 'NANO' ? 'NC' : coreType === 'COMPOSITE' ? 'CC' : 'RC';
-  return `TR-${prefix}${String(groupIdx + 1).padStart(3, '0')}`;
-};
+// Report No. format: TR-TC001 (Toroidal) / TR-RC001 (Rectangular) / TR-NC001
+// (Nano) / TR-RCC001 (round cut) and so on. The 3-digit serial is the 1-indexed
+// position of this group in the current report batch so each PO gets a unique,
+// readable identifier. Prefixes come from the shared map: keyed off this chain,
+// a cut core was issued a certificate numbered as a rectangular one.
+const autoReportNo = (coreType: string, groupIdx: number) =>
+  `TR-${coreCode(coreType)}${String(groupIdx + 1).padStart(3, '0')}`;
 const fmtDate = (iso: string | null | undefined) => {
   if (!iso) return '';
   const d = new Date(iso);

@@ -15,6 +15,7 @@ import { cn } from '@/lib/cn';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Pagination } from '@/components/Pagination';
 
+import { coreShort, coreBadge } from '@/lib/coreTypes';
 type Status = 'ACTIVE' | 'CANCELLED';
 
 type Item = {
@@ -275,9 +276,9 @@ export const POManagePage = () => {
                           <td className="px-3 py-2.5 whitespace-nowrap">
                             <span className={cn(
                               'rounded-full px-2 py-0.5 text-xs font-medium',
-                              it.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
+                              coreBadge(it.coreType)
                             )}>
-                              {it.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
+                              {coreShort(it.coreType)}
                             </span>
                           </td>
                           <td className="px-3 py-2.5 text-slate-700 font-medium whitespace-nowrap">{it.grade}</td>
@@ -406,9 +407,9 @@ export const POManagePage = () => {
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className={cn(
                                   'rounded-full px-1.5 py-0.5 text-[10px] font-medium',
-                                  it.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
+                                  coreBadge(it.coreType)
                                 )}>
-                                  {it.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
+                                  {coreShort(it.coreType)}
                                 </span>
                                 <span className="text-xs text-slate-700 font-medium">{it.grade}</span>
                               </div>

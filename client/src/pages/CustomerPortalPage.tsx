@@ -5,6 +5,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { coreCode, coreBadgeRing } from '@/lib/coreTypes';
 import {
   Search, Package, Factory, Truck, CheckCircle2, Clock,
   Download, AlertCircle, Loader2, ChevronDown, ChevronRight,
@@ -190,8 +191,8 @@ const OrderCard = ({ order, token, dlToken, featured, delay = 0 }: { order: Orde
             <div key={it.id} className="px-5 py-3">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1
-                  ${it.coreType === 'TOROIDAL' ? 'bg-amber-100 text-amber-700 ring-amber-200' : 'bg-rose-100 text-rose-700 ring-rose-200'}`}>
-                  {it.coreType === 'TOROIDAL' ? 'TC' : 'RC'}
+                  ${coreBadgeRing(it.coreType)}`}>
+                  {coreCode(it.coreType)}
                 </span>
                 <span className="font-mono text-[12px] font-semibold text-slate-800">{it.measure}</span>
                 <span className="text-[11px] text-slate-500">{it.grade} · {it.material}</span>

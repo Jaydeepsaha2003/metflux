@@ -12,6 +12,7 @@ import { Pagination } from '@/components/Pagination';
 import { DateRangeFilter } from '@/components/DateRangeFilter';
 import { useHideCustomerNames } from '@/store/auth';
 
+import { coreShort, coreBadge } from '@/lib/coreTypes';
 type Row = {
   id: string;
   poNumber: string;
@@ -164,9 +165,9 @@ export const DispatchListPage = () => {
                   <td data-label="Type" className="px-3 py-2">
                     <span className={cn(
                       'rounded-full px-2 py-0.5',
-                      d.coreType === 'TOROIDAL' ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
+                      coreBadge(d.coreType)
                     )}>
-                      {d.coreType === 'TOROIDAL' ? 'Toro' : 'Rect'}
+                      {coreShort(d.coreType)}
                     </span>
                   </td>
                   <td data-label="Grade" className="px-3 py-2">{d.grade}</td>

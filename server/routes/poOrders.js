@@ -35,6 +35,10 @@ const itemSchema = z.object({
   // The stacking factor this line was weighed with. Recorded per line so a
   // later change to the customer's figure can never re-weigh an existing
   // order; NULL means it used the house default.
+  // Total controlled air gap across both joints, mm. Cut and gap cores only;
+  // NULL on everything else, because "no gap" and "a gap of zero" are not the
+  // same statement about a product.
+  gapMm:       z.coerce.number().nonnegative().max(100).optional().nullable(),
   stackFactor: z.coerce.number().positive().max(100).optional().nullable(),
   turns:       z.coerce.number().positive().transform((v) => Math.round(v)).optional().nullable(),
   flux:        z.coerce.number().positive().optional().nullable(),
@@ -152,6 +156,7 @@ router.post('/', requirePermission('add_po'), asyncHandler(async (req, res) => {
         id1: it.id1, id2: it.id2 ?? null,
         od1: it.od1, od2: it.od2 ?? null,
         ht: it.ht, builtup: it.builtup ?? null,
+        gapMm: it.gapMm ?? null,
         weightPerPc: it.weightPerPc, pcs: it.pcs, totalWeight: it.totalWeight,
         coreAc: it.coreAc ?? null, coreMl: it.coreMl ?? null, d13: it.d13 ?? null,
         stackFactor: it.stackFactor ?? null,
@@ -266,6 +271,9 @@ const flattenItem = (it) => {
     id1: it.id1, id2: it.id2,
     od1: it.od1, od2: it.od2,
     ht: it.ht, builtup: it.builtup,
+    // The Edit page refills the air-gap input from this; without it a gap core
+    // silently reopens as a plain cut core.
+    gapMm: it.gapMm ?? null,
     weightPerPc: it.weightPerPc,
     pcs: it.pcs,
     totalWeight: it.totalWeight,
@@ -606,6 +614,7 @@ router.get('/summary', requirePermission('po_summary'), asyncHandler(async (req,
     grade:         it.grade,
     material:      it.material,
     measure:       it.measure,
+    gapMm:         it.gapMm ?? null,
     pcsOrdered:    it.pcs,
     pcsProduced:   Number(it.pcsProduced ?? 0),
     // Excess produced beyond what was ordered (per item; never negative).
@@ -750,6 +759,7 @@ router.post('/:poId/items', requirePermission('add_po'), asyncHandler(async (req
     id1: data.id1, id2: data.id2 ?? null,
     od1: data.od1, od2: data.od2 ?? null,
     ht: data.ht,   builtup: data.builtup ?? null,
+    gapMm: data.gapMm ?? null,
     weightPerPc: data.weightPerPc, pcs: data.pcs, totalWeight: data.totalWeight,
     coreAc: data.coreAc ?? null, coreMl: data.coreMl ?? null, d13: data.d13 ?? null,
     stackFactor: data.stackFactor ?? null,

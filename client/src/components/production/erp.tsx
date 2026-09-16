@@ -19,6 +19,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Inbox, Pencil, BarChart3, Factory } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { coreLabel, coreBadgeRing } from '@/lib/coreTypes';
 
 /** Uppercase, letter-spaced label — the small caption text used above every
  *  KPI figure, table header cell and section eyebrow in the mockup. */
@@ -59,15 +60,13 @@ export const ErpStatStrip = ({ children }: { children: React.ReactNode }) => (
  *  matching the mockup exactly. Kept separate from the amber/rose chip used
  *  elsewhere in the app (SO Summary, Dispatch, …) since this is a deliberate
  *  reskin of Production specifically, not a site-wide chip-colour change. */
-export const CoreTypeChip = ({ coreType, className }: { coreType: 'TOROIDAL' | 'RECTANGULAR'; className?: string }) => (
+export const CoreTypeChip = ({ coreType, className }: { coreType: string; className?: string }) => (
   <span className={cn(
     'production-chip inline-flex items-center rounded-md px-1.5 py-[3px] text-[10px] font-bold uppercase tracking-[0.06em] shadow-e1 ring-1 ring-inset',
-    coreType === 'TOROIDAL'
-      ? 'bg-[#EAF0FA] text-[#1B4E82] ring-[#C6DAF0]'
-      : 'bg-[#EFF5EC] text-[#33473E] ring-[#CFDECB]',
+    coreBadgeRing(coreType),
     className,
   )}>
-    {coreType === 'TOROIDAL' ? 'Toroidal' : 'Rectangular'}
+    {coreLabel(coreType)}
   </span>
 );
 
