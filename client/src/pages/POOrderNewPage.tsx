@@ -88,6 +88,60 @@ const inputCls =
 
 const readonlyInputCls = inputCls + ' bg-slate-50 text-slate-600';
 
+/* ---------- field width scale ----------
+   An entry form reads badly when a three-digit bore measurement is given the
+   same 200px box as a customer name: the eye has to travel for nothing, and a
+   row of identical boxes gives no clue what belongs in each. Sizing a field to
+   its content is the single biggest thing that makes a form look like an ERP
+   rather than a web page.
+
+   These are fixed widths on wrapping rows rather than grid fractions, so the
+   same markup goes from a 375px phone (fields wrap) to an ultrawide (fields
+   stay put instead of stretching) with no breakpoint juggling and no
+   horizontal scrollbar. */
+const FW = {
+  dim:    'w-[74px]',    // millimetre dimensions — 3 to 4 digits
+  factor: 'w-[106px]',   // stacking factors — 5.77 / 0.95, plus a full label
+  qty:    'w-[84px]',    // pcs, turns
+  rate:   'w-[116px]',   // money, which needs room for thousands
+  stat:   'w-[104px]',   // computed read-outs
+  sel:    'w-[150px]',   // short selects — rate basis, flux
+  selLg:  'w-[184px]',   // grade / material / type names
+} as const;
+
+/* A row of fields that wraps rather than squeezing. */
+const FieldRow = ({ children, className }: { children: React.ReactNode; className?: string }) => (
+  <div className={cn('flex flex-wrap items-start gap-x-2.5 gap-y-2', className)}>{children}</div>
+);
+
+/* A figure carried up into a card header. Greyed until it has a real value, so
+   an empty form doesn't shout "0.000 kg" at someone who hasn't typed yet. */
+const HeadStat = ({ label, value, on }: { label: string; value: string; on: boolean }) => (
+  <span className={cn(
+    'inline-flex items-baseline gap-1.5 rounded-md border px-2 py-0.5',
+    on ? 'border-slate-200 bg-white' : 'border-transparent bg-white/50'
+  )}>
+    <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500">{label}</span>
+    <span className={cn('font-num text-[12px] font-semibold', on ? 'text-slate-900' : 'text-slate-400')}>{value}</span>
+  </span>
+);
+
+/* A read-only computed figure sitting in a field row, sized and aligned like
+   the inputs beside it so the row keeps one baseline. */
+const ReadOut = ({ label, value, w, tone }: { label: string; value: string; w?: string; tone?: 'amber' | 'violet' }) => (
+  <div className={cn('shrink-0', w)}>
+    <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</div>
+    <div className={cn(
+      'flex h-7 items-center justify-end rounded-md border px-2 font-num text-[13px] font-semibold',
+      tone === 'amber' ? 'border-amber-200 bg-amber-50/70 text-amber-900'
+        : tone === 'violet' ? 'border-violet-200 bg-violet-50/70 text-violet-900'
+        : 'border-slate-200 bg-slate-50 text-slate-800'
+    )}>
+      {value}
+    </div>
+  </div>
+);
+
 const coreBadge = (ct: CoreType) =>
   ct === 'TOROIDAL' ? 'bg-amber-50 text-amber-700'
   : ct === 'RECTANGULAR' ? 'bg-rose-50 text-rose-700'
@@ -1130,11 +1184,19 @@ const Field = ({
 );
 
 const NumField = ({
-  label, value, onChange, w,
-}: { label: string; value: number; onChange: (v: number) => void; w?: string }) => (
+  label, value, onChange, w, hint, align = 'left',
+}: {
+  label: string; value: number; onChange: (v: number) => void; w?: string;
+  /** Small note under the field — a unit, a default, a where-it-came-from. */
+  hint?: React.ReactNode;
+  /** Figures that are read down a column (money, weights) line up on the
+   *  decimal point when right-aligned; dimensions typed left-to-right do not
+   *  benefit, so alignment is per-field rather than global. */
+  align?: 'left' | 'right';
+}) => (
   <Field label={label} className={w}>
     <input
-      className={inputCls}
+      className={cn(inputCls, 'font-num', align === 'right' && 'text-right')}
       type="number"
       inputMode="decimal"
       step="any"
@@ -1142,6 +1204,7 @@ const NumField = ({
       onChange={(e) => onChange(numFromInput(e.target.value))}
       placeholder="0"
     />
+    {hint}
   </Field>
 );
 
@@ -1154,7 +1217,7 @@ const NumField = ({
    one, otherwise the house default. The reset link only appears once the value
    has actually been moved off `base`, so the common case stays quiet. */
 const StackFactorField = ({
-  value, onChange, onReset, base, houseDefault, fromCustomer,
+  value, onChange, onReset, base, houseDefault, fromCustomer, w,
 }: {
   value: number;
   onChange: (v: number) => void;
@@ -1162,13 +1225,14 @@ const StackFactorField = ({
   base: number;
   houseDefault: number;
   fromCustomer: boolean;
+  w?: string;
 }) => {
   const overridden = Math.abs(value - base) > 1e-9;
   return (
-    <div>
+    <div className={cn('shrink-0', w)}>
       <Field label="Stacking factor">
         <input
-          className={cn(inputCls, overridden && 'border-amber-400 bg-amber-50/60')}
+          className={cn(inputCls, 'font-num text-right', overridden && 'border-amber-400 bg-amber-50/60')}
           type="number"
           inputMode="decimal"
           step="any"
@@ -1181,13 +1245,13 @@ const StackFactorField = ({
         <button
           type="button"
           onClick={onReset}
-          className="mt-1 text-[11px] font-medium text-amber-700 underline-offset-2 hover:underline"
+          className="mt-1 block text-[10px] font-medium text-amber-700 underline-offset-2 hover:underline"
         >
-          This line only &mdash; back to {base}
+          &#8634; back to {base}
         </button>
       ) : fromCustomer ? (
-        <div className="mt-1 text-[11px] font-medium text-brand-700">
-          The customer&rsquo;s agreed factor (standard {houseDefault}).
+        <div className="mt-1 text-[10px] font-medium text-brand-700">
+          Customer&rsquo;s (std {houseDefault})
         </div>
       ) : null}
     </div>
@@ -1400,15 +1464,17 @@ export const ToroidalForm = ({
         <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-800">Toroidal</span>
       </div>
 
-      {/* Row 1 — wider fields: Grade · Material · Rate Basis · Rate.
-          On md+ screens these four sit on a single line so the dropdowns
-          have room to breathe; on mobile they stack 2-up. */}
-      <div className="grid grid-cols-2 gap-x-2 gap-y-2 md:grid-cols-5">
-        <GradeMaterialPicker
-          grades={grades} grade={grade} material={material}
-          onGrade={setGrade} onMaterial={setMaterial} listIdSuffix="toro"
-        />
-        <Field label="Rate Basis">
+      {/* What is being made and what it costs. Names need reading width; the
+          rate and the factor do not, so they keep to their own size and the
+          row wraps instead of stretching everything to match. */}
+      <FieldRow>
+        <div className="grid min-w-[240px] flex-1 basis-[300px] grid-cols-1 gap-x-2.5 gap-y-2 sm:max-w-[390px] sm:grid-cols-2">
+          <GradeMaterialPicker
+            grades={grades} grade={grade} material={material}
+            onGrade={setGrade} onMaterial={setMaterial} listIdSuffix="toro"
+          />
+        </div>
+        <Field label="Rate Basis" className={cn('shrink-0', FW.sel)}>
           <select
             className={inputCls}
             value={rateBasis}
@@ -1418,19 +1484,21 @@ export const ToroidalForm = ({
             <option value="PER_PCS">Per Pcs</option>
           </select>
         </Field>
-        <div>
+        <div className={cn('shrink-0', FW.rate)}>
           <NumField
-            label={rateBasis === 'PER_KG' ? 'Rate (₹/kg)' : 'Rate (₹/pcs)'}
+            label={rateBasis === 'PER_KG' ? 'Rate ₹/kg' : 'Rate ₹/pc'}
+            align="right"
             value={rateValue}
             onChange={(v) => { setRateTouched(true); setRateValue(v); }}
           />
           {cardRate && !rateTouched && rateValue > 0 && (
-            <div className="mt-1 text-[11px] font-medium text-brand-700">
-              From the customer&rsquo;s rate card &mdash; change it if this order differs.
+            <div className="mt-1 text-[10px] font-medium text-brand-700">
+              From the rate card
             </div>
           )}
         </div>
         <StackFactorField
+          w={FW.factor}
           value={stack}
           onChange={(v) => { setStackTouched(true); setStack(v); }}
           onReset={() => { setStackTouched(false); setStack(stackOr(customerFactor, TOROIDAL_FACTOR)); }}
@@ -1438,19 +1506,18 @@ export const ToroidalForm = ({
           houseDefault={TOROIDAL_FACTOR}
           fromCustomer={stackOr(customerFactor, TOROIDAL_FACTOR) !== TOROIDAL_FACTOR}
         />
-      </div>
+      </FieldRow>
 
-      {/* Row 2 — narrow numeric fields: dimensions, pcs, turns, flux.
-          Six fields fit cleanly in one row on md+ screens. Turns/flux are hidden
-          in quotation mode (testing calibration isn't part of a quote). */}
-      <div className={cn('mt-2 grid grid-cols-3 gap-x-2 gap-y-2 sm:grid-cols-3', hideTesting ? 'md:grid-cols-4' : 'md:grid-cols-6')}>
-        <NumField label="ID" value={id} onChange={setId} />
-        <NumField label="OD" value={od} onChange={setOd} />
-        <NumField label="HT" value={ht} onChange={setHt} />
-        <NumField label="Pcs" value={pcs} onChange={setPcs} />
+      {/* Dimensions and quantity. Millimetre boxes stay narrow; turns/flux are
+          hidden in quotation mode, where calibration is not part of a quote. */}
+      <FieldRow className="mt-2">
+        <NumField label="ID" w={FW.dim} value={id} onChange={setId} />
+        <NumField label="OD" w={FW.dim} value={od} onChange={setOd} />
+        <NumField label="HT" w={FW.dim} value={ht} onChange={setHt} />
+        <NumField label="Pcs" w={FW.qty} align="right" value={pcs} onChange={setPcs} />
         {!hideTesting && (<>
-          <NumField label="Turns" value={turns} onChange={setTurns} />
-          <Field label="Flux">
+          <NumField label="Turns" w={FW.qty} align="right" value={turns} onChange={setTurns} />
+          <Field label="Flux" className={cn('shrink-0', FW.sel)}>
             <SearchableSelect
               dense
               value={flux > 0 ? String(flux) : ''}
@@ -1465,7 +1532,7 @@ export const ToroidalForm = ({
             />
           </Field>
         </>)}
-      </div>
+      </FieldRow>
 
       {/* Computed values — geometry + flux-test results.
           Heading order matches the production sheet: Flux ( T ) → ATe/cm → V (Volts) → Ie max (mA). */}
@@ -1670,13 +1737,15 @@ export const RectangularForm = ({
         <span className="text-[11px] font-semibold uppercase tracking-wider text-rose-800">Rectangular</span>
       </div>
 
-      {/* Row 1 — wider fields: Grade · Material · Rate Basis · Rate. */}
-      <div className="grid grid-cols-2 gap-x-2 gap-y-2 md:grid-cols-5">
-        <GradeMaterialPicker
-          grades={grades} grade={grade} material={material}
-          onGrade={setGrade} onMaterial={setMaterial} listIdSuffix="rect"
-        />
-        <Field label="Rate Basis">
+      {/* Identity and price — same rhythm as the toroidal form above. */}
+      <FieldRow>
+        <div className="grid min-w-[240px] flex-1 basis-[300px] grid-cols-1 gap-x-2.5 gap-y-2 sm:max-w-[390px] sm:grid-cols-2">
+          <GradeMaterialPicker
+            grades={grades} grade={grade} material={material}
+            onGrade={setGrade} onMaterial={setMaterial} listIdSuffix="rect"
+          />
+        </div>
+        <Field label="Rate Basis" className={cn('shrink-0', FW.sel)}>
           <select
             className={inputCls}
             value={rateBasis}
@@ -1686,19 +1755,21 @@ export const RectangularForm = ({
             <option value="PER_PCS">Per Pcs</option>
           </select>
         </Field>
-        <div>
+        <div className={cn('shrink-0', FW.rate)}>
           <NumField
-            label={rateBasis === 'PER_KG' ? 'Rate (₹/kg)' : 'Rate (₹/pcs)'}
+            label={rateBasis === 'PER_KG' ? 'Rate ₹/kg' : 'Rate ₹/pc'}
+            align="right"
             value={rateValue}
             onChange={(v) => { setRateTouched(true); setRateValue(v); }}
           />
           {cardRate && !rateTouched && rateValue > 0 && (
-            <div className="mt-1 text-[11px] font-medium text-brand-700">
-              From the customer&rsquo;s rate card &mdash; change it if this order differs.
+            <div className="mt-1 text-[10px] font-medium text-brand-700">
+              From the rate card
             </div>
           )}
         </div>
         <StackFactorField
+          w={FW.factor}
           value={stack}
           onChange={(v) => { setStackTouched(true); setStack(v); }}
           onReset={() => { setStackTouched(false); setStack(stackOr(customerFactor, RECT_STACK_FACTOR)); }}
@@ -1706,20 +1777,20 @@ export const RectangularForm = ({
           houseDefault={RECT_STACK_FACTOR}
           fromCustomer={stackOr(customerFactor, RECT_STACK_FACTOR) !== RECT_STACK_FACTOR}
         />
-      </div>
+      </FieldRow>
 
-      {/* Row 2 — narrow numeric fields. 8 fields fit cleanly in one line on md+.
-          Turns/flux are hidden in quotation mode (not part of a quote). */}
-      <div className={cn('mt-2 grid grid-cols-2 gap-x-2 gap-y-2 sm:grid-cols-4', hideTesting ? 'md:grid-cols-6' : 'md:grid-cols-8')}>
-        <NumField label="ID 1" value={id1} onChange={setId1} />
-        <NumField label="ID 2" value={id2} onChange={setId2} />
-        <NumField label="OD 1" value={od1} onChange={setOd1} />
-        <NumField label="OD 2" value={od2} onChange={setOd2} />
-        <NumField label="HT"   value={ht}  onChange={setHt} />
-        <NumField label="Pcs"  value={pcs} onChange={setPcs} />
+      {/* Dimensions and quantity — eight narrow boxes that wrap rather than
+          shrink, so a phone gets two tidy rows instead of eight slivers. */}
+      <FieldRow className="mt-2">
+        <NumField label="ID 1" w={FW.dim} value={id1} onChange={setId1} />
+        <NumField label="ID 2" w={FW.dim} value={id2} onChange={setId2} />
+        <NumField label="OD 1" w={FW.dim} value={od1} onChange={setOd1} />
+        <NumField label="OD 2" w={FW.dim} value={od2} onChange={setOd2} />
+        <NumField label="HT"   w={FW.dim} value={ht}  onChange={setHt} />
+        <NumField label="Pcs"  w={FW.qty} align="right" value={pcs} onChange={setPcs} />
         {!hideTesting && (<>
-          <NumField label="Turns" value={turns} onChange={setTurns} />
-          <Field label="Flux">
+          <NumField label="Turns" w={FW.qty} align="right" value={turns} onChange={setTurns} />
+          <Field label="Flux" className={cn('shrink-0', FW.sel)}>
             <SearchableSelect
               dense
               value={flux > 0 ? String(flux) : ''}
@@ -1734,7 +1805,7 @@ export const RectangularForm = ({
             />
           </Field>
         </>)}
-      </div>
+      </FieldRow>
 
       {buildMismatch && (
         <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-800">
@@ -1988,41 +2059,57 @@ export const NanoForm = ({
 
   return (
     <div className={cn('overflow-hidden rounded-xl border bg-white shadow-sm', composite ? 'border-teal-200' : 'border-violet-200')}>
-      {/* Header */}
-      <div className={cn('flex items-center gap-2 border-b px-4 py-2.5', composite ? 'border-teal-100 bg-teal-50/70' : 'border-violet-100 bg-violet-50/70')}>
-        <span className={cn('h-2 w-2 rounded-full', composite ? 'bg-teal-500' : 'bg-violet-500')} />
+      {/* Header. The running weight and line total live here rather than only
+          at the foot of the card: they are the two numbers an operator checks
+          against the customer's order, and on a laptop the foot of a long form
+          is below the fold while the header never is. */}
+      <div className={cn('flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b px-4 py-2.5', composite ? 'border-teal-100 bg-teal-50/70' : 'border-violet-100 bg-violet-50/70')}>
+        <span className={cn('h-2 w-2 shrink-0 rounded-full', composite ? 'bg-teal-500' : 'bg-violet-500')} />
         <span className={cn('text-xs font-bold uppercase tracking-wider', composite ? 'text-teal-800' : 'text-violet-800')}>{composite ? 'Composite Core (Nano + CRGO)' : 'Nano Core'}</span>
+        <span className="ml-auto flex flex-wrap items-center gap-x-2 gap-y-1">
+          <HeadStat label="Wt / pc" value={`${pieceWeight.toFixed(3)} kg`} on={pieceWeight > 0} />
+          <HeadStat label="Total" value={`₹${money0(lineTotal)}`} on={lineTotal > 0} />
+        </span>
       </div>
 
-      <div className="space-y-4 p-4">
+      <div className="space-y-3.5 p-4">
         {composite ? (
           <>
-            {/* Grade + Material (nano grades) + Type (composite join) — compact */}
-            <div className="grid grid-cols-1 gap-x-3 gap-y-3 sm:grid-cols-3 lg:max-w-3xl">
-              <GradeMaterialPicker
-                grades={grades} grade={grade} material={material}
-                onGrade={setGrade} onMaterial={setMaterial} listIdSuffix="composite"
-              />
-              <Field label="Type">
-                <SearchableSelect
-                  dense value={compType} onChange={setCompType}
-                  options={typeGrades.map((g) => ({ value: g.grade, label: g.grade }))}
-                  placeholder="Continuous Loop / Exact Split…"
+            {/* What is being made. Names need room, so these three keep a
+                readable width and wrap together; everything below is numeric
+                and stays narrow. */}
+            <FieldRow>
+              <div className="grid min-w-[240px] flex-1 basis-[440px] grid-cols-1 gap-x-2.5 gap-y-2 sm:max-w-[580px] sm:grid-cols-3">
+                <GradeMaterialPicker
+                  grades={grades} grade={grade} material={material}
+                  onGrade={setGrade} onMaterial={setMaterial} listIdSuffix="composite"
                 />
-              </Field>
-            </div>
+                <Field label="Type">
+                  <SearchableSelect
+                    dense value={compType} onChange={setCompType}
+                    options={typeGrades.map((g) => ({ value: g.grade, label: g.grade }))}
+                    placeholder="Continuous Loop / Exact Split…"
+                  />
+                </Field>
+              </div>
+            </FieldRow>
 
-            {/* Two-part split — CRGO on the left, Nano on the right, each with its own rate */}
-            <div className="grid gap-3 lg:grid-cols-2">
-              <div className="rounded-lg border border-amber-200 bg-amber-50/30 p-3">
+            {/* The two halves of the piece, each with its own dimensions, its
+                own price and its own resulting weight. They sit side by side
+                where there is room and stack where there is not; the max-width
+                stops them sprawling into two half-empty columns on a wide
+                monitor, which is what made the old layout read as a web form
+                rather than a data-entry screen. */}
+            <div className="flex flex-wrap gap-2.5">
+              <section className="min-w-[290px] flex-1 basis-[420px] rounded-lg border border-amber-200 bg-amber-50/40 p-2.5 lg:max-w-[560px]">
                 <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-amber-700">
                   <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> CRGO core
                 </div>
-                <div className="grid grid-cols-4 gap-2.5">
-                  <NumField label="ID" value={crgoId} onChange={setCrgoId} />
-                  <NumField label="OD" value={crgoOd} onChange={setCrgoOd} />
-                  <NumField label="HT" value={crgoHt} onChange={setCrgoHt} />
-                  <div>
+                <FieldRow>
+                  <NumField label="ID" w={FW.dim} value={crgoId} onChange={setCrgoId} />
+                  <NumField label="OD" w={FW.dim} value={crgoOd} onChange={setCrgoOd} />
+                  <NumField label="HT" w={FW.dim} value={crgoHt} onChange={setCrgoHt} />
+                  <div className={cn('shrink-0', FW.factor)}>
                     <NumField
                       label="Stack factor"
                       value={stack}
@@ -2032,60 +2119,64 @@ export const NanoForm = ({
                       <button
                         type="button"
                         onClick={() => { setStackTouched(false); setStack(stackOr(customerFactor, TOROIDAL_FACTOR)); }}
-                        className="mt-1 text-[10px] font-medium text-amber-700 underline-offset-2 hover:underline"
+                        className="mt-1 block text-[10px] font-medium text-amber-700 underline-offset-2 hover:underline"
                       >
-                        Back to {stackOr(customerFactor, TOROIDAL_FACTOR)}
+                        ↺ {stackOr(customerFactor, TOROIDAL_FACTOR)}
                       </button>
                     ) : stackOr(customerFactor, TOROIDAL_FACTOR) !== TOROIDAL_FACTOR ? (
-                      <div className="mt-1 text-[10px] font-medium text-brand-700">Customer&rsquo;s figure</div>
+                      <div className="mt-1 text-[10px] font-medium text-brand-700">Customer&rsquo;s</div>
                     ) : null}
                   </div>
-                </div>
-                <div className="mt-2.5 grid grid-cols-3 gap-2.5">
-                  <Field label="Rate basis">
+                  <ReadOut label="Wt (kg)" w={FW.stat} tone="amber" value={(comp?.crgoWeight ?? 0).toFixed(3)} />
+                </FieldRow>
+                <FieldRow className="mt-2">
+                  <Field label="Rate basis" className={cn('shrink-0', FW.sel)}>
                     <select className={inputCls} value={crgoBasis} onChange={(e) => setCrgoBasis(e.target.value as 'PER_KG' | 'PER_PCS')}>
                       <option value="PER_KG">Per Kg</option>
                       <option value="PER_PCS">Per Pcs</option>
                     </select>
                   </Field>
-                  <NumField label={crgoBasis === 'PER_KG' ? 'CRGO Rate (₹/kg)' : 'CRGO Rate (₹/pc)'} value={crgoRate} onChange={setCrgoRate} />
-                  <Stat label="CRGO Wt (kg)" value={(comp?.crgoWeight ?? 0).toFixed(3)} />
-                </div>
-                <div className="mt-1.5 text-[10px] text-slate-500">CRGO amount / pc: <span className="font-semibold text-slate-700">₹{money0(crgoAmtPc)}</span></div>
-              </div>
-              <div className="rounded-lg border border-violet-200 bg-violet-50/30 p-3">
+                  <NumField
+                    label={crgoBasis === 'PER_KG' ? 'Rate ₹/kg' : 'Rate ₹/pc'}
+                    w={FW.rate} align="right" value={crgoRate} onChange={setCrgoRate}
+                  />
+                  <ReadOut label="Amt / pc" w={FW.stat} tone="amber" value={`₹${money0(crgoAmtPc)}`} />
+                </FieldRow>
+              </section>
+
+              <section className="min-w-[290px] flex-1 basis-[420px] rounded-lg border border-violet-200 bg-violet-50/40 p-2.5 lg:max-w-[560px]">
                 <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-violet-700">
                   <span className="h-1.5 w-1.5 rounded-full bg-violet-500" /> Nano core
                 </div>
-                <div className="grid grid-cols-3 gap-2.5">
-                  <NumField label="ID" value={id} onChange={setId} />
-                  <NumField label="OD" value={od} onChange={setOd} />
-                  <NumField label="HT" value={ht} onChange={setHt} />
+                <FieldRow>
+                  <NumField label="ID" w={FW.dim} value={id} onChange={setId} />
+                  <NumField label="OD" w={FW.dim} value={od} onChange={setOd} />
+                  <NumField label="HT" w={FW.dim} value={ht} onChange={setHt} />
+                  <ReadOut label="Wt (kg)" w={FW.stat} tone="violet" value={nanoPieceWt.toFixed(3)} />
+                </FieldRow>
+                <FieldRow className="mt-2">
+                  <NumField label="Nano ₹/kg" w={FW.rate} align="right" value={nanoPrice} onChange={setNanoPrice} />
+                  <NumField label="Case ₹/kg" w={FW.rate} align="right" value={casePrice} onChange={setCasePrice} />
+                  <ReadOut label="Amt / pc" w={FW.stat} tone="violet" value={`₹${money0(nanoAmtPc)}`} />
+                </FieldRow>
+                <div className="mt-1.5 font-num text-[10px] text-slate-500">
+                  Core {(comp?.coreWeight ?? 0).toFixed(3)}{isEpoxy ? ' · epoxy (case not weighed)' : ` + case ${effCaseWt.toFixed(3)}`} kg
                 </div>
-                <div className="mt-2.5 grid grid-cols-3 gap-2.5">
-                  <NumField label="Nano Price (₹/kg)" value={nanoPrice} onChange={setNanoPrice} />
-                  <NumField label="Case Price (₹/kg)" value={casePrice} onChange={setCasePrice} />
-                  <Stat label="Nano Wt (kg)" value={nanoPieceWt.toFixed(3)} />
-                </div>
-                <div className="mt-1.5 text-[10px] text-slate-500">
-                  Core {(comp?.coreWeight ?? 0).toFixed(3)}{isEpoxy ? ' · epoxy (case not weighed)' : ` + Case ${effCaseWt.toFixed(3)}`} kg · Nano amount / pc: <span className="font-semibold text-slate-700">₹{money0(nanoAmtPc)}</span>
-                </div>
-              </div>
+              </section>
             </div>
 
-            {/* Pcs + optional SO rate — compact */}
-            <div className="grid grid-cols-2 gap-3 sm:max-w-md">
-              <NumField label="Pcs" value={pcs} onChange={setPcs} />
-              <NumField label="SO Rate/Pcs (optional)" value={soRate} onChange={setSoRate} />
-            </div>
-
-            {rule && (
-              <div className="text-[11px] text-slate-500">
-                {rule === 'CONTINUOUS_LOOP' ? 'Continuous loop → ID = min, OD = max, HT = same (concentric).'
-                  : rule === 'EXACT_SPLIT' ? 'Exact split → same ID/OD, heights added (stacked).'
-                  : 'Variable height → same ID/OD, heights added (stacked).'}
-              </div>
-            )}
+            {/* Quantity and the optional override price for the finished piece. */}
+            <FieldRow>
+              <NumField label="Pcs" w={FW.qty} align="right" value={pcs} onChange={setPcs} />
+              <NumField label="SO rate ₹/pc" w={FW.rate} align="right" value={soRate} onChange={setSoRate} />
+              {rule && (
+                <div className="flex min-h-[46px] items-end pb-1 text-[11px] text-slate-500">
+                  {rule === 'CONTINUOUS_LOOP' ? 'Continuous loop → ID = min, OD = max, HT = same (concentric).'
+                    : rule === 'EXACT_SPLIT' ? 'Exact split → same ID/OD, heights added (stacked).'
+                    : 'Variable height → same ID/OD, heights added (stacked).'}
+                </div>
+              )}
+            </FieldRow>
 
             {/* Testing parameters — computed on the Nano core dims. Optional, but
                 filling them lets a composite order produce a Testing Report.
@@ -2093,11 +2184,11 @@ export const NanoForm = ({
             {!hideTesting && (
             <div>
               <SecLabel>Testing parameters (Nano core)</SecLabel>
-              <div className="grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-4">
-                <NumField label="Turns" value={turns} onChange={setTurns} />
-                <NumField label="Frequency (Hz)" value={freq} onChange={setFreq} />
-                <NumField label="Stacking factor" value={sfac} onChange={setSfac} />
-                <Field label="Flux (Bmax)">
+              <FieldRow>
+                <NumField label="Turns" w={FW.qty} align="right" value={turns} onChange={setTurns} />
+                <NumField label="Freq (Hz)" w={FW.qty} align="right" value={freq} onChange={setFreq} />
+                <NumField label="Stack factor" w={FW.factor} align="right" value={sfac} onChange={setSfac} />
+                <Field label="Flux (Bmax)" className={cn('shrink-0', FW.selLg)}>
                   <SearchableSelect
                     dense
                     value={flux > 0 ? String(flux) : ''}
@@ -2111,9 +2202,9 @@ export const NanoForm = ({
                     disabled={!grade || !hasFluxData}
                   />
                 </Field>
-              </div>
+              </FieldRow>
               {flux > 0 && (
-                <div className="mt-3 grid grid-cols-3 gap-x-3 gap-y-2 rounded-lg bg-violet-50/60 px-3 py-2.5 sm:grid-cols-6">
+                <div className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-2 rounded-lg border border-violet-100 bg-violet-50/60 px-3 py-2 sm:grid-cols-3 lg:grid-cols-6">
                   <Stat label="Bmax (G)" value={`${Math.round(flux * 10000)}`} />
                   <Stat label="AT/cm" value={ateCm > 0 ? ateCm.toFixed(4) : '—'} />
                   <Stat label="V (Volts)" value={test.testVoltage > 0 ? test.testVoltage.toFixed(3) : '—'} />
@@ -2127,37 +2218,40 @@ export const NanoForm = ({
           </>
         ) : (
           <>
-            {/* Grade · Material · Prices — one aligned line */}
-            <div className="grid grid-cols-1 gap-x-3 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
-              <GradeMaterialPicker
-                grades={grades} grade={grade} material={material}
-                onGrade={setGrade} onMaterial={setMaterial} listIdSuffix="nano"
-              />
-              <NumField label="Nano Price (₹/kg)" value={nanoPrice} onChange={setNanoPrice} />
-              <NumField label="Case Price (₹/kg)" value={casePrice} onChange={setCasePrice} />
-            </div>
+            {/* Grade and material need reading width; the two prices do not. */}
+            <FieldRow>
+              <div className="grid min-w-[240px] flex-1 basis-[300px] grid-cols-1 gap-x-2.5 gap-y-2 sm:max-w-[390px] sm:grid-cols-2">
+                <GradeMaterialPicker
+                  grades={grades} grade={grade} material={material}
+                  onGrade={setGrade} onMaterial={setMaterial} listIdSuffix="nano"
+                />
+              </div>
+              <NumField label="Nano ₹/kg" w={FW.rate} align="right" value={nanoPrice} onChange={setNanoPrice} />
+              <NumField label="Case ₹/kg" w={FW.rate} align="right" value={casePrice} onChange={setCasePrice} />
+            </FieldRow>
 
             {/* Dimensions + SO rate — one aligned line */}
             <div>
               <SecLabel>Dimensions &amp; rate</SecLabel>
-              <div className="grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-5">
-                <NumField label="ID" value={id} onChange={setId} />
-                <NumField label="OD" value={od} onChange={setOd} />
-                <NumField label="HT" value={ht} onChange={setHt} />
-                <NumField label="Pcs" value={pcs} onChange={setPcs} />
-                <NumField label="SO Rate/Pcs" value={soRate} onChange={setSoRate} />
-              </div>
+              <FieldRow>
+                <NumField label="ID" w={FW.dim} value={id} onChange={setId} />
+                <NumField label="OD" w={FW.dim} value={od} onChange={setOd} />
+                <NumField label="HT" w={FW.dim} value={ht} onChange={setHt} />
+                <NumField label="Pcs" w={FW.qty} align="right" value={pcs} onChange={setPcs} />
+                <NumField label="SO rate ₹/pc" w={FW.rate} align="right" value={soRate} onChange={setSoRate} />
+                <ReadOut label="Wt / pc" w={FW.stat} tone="violet" value={pieceWeight.toFixed(3)} />
+              </FieldRow>
             </div>
 
             {/* Testing parameters — one aligned line. Hidden in quotation mode. */}
             {!hideTesting && (
             <div>
               <SecLabel>Testing parameters</SecLabel>
-              <div className="grid grid-cols-2 gap-x-3 gap-y-3 sm:grid-cols-4">
-                <NumField label="Turns" value={turns} onChange={setTurns} />
-                <NumField label="Frequency (Hz)" value={freq} onChange={setFreq} />
-                <NumField label="Stacking factor" value={sfac} onChange={setSfac} />
-                <Field label="Flux (Bmax)">
+              <FieldRow>
+                <NumField label="Turns" w={FW.qty} align="right" value={turns} onChange={setTurns} />
+                <NumField label="Freq (Hz)" w={FW.qty} align="right" value={freq} onChange={setFreq} />
+                <NumField label="Stack factor" w={FW.factor} align="right" value={sfac} onChange={setSfac} />
+                <Field label="Flux (Bmax)" className={cn('shrink-0', FW.selLg)}>
                   <SearchableSelect
                     dense
                     value={flux > 0 ? String(flux) : ''}
@@ -2171,9 +2265,9 @@ export const NanoForm = ({
                     disabled={!grade || !hasFluxData}
                   />
                 </Field>
-              </div>
+              </FieldRow>
               {flux > 0 && (
-                <div className="mt-3 grid grid-cols-3 gap-x-3 gap-y-2 rounded-lg bg-violet-50/60 px-3 py-2.5 sm:grid-cols-6">
+                <div className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-2 rounded-lg border border-violet-100 bg-violet-50/60 px-3 py-2 sm:grid-cols-3 lg:grid-cols-6">
                   <Stat label="Bmax (G)" value={`${Math.round(flux * 10000)}`} />
                   <Stat label="AT/cm" value={ateCm > 0 ? ateCm.toFixed(4) : '—'} />
                   <Stat label="V (Volts)" value={test.testVoltage > 0 ? test.testVoltage.toFixed(3) : '—'} />
