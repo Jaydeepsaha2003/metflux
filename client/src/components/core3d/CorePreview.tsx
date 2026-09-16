@@ -5,9 +5,10 @@
 // typed a set of dimensions worth drawing — an operator who never opens a line
 // form never pays for it, and it never lands in the main bundle.
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
-import { Box, Loader2, RotateCcw, Maximize2, X, Ruler } from 'lucide-react';
+import { Box, Loader2, RotateCcw, Maximize2, X, Ruler, Download, FileText, Image as ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { shapeIsDrawable, shapeCaption, type CoreShape } from './shape';
+import type { SheetMeta } from './specSheet';
 
 const CoreViewer = lazy(() => import('./CoreViewer'));
 
@@ -30,12 +31,20 @@ const TITLE = {
    fall on. */
 const STAGE = 'bg-[radial-gradient(120%_90%_at_50%_0%,#ffffff_0%,#eef2f7_45%,#dde5ee_100%)]';
 
-export const CorePreview = ({ shape, className }: { shape: CoreShape; className?: string }) => {
+export const CorePreview = ({ shape, className, meta }: {
+  shape: CoreShape;
+  className?: string;
+  /** Context for the downloadable spec sheet — customer, grade, weights. */
+  meta?: SheetMeta;
+}) => {
   const [resetNonce, setResetNonce] = useState(0);
   const [full, setFull] = useState(false);
   // Dimensions are on by default: the reason to look at the model at all is to
   // check the numbers, and an unlabelled solid answers a different question.
   const [showDims, setShowDims] = useState(true);
+  const [menu, setMenu] = useState(false);
+  const [busy, setBusy] = useState<null | 'pdf' | 'jpg'>(null);
+  const [failed, setFailed] = useState(false);
   const drawable = shapeIsDrawable(shape);
   const tone = TONE[shape.kind];
   const caption = useMemo(() => (drawable ? shapeCaption(shape) : null), [shape, drawable]);
@@ -48,6 +57,40 @@ export const CorePreview = ({ shape, className }: { shape: CoreShape; className?
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [full]);
+
+  // The download menu closes on Escape or on any click elsewhere, like every
+  // other menu on the page.
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(false);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('pointerdown', close);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('pointerdown', close);
+    };
+  }, [menu]);
+
+  /* The sheet modules — pdfmake, the fonts, the sketch — are only imported when
+     someone actually asks for a download, so they stay out of the page load. */
+  const download = async (kind: 'pdf' | 'jpg') => {
+    setMenu(false);
+    setFailed(false);
+    setBusy(kind);
+    try {
+      const mod = await import('./specSheet');
+      const info: SheetMeta = meta ?? {};
+      if (kind === 'pdf') await mod.downloadSheetPdf(shape, info);
+      else await mod.downloadSheetJpg(shape, info);
+    } catch {
+      // Nothing was saved, so say so rather than leaving the spinner to stop
+      // and look like success.
+      setFailed(true);
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const stage = (
     <div className={cn('relative flex-1 overflow-hidden', STAGE)}>
@@ -73,10 +116,36 @@ export const CorePreview = ({ shape, className }: { shape: CoreShape; className?
             <GlassBtn title="Reset view" onClick={() => setResetNonce((n) => n + 1)}>
               <RotateCcw className="h-3.5 w-3.5" />
             </GlassBtn>
+            <div className="relative" onPointerDown={(e) => e.stopPropagation()}>
+              <GlassBtn
+                title="Download spec sheet"
+                onClick={() => setMenu((v) => !v)}
+                active={menu}
+              >
+                {busy
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Download className="h-3.5 w-3.5" />}
+              </GlassBtn>
+              {menu && (
+                <div className="absolute right-0 top-full z-20 mt-1 w-44 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
+                  <MenuItem icon={<FileText className="h-3.5 w-3.5" />} onClick={() => download('pdf')}>
+                    PDF spec sheet
+                  </MenuItem>
+                  <MenuItem icon={<ImageIcon className="h-3.5 w-3.5" />} onClick={() => download('jpg')}>
+                    JPG image
+                  </MenuItem>
+                </div>
+              )}
+            </div>
             <GlassBtn title={full ? 'Close' : 'Expand'} onClick={() => setFull((v) => !v)}>
               {full ? <X className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
             </GlassBtn>
           </div>
+          {failed && (
+            <div className="absolute inset-x-2 top-12 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] font-medium text-amber-900 shadow-sm">
+              Could not build the sheet. Nothing was downloaded.
+            </div>
+          )}
           <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-2">
             <span className="rounded-md bg-white/75 px-1.5 py-0.5 font-num text-[10px] font-semibold text-slate-700 backdrop-blur-sm">
               {caption}
@@ -149,6 +218,19 @@ export const CorePreview = ({ shape, className }: { shape: CoreShape; className?
     </>
   );
 };
+
+const MenuItem = ({ icon, onClick, children }: {
+  icon: React.ReactNode; onClick: () => void; children: React.ReactNode;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] font-medium text-slate-700 transition hover:bg-slate-50"
+  >
+    <span className="text-slate-400">{icon}</span>
+    {children}
+  </button>
+);
 
 const GlassBtn = ({ title, onClick, children, active }: {
   title: string; onClick: () => void; children: React.ReactNode; active?: boolean;

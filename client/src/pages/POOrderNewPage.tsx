@@ -14,6 +14,8 @@ import { SearchableSelect } from '@/components/SearchableSelect';
 import { useConfirm } from '@/hooks/useConfirm';
 import CorePreview from '@/components/core3d/CorePreview';
 import type { CoreShape } from '@/components/core3d/shape';
+import type { SheetMeta } from '@/components/core3d/specSheet';
+import { useAuthStore, activeMembership } from '@/store/auth';
 import './po-order-new.css';
 
 /* ---------- types ---------- */
@@ -115,7 +117,13 @@ const FW = {
    The callback is held in a ref so the effect depends on the numbers alone:
    the parent re-renders on every report, which would otherwise re-create the
    callback, re-run the effect and report again forever. */
-const useReportShape = (onShape: ((s: CoreShape) => void) | undefined, build: () => CoreShape, deps: unknown[]) => {
+export type ShapeReport = { shape: CoreShape; meta: SheetMeta };
+
+const useReportShape = (
+  onShape: ((r: ShapeReport) => void) | undefined,
+  build: () => ShapeReport,
+  deps: unknown[],
+) => {
   const ref = useRef(onShape);
   ref.current = onShape;
   useEffect(() => {
@@ -237,8 +245,12 @@ export const POOrderNewPage = () => {
   // What the 3D dock is drawing. Reported up by whichever line form is
   // open; cleared on a core-type switch so the old solid never lingers
   // beside the new form's empty fields.
-  const [shape, setShape] = useState<CoreShape | null>(null);
-  const pickCore = (ct: CoreType) => { setShape(null); setCoreType(ct); };
+  const [report, setReport] = useState<ShapeReport | null>(null);
+  const shape = report?.shape ?? null;
+  // Names the spec sheet header; null when the store has no active membership
+  // (a platform admin who has not picked a company yet).
+  const companyName = useAuthStore((st) => activeMembership(st)?.companyName ?? null);
+  const pickCore = (ct: CoreType) => { setReport(null); setCoreType(ct); };
   const [items, setItems] = useState<Item[]>([]);
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   const toggleExpand = (idx: number) => setExpandedIdx((p) => (p === idx ? null : idx));
@@ -848,7 +860,7 @@ export const POOrderNewPage = () => {
           <div className="min-w-0">
         {coreType === 'TOROIDAL' && (
           <ToroidalForm
-            onShape={setShape}
+            onShape={setReport}
             customerId={customerId}
             customerFactor={selectedCustomer?.toroidalFactor}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'TOROIDAL'))}
@@ -862,7 +874,7 @@ export const POOrderNewPage = () => {
         )}
         {coreType === 'RECTANGULAR' && (
           <RectangularForm
-            onShape={setShape}
+            onShape={setReport}
             customerId={customerId}
             customerFactor={selectedCustomer?.rectStackFactor}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'RECTANGULAR'))}
@@ -876,7 +888,7 @@ export const POOrderNewPage = () => {
         )}
         {coreType === 'NANO' && (
           <NanoForm
-            onShape={setShape}
+            onShape={setReport}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'NANO'))}
             fluxGrades={fluxRespNano?.grades ?? []}
             onAdd={(item) => { setItems((prev) => [...prev, item]); }}
@@ -889,7 +901,7 @@ export const POOrderNewPage = () => {
         {coreType === 'COMPOSITE' && (
           <NanoForm
             composite
-            onShape={setShape}
+            onShape={setReport}
             customerFactor={selectedCustomer?.toroidalFactor}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'NANO'))}
             typeGrades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'COMPOSITE'))}
@@ -912,6 +924,11 @@ export const POOrderNewPage = () => {
             <div className="min-w-0 xl:sticky xl:top-3 xl:self-start">
               <CorePreview
                 shape={shape ?? emptyShapeFor(coreType)}
+                meta={{
+                  ...(report?.meta ?? {}),
+                  company: companyName,
+                  customer: selectedCustomer?.name ?? null,
+                }}
                 className="core-model-stage h-[260px] xl:h-[360px]"
               />
             </div>
@@ -1378,7 +1395,7 @@ export const ToroidalForm = ({
   fluxGrades: FluxGroup[];
   onAdd: (item: Item) => void;
   /** Reports the live dimensions to the 3D preview. */
-  onShape?: (s: CoreShape) => void;
+  onShape?: (r: ShapeReport) => void;
   /** Whose rate card to consult. Optional: the quotation screen has no
    *  customer, and passing none simply means nothing is filled in. */
   customerId?: string;
@@ -1460,7 +1477,14 @@ export const ToroidalForm = ({
   }, [edit?.nonce]);
 
   const calc = useMemo(() => toroidalCalc({ id, od, ht, pcs, factor: stack }), [id, od, ht, pcs, stack]);
-  useReportShape(onShape, () => ({ kind: 'TOROIDAL', dims: { id, od, ht } }), [id, od, ht]);
+  useReportShape(
+    onShape,
+    () => ({
+      shape: { kind: 'TOROIDAL', dims: { id, od, ht } },
+      meta: { grade, material, pcs, factor: stack, weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight },
+    }),
+    [id, od, ht, grade, material, pcs, stack, calc.weightPerPc, calc.totalWeight],
+  );
   const fluxCalc = useMemo(
     () => fluxTestCalc({ id, od, ht, turns, flux, ateCm }),
     [id, od, ht, turns, flux, ateCm]
@@ -1637,7 +1661,7 @@ export const RectangularForm = ({
   fluxGrades: FluxGroup[];
   onAdd: (item: Item) => void;
   /** Reports the live dimensions to the 3D preview. */
-  onShape?: (s: CoreShape) => void;
+  onShape?: (r: ShapeReport) => void;
   /** Whose rate card to consult. Optional: the quotation screen has no
    *  customer, and passing none simply means nothing is filled in. */
   customerId?: string;
@@ -1719,7 +1743,14 @@ export const RectangularForm = ({
     () => rectangularCalc({ id1, id2, od1, od2, ht, pcs, factor: stack }),
     [id1, id2, od1, od2, ht, pcs, stack]
   );
-  useReportShape(onShape, () => ({ kind: 'RECTANGULAR', id1, id2, od1, od2, ht }), [id1, id2, od1, od2, ht]);
+  useReportShape(
+    onShape,
+    () => ({
+      shape: { kind: 'RECTANGULAR', id1, id2, od1, od2, ht },
+      meta: { grade, material, pcs, factor: stack, weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight },
+    }),
+    [id1, id2, od1, od2, ht, grade, material, pcs, stack, calc.weightPerPc, calc.totalWeight],
+  );
   const fluxCalc = useMemo(
     () => rectangularFluxTestCalc({
       area: calc.coreAc, meanPath: calc.coreMl, turns, flux, ateCm,
@@ -1917,7 +1948,7 @@ export const NanoForm = ({
   fluxGrades: FluxGroup[];
   onAdd: (item: Item) => void;
   /** Reports the live dimensions to the 3D preview. */
-  onShape?: (s: CoreShape) => void;
+  onShape?: (r: ShapeReport) => void;
   /** The customer's toroidal factor, for the CRGO half of a composite.
    *  The nano ribbon and its case have their own constants and are not a
    *  laminated stack, so it never touches those. */
@@ -2029,18 +2060,6 @@ export const NanoForm = ({
   // Epoxy / plastic casing has no SS case — its case weight must NOT count in
   // the piece weight (nor be priced). Detected from the grade / material name.
   const isEpoxy = /epoxy|plastic/i.test(grade) || /epoxy|plastic/i.test(material);
-  useReportShape(
-    onShape,
-    () => (composite
-      ? {
-          kind: 'COMPOSITE',
-          rule: rule ?? 'CONTINUOUS_LOOP',
-          crgo: { id: crgoId, od: crgoOd, ht: crgoHt },
-          nano: { id, od, ht },
-        }
-      : { kind: 'NANO', dims: { id, od, ht }, cased: !isEpoxy }),
-    [composite, rule, crgoId, crgoOd, crgoHt, id, od, ht, isEpoxy],
-  );
   const effCaseWt = isEpoxy ? 0 : calc.caseWeight;
   // Nano part per piece = core (+ SS case unless epoxy). Composite adds CRGO.
   const nanoPieceWt = Math.round((calc.coreWeight + effCaseWt) * 1000) / 1000;
@@ -2048,6 +2067,29 @@ export const NanoForm = ({
     ? Math.round((nanoPieceWt + comp.crgoWeight) * 1000) / 1000
     : nanoPieceWt;
   const totalWt = pcs > 0 ? Math.round(pieceWeight * pcs * 1000) / 1000 : 0;
+
+  useReportShape(
+    onShape,
+    () => ({
+      shape: composite
+        ? {
+            kind: 'COMPOSITE',
+            rule: rule ?? 'CONTINUOUS_LOOP',
+            crgo: { id: crgoId, od: crgoOd, ht: crgoHt },
+            nano: { id, od, ht },
+          }
+        : { kind: 'NANO', dims: { id, od, ht }, cased: !isEpoxy },
+      meta: {
+        grade, material, pcs,
+        // Only a composite carries a stacking factor; a plain nano's weight
+        // comes from the ribbon constants, with no stack to speak of.
+        factor: composite ? stack : null,
+        weightPerPc: pieceWeight, totalWeight: totalWt,
+      },
+    }),
+    [composite, rule, crgoId, crgoOd, crgoHt, id, od, ht, isEpoxy,
+     grade, material, pcs, stack, pieceWeight, totalWt],
+  );
 
   // Finished output size = ordered dims + the selected grade's nano offsets.
   const selGrade = grades.find((g) => g.grade === grade);

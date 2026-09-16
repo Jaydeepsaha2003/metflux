@@ -34,7 +34,9 @@ const FONTS = {
 };
 
 let _pdfMake: any = null;
-const loadPdfMake = async (): Promise<any> => {
+// Exported so other modules (the core spec sheet) can reuse the same loaded
+// instance and font VFS rather than pulling a second copy of pdfmake.
+export const loadPdfMake = async (): Promise<any> => {
   if (_pdfMake) return _pdfMake;
   const [pdfMakeMod, mont, carl, pop]: any = await Promise.all([
     import('pdfmake/build/pdfmake'),
