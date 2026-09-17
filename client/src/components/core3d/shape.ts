@@ -9,6 +9,25 @@ import type { CompositeRule } from '@/lib/calc';
 
 export type Tri = { id: number; od: number; ht: number };
 
+/** Where the line of cut sits on a cut core. */
+export type CutAt = 'TOP' | 'CENTRE' | 'BOTTOM';
+
+/**
+ * How far off centre the line of cut sits, in mm along the ID2 axis.
+ *
+ * A quarter of the window each way: far enough to see and to matter, and still
+ * across the limbs rather than through the yoke — cut past the window and you
+ * are no longer making two C halves, you are making a C and a lid.
+ */
+export const cutOffsetMm = (id2: number, at: CutAt | undefined) =>
+  (at === 'TOP' ? id2 / 4 : at === 'BOTTOM' ? -id2 / 4 : 0);
+
+export const CUT_AT_LABEL: Record<CutAt, string> = {
+  TOP: 'Nearer the top yoke',
+  CENTRE: 'Centre — two equal halves',
+  BOTTOM: 'Nearer the bottom yoke',
+};
+
 export type CoreShape =
   | { kind: 'TOROIDAL'; dims: Tri }
   /** A toroid cut into two mating C halves. Dimensioned by the core it was cut
@@ -19,7 +38,13 @@ export type CoreShape =
   /** A rectangular window core sawn straight across both limbs into two C
    *  halves. Same dimensions as the ring it came from; `gapMm` is the total
    *  controlled air gap across both joints. */
-  | { kind: 'CUT_RECT'; id1: number; id2: number; od1: number; od2: number; ht: number; gapMm: number }
+  | {
+      kind: 'CUT_RECT'; id1: number; id2: number; od1: number; od2: number; ht: number;
+      gapMm: number;
+      /** Where along the limbs the line of cut falls. Centre gives two equal C
+       *  halves; top or bottom gives a deep C and a shallow one. */
+      cutAt?: CutAt;
+    }
   | { kind: 'NANO'; dims: Tri; cased: boolean }
   /** A stacked E+I lamination core, quoted the way the trade quotes it: the
    *  centre limb (tongue), the window it encloses, and the stack depth. The

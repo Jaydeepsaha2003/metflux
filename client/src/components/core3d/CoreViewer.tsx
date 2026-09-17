@@ -22,7 +22,7 @@ import {
   annulus, halfAnnulus, rectRing, halfRectRing, nanoCase,
   eCoreE, eCoreI, obround, stepPlate,
 } from './geometry';
-import { compositeLayout, shapeExtent, shapeIsDrawable, type CoreShape } from './shape';
+import { compositeLayout, shapeExtent, shapeIsDrawable, type CoreShape, cutOffsetMm } from './shape';
 import { buildDimensions } from './dimensions';
 
 /* Steel that reads as steel.
@@ -419,8 +419,11 @@ export default function CoreViewer({ shape, resetNonce, showDims, view = 'iso' }
         const split = shape.gapMm > 0
           ? shape.gapMm / 2
           : Math.max(shape.od2 * 0.004, 0.2);
-        const a = add(halfRectRing(shape.id1, shape.id2, shape.od1, shape.od2, shape.ht, 1), mat);
-        const b = add(halfRectRing(shape.id1, shape.id2, shape.od1, shape.od2, shape.ht, -1), mat);
+        // The cut plane moves with the chosen position, so the solid shows the
+        // two halves you would actually get rather than always two equal C's.
+        const off = cutOffsetMm(shape.id2, shape.cutAt);
+        const a = add(halfRectRing(shape.id1, shape.id2, shape.od1, shape.od2, shape.ht, 1, off), mat);
+        const b = add(halfRectRing(shape.id1, shape.id2, shape.od1, shape.od2, shape.ht, -1, off), mat);
         // The extrude is laid down with rotateX(-90), which maps the shape's
         // second axis to world -Z. So the +1 half lives at negative Z and has
         // to move further negative to open the joint; signing these the

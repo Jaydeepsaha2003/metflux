@@ -58,6 +58,9 @@ const itemSchema = z.object({
     width: z.coerce.number().positive(),
     stack: z.coerce.number().positive(),
   })).max(24).optional().nullable(),
+  /* Where the line of cut falls. NULL = centre, which is how every cut core
+     booked before today was made. */
+  cutAt:       z.enum(['TOP', 'CENTRE', 'BOTTOM']).optional().nullable(),
   gapMm:       z.coerce.number().nonnegative().max(100).optional().nullable(),
   stackFactor: z.coerce.number().positive().max(100).optional().nullable(),
   turns:       z.coerce.number().positive().transform((v) => Math.round(v)).optional().nullable(),
@@ -290,6 +293,7 @@ router.post('/', requireAnyPermission('add_quotation', 'add_po'), asyncHandler(a
         ht: it.ht, builtup: it.builtup ?? null,
         gapMm: it.gapMm ?? null,
         alloy: it.alloy ?? null,
+        cutAt: it.cutAt ?? null,
         steps: it.steps?.length ? JSON.stringify(it.steps) : null,
         weightPerPc: it.weightPerPc, pcs: it.pcs, totalWeight: it.totalWeight,
         coreAc: it.coreAc ?? null, coreMl: it.coreMl ?? null, d13: it.d13 ?? null,
@@ -379,6 +383,7 @@ router.put('/:id', requireAnyPermission('add_quotation', 'add_po'), asyncHandler
         ht: it.ht, builtup: it.builtup ?? null,
         gapMm: it.gapMm ?? null,
         alloy: it.alloy ?? null,
+        cutAt: it.cutAt ?? null,
         steps: it.steps?.length ? JSON.stringify(it.steps) : null,
         weightPerPc: it.weightPerPc, pcs: it.pcs, totalWeight: it.totalWeight,
         coreAc: it.coreAc ?? null, coreMl: it.coreMl ?? null, d13: it.d13 ?? null,
@@ -506,6 +511,7 @@ router.post('/:id/convert', requireAnyPermission('add_quotation', 'add_po'), asy
         id1: it.id1, id2: it.id2, od1: it.od1, od2: it.od2, ht: it.ht, builtup: it.builtup,
         gapMm: it.gapMm ?? null,
         alloy: it.alloy ?? null,
+        cutAt: it.cutAt ?? null,
         steps: it.steps?.length ? JSON.stringify(it.steps) : null,
         weightPerPc: it.weightPerPc, pcs: it.pcs, totalWeight: it.totalWeight,
         coreAc: it.coreAc, coreMl: it.coreMl, d13: it.d13,

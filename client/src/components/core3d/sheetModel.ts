@@ -20,7 +20,7 @@ import {
 } from '@/lib/coreMaterials';
 import {
   compositeLayout, cutCoreCode, eCoreOutline, stepCoreSpan, shapeCaption, shapeTitle,
-  type CoreShape,
+  CUT_AT_LABEL, type CoreShape,
 } from './shape';
 import {
   eCoreMeanPath, woundMeanPath, stepGrossArea, defaultRectStack,
@@ -179,7 +179,10 @@ const dimensions = (shape: CoreShape): Section => {
 
   if (isCut(shape)) {
     const g = gapOf(shape);
-    rows.push(['Total air gap', g > 0 ? mm(g) : 'None — butt joint']);
+    rows.push(['Line of cut', g > 0 ? mm(g) : 'Butt — no deliberate gap']);
+    if (shape.kind === 'CUT_RECT') {
+      rows.push(['Cut position', CUT_AT_LABEL[shape.cutAt ?? 'CENTRE']]);
+    }
   }
   if (shape.kind === 'NANO' && shape.cased) {
     rows.push(['Case  ID / OD', `${n(shape.dims.id - 5)} / ${n(shape.dims.od + 5)} mm`]);

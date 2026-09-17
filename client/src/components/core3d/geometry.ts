@@ -174,29 +174,35 @@ export const rectRing = (
  */
 export const halfRectRing = (
   id1: number, id2: number, od1: number, od2: number, ht: number, sign: 1 | -1,
+  /** Where the cut falls along the ID2 axis, mm off centre. The extrusion maps
+   *  shape-Y to world -Z, so the sign is flipped on the way in. */
+  cutOffset = 0,
 ): THREE.BufferGeometry => {
   const X = od1 / 2, Z = (od2 / 2) * sign;
   const xi = id1 / 2, zi = (id2 / 2) * sign;
+  // Clamped inside the window: a cut past it would leave the shape open and
+  // the extrusion would come out inside-out rather than merely wrong.
+  const cut = Math.max(-id2 / 2 + 0.5, Math.min(id2 / 2 - 0.5, -cutOffset));
   const rOuter = Math.min(od1, od2) * 0.04;
   const rWin = Math.min(id1, id2) * 0.12;
 
   const sh = new THREE.Shape();
   // Up the left outer wall from the cut face.
-  sh.moveTo(-X, 0);
+  sh.moveTo(-X, cut);
   sh.lineTo(-X, Z - rOuter * sign);
   sh.quadraticCurveTo(-X, Z, -X + rOuter, Z);
   // Across the outer end.
   sh.lineTo(X - rOuter, Z);
   sh.quadraticCurveTo(X, Z, X, Z - rOuter * sign);
   // Back down the right outer wall to the cut face.
-  sh.lineTo(X, 0);
+  sh.lineTo(X, cut);
   // In along the cut face to the window, then around the window and back out.
-  sh.lineTo(xi, 0);
+  sh.lineTo(xi, cut);
   sh.lineTo(xi, zi - rWin * sign);
   sh.quadraticCurveTo(xi, zi, xi - rWin, zi);
   sh.lineTo(-xi + rWin, zi);
   sh.quadraticCurveTo(-xi, zi, -xi, zi - rWin * sign);
-  sh.lineTo(-xi, 0);
+  sh.lineTo(-xi, cut);
   sh.closePath();
 
   const g = new THREE.ExtrudeGeometry(sh, { depth: ht, bevelEnabled: false, curveSegments: 16 });

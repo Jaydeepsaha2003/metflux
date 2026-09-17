@@ -20,7 +20,8 @@
 // attributes, and anything else silently drops. Section hatching is therefore
 // computed as individual line segments rather than asked for as a fill.
 import {
-  compositeLayout, cutCoreCode, eCoreOutline, stepCoreSpan, type CoreShape,
+  compositeLayout, cutCoreCode, cutOffsetMm, eCoreOutline, stepCoreSpan,
+  type CoreShape,
 } from './shape';
 
 const INK = '#0f172a';
@@ -457,13 +458,20 @@ const viewsFor = (shape: CoreShape): View[] => {
       const { id1, id2, od1, od2, ht } = shape;
       return [
         rectPlan(id1, id2, od1, od2, STEEL, (c, W) => {
+          // Drawn where the cut is actually made, not always down the middle:
+          // a line of cut nearer one yoke gives a deep C and a shallow one, and
+          // a drawing that always halves the part would not say so.
+          const cy = c.cy - c.m(cutOffsetMm(id2, shape.cutAt));
           c.out.push(
-            line({ x: c.cx - W / 2, y: c.cy }, { x: c.cx + W / 2, y: c.cy }, STEEL.edge, 1.5),
-            noteOnPart({ x: c.cx, y: c.cy - c.s * 1.15 }, 'LINE OF CUT', c.s),
+            line({ x: c.cx - W / 2, y: cy }, { x: c.cx + W / 2, y: cy }, STEEL.edge, 1.5),
+            noteOnPart({ x: c.cx, y: cy - c.s * 1.15 }, 'LINE OF CUT', c.s),
           );
           // On the right limb: the note sits over the window in the middle, and
           // the balloon on the left landed on top of its first two letters.
-          detailBalloon(c, { x: c.cx + W / 2 - c.m((od1 - id1) / 4), y: c.cy });
+          detailBalloon(c, {
+            x: c.cx + W / 2 - c.m((od1 - id1) / 4),
+            y: c.cy - c.m(cutOffsetMm(id2, shape.cutAt)),
+          });
         }),
         rectSection(id1, od1, ht, STEEL),
         jointDetail(shape.gapMm, ht, STEEL),
