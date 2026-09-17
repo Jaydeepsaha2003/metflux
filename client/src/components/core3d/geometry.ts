@@ -120,6 +120,60 @@ export const halfAnnulus = (t: Tri, startAngle: number): THREE.BufferGeometry =>
   return merged ?? outerWall;
 };
 
+/**
+ * One continuous toroidal core with a single radial air gap.
+ *
+ * A gap core is not two semi-circular halves pushed apart. It is a wound ring
+ * with one controlled break between its two cut faces. Building the remaining
+ * 360° minus the gap as one annular sector makes the model match the physical
+ * part and leaves both cut faces visible at the joint.
+ */
+export const gappedAnnulus = (t: Tri, gapMm = 0): THREE.BufferGeometry => {
+  const ri = Math.max(t.id / 2, 0.001);
+  const ro = t.od / 2;
+  const h = t.ht;
+  const meanR = (ri + ro) / 2;
+  // Keep a hairline opening for a plain cut core so the machined joint reads;
+  // cap it well below a half turn to preserve a recognisable ring.
+  const opening = Math.max(gapMm, Math.min(Math.max(t.od * 0.004, 0.2), meanR * 0.08));
+  const gapAngle = Math.min(opening / Math.max(meanR, 0.001), Math.PI / 3);
+  const start = gapAngle / 2;
+  const sweep = Math.PI * 2 - gapAngle;
+  const seg = Math.max(32, Math.round(RADIAL * sweep / (Math.PI * 2)));
+
+  const outerWall = new THREE.CylinderGeometry(ro, ro, h, seg, 1, true, start, sweep);
+  const innerWall = new THREE.CylinderGeometry(ri, ri, h, seg, 1, true, start, sweep);
+  const innerIdx = innerWall.getIndex();
+  if (innerIdx) {
+    const a = Array.from(innerIdx.array);
+    for (let i = 0; i < a.length; i += 3) { const t0 = a[i]; a[i] = a[i + 2]; a[i + 2] = t0; }
+    innerWall.setIndex(a);
+  }
+  const normals = innerWall.getAttribute('normal');
+  for (let i = 0; i < normals.count; i += 1) normals.setXYZ(i, -normals.getX(i), -normals.getY(i), -normals.getZ(i));
+  normals.needsUpdate = true;
+
+  const face = (y: number, up: boolean) => {
+    const g = new THREE.RingGeometry(ri, ro, seg, 1, start, sweep);
+    g.rotateX(up ? -Math.PI / 2 : Math.PI / 2);
+    g.translate(0, y, 0);
+    return g;
+  };
+  const cutFace = (angle: number) => {
+    const g = new THREE.PlaneGeometry(ro - ri, h);
+    g.rotateY(Math.PI / 2);
+    g.translate(0, 0, (ro + ri) / 2);
+    g.rotateY(-angle);
+    return g;
+  };
+  const merged = mergeGeometries([
+    outerWall, innerWall, face(h / 2, true), face(-h / 2, false),
+    cutFace(start), cutFace(start + sweep),
+  ], false);
+  [outerWall, innerWall].forEach((g) => g.dispose());
+  return merged ?? outerWall;
+};
+
 /** A rectangular window core: outer rectangle with a rectangular hole,
  *  extruded through the stack height.
  *
@@ -205,6 +259,31 @@ export const halfRectRing = (
   sh.lineTo(-xi, cut);
   sh.closePath();
 
+  const g = new THREE.ExtrudeGeometry(sh, { depth: ht, bevelEnabled: false, curveSegments: 16 });
+  g.rotateX(-Math.PI / 2);
+  g.translate(0, -ht / 2, 0);
+  return g;
+};
+
+/** A single C-shaped rectangular core with one controlled break on its right limb. */
+export const gappedRectRing = (
+  id1: number, id2: number, od1: number, od2: number, ht: number,
+  gapMm = 0, cutOffset = 0,
+): THREE.BufferGeometry => {
+  const X = od1 / 2, Z = od2 / 2, xi = id1 / 2, zi = id2 / 2;
+  const bridge = Math.max((od1 - id1) / 2, 0.2);
+  const visibleGap = Math.max(gapMm, Math.min(Math.max(od2 * 0.004, 0.2), bridge * 0.3));
+  const halfGap = Math.min(visibleGap / 2, Math.max(0.1, zi - 0.1));
+  // The existing Cut position control maps onto the position along the right
+  // limb. It never lets the gap escape the window or touch a yoke.
+  const centre = THREE.MathUtils.clamp(-cutOffset, -zi + halfGap, zi - halfGap);
+  const topGap = centre + halfGap, bottomGap = centre - halfGap;
+  const sh = new THREE.Shape();
+  sh.moveTo(X, topGap);
+  sh.lineTo(X, Z); sh.lineTo(-X, Z); sh.lineTo(-X, -Z); sh.lineTo(X, -Z);
+  sh.lineTo(X, bottomGap); sh.lineTo(xi, bottomGap);
+  sh.lineTo(xi, -zi); sh.lineTo(-xi, -zi); sh.lineTo(-xi, zi);
+  sh.lineTo(xi, zi); sh.lineTo(xi, topGap); sh.closePath();
   const g = new THREE.ExtrudeGeometry(sh, { depth: ht, bevelEnabled: false, curveSegments: 16 });
   g.rotateX(-Math.PI / 2);
   g.translate(0, -ht / 2, 0);

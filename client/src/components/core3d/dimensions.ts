@@ -304,10 +304,10 @@ export const buildDimensions = (shape: CoreShape, extent: number) => {
       const { id, od, ht } = shape.dims;
       annularDims(id, od, ht);
       if (shape.gapMm > 0) {
-        // Pointed at from the left: the height dimension already owns the
-        // right-hand wall, and two annotations on one side is a thicket.
+        // The annular gap is at the front (+Z), matching the physical cut
+        // faces in the model instead of pointing at an unrelated outer wall.
         leader(
-          new THREE.Vector3(-od / 2, 0, 0), new THREE.Vector3(-1, 0.25, 0),
+          new THREE.Vector3(0, 0, od / 2), new THREE.Vector3(0.5, 0.35, 1),
           `GAP ${n(shape.gapMm)}`, ctx,
         );
       }
@@ -353,7 +353,8 @@ export const buildDimensions = (shape: CoreShape, extent: number) => {
       leader(new THREE.Vector3(0,top,(z+zi)/2),new THREE.Vector3(0,.8,1),`BUILD Y ${n((od2-id2)/2)}`,ctx);
       if (shape.kind === 'CUT_RECT' && shape.gapMm > 0) {
         leader(
-          new THREE.Vector3(-x, 0, 0), new THREE.Vector3(-1, 0.25, 0),
+          // A rectangular gap sits on the right limb of the C-shaped body.
+          new THREE.Vector3(x, 0, 0), new THREE.Vector3(1, 0.25, 0),
           `GAP ${n(shape.gapMm)}`, ctx,
         );
       }

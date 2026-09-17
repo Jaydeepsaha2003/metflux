@@ -438,11 +438,20 @@ const viewsFor = (shape: CoreShape): View[] => {
       const { id, od, ht } = shape.dims;
       return [
         annularPlan(id, od, STEEL, (c, ro, ri) => {
-          c.out.push(
-            line({ x: c.cx - ro, y: c.cy }, { x: c.cx + ro, y: c.cy }, STEEL.edge, 1.5),
-            noteOnPart({ x: c.cx - ro * 0.5, y: c.cy - c.s * 1.15 }, 'LINE OF CUT', c.s),
-          );
-          detailBalloon(c, { x: c.cx + (ri + ro) / 2, y: c.cy });
+          if (shape.gapMm > 0) {
+            c.out.push(
+              // One radial joint at the top, matching a real gapped ring.
+              line({ x: c.cx, y: c.cy - ro }, { x: c.cx, y: c.cy - ri }, STEEL.edge, 1.5),
+              noteOnPart({ x: c.cx + c.s * 1.05, y: c.cy - (ri + ro) / 2 }, 'GAP', c.s),
+            );
+            detailBalloon(c, { x: c.cx, y: c.cy - (ri + ro) / 2 });
+          } else {
+            c.out.push(
+              line({ x: c.cx - ro, y: c.cy }, { x: c.cx + ro, y: c.cy }, STEEL.edge, 1.5),
+              noteOnPart({ x: c.cx - ro * 0.5, y: c.cy - c.s * 1.15 }, 'LINE OF CUT', c.s),
+            );
+            detailBalloon(c, { x: c.cx + (ri + ro) / 2, y: c.cy });
+          }
         }),
         annularSection(id, od, ht, STEEL),
         jointDetail(shape.gapMm, ht, STEEL),
@@ -458,20 +467,23 @@ const viewsFor = (shape: CoreShape): View[] => {
       const { id1, id2, od1, od2, ht } = shape;
       return [
         rectPlan(id1, id2, od1, od2, STEEL, (c, W) => {
-          // Drawn where the cut is actually made, not always down the middle:
-          // a line of cut nearer one yoke gives a deep C and a shallow one, and
-          // a drawing that always halves the part would not say so.
           const cy = c.cy - c.m(cutOffsetMm(id2, shape.cutAt));
-          c.out.push(
-            line({ x: c.cx - W / 2, y: cy }, { x: c.cx + W / 2, y: cy }, STEEL.edge, 1.5),
-            noteOnPart({ x: c.cx, y: cy - c.s * 1.15 }, 'LINE OF CUT', c.s),
-          );
-          // On the right limb: the note sits over the window in the middle, and
-          // the balloon on the left landed on top of its first two letters.
-          detailBalloon(c, {
-            x: c.cx + W / 2 - c.m((od1 - id1) / 4),
-            y: c.cy - c.m(cutOffsetMm(id2, shape.cutAt)),
-          });
+          const innerRight = c.cx + c.m(id1) / 2;
+          if (shape.gapMm > 0) {
+            c.out.push(
+              // A gapped rectangular core is one C-shaped path with its joint
+              // on the right limb, not two halves divided through the part.
+              line({ x: innerRight, y: cy }, { x: c.cx + W / 2, y: cy }, STEEL.edge, 1.5),
+              noteOnPart({ x: innerRight + c.s * 0.8, y: cy - c.s * 1.15 }, 'GAP', c.s),
+            );
+            detailBalloon(c, { x: c.cx + W / 2 - c.m((od1 - id1) / 4), y: cy });
+          } else {
+            c.out.push(
+              line({ x: c.cx - W / 2, y: cy }, { x: c.cx + W / 2, y: cy }, STEEL.edge, 1.5),
+              noteOnPart({ x: c.cx, y: cy - c.s * 1.15 }, 'LINE OF CUT', c.s),
+            );
+            detailBalloon(c, { x: c.cx + W / 2 - c.m((od1 - id1) / 4), y: cy });
+          }
         }),
         rectSection(id1, od1, ht, STEEL),
         jointDetail(shape.gapMm, ht, STEEL),

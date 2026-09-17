@@ -19,7 +19,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import {
-  annulus, halfAnnulus, rectRing, halfRectRing, nanoCase,
+  annulus, halfAnnulus, gappedAnnulus, rectRing, halfRectRing, gappedRectRing, nanoCase,
   eCoreE, eCoreI, obround, stepPlate,
 } from './geometry';
 import { compositeLayout, shapeExtent, shapeIsDrawable, type CoreShape, cutOffsetMm } from './shape';
@@ -416,34 +416,25 @@ export default function CoreViewer({ shape, resetNonce, showDims, view = 'iso' }
         break;
       case 'CUT_RECT': {
         const mat = mk(MATERIALS.rect);
-        const split = shape.gapMm > 0
-          ? shape.gapMm / 2
-          : Math.max(shape.od2 * 0.004, 0.2);
-        // The cut plane moves with the chosen position, so the solid shows the
-        // two halves you would actually get rather than always two equal C's.
         const off = cutOffsetMm(shape.id2, shape.cutAt);
-        const a = add(halfRectRing(shape.id1, shape.id2, shape.od1, shape.od2, shape.ht, 1, off), mat);
-        const b = add(halfRectRing(shape.id1, shape.id2, shape.od1, shape.od2, shape.ht, -1, off), mat);
-        // The extrude is laid down with rotateX(-90), which maps the shape's
-        // second axis to world -Z. So the +1 half lives at negative Z and has
-        // to move further negative to open the joint; signing these the
-        // obvious way pushed the halves through each other instead.
-        a.position.z = -split;
-        b.position.z = split;
+        if (shape.gapMm > 0) {
+          add(gappedRectRing(shape.id1, shape.id2, shape.od1, shape.od2, shape.ht, shape.gapMm, off), mat);
+        } else {
+          // A plain rectangular cut is supplied as two mating C halves.
+          add(halfRectRing(shape.id1, shape.id2, shape.od1, shape.od2, shape.ht, 1, off), mat).position.z = -Math.max(shape.od2 * 0.004, 0.2);
+          add(halfRectRing(shape.id1, shape.id2, shape.od1, shape.od2, shape.ht, -1, off), mat).position.z = Math.max(shape.od2 * 0.004, 0.2);
+        }
         break;
       }
       case 'CUT_ROUND': {
-        /* Two real halves rather than a ring with a line drawn on it. They are
-           pushed apart by the specified gap, or by a hairline when there is no
-           gap, so the joint is visible and the product reads as what it is. */
         const mat = mk(MATERIALS.crgo);
-        const split = shape.gapMm > 0
-          ? shape.gapMm / 2
-          : Math.max(shape.dims.od * 0.004, 0.2);
-        const top = add(halfAnnulus(shape.dims, 0), mat);
-        const bot = add(halfAnnulus(shape.dims, Math.PI), mat);
-        top.position.z = split;
-        bot.position.z = -split;
+        if (shape.gapMm > 0) {
+          add(gappedAnnulus(shape.dims, shape.gapMm), mat);
+        } else {
+          // A plain round cut is supplied as two mating C halves.
+          add(halfAnnulus(shape.dims, 0), mat).position.z = Math.max(shape.dims.od * 0.004, 0.2);
+          add(halfAnnulus(shape.dims, Math.PI), mat).position.z = -Math.max(shape.dims.od * 0.004, 0.2);
+        }
         break;
       }
       case 'E_CORE':
