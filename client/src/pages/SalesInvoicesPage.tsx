@@ -17,7 +17,6 @@ import { DateRangeFilter } from '@/components/DateRangeFilter';
 import { useConfirm } from '@/hooks/useConfirm';
 import { ImportCheck, type ImportFileCheck } from '@/components/ImportCheck';
 import { useHideCustomerNames } from '@/store/auth';
-import { InsightMetrics } from '@/components/CommercialInsights';
 
 type Invoice = {
   id: string; invoiceNumber: string; invoiceDate: string;
@@ -84,12 +83,12 @@ export const SalesInvoicesPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [fixTarget, setFixTarget] = useState<Invoice | null>(null);
 
-  const { data: summary, isError: summaryError } = useQuery({
+  const { data: summary } = useQuery({
     queryKey: ['sales-invoice-summary'],
     queryFn: () => api<Summary>('/sales-invoices/summary'),
   });
 
-  const { data, isLoading, isFetching, isError: registerError } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['sales-invoices', debouncedSearch, status, attention, docType, page, pageSize, due, from, to],
     queryFn: () => api<ListResp>(
       `/sales-invoices?status=${status}&filter=${attention ? 'ATTENTION' : 'ALL'}&docType=${docType}&page=${page}&pageSize=${pageSize}${debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : ''}${due ? `&due=${due}` : ''}${from ? `&from=${from}` : ''}${to ? `&to=${to}` : ''}`
@@ -192,13 +191,13 @@ export const SalesInvoicesPage = () => {
   };
 
   return (
-    <div className="commercial-workspace space-y-5">
+    <div className="space-y-5">
       <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={onFile} className="hidden" />
 
-      <div className="commercial-heading flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div><p className="commercial-eyebrow">Finance / Sales & adjustments</p><h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <Receipt className="h-5 w-5 text-brand-600" /> Sales & Credit Notes
-        </h1><p className="mt-1 text-xs text-slate-500">Review billing, credit adjustments and outstanding balances.</p></div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+          <Receipt className="h-5 w-5 text-brand-600" /> Sales Register
+        </h1>
         <div className="flex items-center gap-2">
           <button onClick={deleteEverything} disabled={bulkDel.isPending || !grandTotal}
             className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-40"
@@ -213,23 +212,12 @@ export const SalesInvoicesPage = () => {
       </div>
 
       {/* Summary cards */}
-      <p className="text-xs text-slate-500">Company overview · All time · Includes GST · Independent of the register filters below</p>
-      {summaryError && <p role="alert" className="text-sm text-red-700">Sales overview could not load. Refresh to try again.</p>}
-      {!summary && !summaryError && <p role="status" className="text-sm text-slate-500">Loading sales overview…</p>}
-      {summary && <>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Card label="Total Sales" value={inr(summary?.totalSales ?? 0)} tone="brand" note="Invoices only — before credit notes" />
         <Card label="Output GST" value={inr(summary?.outputGst ?? 0)} tone="muted" note="On invoices only" />
         <Card label="Less: Credit Notes" value={inr(summary?.creditNotes ?? 0)} tone={summary && summary.creditNotes > 0 ? 'warning' : 'muted'} note="Deducted from sales" />
         <Card label="Net Sales" value={inr(summary?.netSales ?? 0)} tone="brand" note="Ties to your register's Total row" />
       </div>
-      <InsightMetrics title="Sales health" scope="All-time company register" items={[
-        {label:'Credit adjustment rate',value:summary.totalSales > 0 ? `${(summary.creditNotes / summary.totalSales * 100).toFixed(1)}%` : '—',note:'Credit-note value ÷ invoiced sales',onClick:()=>{setDocType('CREDIT_NOTE');setStatus('ALL');setAttention(false);clearDue();setFrom('');setTo('');setSearch('');}},
-        {label:'Net outstanding',value:inr(summary.outstanding),note:'Signed register balance after allocations'},
-        {label:'Overdue balance',value:inr(summary.overdue),note:'Unpaid or partial documents past due',onClick:()=>{setStatus('OVERDUE');setDocType('ALL');setAttention(false);clearDue();setFrom('');setTo('');setSearch('');}},
-        {label:'Needs attention',value:summary.attention.toLocaleString('en-IN'),note:'Missing customer or payment terms',onClick:()=>{setAttention(true);setStatus('ALL');setDocType('ALL');clearDue();setFrom('');setTo('');setSearch('');}},
-      ]} />
-      </>}
       {/* A register's own Total row is NET of credit notes, so the figure to
           compare against it is Net Sales — not the larger Total Sales card. */}
       {!!summary?.creditNotes && (
@@ -256,7 +244,7 @@ export const SalesInvoicesPage = () => {
       )}
 
       {/* Filters */}
-      <div className="commercial-filters flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[200px] sm:max-w-xs">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input className="input pl-9" placeholder="Search invoice # or customer…" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -288,13 +276,6 @@ export const SalesInvoicesPage = () => {
       </div>
 
       {/* Bulk-selection toolbar */}
-      {registerError && <p role="alert" className="text-sm text-red-700">The register could not refresh. Any visible figures are from the previous result.</p>}
-      {data && <InsightMetrics title={docType === 'CREDIT_NOTE' ? 'Credit-note register' : 'Current register selection'} scope={isFetching ? 'Updating selection…' : 'All matching records across pages'} items={[
-        {label:'Documents',value:data.total.toLocaleString('en-IN')},
-        {label:'Signed amount',value:inr(data.totals.amount),note:'Credit notes reduce this total'},
-        {label:'Allocated amount',value:inr(data.totals.paid)},
-        {label:'Remaining balance',value:inr(data.totals.balance)},
-      ]} />}
       {(selected.size > 0 || allMatching) && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-sm">
           <span className="font-medium text-brand-800">
@@ -327,7 +308,7 @@ export const SalesInvoicesPage = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="commercial-invoice-table w-full text-sm whitespace-nowrap">
+            <table className="w-full text-sm whitespace-nowrap">
               <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-3 py-2.5 w-8">
@@ -357,7 +338,7 @@ export const SalesInvoicesPage = () => {
                   const checked = allMatching || selected.has(inv.id);
                   return (
                   <tr key={inv.id} className={cn('border-t border-slate-100 hover:bg-slate-50/60', checked && 'bg-brand-50/40', !checked && inv.needsAttention && 'bg-red-50/40', due && 'border-l-2 border-l-amber-400')}>
-                    <td data-label="Select" className="px-3 py-2.5">
+                    <td className="px-3 py-2.5">
                       <input
                         type="checkbox"
                         className="h-4 w-4 cursor-pointer rounded border-slate-300 accent-brand-600"
@@ -365,7 +346,7 @@ export const SalesInvoicesPage = () => {
                         onChange={() => toggleOne(inv.id)}
                       />
                     </td>
-                    <td data-label="Document" className="px-3 py-2.5 font-medium text-slate-900">
+                    <td className="px-3 py-2.5 font-medium text-slate-900">
                       <span className="inline-flex items-center gap-1.5">
                         {inv.invoiceNumber}
                         {inv.docType === 'CREDIT_NOTE' && (
@@ -373,8 +354,8 @@ export const SalesInvoicesPage = () => {
                         )}
                       </span>
                     </td>
-                    <td data-label="Invoice date" className="px-3 py-2.5 text-slate-600">{fmtDate(inv.invoiceDate)}</td>
-                    <td data-label="Customer" className="px-3 py-2.5">
+                    <td className="px-3 py-2.5 text-slate-600">{fmtDate(inv.invoiceDate)}</td>
+                    <td className="px-3 py-2.5">
                       {inv.customerId ? (
                         <span className="text-slate-700">{hideNames ? (inv.customerCode ?? '••••') : inv.customerName}</span>
                       ) : (
@@ -383,16 +364,16 @@ export const SalesInvoicesPage = () => {
                         </span>
                       )}
                     </td>
-                    <td data-label="Taxable" className="px-3 py-2.5 text-right tabular-nums text-slate-500">{inv.taxableAmount ? inr(inv.taxableAmount) : '—'}</td>
-                    <td data-label="GST"
+                    <td className="px-3 py-2.5 text-right tabular-nums text-slate-500">{inv.taxableAmount ? inr(inv.taxableAmount) : '—'}</td>
+                    <td
                       className="px-3 py-2.5 text-right tabular-nums text-slate-500"
                       title={inv.gst ? `IGST ${inr(inv.igst)} · CGST ${inr(inv.cgst)} · SGST ${inr(inv.sgst)}${inv.taxType ? `\n${inv.taxType}` : ''}` : undefined}
                     >
                       {inv.gst ? inr(inv.gst) : '—'}
                     </td>
-                    <td data-label="Amount incl. GST" className="px-3 py-2.5 text-right tabular-nums">{inr(inv.amount)}</td>
-                    <td data-label="Balance" className="px-3 py-2.5 text-right tabular-nums font-medium">{inr(inv.balance)}</td>
-                    <td data-label="Due" className="px-3 py-2.5">
+                    <td className="px-3 py-2.5 text-right tabular-nums">{inr(inv.amount)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums font-medium">{inr(inv.balance)}</td>
+                    <td className="px-3 py-2.5">
                       {inv.dueDate ? (
                         <span className={cn(inv.daysOverdue != null && inv.daysOverdue > 0 ? 'text-red-600 font-medium' : 'text-slate-600')}>
                           {fmtDate(inv.dueDate)}
@@ -404,12 +385,12 @@ export const SalesInvoicesPage = () => {
                         </span>
                       )}
                     </td>
-                    <td data-label="Status" className="px-3 py-2.5 text-center">
+                    <td className="px-3 py-2.5 text-center">
                       <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', STATUS_BADGE[inv.status])}>
                         {inv.status.charAt(0) + inv.status.slice(1).toLowerCase()}
                       </span>
                     </td>
-                    <td data-label="Actions" className="px-3 py-2.5 text-right">
+                    <td className="px-3 py-2.5 text-right">
                       <div className="inline-flex items-center gap-1">
                         <button onClick={() => setFixTarget(inv)} className="btn-ghost text-brand-700 hover:bg-brand-50" title="Assign customer / set due date">
                           <Pencil className="h-4 w-4" />
@@ -435,7 +416,7 @@ export const SalesInvoicesPage = () => {
               {totals && (
                 <tfoot>
                   <tr className="border-t-2 border-slate-300 bg-slate-50 font-semibold">
-                    <td className="px-3 py-2.5 text-slate-600" colSpan={6}>Filtered total ({data.total} documents)</td>
+                    <td className="px-3 py-2.5 text-slate-600" colSpan={6}>Page total ({data.total} invoices)</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{inr(totals.amount)}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{inr(totals.balance)}</td>
                     <td colSpan={3} />

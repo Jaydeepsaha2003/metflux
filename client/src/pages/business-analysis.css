@@ -69,4 +69,29 @@
  .analysis-glass h2 { font-size:16px; }
  .analysis-table-scroll table { min-width:460px; }
 }
+.analysis-quality-section { margin-top:20px; padding-top:18px; border-top:1px solid var(--d-grid); }
+.analysis-gst-table table { width:100%; table-layout:fixed; border-collapse:collapse; font-size:12px; }
+.analysis-gst-table th,.analysis-gst-table td { padding:9px 6px; border-bottom:1px solid var(--d-grid); text-align:right; overflow-wrap:anywhere; font-variant-numeric:tabular-nums; }
+.analysis-gst-table th:first-child { text-align:left; }
+.analysis-gst-table thead { background:#ffffff55; }
+.analysis-gst-table tbody th { font-weight:500; }
+.analysis-gst-table td { font-weight:600; }
+.analysis-gst-table tbody tr:last-child { font-weight:750; background:#ffffff66; }
+.analysis-gst-table small { display:block; font-size:10px; font-weight:500; color:var(--d-muted); }
+.analysis-gst-net { display:flex; gap:10px; justify-content:space-between; align-items:center; padding:10px; margin-top:10px; border-left:3px solid var(--d-accent); background:#ffffff66; font-size:12px; }
+.analysis-gst-net strong { font-size:18px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.analysis-quality-totals { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:14px 0; }
+.analysis-quality-totals > div { border-left:2px solid var(--d-accent); padding:8px 12px; background:#ffffff50; min-width:0; }
+.analysis-quality-totals span { display:block; font-size:11px; color:var(--d-muted); }
+.analysis-quality-totals strong { display:block; margin-top:5px; font-size:22px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.analysis-quality-bars { border:1px solid var(--d-grid); padding:12px; min-width:0; }
+.analysis-quality-bars h3 { font-size:12px; font-weight:700; margin-bottom:10px; }
+.analysis-quality-bars p { font-size:12px; color:var(--d-muted); }
+.analysis-quality-bars > div { margin-top:10px; }
+.analysis-quality-bars > div > div:first-child { display:flex; justify-content:space-between; gap:10px; font-size:12px; }
+.analysis-quality-bars span { overflow-wrap:anywhere; }
+.analysis-quality-bars strong { white-space:nowrap; }
+.analysis-quality-track { height:5px; background:var(--d-grid); margin-top:5px; }
+.analysis-quality-track span { display:block; height:100%; background:var(--d-accent); }
+@media(max-width:639px) { .analysis-quality-totals { grid-template-columns:1fr; gap:6px; } .analysis-quality-totals > div { display:flex; align-items:center; justify-content:space-between; gap:8px; } .analysis-quality-totals strong { font-size:18px; margin:0; } }
 @media(prefers-reduced-motion:no-preference) { .analysis-glass .card { animation:dash-reveal .45s ease both; } }

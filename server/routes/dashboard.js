@@ -430,7 +430,7 @@ router.get('/analysis', requireAnyPermission('view_analysis', 'manage_invoices')
   const [
     invAgg, payAgg, outAgg, agingRows,
     invByMonth, payByMonth, prodByMonth,
-    fulfill, topCust, byState, coreRows, returnRows,
+    fulfill, topCust, byState, coreRows, returnRows, salesAdjustments, rejectionGroups, purchaseGst,
   ] = await Promise.all([
     qOne(`SELECT COUNT(*) cnt,
             COALESCE(SUM(\`amount\`),0) invoiced,
@@ -493,6 +493,23 @@ router.get('/analysis', requireAnyPermission('view_analysis', 'manage_invoices')
           WHERE po.\`companyId\` = ? AND it.\`status\` = 'ACTIVE' AND po.\`orderDate\` >= ? AND po.\`orderDate\` <= ?
           GROUP BY it.\`coreType\``, [companyId, rangeStart, rangeEnd]),
     q(`SELECT \`status\`, COUNT(*) n FROM \`Return\` WHERE \`companyId\` = ? GROUP BY \`status\``, [companyId]),
+    qOne(`SELECT
+        COALESCE(SUM(CASE WHEN docType = 'CREDIT_NOTE' OR (docType IS NULL AND amount < 0) THEN 0 ELSE amount END),0) grossSales,
+        COALESCE(SUM(CASE WHEN docType = 'CREDIT_NOTE' OR (docType IS NULL AND amount < 0) THEN -amount ELSE 0 END),0) creditValue,
+        COALESCE(SUM(CASE WHEN docType = 'CREDIT_NOTE' OR (docType IS NULL AND amount < 0) THEN 1 ELSE 0 END),0) creditCount,
+        COUNT(*) documents
+      FROM SalesInvoice WHERE companyId = ? AND invoiceDate >= ? AND invoiceDate <= ?`,
+      [companyId, rangeStart, rangeEnd]),
+    q(`SELECT sm.coreType, w.name warehouse, COUNT(*) records,
+        COALESCE(SUM(sm.pcs),0) pcs, COALESCE(SUM(sm.totalWeight),0) weight
+      FROM StockMovement sm INNER JOIN Warehouse w ON w.id = sm.warehouseId
+      WHERE sm.companyId = ? AND sm.isRejection = 1
+        AND COALESCE(sm.movementDate,sm.createdAt) >= ? AND COALESCE(sm.movementDate,sm.createdAt) <= ?
+      GROUP BY sm.coreType, w.id, w.name`, [companyId, rangeStart, rangeEnd]),
+    qOne(`SELECT COALESCE(SUM(taxableAmount),0) taxable,
+        COALESCE(SUM(igst),0) igst, COALESCE(SUM(cgst),0) cgst, COALESCE(SUM(sgst),0) sgst
+      FROM PurchaseInvoice WHERE companyId = ? AND invoiceDate >= ? AND invoiceDate <= ?`,
+      [companyId, rangeStart, rangeEnd]),
   ]);
 
   // 12-month trend, every month filled.
@@ -527,6 +544,12 @@ router.get('/analysis', requireAnyPermission('view_analysis', 'manage_invoices')
     .reduce((s, r) => s + r.count, 0);
 
   res.json({
+    salesAdjustments: {
+      grossSales: r2(salesAdjustments?.grossSales), creditValue: r2(salesAdjustments?.creditValue),
+      creditCount: num(salesAdjustments?.creditCount), invoiceCount: num(salesAdjustments?.documents) - num(salesAdjustments?.creditCount),
+      netSales: r2(num(salesAdjustments?.grossSales) - num(salesAdjustments?.creditValue)),
+    },
+    rejections: rejectionGroups.map(r => ({ coreType: r.coreType || 'Unspecified', warehouse: r.warehouse || 'Unspecified', records: num(r.records), pcs: num(r.pcs), weight: num(r.weight) })),
     range: { from: rangeStart.toISOString(), to: rangeEnd.toISOString() },
     headline: {
       invoiced,
@@ -563,7 +586,10 @@ router.get('/analysis', requireAnyPermission('view_analysis', 'manage_invoices')
       share: Math.round((num(s.amt) / totalShare) * 100),
     })),
     coreSplit: { toroidal: coreSplit.TOROIDAL, rectangular: coreSplit.RECTANGULAR },
-    gst: { taxable: r2(invAgg?.taxable), igst: r2(invAgg?.igst), cgst: r2(invAgg?.cgst), sgst: r2(invAgg?.sgst), total: gstTotal },
+    gst: {
+      taxable: r2(invAgg?.taxable), igst: r2(invAgg?.igst), cgst: r2(invAgg?.cgst), sgst: r2(invAgg?.sgst), total: gstTotal,
+      input: { taxable: r2(purchaseGst?.taxable), igst: r2(purchaseGst?.igst), cgst: r2(purchaseGst?.cgst), sgst: r2(purchaseGst?.sgst), total: r2(num(purchaseGst?.igst)+num(purchaseGst?.cgst)+num(purchaseGst?.sgst)) },
+    },
     returns: { open: openReturns, total: returnsByStatus.reduce((s, r) => s + r.count, 0), byStatus: returnsByStatus },
   });
 }));

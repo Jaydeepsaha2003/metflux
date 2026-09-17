@@ -28,8 +28,11 @@ type Analysis = {
   topCustomers: { id: string; name: string; code: string | null; invoiced: number; outstanding: number; share: number }[];
   byState: { state: string; amount: number; count: number; share: number }[];
   coreSplit: { toroidal: number; rectangular: number };
-  gst: { taxable: number; igst: number; cgst: number; sgst: number; total: number };
+  gst: { taxable: number; igst: number; cgst: number; sgst: number; total: number;
+    input?: { taxable: number; igst: number; cgst: number; sgst: number; total: number } };
   returns: { open: number; total: number; byStatus: { status: string; count: number }[] };
+  salesAdjustments: { grossSales: number; creditValue: number; creditCount: number; invoiceCount: number; netSales: number };
+  rejections: { coreType: string; warehouse: string; records: number; pcs: number; weight: number }[];
 };
 
 /* ── Formatters ─────────────────────────────────────────────── */
@@ -111,7 +114,7 @@ export const BusinessAnalysisPage = () => {
         </div>
       </div>
 
-      <p className="analysis-scope">Financial totals use the selected period. Receivables, fulfilment and returns show the current position. Monthly charts always show the trailing 12 months.</p>
+      <p className="analysis-scope">Financial totals, credit notes and rejections use the selected period. Receivables, fulfilment and returns show the current position. Monthly charts always show the trailing 12 months.</p>
       {!validRange ? <div className="card p-5" role="alert">Choose a valid start and end date to load analysis.</div> : isLoading ? (
         <div className="card p-16 text-center text-slate-400" role="status"><Loader2 className="mx-auto h-6 w-6 animate-spin" />Loading business analysis…</div>
       ) : isError || !data ? (
@@ -122,6 +125,44 @@ export const BusinessAnalysisPage = () => {
       </div>
     </div>
   );
+};
+
+const SalesQualityAnalysis = ({ data }: { data: Analysis }) => {
+  const sales = data.salesAdjustments;
+  const rows = data.rejections;
+  const group = (key: 'coreType' | 'warehouse') => Object.entries((rows ?? []).reduce<Record<string,number>>((acc,row)=>{
+    acc[row[key]] = (acc[row[key]] || 0) + row.pcs; return acc;
+  },{})).sort((a,b)=>b[1]-a[1]);
+  const breakdown = (title: string, groups: [string,number][]) => <div className="analysis-quality-bars">
+    <h3>{title}</h3>
+    {!groups.length ? <p>No recorded rejections in this period.</p> : groups.slice(0,5).map(([name,pcs])=><div key={name}>
+      <div><span>{name}</span><strong>{nf(pcs)} pcs</strong></div>
+      <div className="analysis-quality-track"><span style={{width:`${Math.max(0,pcs)/Math.max(1,...groups.map(g=>g[1]))*100}%`}} /></div>
+    </div>)}
+  </div>;
+  return <section className="card p-5 analysis-sales-quality">
+    <SectionTitle icon={ReceiptText} title="Sales & credit notes" subtitle="Selected period · Values include GST · Credit notes reduce invoiced sales" />
+    {!sales ? <p className="text-sm text-slate-500">Sales adjustment analysis is unavailable. Refresh after the server updates.</p> : <>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 mt-3">
+        <Kpi icon={ReceiptText} tone="brand" label="Gross invoiced sales" value={cr(sales.grossSales)} sub={`${nf(sales.invoiceCount)} invoices before credits`} />
+        <Kpi icon={RotateCcw} tone="rose" label="Credit notes" value={cr(sales.creditValue)} sub={`${nf(sales.creditCount)} credit documents`} />
+        <Kpi icon={IndianRupee} tone="emerald" label="Net sales" value={cr(sales.netSales)} sub="Gross sales − credit notes" />
+        <Kpi icon={BarChart3} tone="amber" label="Credit adjustment rate" value={sales.grossSales > 0 ? `${(sales.creditValue/sales.grossSales*100).toFixed(1)}%` : '—'} sub="Credit value ÷ gross invoiced sales" />
+      </div>
+      <p className="analysis-scope mt-3">{inr(sales.grossSales)} gross − {inr(sales.creditValue)} credits = {inr(sales.netSales)} net sales. Credit adjustments do not necessarily represent rejected goods.</p>
+    </>}
+    <div className="analysis-quality-section">
+      <SectionTitle icon={AlertTriangle} title="Production rejections" subtitle="Selected period · All matching rejection movements · Uses recorded date, or creation date when missing" />
+      {!rows ? <p className="text-sm text-slate-500">Rejection analysis is unavailable. Refresh after the server updates.</p> : <>
+        <div className="analysis-quality-totals">
+          <div><span>Rejected pieces</span><strong>{nf(rows.reduce((n,r)=>n+r.pcs,0))}</strong></div>
+          <div><span>Rejected weight</span><strong>{rows.reduce((n,r)=>n+r.weight,0).toLocaleString('en-IN',{maximumFractionDigits:3})} kg</strong></div>
+          <div><span>Rejection records</span><strong>{nf(rows.reduce((n,r)=>n+r.records,0))}</strong></div>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">{breakdown('By core type',group('coreType'))}{breakdown('Top 5 stores by rejected pieces',group('warehouse'))}</div>
+      </>}
+    </div>
+  </section>;
 };
 
 const AnalysisBody = ({ data }: { data: Analysis }) => {
@@ -137,12 +178,13 @@ const AnalysisBody = ({ data }: { data: Analysis }) => {
         <Kpi icon={Wallet}      tone="emerald" label="Collected"       value={cr(h.received)}  sub={`${h.collectionRate}% of invoiced`} />
         <Kpi icon={Clock}       tone="amber"   label="Outstanding"     value={cr(h.outstanding)} sub={`${nf(h.openInvoices)} open`} />
         <Kpi icon={AlertTriangle} tone="rose"  label="Overdue"         value={cr(h.overdue)}   sub="past due date" />
-        <Kpi icon={IndianRupee} tone="slate"   label="GST invoiced"   value={cr(h.gst)}       sub={`on ${cr(h.taxable)} taxable`} />
+        <Kpi icon={IndianRupee} tone="slate"   label="Output GST"   value={cr(h.gst)}       sub={`on ${cr(h.taxable)} taxable sales`} />
         <Kpi icon={Users}       tone="sky"     label="Active customers" value={nf(h.customers)} sub="billed in range" />
         <Kpi icon={TrendingUp}  tone="violet"  label="Avg invoice"     value={cr(h.avgInvoice)} sub="per bill" />
         <Kpi icon={RotateCcw}   tone="slate"   label="Open returns"    value={nf(data.returns.open)} sub={`${nf(data.returns.total)} all-time`} />
       </div>
       <AdvancedInsights data={data} />
+      <SalesQualityAnalysis data={data} />
 
       {/* ── Revenue trend ── */}
       <div className="card p-5">
@@ -202,15 +244,14 @@ const AnalysisBody = ({ data }: { data: Analysis }) => {
           <CoreDonut toroidal={data.coreSplit.toroidal} rectangular={data.coreSplit.rectangular} />
         </div>
         <div className="card p-5">
-          <SectionTitle icon={IndianRupee} title="GST breakdown" subtitle="Tax on sales (range)" />
-          <div className="mt-3 space-y-2 text-sm">
-            <GstRow label="Taxable value" value={data.gst.taxable} strong />
-            <GstRow label="IGST" value={data.gst.igst} />
-            <GstRow label="CGST" value={data.gst.cgst} />
-            <GstRow label="SGST" value={data.gst.sgst} />
-            <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-2 font-semibold">
-              <span className="text-slate-600">Total GST</span><span className="tabular-nums text-slate-900">{inr(data.gst.total)}</span>
-            </div>
+          <SectionTitle icon={IndianRupee} title="Input & Output GST" subtitle="Selected period · Signed tax amounts from the registers" />
+          <div className="analysis-gst-table mt-3">
+            <table aria-label="Input and output GST breakdown">
+              <thead><tr><th>Component</th><th>Input GST<small>Purchases</small></th><th>Output GST<small>Sales</small></th></tr></thead>
+              <tbody>{([['taxable','Taxable value'],['igst','IGST'],['cgst','CGST'],['sgst','SGST'],['total','Total GST']] as const).map(([key,label])=><tr key={key}><th scope="row">{label}</th><td>{data.gst.input ? inr(data.gst.input[key]) : '—'}</td><td>{inr(data.gst[key])}</td></tr>)}</tbody>
+            </table>
+            {data.gst.input ? <div className="analysis-gst-net"><span>Output − Input<small>Book difference</small></span><strong>{inr(data.gst.total-data.gst.input.total)}</strong></div> : <p className="mt-2 text-xs text-slate-500">Input GST data is unavailable. Refresh after the server updates.</p>}
+            <p className="mt-2 text-[11px] text-slate-500">Includes recorded credit/debit adjustments. Input GST is the purchase-register amount; this view does not determine eligible tax credit or tax payable.</p>
           </div>
         </div>
         <div className="card p-5">
@@ -314,13 +355,6 @@ const BarList = ({ items }: { items: { label: string; value: number; share: numb
     </div>
   );
 };
-
-const GstRow = ({ label, value, strong }: { label: string; value: number; strong?: boolean }) => (
-  <div className="flex items-center justify-between">
-    <span className="text-slate-500">{label}</span>
-    <span className={cn('tabular-nums', strong ? 'font-semibold text-slate-900' : 'text-slate-700')}>{inr(value)}</span>
-  </div>
-);
 
 /* Stacked horizontal aging bar + bucket legend. */
 const AGING_DEFS: { key: keyof Analysis['aging']; label: string; color: string }[] = [
