@@ -41,6 +41,10 @@ export const CorePreview = ({ shape, className, meta }: {
   // Dimensions are on by default: the reason to look at the model at all is to
   // check the numbers, and an unlabelled solid answers a different question.
   const [showDims, setShowDims] = useState(true);
+  const [view,setView] = useState<'iso' | 'top' | 'front'>('iso');
+  const viewButtons = <div className="flex gap-0.5 border border-slate-200 bg-white/90 p-0.5 shadow-sm" aria-label="Model orientation">
+    {(['iso','top','front'] as const).map(v=><button key={v} type="button" aria-pressed={view===v} onClick={()=>{setView(v);setResetNonce(n=>n+1);}} className={cn('px-1.5 py-1 text-[10px] font-semibold',view===v ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100')}>{v==='iso'?'3D':v==='top'?'Top':'Front'}</button>)}
+  </div>;
   const [menu, setMenu] = useState(false);
   const [busy, setBusy] = useState<null | 'pdf' | 'jpg'>(null);
   const [failed, setFailed] = useState(false);
@@ -95,7 +99,7 @@ export const CorePreview = ({ shape, className, meta }: {
     <div className={cn('relative flex-1 overflow-hidden', STAGE)}>
       {drawable ? (
         <Suspense fallback={<Waiting label="Loading viewer…" />}>
-          <CoreViewer shape={shape} resetNonce={resetNonce} showDims={showDims} />
+          <CoreViewer shape={shape} resetNonce={resetNonce} showDims={showDims} view={view} />
         </Suspense>
       ) : (
         <Empty kind={shape.kind} />
@@ -104,6 +108,7 @@ export const CorePreview = ({ shape, className, meta }: {
       {drawable && (
         <>
           {/* Controls float over the stage so the model keeps the full frame. */}
+          <div className="absolute left-2 top-11">{viewButtons}</div>
           <div className="absolute right-2 top-2 flex gap-1">
             <GlassBtn
               title={showDims ? 'Hide dimensions' : 'Show dimensions'}
@@ -128,7 +133,7 @@ export const CorePreview = ({ shape, className, meta }: {
               {menu && (
                 <div className="absolute right-0 top-full z-20 mt-1 w-44 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
                   <MenuItem icon={<FileText className="h-3.5 w-3.5" />} onClick={() => download('pdf')}>
-                    PDF spec sheet
+                    PDF drawing + specs
                   </MenuItem>
                   <MenuItem icon={<ImageIcon className="h-3.5 w-3.5" />} onClick={() => download('jpg')}>
                     JPG image
@@ -150,7 +155,7 @@ export const CorePreview = ({ shape, className, meta }: {
               {caption}
             </span>
             <span className="rounded-md bg-white/60 px-1.5 py-0.5 text-[10px] text-slate-500 backdrop-blur-sm">
-              drag to rotate · scroll to zoom
+              Drag to rotate · hover dimensions · mm
             </span>
           </div>
         </>
@@ -207,8 +212,9 @@ export const CorePreview = ({ shape, className, meta }: {
               </button>
             </div>
             <div className={cn('relative min-h-0 flex-1', STAGE)}>
+              <div className="absolute left-2 top-2 z-10">{viewButtons}</div>
               <Suspense fallback={<Waiting label="Loading viewer…" />}>
-                <CoreViewer shape={shape} resetNonce={resetNonce} showDims={showDims} />
+                <CoreViewer shape={shape} resetNonce={resetNonce} showDims={showDims} view={view} />
               </Suspense>
             </div>
           </div>

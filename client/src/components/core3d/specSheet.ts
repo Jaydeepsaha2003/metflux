@@ -295,6 +295,8 @@ export const downloadSheetPdf = async (shape: CoreShape, meta: SheetMeta) => {
   // pages with a title block alone on the second is a sheet somebody prints,
   // staples and loses half of.
   const sk = buildSketch(shape, PAGE_W, 198);
+  const drawingWidth = 777.89;
+  const detail = buildSketch(shape, drawingWidth, 370);
 
   /* Two columns, filled across, so the sheet reads in the same order as the
      JPG: Product · Dimensions, then Geometry · Weight, then Magnetic · Notes. */
@@ -316,10 +318,21 @@ export const downloadSheetPdf = async (shape: CoreShape, meta: SheetMeta) => {
 
   const doc: any = {
     pageSize: 'A4',
+    pageOrientation: 'landscape',
     pageMargins: [32, 30, 32, 40],
     defaultStyle: { font: 'Montserrat', fontSize: 8.5, color: '#0f172a' },
     content: [
+      { text: `${model.title} — Technical drawing`, fontSize:17, bold:true },
+      { text:[meta.company,meta.customer,meta.orderNo].filter(Boolean).join(' · ') || 'Core geometry specification',fontSize:9,color:'#475569',margin:[0,4,0,10] },
+      { svg:detail.svg,width:drawingWidth },
+      { table:{widths:['*','*','*','*'],body:[
+        ['DRAWING UNITS','MAIN VIEW SCALE','ISSUED','REFERENCE'].map(text=>({text,bold:true,fontSize:8,fillColor:'#eef3f7'})),
+        ['Millimetres',scaleLabel(detail.unitsPerMm,25.4/72),stamp(),meta.orderNo || 'Order draft'].map(text=>({text,fontSize:9})),
+      ]},layout:'lightHorizontalLines',margin:[0,10,0,8] },
+      { text:'Dimensioned plan and section views. Joint details, where shown, use their own enlarged scale. Read stated dimensions; do not measure from a resized print. Tolerances and manufacturing approval must be agreed separately.',fontSize:8,color:'#475569' },
       {
+        pageBreak:'before',
+        pageOrientation:'portrait',
         columns: [
           [
             { text: meta.company || 'Core specification', fontSize: 15, bold: true },

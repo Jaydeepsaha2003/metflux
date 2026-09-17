@@ -75,12 +75,12 @@ const makeLabel = (text: string, ctx: Ctx): THREE.Sprite => {
   c.fillStyle = 'rgba(255,255,255,0.94)';
   c.strokeStyle = DIM_TEXT;
   c.lineWidth = 2.5;
-  const r = h / 2;
+  const r = 8;
   c.beginPath();
   c.moveTo(r, 0); c.lineTo(w - r, 0);
-  c.arc(w - r, r, r, -Math.PI / 2, Math.PI / 2);
-  c.lineTo(r, h);
-  c.arc(r, r, r, Math.PI / 2, -Math.PI / 2);
+  c.quadraticCurveTo(w,0,w,r); c.lineTo(w,h-r);
+  c.quadraticCurveTo(w,h,w-r,h); c.lineTo(r,h);
+  c.quadraticCurveTo(0,h,0,h-r); c.lineTo(0,r); c.quadraticCurveTo(0,0,r,0);
   c.closePath();
   c.fill();
   c.stroke();
@@ -106,6 +106,14 @@ const makeLabel = (text: string, ctx: Ctx): THREE.Sprite => {
   // Excluded from camera framing — see fitBox() in CoreViewer. A label is
   // allowed to overhang; shrinking the part to fit its text would be backwards.
   sprite.userData.noFit = true;
+  sprite.userData.dimensionText = text;
+  sprite.userData.labelAspect = w / h;
+  const leaderGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]);
+  const leaderMat = new THREE.LineBasicMaterial({color:DIM_COLOR,transparent:true,opacity:.55,depthTest:false,depthWrite:false});
+  const connector = new THREE.Line(leaderGeo,leaderMat);
+  connector.userData.noFit=true; connector.renderOrder=11; connector.visible=false;
+  ctx.group.add(connector); sprite.userData.connector=connector;
+  ctx.disposables.push(leaderGeo,leaderMat);
   ctx.disposables.push(tex, mat);
   return sprite;
 };
@@ -148,7 +156,7 @@ const addArrow = (tip: THREE.Vector3, back: THREE.Vector3, ctx: Ctx) => {
   // well as in front — it is seen from every angle as the part is rotated.
   const geo = new THREE.ConeGeometry(ctx.labelH * ARROW_RAD, len, 18, 1, false);
   const cone = new THREE.Mesh(geo, ctx.ink);
-  cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+  cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().negate());
   cone.position.copy(tip).addScaledVector(dir, len / 2);
   cone.renderOrder = 11;
   ctx.disposables.push(geo);
@@ -167,6 +175,13 @@ const dimension = (
   a: THREE.Vector3, b: THREE.Vector3, offset: THREE.Vector3, text: string, ctx: Ctx,
 ) => {
   const dir = offset.clone().normalize();
+  // Contact dots make the exact measured faces visible during orbit.
+  for (const point of [a,b]) {
+    const geo = new THREE.SphereGeometry(ctx.labelH * .055, 12, 8);
+    const dot = new THREE.Mesh(geo,ctx.ink);
+    dot.position.copy(point); dot.renderOrder=11;
+    ctx.group.add(dot); ctx.disposables.push(geo);
+  }
   const A = a.clone().add(offset);
   const B = b.clone().add(offset);
   const clear = dir.clone().multiplyScalar(ctx.labelH * CLEAR);

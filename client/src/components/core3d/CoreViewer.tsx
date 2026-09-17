@@ -47,6 +47,7 @@ type Props = {
   resetNonce: number;
   /** Draw dimension lines and values over the part. */
   showDims: boolean;
+  view?: 'iso' | 'top' | 'front';
 };
 
 /** The default three-quarter view: front, right, slightly above. */
@@ -83,7 +84,7 @@ type Kit = {
  * distance — so typing a dimension re-fits without throwing away the view they
  * chose. Reset passes false to return to the default three-quarter.
  */
-const frame = (k: Kit, { keepAngle }: { keepAngle: boolean }) => {
+const frame = (k: Kit, { keepAngle, direction = DEFAULT_DIR }: { keepAngle: boolean; direction?: THREE.Vector3 }) => {
   // Fit the part AND its dimension lines. Those lines stand off the metal by
   // design, so framing the solid alone would crop them.
   //
@@ -94,7 +95,7 @@ const frame = (k: Kit, { keepAngle }: { keepAngle: boolean }) => {
   const box = new THREE.Box3().setFromObject(k.group);
   if (box.isEmpty()) return;
   k.dims.traverse((o) => {
-    if (o.userData.noFit || o === k.dims) return;
+    if (o.userData.noFit || o === k.dims || o instanceof THREE.Group) return;
     box.expandByObject(o);
   });
   const sphere = box.getBoundingSphere(new THREE.Sphere());
@@ -107,8 +108,8 @@ const frame = (k: Kit, { keepAngle }: { keepAngle: boolean }) => {
   // Keep the direction the user is looking from, if they have moved at all.
   const dir = keepAngle
     ? k.camera.position.clone().sub(k.controls.target).normalize()
-    : DEFAULT_DIR.clone();
-  if (!keepAngle || dir.lengthSq() < 1e-6) dir.copy(DEFAULT_DIR);
+    : direction.clone();
+  if (!keepAngle || dir.lengthSq() < 1e-6) dir.copy(direction);
 
   k.controls.target.copy(sphere.center);
   k.camera.position.copy(sphere.center).addScaledVector(dir, dist);
@@ -128,7 +129,7 @@ const frame = (k: Kit, { keepAngle }: { keepAngle: boolean }) => {
   k.render();
 };
 
-export default function CoreViewer({ shape, resetNonce, showDims }: Props) {
+export default function CoreViewer({ shape, resetNonce, showDims, view = 'iso' }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   // Releases the current annotation's geometry, materials and label textures.
   const disposeDims = useRef<(() => void) | null>(null);
@@ -242,7 +243,63 @@ export default function CoreViewer({ shape, resetNonce, showDims }: Props) {
     const dims = new THREE.Group();
     scene.add(dims);
 
-    const render = () => renderer.render(scene, camera);
+    // Keep labels readable in CSS pixels while their anchors remain in model
+    // coordinates. Orbit, zoom and resize all pass through this render path.
+    const labelPosition = new THREE.Vector3();
+    const render = () => {
+      scene.updateMatrixWorld(true);
+      camera.updateMatrixWorld(true);
+      const occupied: {x:number;y:number;w:number;h:number}[]=[];
+      dims.traverse(o => {
+        if (!(o instanceof THREE.Sprite) || !o.userData.dimensionText) return;
+        if (!o.userData.anchor) o.userData.anchor=o.position.clone();
+        o.position.copy(o.userData.anchor); o.updateMatrixWorld(true);
+        const anchorWorld=o.getWorldPosition(new THREE.Vector3());
+        o.getWorldPosition(labelPosition).applyMatrix4(camera.matrixWorldInverse);
+        const aspect = o.userData.labelAspect as number;
+        const px = Math.min(o.userData.hovered ? 25 : 22, Math.max(14,host.clientWidth*.42/aspect));
+        const worldHeight = 2*Math.max(.01,-labelPosition.z)*Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*px/Math.max(1,host.clientHeight);
+        o.scale.set(worldHeight*aspect,worldHeight,1);
+        const projected=anchorWorld.clone().project(camera);
+        const w=px*aspect,h=px, width=Math.max(1,host.clientWidth),height=Math.max(1,host.clientHeight);
+        const startX=(projected.x+1)*width/2,startY=(1-projected.y)*height/2;
+        const x=THREE.MathUtils.clamp(startX,w/2+8,Math.max(w/2+8,width-w/2-8));
+        let y=THREE.MathUtils.clamp(startY,h/2+8,height-h/2-8);
+        for(let step=0;step<20;step++) {
+          const candidate=THREE.MathUtils.clamp(startY+(step%2 ? 1 : -1)*Math.ceil(step/2)*(h+5),h/2+8,height-h/2-8);
+          if(!occupied.some(r=>Math.abs(x-r.x)<(w+r.w)/2+4 && Math.abs(candidate-r.y)<(h+r.h)/2+4)) {y=candidate;break;}
+        }
+        occupied.push({x,y,w,h});
+        const adjusted=new THREE.Vector3(x/width*2-1,1-y/height*2,projected.z).unproject(camera);
+        o.position.copy(o.parent!.worldToLocal(adjusted));
+        const connector=o.userData.connector as THREE.Line;
+        connector.visible=Math.abs(x-startX)+Math.abs(y-startY)>2;
+        const points=connector.geometry.getAttribute('position') as THREE.BufferAttribute;
+        const anchor=o.userData.anchor as THREE.Vector3;
+        points.setXYZ(0,anchor.x,anchor.y,anchor.z); points.setXYZ(1,o.position.x,o.position.y,o.position.z); points.needsUpdate=true;
+        connector.geometry.computeBoundingSphere();
+      });
+      renderer.render(scene, camera);
+    };
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    let hovered: THREE.Sprite | null = null;
+    const clearHover = () => {
+      if (hovered) { hovered.userData.hovered=false; hovered.material.color.set(0xffffff); }
+      hovered=null; renderer.domElement.removeAttribute('title'); render();
+    };
+    const inspectDimension = (event: PointerEvent) => {
+      if (event.buttons) return;
+      const rect=renderer.domElement.getBoundingClientRect();
+      pointer.set((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1);
+      raycaster.setFromCamera(pointer,camera);
+      const hit=raycaster.intersectObjects(dims.children,true).find(h=>h.object instanceof THREE.Sprite)?.object as THREE.Sprite | undefined;
+      if (hit===hovered) return;
+      clearHover();
+      if(hit) { hovered=hit; hit.userData.hovered=true; hit.material.color.set(0xc2edff); renderer.domElement.title=`${hit.userData.dimensionText} mm · measured on the core`; render(); }
+    };
+    renderer.domElement.addEventListener('pointermove',inspectDimension);
+    renderer.domElement.addEventListener('pointerleave',clearHover);
 
     // On-demand drawing: a frame per control change, plus a short damped tail
     // so the inertia after a flick still animates.
@@ -293,6 +350,8 @@ export default function CoreViewer({ shape, resetNonce, showDims }: Props) {
     return () => {
       if (raf) cancelAnimationFrame(raf);
       window.removeEventListener('pointerup', release);
+      renderer.domElement.removeEventListener('pointermove',inspectDimension);
+      renderer.domElement.removeEventListener('pointerleave',clearHover);
       ro.disconnect();
       controls.dispose();
       disposeContents();
@@ -328,6 +387,8 @@ export default function CoreViewer({ shape, resetNonce, showDims }: Props) {
       mesh.position.y = y;
       mesh.castShadow = true;
       mesh.receiveShadow = true;
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo,35),new THREE.LineBasicMaterial({color:0x344454,transparent:true,opacity:.22}));
+      mesh.add(edges);
       k.group.add(mesh);
       return mesh;
     };
@@ -429,9 +490,11 @@ export default function CoreViewer({ shape, resetNonce, showDims }: Props) {
   useEffect(() => {
     const k = kit.current;
     if (!k || !shapeIsDrawable(shape) || k.group.children.length === 0) return;
-    frame(k, { keepAngle: false });
+    const direction = view === 'top' ? new THREE.Vector3(0,1,.001).normalize()
+      : view === 'front' ? new THREE.Vector3(0,0,1) : DEFAULT_DIR;
+    frame(k, { keepAngle: false, direction });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resetNonce]);
+  }, [resetNonce, view]);
 
   return <div ref={hostRef} className="h-full w-full" />;
 }
