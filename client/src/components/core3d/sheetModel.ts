@@ -19,8 +19,12 @@ import {
   type MaterialKey,
 } from '@/lib/coreMaterials';
 import {
-  compositeLayout, cutCoreCode, shapeCaption, shapeTitle, type CoreShape,
+  compositeLayout, cutCoreCode, eCoreOutline, stepCoreSpan, shapeCaption, shapeTitle,
+  type CoreShape,
 } from './shape';
+import {
+  eCoreMeanPath, woundMeanPath, stepGrossArea, defaultRectStack,
+} from '@/lib/calc';
 
 export type SheetMeta = {
   company?: string | null;
@@ -140,6 +144,36 @@ const dimensions = (shape: CoreShape): Section => {
           ['Overall height', mm(totalHt)],
         ] as [string, string][];
       }
+      case 'E_CORE': {
+        const o = eCoreOutline(shape);
+        return [
+          ['Tongue  T', mm(shape.tongue)],
+          ['Window  W × H', `${n(shape.windowW)} × ${n(shape.windowH)} mm`],
+          ['Stack  D', mm(shape.stack)],
+          ['Outer limb / yoke', mm(o.yoke)],
+          ['Overall  W × H', `${n(o.width)} × ${n(o.height)} mm`],
+        ] as [string, string][];
+      }
+      case 'WOUND_CORE':
+        return [
+          ['Window  ID1', mm(shape.id1)],
+          ['Window  ID2', mm(shape.id2)],
+          ['Outer  OD1', mm(shape.od1)],
+          ['Outer  OD2', mm(shape.od2)],
+          ['Strip width  HT', mm(shape.ht)],
+          ['Build-up', mm((shape.od1 - shape.id1) / 2)],
+          ['Ends', `Radiused — R${n(Math.min(shape.id1, shape.id2) / 2)} inner`],
+        ] as [string, string][];
+      case 'STEP_CORE': {
+        const sp = stepCoreSpan(shape);
+        return [
+          ['Steps', String(shape.steps.length)],
+          ['Widest plate', mm(sp.width)],
+          ['Stacked build', mm(sp.depth)],
+          ['Circumscribing circle', `Ø ${n(sp.circle)} mm`],
+          ['Window  ID1 × ID2', `${n(shape.id1)} × ${n(shape.id2)} mm`],
+        ] as [string, string][];
+      }
     }
   })();
 
@@ -214,6 +248,54 @@ const geometry = (shape: CoreShape, meta: SheetMeta): Section | null => {
         ],
       };
     }
+    case 'E_CORE': {
+      if (!(shape.tongue > 0 && shape.stack > 0)) return null;
+      const sf = stackOr(meta.factor, defaultRectStack(meta.alloy));
+      const ag = shape.tongue * shape.stack;
+      return {
+        heading: 'Geometry',
+        rows: [
+          ['Gross section  Ag', mm2(ag)],
+          ['Net core area  Ae', cm2((ag * sf) / 100)],
+          ['Mean path  Lm', `${eCoreMeanPath(shape.tongue, shape.windowW, shape.windowH).toFixed(2)} cm`],
+          ['Window area (each)', mm2(shape.windowW * shape.windowH)],
+        ],
+      };
+    }
+    case 'WOUND_CORE': {
+      if (!(shape.od2 > shape.id2 && shape.ht > 0)) return null;
+      const sf = stackOr(meta.factor, defaultRectStack(meta.alloy));
+      const ag = ((shape.od2 - shape.id2) / 2) * shape.ht;
+      const build = (shape.od1 - shape.id1) / 2;
+      return {
+        heading: 'Geometry',
+        rows: [
+          ['Gross section  Ag', mm2(ag)],
+          ['Net core area  Ac', cm2((ag * sf) / 100)],
+          ['Mean path  Lm', `${woundMeanPath(shape.id1, shape.id2, build).toFixed(2)} cm`],
+          ['Window area', mm2(shape.id1 * shape.id2)],
+        ],
+      };
+    }
+    case 'STEP_CORE': {
+      const gross = stepGrossArea(shape.steps);
+      if (!(gross > 0 && shape.id1 > 0 && shape.id2 > 0)) return null;
+      const sf = stackOr(meta.factor, defaultRectStack(meta.alloy));
+      const sp = stepCoreSpan(shape);
+      return {
+        heading: 'Geometry',
+        rows: [
+          ['Gross section  Ag', mm2(gross)],
+          ['Net core area  Ac', cm2((gross * sf) / 100)],
+          ['Mean path  Lm', `${(0.2 * (shape.id1 + shape.id2) + sp.depth * 0.314).toFixed(2)} cm`],
+          ['Space factor in circle', `${((gross / (Math.PI / 4 * sp.circle * sp.circle)) * 100).toFixed(1)} %`],
+        ],
+        table: {
+          head: ['Step', 'Width (mm)', 'Stack (mm)'],
+          rows: shape.steps.map((st, i) => [String(i + 1), n(st.width), n(st.stack)]),
+        },
+      };
+    }
     case 'COMPOSITE': {
       const fx = stackOr(meta.factor, TOROIDAL_FACTOR);
       const sfC = factorToSF(fx, materialOf(meta.alloy).density);
@@ -279,6 +361,31 @@ const electrical = (shape: CoreShape, meta: SheetMeta) => {
       return {
         areaCm2: (((od2 - id2) / 2) * ht * sfac) / 100,
         meanPathCm: 0.2 * (id1 + id2) + ((od2 - id2) / 20) * 3.14,
+      };
+    }
+    case 'E_CORE': {
+      if (!(shape.tongue > 0 && shape.stack > 0)) return null;
+      const sf = stackOr(meta.factor, defaultRectStack(meta.alloy));
+      return {
+        areaCm2: (shape.tongue * shape.stack * sf) / 100,
+        meanPathCm: eCoreMeanPath(shape.tongue, shape.windowW, shape.windowH),
+      };
+    }
+    case 'WOUND_CORE': {
+      if (!(shape.od2 > shape.id2 && shape.ht > 0)) return null;
+      const sf = stackOr(meta.factor, defaultRectStack(meta.alloy));
+      return {
+        areaCm2: (((shape.od2 - shape.id2) / 2) * shape.ht * sf) / 100,
+        meanPathCm: woundMeanPath(shape.id1, shape.id2, (shape.od1 - shape.id1) / 2),
+      };
+    }
+    case 'STEP_CORE': {
+      const gross = stepGrossArea(shape.steps);
+      if (!(gross > 0 && shape.id1 > 0 && shape.id2 > 0)) return null;
+      const sf = stackOr(meta.factor, defaultRectStack(meta.alloy));
+      return {
+        areaCm2: (gross * sf) / 100,
+        meanPathCm: 0.2 * (shape.id1 + shape.id2) + stepCoreSpan(shape).depth * 0.314,
       };
     }
     default:

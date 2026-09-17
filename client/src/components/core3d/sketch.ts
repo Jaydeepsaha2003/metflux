@@ -19,7 +19,9 @@
 // paths — pdfmake's SVG support handles plain shapes and text with explicit
 // attributes, and anything else silently drops. Section hatching is therefore
 // computed as individual line segments rather than asked for as a fill.
-import { compositeLayout, cutCoreCode, type CoreShape } from './shape';
+import {
+  compositeLayout, cutCoreCode, eCoreOutline, stepCoreSpan, type CoreShape,
+} from './shape';
 
 const INK = '#0f172a';
 const DIM = '#1d4ed8';
@@ -465,6 +467,186 @@ const viewsFor = (shape: CoreShape): View[] => {
         }),
         rectSection(id1, od1, ht, STEEL),
         jointDetail(shape.gapMm, ht, STEEL),
+      ];
+    }
+
+    /* An E core is drawn front-on, because that is the view its four figures
+       live in: the tongue, the two windows and the yokes are all in it. The
+       side view carries the stack, the one thing the front cannot show. */
+    case 'E_CORE': {
+      const o = eCoreOutline(shape);
+      return [
+        {
+          title: 'FRONT — E + I',
+          w: o.width, h: o.height,
+          pad: { l: 5.4, r: 5.4, b: 4.2 },
+          draw: (c) => {
+            const W = c.m(o.width), H = c.m(o.height);
+            const yoke = c.m(o.yoke), win = c.m(shape.windowW), winH = c.m(shape.windowH);
+            const left = c.cx - W / 2, top = c.cy - H / 2;
+            const white = (x: number, y: number, w: number, h: number) =>
+              `<rect x="${f(x)}" y="${f(y)}" width="${f(w)}" height="${f(h)}" fill="#ffffff"`
+              + ` stroke="${STEEL.edge}" stroke-width="1.2"/>`;
+            /* The I bar is its own body with its hatching mirrored, because it
+               is a separate part: that is how a drawing says so. */
+            c.out.push(
+              solidRect(left, top, W, yoke, STEEL, c.s, -1),
+              solidRect(left, top + yoke, W, H - yoke, STEEL, c.s),
+              white(left + yoke, top + yoke, win, winH),
+              white(left + W - yoke - win, top + yoke, win, winH),
+              line({ x: left, y: top + yoke }, { x: left + W, y: top + yoke }, INK, 0.9, '9 3 2 3'),
+              noteOnPart({ x: c.cx, y: top + yoke * 0.5 }, 'I', c.s),
+              centreMarks(c.cx, c.cy, W / 2 + c.s * 1.2, H / 2 + c.s * 1.2),
+              linearDim(
+                { x: left, y: top + H }, { x: left + W, y: top + H },
+                { x: 0, y: c.s * 2.4 }, n(o.width), c.s,
+              ),
+              linearDim(
+                { x: c.cx - c.m(shape.tongue) / 2, y: top + yoke },
+                { x: c.cx + c.m(shape.tongue) / 2, y: top + yoke },
+                { x: 0, y: -(yoke + c.s * 2.4) }, `T ${n(shape.tongue)}`, c.s,
+              ),
+              linearDim(
+                { x: left + yoke, y: top + yoke }, { x: left + yoke + win, y: top + yoke },
+                { x: 0, y: winH + c.s * 2.2 }, `W ${n(shape.windowW)}`, c.s,
+              ),
+              linearDim(
+                { x: left + yoke, y: top + yoke }, { x: left + yoke, y: top + yoke + winH },
+                { x: -(yoke + c.s * 2.6), y: 0 }, `H ${n(shape.windowH)}`, c.s,
+              ),
+            );
+          },
+        },
+        {
+          title: 'SIDE',
+          w: shape.stack, h: o.height,
+          pad: { r: 5.5 },
+          draw: (c) => {
+            const D = c.m(shape.stack), H = c.m(o.height), yoke = c.m(o.yoke);
+            const left = c.cx - D / 2, top = c.cy - H / 2;
+            c.out.push(
+              solidRect(left, top, D, yoke, STEEL, c.s, -1),
+              solidRect(left, top + yoke, D, H - yoke, STEEL, c.s),
+              centreMarks(c.cx, c.cy, D / 2 + c.s * 1.2, H / 2 + c.s * 1.2),
+              linearDim(
+                { x: left, y: top + H }, { x: left + D, y: top + H },
+                { x: 0, y: c.s * 2.4 }, `STACK ${n(shape.stack)}`, c.s,
+              ),
+              linearDim(
+                { x: left + D, y: top }, { x: left + D, y: top + H },
+                { x: c.s * 2.6, y: 0 }, n(o.height), c.s,
+              ),
+            );
+          },
+        },
+      ];
+    }
+
+    /* The obround. Same plan as the rectangular but with true semicircular
+       ends — the difference is the whole product, so the drawing shows it
+       rather than leaving it to a note. */
+    case 'WOUND_CORE': {
+      const { id1, id2, od1, od2, ht } = shape;
+      return [
+        {
+          title: 'PLAN',
+          w: od1, h: od2,
+          pad: { l: 5.4, r: 5.4 },
+          draw: (c) => {
+            const W = c.m(od1), H = c.m(od2), wI = c.m(id1), hI = c.m(id2);
+            const stadium = (x: number, y: number, w: number, h: number, fill: string) => {
+              const r = Math.min(w, h) / 2;
+              return `<rect x="${f(x)}" y="${f(y)}" width="${f(w)}" height="${f(h)}"`
+                + ` rx="${f(r)}" ry="${f(r)}" fill="${fill}" stroke="${STEEL.edge}" stroke-width="1.2"/>`;
+            };
+            c.out.push(
+              stadium(c.cx - W / 2, c.cy - H / 2, W, H, STEEL.fill),
+              stadium(c.cx - wI / 2, c.cy - hI / 2, wI, hI, '#ffffff'),
+              centreMarks(c.cx, c.cy, W / 2 + c.s * 1.2, H / 2 + c.s * 1.2),
+              linearDim(
+                { x: c.cx - W / 2, y: c.cy + H / 2 }, { x: c.cx + W / 2, y: c.cy + H / 2 },
+                { x: 0, y: c.s * 2.4 }, `OD1 ${n(od1)}`, c.s,
+              ),
+              linearDim(
+                { x: c.cx - wI / 2, y: c.cy - hI / 2 }, { x: c.cx + wI / 2, y: c.cy - hI / 2 },
+                { x: 0, y: -((H - hI) / 2 + c.s * 2.4) }, `ID1 ${n(id1)}`, c.s,
+              ),
+              linearDim(
+                { x: c.cx - W / 2, y: c.cy - H / 2 }, { x: c.cx - W / 2, y: c.cy + H / 2 },
+                { x: -c.s * 2.6, y: 0 }, `OD2 ${n(od2)}`, c.s,
+              ),
+              linearDim(
+                { x: c.cx + wI / 2, y: c.cy - hI / 2 }, { x: c.cx + wI / 2, y: c.cy + hI / 2 },
+                { x: (W - wI) / 2 + c.s * 2.6, y: 0 }, `ID2 ${n(id2)}`, c.s,
+              ),
+              noteOnPart({ x: c.cx, y: c.cy }, `R${n(Math.min(id1, id2) / 2)} ENDS`, c.s),
+            );
+          },
+        },
+        rectSection(id1, od1, ht, STEEL),
+      ];
+    }
+
+    /* The stepped limb, end-on: the view the steps exist in, inside the circle
+       they are cut to fill. */
+    case 'STEP_CORE': {
+      const sp = stepCoreSpan(shape);
+      return [
+        {
+          title: 'LIMB SECTION',
+          w: sp.circle, h: sp.circle,
+          pad: { l: 5.4, r: 5.4, b: 4.2 },
+          draw: (c) => {
+            const R = c.m(sp.circle) / 2;
+            c.out.push(
+              `<circle cx="${f(c.cx)}" cy="${f(c.cy)}" r="${f(R)}" fill="none"`
+              + ` stroke="${DIM}" stroke-width="0.8" stroke-dasharray="6 4"/>`,
+            );
+            let y = c.cy - c.m(sp.depth) / 2;
+            shape.steps.forEach((st) => {
+              const w = c.m(st.width), h = c.m(st.stack);
+              c.out.push(solidRect(c.cx - w / 2, y, w, h, STEEL, c.s));
+              y += h;
+            });
+            c.out.push(
+              centreMarks(c.cx, c.cy, R + c.s * 1.2),
+              linearDim(
+                { x: c.cx - c.m(sp.width) / 2, y: c.cy + c.m(sp.depth) / 2 },
+                { x: c.cx + c.m(sp.width) / 2, y: c.cy + c.m(sp.depth) / 2 },
+                { x: 0, y: c.s * 2.4 }, n(sp.width), c.s,
+              ),
+              linearDim(
+                { x: c.cx + c.m(sp.width) / 2, y: c.cy - c.m(sp.depth) / 2 },
+                { x: c.cx + c.m(sp.width) / 2, y: c.cy + c.m(sp.depth) / 2 },
+                { x: c.s * 2.6, y: 0 }, n(sp.depth), c.s,
+              ),
+              text({ x: c.cx, y: c.cy - R - c.s * 1.4 }, `\u00d8 ${n(sp.circle)}`, c.s * 1.05,
+                { fill: DIM, weight: 700 }),
+            );
+          },
+        },
+        {
+          title: 'WINDOW',
+          w: shape.id1, h: shape.id2,
+          pad: { l: 5.4, r: 5.4 },
+          draw: (c) => {
+            const W = c.m(shape.id1), H = c.m(shape.id2);
+            c.out.push(
+              `<rect x="${f(c.cx - W / 2)}" y="${f(c.cy - H / 2)}" width="${f(W)}" height="${f(H)}"`
+              + ` fill="#ffffff" stroke="${STEEL.edge}" stroke-width="1.2" stroke-dasharray="7 4"/>`,
+              centreMarks(c.cx, c.cy, W / 2 + c.s * 1.2, H / 2 + c.s * 1.2),
+              linearDim(
+                { x: c.cx - W / 2, y: c.cy + H / 2 }, { x: c.cx + W / 2, y: c.cy + H / 2 },
+                { x: 0, y: c.s * 2.4 }, `ID1 ${n(shape.id1)}`, c.s,
+              ),
+              linearDim(
+                { x: c.cx - W / 2, y: c.cy - H / 2 }, { x: c.cx - W / 2, y: c.cy + H / 2 },
+                { x: -c.s * 2.6, y: 0 }, `ID2 ${n(shape.id2)}`, c.s,
+              ),
+              text({ x: c.cx, y: c.cy }, 'magnetic path', c.s * 0.95, { fill: NOTE }),
+            );
+          },
+        },
       ];
     }
 

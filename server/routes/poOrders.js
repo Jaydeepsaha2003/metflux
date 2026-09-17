@@ -14,7 +14,10 @@ const router = Router();
 router.use(requireAuth, resolveTenant);
 
 const itemSchema = z.object({
-  coreType: z.enum(['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT']),
+  coreType: z.enum([
+    'TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT',
+    'E_CORE', 'WOUND_CORE', 'STEP_CORE',
+  ]),
   grade: z.string().trim().min(1).max(80),
   material: z.string().trim().min(1).max(120),
   measure: z.string().trim().min(1).max(160),
@@ -41,6 +44,13 @@ const itemSchema = z.object({
   // The material family this line is wound from. NULL = CRGO, which is what
   // every line booked before the alloy existed was.
   alloy:       z.enum(['CRGO', 'NANOCRYSTALLINE', 'AMORPHOUS']).optional().nullable(),
+  /* Step core only: the plate table, as [{width, stack}, ...]. Stored as JSON
+     text because the number of steps is part of the specification, not a fixed
+     shape a set of numbered columns could hold. */
+  steps: z.array(z.object({
+    width: z.coerce.number().positive(),
+    stack: z.coerce.number().positive(),
+  })).max(24).optional().nullable(),
   gapMm:       z.coerce.number().nonnegative().max(100).optional().nullable(),
   stackFactor: z.coerce.number().positive().max(100).optional().nullable(),
   turns:       z.coerce.number().positive().transform((v) => Math.round(v)).optional().nullable(),
@@ -109,6 +119,20 @@ const ensurePoNumberFree = async (companyId, poNumber, excludeId = null) => {
 };
 
 // Loads items for a list of poOrderIds keyed by poOrderId.
+/* The step table is stored as JSON text, so it is parsed on the way out: the
+   API's contract is an array of {width, stack}, and handing callers a string
+   because of how it happens to be stored would push that detail into every
+   consumer. Tolerant of a bad value — a malformed row should cost one line its
+   step table, not the whole request. */
+const parseSteps = (v) => {
+  if (Array.isArray(v)) return v;
+  if (typeof v !== 'string' || !v.trim()) return null;
+  try {
+    const parsed = JSON.parse(v);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch { return null; }
+};
+
 const loadItemsForPos = async (poOrderIds) => {
   if (poOrderIds.length === 0) return new Map();
   const placeholders = poOrderIds.map(() => '?').join(',');
@@ -119,7 +143,7 @@ const loadItemsForPos = async (poOrderIds) => {
   const byPo = new Map();
   for (const it of rows) {
     if (!byPo.has(it.poOrderId)) byPo.set(it.poOrderId, []);
-    byPo.get(it.poOrderId).push(it);
+    byPo.get(it.poOrderId).push({ ...it, steps: parseSteps(it.steps) });
   }
   return byPo;
 };
@@ -161,6 +185,7 @@ router.post('/', requirePermission('add_po'), asyncHandler(async (req, res) => {
         ht: it.ht, builtup: it.builtup ?? null,
         gapMm: it.gapMm ?? null,
         alloy: it.alloy ?? null,
+        steps: it.steps?.length ? JSON.stringify(it.steps) : null,
         weightPerPc: it.weightPerPc, pcs: it.pcs, totalWeight: it.totalWeight,
         coreAc: it.coreAc ?? null, coreMl: it.coreMl ?? null, d13: it.d13 ?? null,
         stackFactor: it.stackFactor ?? null,
@@ -279,6 +304,7 @@ const flattenItem = (it) => {
     // silently reopens as a plain cut core.
     gapMm: it.gapMm ?? null,
     alloy: it.alloy ?? null,
+    steps: parseSteps(it.steps),
     weightPerPc: it.weightPerPc,
     pcs: it.pcs,
     totalWeight: it.totalWeight,
@@ -621,6 +647,7 @@ router.get('/summary', requirePermission('po_summary'), asyncHandler(async (req,
     measure:       it.measure,
     gapMm:         it.gapMm ?? null,
     alloy:         it.alloy ?? null,
+    steps:         parseSteps(it.steps),
     pcsOrdered:    it.pcs,
     pcsProduced:   Number(it.pcsProduced ?? 0),
     // Excess produced beyond what was ordered (per item; never negative).
@@ -767,6 +794,7 @@ router.post('/:poId/items', requirePermission('add_po'), asyncHandler(async (req
     ht: data.ht,   builtup: data.builtup ?? null,
     gapMm: data.gapMm ?? null,
     alloy: data.alloy ?? null,
+    steps: data.steps?.length ? JSON.stringify(data.steps) : null,
     weightPerPc: data.weightPerPc, pcs: data.pcs, totalWeight: data.totalWeight,
     coreAc: data.coreAc ?? null, coreMl: data.coreMl ?? null, d13: data.d13 ?? null,
     stackFactor: data.stackFactor ?? null,

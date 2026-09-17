@@ -21,6 +21,20 @@ export type CoreShape =
    *  controlled air gap across both joints. */
   | { kind: 'CUT_RECT'; id1: number; id2: number; od1: number; od2: number; ht: number; gapMm: number }
   | { kind: 'NANO'; dims: Tri; cased: boolean }
+  /** A stacked E+I lamination core, quoted the way the trade quotes it: the
+   *  centre limb (tongue), the window it encloses, and the stack depth. The
+   *  outer limbs are half the tongue and the yokes likewise, which is what
+   *  makes an E an E rather than a set of four free dimensions. */
+  | { kind: 'E_CORE'; tongue: number; windowW: number; windowH: number; stack: number }
+  /** A wound core with radiused ends — the obround, or racetrack. Same five
+   *  dimensions as the rectangular, but the ends are true semicircles, which
+   *  is both what a strip can actually be wound around and what shortens the
+   *  magnetic path against a square-cornered window of the same size. */
+  | { kind: 'WOUND_CORE'; id1: number; id2: number; od1: number; od2: number; ht: number }
+  /** A limb whose section is stepped to approximate a circle — plates of
+   *  decreasing width stacked to fill a bore. The steps give the area; the
+   *  window it is built into gives the magnetic path. */
+  | { kind: 'STEP_CORE'; steps: { width: number; stack: number }[]; id1: number; id2: number }
   | { kind: 'COMPOSITE'; rule: CompositeRule; crgo: Tri; nano: Tri };
 
 export const triOk = (t: Tri) => t.id > 0 && t.od > 0 && t.ht > 0 && t.od > t.id;
@@ -33,8 +47,14 @@ export const shapeIsDrawable = (s: CoreShape): boolean => {
       return triOk(s.dims);
     case 'RECTANGULAR':
     case 'CUT_RECT':
+    case 'WOUND_CORE':
       return s.id1 > 0 && s.id2 > 0 && s.od1 > 0 && s.od2 > 0 && s.ht > 0
         && s.od1 > s.id1 && s.od2 > s.id2;
+    case 'E_CORE':
+      return s.tongue > 0 && s.windowW > 0 && s.windowH > 0 && s.stack > 0;
+    case 'STEP_CORE':
+      return s.id1 > 0 && s.id2 > 0
+        && s.steps.length > 0 && s.steps.every((t) => t.width > 0 && t.stack > 0);
     case 'COMPOSITE':
       return triOk(s.crgo) && triOk(s.nano);
   }
@@ -65,7 +85,14 @@ export const shapeExtent = (s: CoreShape): number => {
     case 'CUT_ROUND': return Math.max(s.dims.od, s.dims.ht);
     case 'NANO':     return Math.max(s.dims.od + 5, s.dims.ht + 5);
     case 'RECTANGULAR':
-    case 'CUT_RECT': return Math.max(s.od1, s.od2, s.ht);
+    case 'CUT_RECT':
+    case 'WOUND_CORE': return Math.max(s.od1, s.od2, s.ht);
+    case 'E_CORE': return Math.max(eCoreOutline(s).width, eCoreOutline(s).height, s.stack);
+    case 'STEP_CORE': return Math.max(
+      s.id1, s.id2,
+      s.steps.reduce((t, x) => Math.max(t, x.width), 0),
+      s.steps.reduce((t, x) => t + x.stack, 0),
+    );
     case 'COMPOSITE': {
       const { totalHt } = compositeLayout(s.rule, s.crgo, s.nano);
       return Math.max(s.crgo.od, s.nano.od, totalHt);
@@ -87,6 +114,37 @@ export const cutCoreCode = (
   return `CD ${n2(ht)}x${n2(build)}x${n2(id1)}/${n2(id2)}`;
 };
 
+/**
+ * The E's outline, derived from the four figures the trade quotes.
+ *
+ * Outer limbs are half the tongue and the yokes the same, so the flux divides
+ * evenly and each half-limb carries half the centre limb's flux. Writing it
+ * down once here keeps the drawing, the 3D solid and the weight agreeing about
+ * what the part looks like.
+ */
+export const eCoreOutline = (s: { tongue: number; windowW: number; windowH: number }) => {
+  const yoke = s.tongue / 2;
+  return {
+    yoke,
+    /** Across the laminations: half-limb, window, tongue, window, half-limb. */
+    width: s.tongue * 2 + s.windowW * 2,
+    /** The E alone; the I sits on top of it. */
+    eHeight: s.windowH + yoke,
+    /** E plus the I bar that closes it. */
+    height: s.windowH + s.tongue,
+  };
+};
+
+/** Total stacked depth of a step core, and the bore it fits. */
+export const stepCoreSpan = (s: { steps: { width: number; stack: number }[] }) => {
+  const depth = s.steps.reduce((t, x) => t + x.stack, 0);
+  const width = s.steps.reduce((t, x) => Math.max(t, x.width), 0);
+  // The circle the stepped section is inscribed in — the figure a limb is
+  // actually specified by, and the one the winding has to clear.
+  const circle = Math.sqrt(width * width + depth * depth);
+  return { depth, width, circle };
+};
+
 const KIND_NAME = {
   TOROIDAL: 'Toroidal core',
   RECTANGULAR: 'Rectangular core',
@@ -94,6 +152,9 @@ const KIND_NAME = {
   COMPOSITE: 'Composite core',
   CUT_ROUND: 'Round cut core',
   CUT_RECT: 'Rectangular cut core',
+  E_CORE: 'E core',
+  WOUND_CORE: 'Wound core',
+  STEP_CORE: 'Step core',
 } as const;
 
 /**
@@ -131,6 +192,15 @@ export const shapeCaption = (s: CoreShape): string => {
       const id = Math.min(s.crgo.id, s.nano.id);
       const od = Math.max(s.crgo.od, s.nano.od);
       return `${n(id)} × ${n(od)} × ${n(totalHt)} mm`;
+    }
+    case 'E_CORE':
+      // Tongue first, because that is the figure an E core is ordered by.
+      return `T${n(s.tongue)} · window ${n(s.windowW)} × ${n(s.windowH)} · stack ${n(s.stack)} mm`;
+    case 'WOUND_CORE':
+      return `${n(s.id1)} × ${n(s.id2)} × ${n(s.od1)} × ${n(s.od2)} × ${n(s.ht)} mm · radiused`;
+    case 'STEP_CORE': {
+      const { circle, depth } = stepCoreSpan(s);
+      return `${s.steps.length} steps · Ø${n(circle)} · build ${n(depth)} · window ${n(s.id1)} × ${n(s.id2)} mm`;
     }
   }
 };

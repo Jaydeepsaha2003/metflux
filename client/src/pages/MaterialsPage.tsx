@@ -10,7 +10,8 @@ import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
 import { BulkExcel, type BulkExcelConfig } from '@/components/BulkExcel';
 
-type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE' | 'CUT_ROUND' | 'CUT_RECT';
+// The shared list, so a family added there cannot be missing from the gate.
+import type { CoreType } from '@/lib/coreTypes';
 type Row = {
   id: string; grade: string; material: string; createdAt: string;
   coreTypes: CoreType[];
@@ -25,13 +26,21 @@ type Attrs = { coreTypes: CoreType[]; nanoIdOff: number | null; nanoOdOff: numbe
    with nowhere in the UI to put that right. */
 const ALL_CORES: CoreType[] = [
   'TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT',
+  'E_CORE', 'WOUND_CORE', 'STEP_CORE',
 ];
-const CORE_LABEL: Record<CoreType, string> = { TOROIDAL: 'Toroidal', RECTANGULAR: 'Rectangular', NANO: 'Nano', COMPOSITE: 'Composite', CUT_ROUND: 'Round cut', CUT_RECT: 'Rect cut' };
+const CORE_LABEL: Record<CoreType, string> = {
+  TOROIDAL: 'Toroidal', RECTANGULAR: 'Rectangular', NANO: 'Nano', COMPOSITE: 'Composite',
+  CUT_ROUND: 'Round cut', CUT_RECT: 'Rect cut',
+  E_CORE: 'E core', WOUND_CORE: 'Wound core', STEP_CORE: 'Step core',
+};
 const CORE_TONE: Record<CoreType, string> = {
   TOROIDAL: 'bg-amber-50 text-amber-700 ring-amber-200',
   RECTANGULAR: 'bg-rose-50 text-rose-700 ring-rose-200',
   NANO: 'bg-violet-50 text-violet-700 ring-violet-200',
   COMPOSITE: 'bg-teal-50 text-teal-700 ring-teal-200',
+  E_CORE: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
+  WOUND_CORE: 'bg-orange-50 text-orange-700 ring-orange-200',
+  STEP_CORE: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   CUT_ROUND: 'bg-sky-50 text-sky-700 ring-sky-200',
   CUT_RECT: 'bg-cyan-50 text-cyan-700 ring-cyan-200',
 };

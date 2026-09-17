@@ -214,6 +214,113 @@ export const rectangularCalc = ({
   return { builtup, coreAc, d13, coreMl, weightPerPc, totalWeight, measure };
 };
 
+/* ── E core ───────────────────────────────────────────────────────────────
+   A stacked lamination rather than a wound ring, so there is no toroidal
+   multiplier: the section is simply the tongue by the stack, and the stacking
+   factor is the bare fraction the rectangular form already uses. */
+
+/**
+ * Mean magnetic path of an E+I core.
+ *
+ * 2H + 2W + 3T, the published approximation for EI laminations: up and down
+ * the window twice, across it twice, and three limb widths for the turns at
+ * the corners. It is a convention, not a measurement — if your works sizes
+ * these on a different figure this is the single line to change, and the
+ * weight, the test voltage and the magnetising current all follow it.
+ */
+export const eCoreMeanPath = (tongue: number, windowW: number, windowH: number) =>
+  (2 * windowH + 2 * windowW + 3 * tongue) / 10;
+
+export const eCoreCalc = ({
+  tongue, windowW, windowH, stack, pcs, factor, alloy,
+}: {
+  tongue: number; windowW: number; windowH: number; stack: number; pcs: number;
+  factor?: number | null; alloy?: MaterialKey | null;
+}) => {
+  const valid = tongue > 0 && windowW > 0 && windowH > 0 && stack > 0;
+  const sf = stackOr(factor, defaultRectStack(alloy));
+  // Section is the centre limb: the outer limbs are half of it each and carry
+  // half the flux, so the tongue is what the whole flux passes through.
+  const coreAc = valid ? round3((tongue * stack * sf) / 100) : 0;
+  const coreMl = valid ? round3(eCoreMeanPath(tongue, windowW, windowH)) : 0;
+  const weightPerPc = coreAc > 0 && coreMl > 0
+    ? round3((coreAc * coreMl * materialOf(alloy).density) / 1000) : 0;
+  const totalWeight = pcs > 0 ? round3(pcs * weightPerPc) : 0;
+  const measure = `T${tongue || 0} x ${windowW || 0} x ${windowH || 0} x ${stack || 0}`;
+  return { coreAc, coreMl, weightPerPc, totalWeight, measure };
+};
+
+/* ── Wound core (obround) ─────────────────────────────────────────────────
+   The same five dimensions as the rectangular window core, but the ends are
+   true semicircles — which is what strip can actually be wound round, and
+   what makes the magnetic path shorter than a square-cornered window of the
+   same size rather than longer. */
+
+/**
+ * Mean path, cm: two straight runs plus one full circle at the mean build.
+ *
+ * The straights lie along the LONG inner axis and the semicircular ends have
+ * the SHORT one for their diameter — which way round the two are entered does
+ * not change the part, so it must not change the answer. Taking ID1 as the
+ * straight regardless put the whole path in the ends whenever the window was
+ * entered narrow-side-first, and lost 25% of the weight with it.
+ */
+export const woundMeanPath = (id1: number, id2: number, build: number) => {
+  const short = Math.min(id1, id2);
+  const long = Math.max(id1, id2);
+  return (2 * (long - short) + Math.PI * (short + build)) / 10;
+};
+
+export const woundCoreCalc = ({
+  id1, id2, od1, od2, ht, pcs, factor, alloy,
+}: {
+  id1: number; id2: number; od1: number; od2: number; ht: number; pcs: number;
+  factor?: number | null; alloy?: MaterialKey | null;
+}) => {
+  const sf = stackOr(factor, defaultRectStack(alloy));
+  const builtup = od1 > 0 && id1 > 0 ? round3((od1 - id1) / 2) : 0;
+  const coreAc = od2 > 0 && id2 > 0 && ht > 0 ? round3(((od2 - id2) / 2) * ht * sf / 100) : 0;
+  const coreMl = id1 > 0 && id2 > 0 ? round3(woundMeanPath(id1, id2, builtup)) : 0;
+  const weightPerPc = coreAc > 0 && coreMl > 0
+    ? round3((coreAc * coreMl * materialOf(alloy).density) / 1000) : 0;
+  const totalWeight = pcs > 0 ? round3(pcs * weightPerPc) : 0;
+  const measure = `${id1 || 0} x ${id2 || 0} x ${od1 || 0} x ${od2 || 0} x ${ht || 0} R`;
+  return { builtup, coreAc, coreMl, weightPerPc, totalWeight, measure };
+};
+
+/* ── Step core ────────────────────────────────────────────────────────────
+   A limb whose section is built from plates of decreasing width, stacked to
+   fill a bore. The steps give the area; the window gives the path. */
+
+export type CoreStep = { width: number; stack: number };
+
+/** Gross section of the stepped limb, mm². */
+export const stepGrossArea = (steps: CoreStep[]) =>
+  steps.reduce((t, s) => t + (s.width > 0 && s.stack > 0 ? s.width * s.stack : 0), 0);
+
+export const stepCoreCalc = ({
+  steps, id1, id2, pcs, factor, alloy,
+}: {
+  steps: CoreStep[]; id1: number; id2: number; pcs: number;
+  factor?: number | null; alloy?: MaterialKey | null;
+}) => {
+  const sf = stackOr(factor, defaultRectStack(alloy));
+  const gross = stepGrossArea(steps);
+  const depth = steps.reduce((t, x) => t + Math.max(0, x.stack), 0);
+  const width = steps.reduce((t, x) => Math.max(t, x.width), 0);
+  // The circle the section is inscribed in — what the winding has to clear.
+  const circle = round3(Math.sqrt(width * width + depth * depth));
+  const coreAc = gross > 0 ? round3((gross * sf) / 100) : 0;
+  // Same corner convention as the rectangular window core, with the stacked
+  // depth standing in for the build, so the two families agree with each other.
+  const coreMl = id1 > 0 && id2 > 0 ? round3(0.2 * (id1 + id2) + depth * 0.314) : 0;
+  const weightPerPc = coreAc > 0 && coreMl > 0
+    ? round3((coreAc * coreMl * materialOf(alloy).density) / 1000) : 0;
+  const totalWeight = pcs > 0 ? round3(pcs * weightPerPc) : 0;
+  const measure = `${steps.length} step x ${width || 0} x ${round3(depth) || 0} / ${id1 || 0} x ${id2 || 0}`;
+  return { coreAc, coreMl, weightPerPc, totalWeight, measure, circle, depth: round3(depth), width };
+};
+
 export const numFromInput = (s: string) => {
   const n = parseFloat(s);
   return Number.isFinite(n) ? n : 0;

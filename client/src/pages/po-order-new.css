@@ -71,7 +71,7 @@
 .sales-order-workbench .sales-order-entry .sales-order-section-heading > div:first-child { display:block; }
 .sales-order-entry .sales-order-section-heading h2 { font-size:16px; }
 .sales-order-entry .sales-order-section-heading > div:first-child > div > span { background:var(--core-accent); color:#fff; padding:4px 7px; font-size:11px; font-weight:800; box-shadow:inset 0 1px 0 #ffffff70; }
-.sales-order-workbench .sales-order-entry .core-family-selector { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:5px; padding:5px; background:#e9eef4; box-shadow:inset 0 2px 4px #1e293b12; }
+.sales-order-workbench .sales-order-entry .core-family-selector { display:grid; grid-template-columns:repeat(9,minmax(0,1fr)); gap:5px; padding:5px; background:#e9eef4; box-shadow:inset 0 2px 4px #1e293b12; }
 .sales-order-workbench .sales-order-entry .core-family-selector button { display:flex; align-items:center; gap:7px; justify-content:center; min-height:42px; background:linear-gradient(#fff,#f3f6fa); border:1px solid #d5dfe8; box-shadow:0 2px 3px #233b5012,inset 0 1px 0 #fff; font-size:12px; }
 .core-family-selector button::before { content:''; width:16px; height:12px; border:3px double currentColor; transform:skewY(-12deg); box-shadow:2px 2px 0 #64748b30; }
 .sales-order-workbench .sales-order-entry .core-family-selector button[aria-pressed=true] { background:linear-gradient(#fff,var(--core-tint)); border-color:var(--core-accent); color:var(--core-accent); box-shadow:inset 0 -3px 0 var(--core-accent),0 3px 6px #233b5018; }
@@ -117,8 +117,12 @@
      above wins on specificity whatever the element is told. */
   .sales-order-entry .core-builder-layout.is-single { grid-template-columns:minmax(0,1fr); }
 }
-/* Six across needs about 700px of strip beside the section heading. Below
-   that it steps down rather than overflowing: three, then two on a phone. */
+/* Nine across needs the better part of a thousand pixels beside the section
+   heading, so it steps down rather than overflowing: five, then three, then
+   two on a phone. */
+@media (max-width:1599px) {
+  .sales-order-workbench .sales-order-entry .core-family-selector { grid-template-columns:repeat(5,minmax(0,1fr)); }
+}
 @media (max-width:1179px) {
   .sales-order-workbench .sales-order-entry .core-family-selector { grid-template-columns:repeat(3,minmax(0,1fr)); }
 }

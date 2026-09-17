@@ -209,5 +209,98 @@ export const halfRectRing = (
  *  a disc top and bottom. Modelled as one annulus slightly larger than the core
  *  in every direction — the viewer draws it translucent, so its job is to show
  *  that a case is fitted, not to be a manufacturing drawing of it. */
+/**
+ * A stacked E lamination — the E body only; the I bar is a separate solid, as
+ * it is a separate part.
+ *
+ * Extruded from a front-on outline with the two windows punched out as holes,
+ * then stood upright. The extrusion runs along the shape's own Z, which after
+ * the rotation below becomes the stack depth.
+ */
+export const eCoreE = (
+  tongue: number, windowW: number, windowH: number, stack: number,
+): THREE.BufferGeometry => {
+  const yoke = tongue / 2;
+  const width = tongue * 2 + windowW * 2;
+  const eHeight = windowH + yoke;
+
+  const outline = new THREE.Shape();
+  outline.moveTo(-width / 2, -eHeight / 2);
+  outline.lineTo(width / 2, -eHeight / 2);
+  outline.lineTo(width / 2, eHeight / 2);
+  outline.lineTo(-width / 2, eHeight / 2);
+  outline.closePath();
+
+  // Both windows sit on the yoke and stop at the top of the E.
+  const window = (cx: number) => {
+    const p = new THREE.Path();
+    const x0 = cx - windowW / 2, x1 = cx + windowW / 2;
+    const y0 = -eHeight / 2 + yoke, y1 = y0 + windowH;
+    p.moveTo(x0, y0); p.lineTo(x1, y0); p.lineTo(x1, y1); p.lineTo(x0, y1); p.closePath();
+    return p;
+  };
+  const offset = (tongue + windowW) / 2;
+  outline.holes.push(window(-offset), window(offset));
+
+  const g = new THREE.ExtrudeGeometry(outline, {
+    depth: stack, bevelEnabled: false, curveSegments: 4,
+  });
+  // Centre the extrusion on its own depth before standing it up, or the part
+  // hangs off its origin and every camera fit is thrown by half a stack.
+  g.translate(0, 0, -stack / 2);
+  return g;
+};
+
+/** The I bar that closes an E core. */
+export const eCoreI = (
+  tongue: number, windowW: number, stack: number,
+): THREE.BufferGeometry => {
+  const width = tongue * 2 + windowW * 2;
+  const g = new THREE.BoxGeometry(width, tongue / 2, stack);
+  return g;
+};
+
+/**
+ * An obround — the racetrack wound core.
+ *
+ * Built from a stadium outline with a stadium hole, which is the one thing
+ * that makes it not a rectangular core: the ends are true semicircles, so the
+ * strip has something it can actually be wound around.
+ */
+export const obround = (
+  id1: number, id2: number, od1: number, od2: number, ht: number,
+): THREE.BufferGeometry => {
+  const stadium = (w: number, d: number) => {
+    const s = new THREE.Shape();
+    const r = Math.min(w, d) / 2;
+    const x = Math.max(0, w / 2 - r), z = Math.max(0, d / 2 - r);
+    s.moveTo(-x, -z - r);
+    s.lineTo(x, -z - r);
+    s.absarc(x, -z, r, -Math.PI / 2, 0, false);
+    s.lineTo(x + r, z);
+    s.absarc(x, z, r, 0, Math.PI / 2, false);
+    s.lineTo(-x, z + r);
+    s.absarc(-x, z, r, Math.PI / 2, Math.PI, false);
+    s.lineTo(-x - r, -z);
+    s.absarc(-x, -z, r, Math.PI, Math.PI * 1.5, false);
+    return s;
+  };
+
+  const outer = stadium(od1, od2);
+  outer.holes.push(new THREE.Path(stadium(id1, id2).getPoints(64)));
+
+  const g = new THREE.ExtrudeGeometry(outer, {
+    depth: ht, bevelEnabled: false, curveSegments: 24,
+  });
+  g.translate(0, 0, -ht / 2);
+  g.rotateX(-Math.PI / 2);
+  return g;
+};
+
+/** One plate of a stepped limb. Stacked by the caller, widest in the middle. */
+export const stepPlate = (
+  width: number, thickness: number, length: number,
+): THREE.BufferGeometry => new THREE.BoxGeometry(width, thickness, length);
+
 export const nanoCase = (t: Tri): THREE.BufferGeometry =>
   annulus({ id: Math.max(1, t.id - 5), od: t.od + 5, ht: t.ht + 5 });

@@ -9,18 +9,20 @@ import { Plus, Trash2, Save, Loader2, Calendar, Hash, User2, Package, Pencil, Co
 import { api, ApiError } from '@/lib/api';
 import { useCustomerRate, useAutoFillRate, type CardRate } from '@/hooks/useCustomerRate';
 import { cn } from '@/lib/cn';
-import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc, nanoCalc, nanoTestCalc, isCompositeGrade, compositeRuleFromMaterial, compositeCalc, stackOr, defaultToroidalFactor, defaultRectStack, TOROIDAL_FACTOR, RECT_STACK_FACTOR } from '@/lib/calc';
+import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc, nanoCalc, nanoTestCalc, isCompositeGrade, compositeRuleFromMaterial, compositeCalc, stackOr, defaultToroidalFactor, defaultRectStack, eCoreCalc, woundCoreCalc, stepCoreCalc, type CoreStep, TOROIDAL_FACTOR, RECT_STACK_FACTOR } from '@/lib/calc';
 import { MATERIALS, type MaterialKey } from '@/lib/coreMaterials';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useConfirm } from '@/hooks/useConfirm';
 import CorePreview from '@/components/core3d/CorePreview';
-import type { CoreShape } from '@/components/core3d/shape';
+import { shapeIsDrawable, type CoreShape } from '@/components/core3d/shape';
 import type { SheetMeta } from '@/components/core3d/specSheet';
 import { useAuthStore, activeMembership } from '@/store/auth';
 import './po-order-new.css';
 
 /* ---------- types ---------- */
-type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE' | 'CUT_ROUND' | 'CUT_RECT';
+// The shared list, so this page and every register downstream agree on what
+// the families are and what they are called.
+import type { CoreType } from '@/lib/coreTypes';
 
 export type Item = {
   /** Set when the item came from the DB (edit mode). Not sent to the server — Zod strips it. */
@@ -47,6 +49,8 @@ export type Item = {
   gapMm?: number;
   /** Material family the line is wound from. Absent = CRGO. */
   alloy?: MaterialKey;
+  /** Step core only: the plate table that gives the limb its section. */
+  steps?: CoreStep[];
   // Toroidal flux-test calibration — optional, only set when user fills them.
   turns?: number; flux?: number; ateCm?: number; testVoltage?: number; testCurrent?: number;
   // Pricing — rateBasis + rateValue are user-entered; per-kg / per-pc / total
@@ -146,6 +150,9 @@ export const emptyShapeFor = (ct: CoreType): CoreShape => {
     case 'RECTANGULAR': return { kind: 'RECTANGULAR', id1: 0, id2: 0, od1: 0, od2: 0, ht: 0 };
     case 'CUT_ROUND':   return { kind: 'CUT_ROUND', dims: zero, gapMm: 0 };
     case 'CUT_RECT':    return { kind: 'CUT_RECT', id1: 0, id2: 0, od1: 0, od2: 0, ht: 0, gapMm: 0 };
+    case 'E_CORE':      return { kind: 'E_CORE', tongue: 0, windowW: 0, windowH: 0, stack: 0 };
+    case 'WOUND_CORE':  return { kind: 'WOUND_CORE', id1: 0, id2: 0, od1: 0, od2: 0, ht: 0 };
+    case 'STEP_CORE':   return { kind: 'STEP_CORE', steps: [], id1: 0, id2: 0 };
     case 'NANO':        return { kind: 'NANO', dims: zero, cased: true };
     case 'COMPOSITE':   return { kind: 'COMPOSITE', rule: 'CONTINUOUS_LOOP', crgo: zero, nano: zero };
     default:            return { kind: 'TOROIDAL', dims: zero };
@@ -195,10 +202,14 @@ const CORE_BADGE: Record<CoreType, string> = {
   NANO:        'bg-violet-50 text-violet-700',
   CUT_ROUND:   'bg-sky-50 text-sky-700',
   CUT_RECT:    'bg-cyan-50 text-cyan-700',
+  E_CORE:      'bg-indigo-50 text-indigo-700',
+  WOUND_CORE:  'bg-orange-50 text-orange-700',
+  STEP_CORE:   'bg-emerald-50 text-emerald-700',
 };
 const CORE_SHORT: Record<CoreType, string> = {
   TOROIDAL: 'Toro', RECTANGULAR: 'Rect', COMPOSITE: 'Comp', NANO: 'Nano',
   CUT_ROUND: 'Cut R', CUT_RECT: 'Cut X',
+  E_CORE: 'E core', WOUND_CORE: 'Wound', STEP_CORE: 'Step',
 };
 const coreBadge = (ct: CoreType) => CORE_BADGE[ct] ?? 'bg-slate-100 text-slate-700';
 const coreShort = (ct: CoreType) => CORE_SHORT[ct] ?? ct;
@@ -895,6 +906,45 @@ export const POOrderNewPage = () => {
             >
               Rect cut
             </button>
+            <button
+              type="button"
+              onClick={() => pickCore('E_CORE')}
+              aria-pressed={coreType === 'E_CORE'}
+              className={cn(
+                'rounded-md px-3 py-1.5 font-medium transition',
+                coreType === 'E_CORE'
+                  ? 'bg-white text-indigo-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              )}
+            >
+              E core
+            </button>
+            <button
+              type="button"
+              onClick={() => pickCore('WOUND_CORE')}
+              aria-pressed={coreType === 'WOUND_CORE'}
+              className={cn(
+                'rounded-md px-3 py-1.5 font-medium transition',
+                coreType === 'WOUND_CORE'
+                  ? 'bg-white text-orange-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              )}
+            >
+              Wound
+            </button>
+            <button
+              type="button"
+              onClick={() => pickCore('STEP_CORE')}
+              aria-pressed={coreType === 'STEP_CORE'}
+              className={cn(
+                'rounded-md px-3 py-1.5 font-medium transition',
+                coreType === 'STEP_CORE'
+                  ? 'bg-white text-emerald-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              )}
+            >
+              Step
+            </button>
           </div>
         </div>
 
@@ -986,6 +1036,17 @@ export const POOrderNewPage = () => {
             prefill={prefill}
             onPrefillConsumed={() => setPrefill(null)}
             edit={editSeed?.item.coreType === 'CUT_RECT' ? editSeed : null}
+            onEditConsumed={() => setEditSeed(null)}
+          />
+        )}
+        {(coreType === 'E_CORE' || coreType === 'WOUND_CORE' || coreType === 'STEP_CORE') && (
+          <StackedCoreForm
+            kind={coreType}
+            onShape={setReport}
+            customerId={customerId}
+            grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, coreType))}
+            onAdd={(item) => { setItems((prev) => [...prev, item]); }}
+            edit={editSeed && (editSeed.item.coreType === coreType) ? editSeed : null}
             onEditConsumed={() => setEditSeed(null)}
           />
         )}
@@ -1492,6 +1553,309 @@ const Stat = ({ label, value, accent }: { label: string; value: string; accent?:
     </div>
   </div>
 );
+
+
+/* ---------- E CORE / WOUND CORE / STEP CORE ----------
+   One component for the three shapes added together, because they differ only
+   in the handful of dimension boxes at the top: everything below — grade,
+   alloy, stacking factor, quantity, rate, the computed read-outs — is the same
+   form. Three near-identical copies would have drifted apart within a month.
+
+   The dimensions are stored in the generic id/od/ht columns rather than in
+   columns of their own. The mapping is written down in ONE place, dimsOf and
+   dimsFrom below, so a line always reads back as the shape it was booked as. */
+
+type StackedKind = 'E_CORE' | 'WOUND_CORE' | 'STEP_CORE';
+
+const STACKED_SKIN: Record<StackedKind, { border: string; dot: string; ink: string; title: string }> = {
+  E_CORE:     { border: 'border-indigo-200 bg-indigo-50/40',   dot: 'bg-indigo-500',  ink: 'text-indigo-800',  title: 'E core' },
+  WOUND_CORE: { border: 'border-orange-200 bg-orange-50/40',   dot: 'bg-orange-500',  ink: 'text-orange-800',  title: 'Wound core' },
+  STEP_CORE:  { border: 'border-emerald-200 bg-emerald-50/40', dot: 'bg-emerald-500', ink: 'text-emerald-800', title: 'Step core' },
+};
+
+const STACKED_NOTE: Record<StackedKind, string> = {
+  E_CORE: 'outer limbs and yokes are half the tongue',
+  WOUND_CORE: 'radiused ends \u00b7 strip wound, not stacked',
+  STEP_CORE: 'limb section \u00b7 the window gives the magnetic path',
+};
+
+export const StackedCoreForm = ({
+  kind, grades, onAdd, onShape, customerId, edit, onEditConsumed, hideTesting = false,
+}: {
+  kind: StackedKind;
+  grades: GradeRow[];
+  onAdd: (item: Item) => void;
+  onShape?: (r: ShapeReport) => void;
+  customerId?: string;
+  edit?: { item: Item; nonce: number } | null;
+  onEditConsumed?: () => void;
+  hideTesting?: boolean;
+}) => {
+  const skin = STACKED_SKIN[kind];
+  const [grade, setGrade] = useState('');
+  const [material, setMaterial] = useState('');
+  const [alloy, setAlloy] = useState<MaterialKey>('CRGO');
+  const [pcs, setPcs] = useState(0);
+  const [rateBasis, setRateBasis] = useState<'PER_KG' | 'PER_PCS'>('PER_KG');
+  const [rateValue, setRateValue] = useState(0);
+
+  // E core
+  const [tongue, setTongue] = useState(0);
+  const [windowW, setWindowW] = useState(0);
+  const [windowH, setWindowH] = useState(0);
+  const [stackD, setStackD] = useState(0);
+  // Wound core
+  const [id1, setId1] = useState(0);
+  const [id2, setId2] = useState(0);
+  const [od1, setOd1] = useState(0);
+  const [od2, setOd2] = useState(0);
+  const [ht, setHt] = useState(0);
+  // Step core
+  const [steps, setSteps] = useState<CoreStep[]>([{ width: 0, stack: 0 }]);
+
+  const [stack, setStack] = useState(defaultRectStack('CRGO'));
+  const [stackTouched, setStackTouched] = useState(false);
+  useEffect(() => {
+    if (!stackTouched) setStack(defaultRectStack(alloy));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alloy]);
+
+  const cardRate = useCustomerRate(customerId, grade, kind);
+  const [rateTouched, setRateTouched] = useState(false);
+  useEffect(() => {
+    if (!rateTouched && cardRate) {
+      setRateBasis(cardRate.rateBasis); setRateValue(cardRate.rateValue);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cardRate?.rateValue, cardRate?.rateBasis]);
+
+  const shape: CoreShape = useMemo(() => (
+    kind === 'E_CORE'
+      ? { kind: 'E_CORE', tongue, windowW, windowH, stack: stackD }
+      : kind === 'WOUND_CORE'
+        ? { kind: 'WOUND_CORE', id1, id2, od1, od2, ht }
+        : { kind: 'STEP_CORE', steps, id1, id2 }
+  ), [kind, tongue, windowW, windowH, stackD, id1, id2, od1, od2, ht, steps]);
+
+  const calc = useMemo(() => {
+    if (kind === 'E_CORE') {
+      return eCoreCalc({ tongue, windowW, windowH, stack: stackD, pcs, factor: stack, alloy });
+    }
+    if (kind === 'WOUND_CORE') {
+      const r = woundCoreCalc({ id1, id2, od1, od2, ht, pcs, factor: stack, alloy });
+      return r;
+    }
+    return stepCoreCalc({ steps, id1, id2, pcs, factor: stack, alloy });
+  }, [kind, tongue, windowW, windowH, stackD, id1, id2, od1, od2, ht, steps, pcs, stack, alloy]);
+
+  useReportShape(
+    onShape,
+    () => ({
+      shape,
+      meta: {
+        grade, material, pcs, factor: stack, alloy,
+        weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight,
+      },
+    }),
+    [shape, grade, material, pcs, stack, alloy, calc.weightPerPc, calc.totalWeight],
+  );
+
+  useEffect(() => {
+    if (!edit || edit.item.coreType !== kind) return;
+    const it = edit.item;
+    setGrade(it.grade); setMaterial(it.material); setPcs(it.pcs);
+    setAlloy((it.alloy as MaterialKey) ?? 'CRGO');
+    setStack(stackOr(it.stackFactor, defaultRectStack(it.alloy))); setStackTouched(true);
+    setRateBasis(it.rateBasis ?? 'PER_KG'); setRateValue(it.rateValue ?? 0); setRateTouched(true);
+    if (kind === 'E_CORE') {
+      setWindowW(it.id1); setWindowH(it.id2 ?? 0); setTongue(it.od1); setStackD(it.ht);
+    } else if (kind === 'WOUND_CORE') {
+      setId1(it.id1); setId2(it.id2 ?? 0); setOd1(it.od1); setOd2(it.od2 ?? 0); setHt(it.ht);
+    } else {
+      setId1(it.id1); setId2(it.id2 ?? 0);
+      setSteps(it.steps?.length ? it.steps : [{ width: 0, stack: 0 }]);
+    }
+    onEditConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [edit?.nonce]);
+
+  const reset = () => {
+    setPcs(0); setRateValue(0); setRateTouched(false);
+    setTongue(0); setWindowW(0); setWindowH(0); setStackD(0);
+    setId1(0); setId2(0); setOd1(0); setOd2(0); setHt(0);
+    setSteps([{ width: 0, stack: 0 }]);
+    setStack(defaultRectStack(alloy)); setStackTouched(false);
+  };
+
+  const ready = shapeIsDrawable(shape) && pcs > 0 && !!grade && !!material;
+
+  const add = () => {
+    if (!ready) return;
+    /* The generic columns, mapped once. Read the pair with dimsFrom in the edit
+       branch above: the two must stay opposite each other. */
+    const dims = kind === 'E_CORE'
+      ? { id1: windowW, id2: windowH, od1: tongue, od2: tongue, ht: stackD }
+      : kind === 'WOUND_CORE'
+        ? { id1, id2, od1, od2, ht }
+        : { id1, id2, od1: 0, od2: 0, ht: 0 };
+    const ratePerKg = rateBasis === 'PER_KG'
+      ? rateValue
+      : (calc.weightPerPc > 0 ? rateValue / calc.weightPerPc : 0);
+    const ratePerPc = rateBasis === 'PER_PCS' ? rateValue : rateValue * calc.weightPerPc;
+    onAdd({
+      coreType: kind, grade, material, alloy,
+      measure: calc.measure,
+      ...dims,
+      steps: kind === 'STEP_CORE' ? steps.filter((t) => t.width > 0 && t.stack > 0) : undefined,
+      weightPerPc: calc.weightPerPc, pcs, totalWeight: calc.totalWeight,
+      coreAc: calc.coreAc, coreMl: calc.coreMl,
+      stackFactor: stack,
+      rateBasis: rateValue > 0 ? rateBasis : undefined,
+      rateValue: rateValue > 0 ? rateValue : undefined,
+      ratePerKg: rateValue > 0 ? +ratePerKg.toFixed(4) : undefined,
+      ratePerPc: rateValue > 0 ? +ratePerPc.toFixed(4) : undefined,
+      totalAmount: rateValue > 0 ? +(ratePerPc * pcs).toFixed(2) : undefined,
+    });
+    reset();
+  };
+
+  // Only the step core has a circumscribing circle; narrowing it here keeps
+  // the read-out honest instead of poking at a field the other two lack.
+  const stepInfo = kind === 'STEP_CORE' && 'circle' in calc
+    ? (calc as ReturnType<typeof stepCoreCalc>) : null;
+
+  const setStep = (i: number, patch: Partial<CoreStep>) =>
+    setSteps((ss) => ss.map((t, j) => (i === j ? { ...t, ...patch } : t)));
+
+  return (
+    <div className={cn('core-entry-form rounded-xl border p-3 sm:p-4', skin.border)}>
+      <div className="mb-2 flex items-center gap-2">
+        <span className={cn('h-1.5 w-1.5 rounded-full', skin.dot)} />
+        <span className={cn('text-[11px] font-semibold uppercase tracking-wider', skin.ink)}>
+          {skin.title}
+        </span>
+        <span className="text-[10px] font-medium text-slate-500">{STACKED_NOTE[kind]}</span>
+      </div>
+
+      <FieldRow>
+        <GradeMaterialPicker
+          grades={grades} grade={grade} material={material}
+          onGrade={setGrade} onMaterial={setMaterial}
+        />
+        <Field label="Rate basis" className={cn('shrink-0', FW.sel)}>
+          <SearchableSelect
+            dense
+            value={rateBasis}
+            onChange={(v) => { setRateTouched(true); setRateBasis(v as 'PER_KG' | 'PER_PCS'); }}
+            options={[{ value: 'PER_KG', label: 'Per Kg' }, { value: 'PER_PCS', label: 'Per Pcs' }]}
+          />
+        </Field>
+        <NumField
+          label={rateBasis === 'PER_KG' ? 'Rate \u20b9/kg' : 'Rate \u20b9/pc'}
+          w={FW.rate} align="right"
+          value={rateValue} onChange={(v) => { setRateTouched(true); setRateValue(v); }}
+        />
+        <StackFactorField
+          w={FW.factor}
+          value={stack}
+          onChange={(v) => { setStackTouched(true); setStack(v); }}
+          onReset={() => { setStackTouched(false); setStack(defaultRectStack(alloy)); }}
+          base={defaultRectStack(alloy)}
+          houseDefault={defaultRectStack(alloy)}
+          fromCustomer={false}
+        />
+        <AlloyField w={FW.selLg} value={alloy} onChange={setAlloy} />
+      </FieldRow>
+
+      <FieldRow className="mt-2">
+        {kind === 'E_CORE' && (<>
+          <NumField label="Tongue T" w={FW.dim} value={tongue} onChange={setTongue} />
+          <NumField label="Window W" w={FW.dim} value={windowW} onChange={setWindowW} />
+          <NumField label="Window H" w={FW.dim} value={windowH} onChange={setWindowH} />
+          <NumField label="Stack D" w={FW.dim} value={stackD} onChange={setStackD} />
+        </>)}
+        {kind === 'WOUND_CORE' && (<>
+          <NumField label="ID 1" w={FW.dim} value={id1} onChange={setId1} />
+          <NumField label="ID 2" w={FW.dim} value={id2} onChange={setId2} />
+          <NumField label="OD 1" w={FW.dim} value={od1} onChange={setOd1} />
+          <NumField label="OD 2" w={FW.dim} value={od2} onChange={setOd2} />
+          <NumField label="HT" w={FW.dim} value={ht} onChange={setHt} />
+        </>)}
+        {kind === 'STEP_CORE' && (<>
+          <NumField label="Window ID 1" w={FW.dim} value={id1} onChange={setId1} />
+          <NumField label="Window ID 2" w={FW.dim} value={id2} onChange={setId2} />
+        </>)}
+        <NumField label="Pcs" w={FW.qty} align="right" value={pcs} onChange={setPcs} />
+      </FieldRow>
+
+      {kind === 'STEP_CORE' && (
+        <div className="mt-2 rounded-md border border-emerald-100 bg-white/70 px-3 py-2">
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-800">
+              Step table
+            </span>
+            <button
+              type="button"
+              onClick={() => setSteps((ss) => [...ss, { width: 0, stack: 0 }])}
+              className="btn-row"
+            >
+              <Plus className="h-3 w-3" /> Add step
+            </button>
+          </div>
+          <div className="space-y-1.5">
+            {steps.map((st, i) => (
+              <FieldRow key={i}>
+                <span className="mt-5 w-5 shrink-0 text-[11px] font-semibold text-slate-500">
+                  {i + 1}
+                </span>
+                <NumField
+                  label="Plate width" w={FW.dim} value={st.width}
+                  onChange={(v) => setStep(i, { width: v })}
+                />
+                <NumField
+                  label="Stack" w={FW.dim} value={st.stack}
+                  onChange={(v) => setStep(i, { stack: v })}
+                />
+                {steps.length > 1 && (
+                  <button
+                    type="button"
+                    title="Remove step"
+                    onClick={() => setSteps((ss) => ss.filter((_, j) => j !== i))}
+                    className="btn-ghost mt-4 text-red-600 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </FieldRow>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-3 rounded-md border border-slate-100 bg-white/60 px-3 py-2">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-6">
+          <Stat label="Wt / pc"   value={calc.weightPerPc.toFixed(3)} />
+          <Stat label="Total Wt"  value={calc.totalWeight.toFixed(3)} accent="primary" />
+          <Stat label="Core A/C"  value={calc.coreAc > 0 ? calc.coreAc.toFixed(3) : '\u2014'} />
+          <Stat label="Mean path" value={calc.coreMl > 0 ? calc.coreMl.toFixed(2) : '\u2014'} />
+          {kind === 'STEP_CORE' && (
+            <Stat label="Ø circle" value={stepInfo && stepInfo.circle > 0 ? stepInfo.circle.toFixed(1) : '—'} />
+          )}
+          <div className="col-span-2 sm:col-span-6">
+            <Stat label="Measure" value={calc.measure} />
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 flex justify-end">
+        <button type="button" onClick={add} disabled={!ready} className="btn-primary text-sm">
+          <Plus className="h-4 w-4" /> Add {skin.title.toLowerCase()} item
+        </button>
+      </div>
+      {hideTesting && null}
+    </div>
+  );
+};
 
 /* ---------- TOROIDAL ---------- */
 export const ToroidalForm = ({

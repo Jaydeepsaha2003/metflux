@@ -11,7 +11,8 @@ import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import {
-  type Item, type ShapeReport, ToroidalForm, RectangularForm, NanoForm, emptyShapeFor,
+  type Item, type ShapeReport, ToroidalForm, RectangularForm, NanoForm,
+  StackedCoreForm, emptyShapeFor,
 } from '@/pages/POOrderNewPage';
 import CorePreview from '@/components/core3d/CorePreview';
 // The Sales Order stylesheet, because this screen now uses the same workbench
@@ -30,12 +31,17 @@ const CORE_TAB_INK: Record<CoreType, string> = {
   COMPOSITE: 'text-teal-700',
   CUT_ROUND: 'text-sky-700',
   CUT_RECT: 'text-cyan-700',
+  E_CORE: 'text-indigo-700',
+  WOUND_CORE: 'text-orange-700',
+  STEP_CORE: 'text-emerald-700',
 };
 
 /* Local item = SO item + quotation-only print fields (HSN/SAC + unit). */
 type QItem = Item & { hsnCode?: string; unit?: string };
 
-type CoreType = 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE' | 'CUT_ROUND' | 'CUT_RECT';
+// The shared list — the quotation screen offers the same families as the
+// order screen, and a local copy is how the two stop offering the same set.
+import type { CoreType } from '@/lib/coreTypes';
 type Customer = {
   id: string; name: string; gstRate?: number;
   toroidalFactor?: number | null; rectStackFactor?: number | null;
@@ -477,7 +483,10 @@ export const QuotationNewPage = () => {
           </div>
           <div className="flex flex-wrap items-center gap-2 self-start">
             <div className="core-family-selector flex flex-wrap gap-0.5 rounded-lg bg-slate-100 p-0.5 text-sm" aria-label="Core family">
-              {(['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT'] as CoreType[]).map((ct) => (
+              {([
+              'TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT',
+              'E_CORE', 'WOUND_CORE', 'STEP_CORE',
+            ] as CoreType[]).map((ct) => (
                 <button key={ct} type="button" onClick={() => pickCore(ct)}
                   aria-pressed={coreType === ct}
                   className={cn('rounded-md px-3 py-1.5 font-medium transition',
@@ -566,6 +575,16 @@ export const QuotationNewPage = () => {
             onShape={setReport}
             onAdd={addItem} prefill={prefill} onPrefillConsumed={() => setPrefill(null)}
             edit={editSeed?.item.coreType === 'CUT_RECT' ? editSeed : null} onEditConsumed={() => setEditSeed(null)}
+          />
+        )}
+        {(coreType === 'E_CORE' || coreType === 'WOUND_CORE' || coreType === 'STEP_CORE') && (
+          <StackedCoreForm
+            kind={coreType} hideTesting
+            onShape={setReport}
+            grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, coreType))}
+            onAdd={addItem}
+            edit={editSeed && (editSeed.item.coreType === coreType) ? editSeed : null}
+            onEditConsumed={() => setEditSeed(null)}
           />
         )}
         {coreType === 'MANUAL' && <ManualLineForm onAdd={addManual} />}

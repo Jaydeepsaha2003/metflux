@@ -18,7 +18,10 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { annulus, halfAnnulus, rectRing, halfRectRing, nanoCase } from './geometry';
+import {
+  annulus, halfAnnulus, rectRing, halfRectRing, nanoCase,
+  eCoreE, eCoreI, obround, stepPlate,
+} from './geometry';
 import { compositeLayout, shapeExtent, shapeIsDrawable, type CoreShape } from './shape';
 import { buildDimensions } from './dimensions';
 
@@ -85,6 +88,8 @@ type Kit = {
  * chose. Reset passes false to return to the default three-quarter.
  */
 const frame = (k: Kit, { keepAngle, direction = DEFAULT_DIR }: { keepAngle: boolean; direction?: THREE.Vector3 }) => {
+  k.group.updateMatrixWorld(true);
+  k.dims.updateMatrixWorld(true);
   // Fit the part AND its dimension lines. Those lines stand off the metal by
   // design, so framing the solid alone would crop them.
   //
@@ -257,7 +262,7 @@ export default function CoreViewer({ shape, resetNonce, showDims, view = 'iso' }
         const anchorWorld=o.getWorldPosition(new THREE.Vector3());
         o.getWorldPosition(labelPosition).applyMatrix4(camera.matrixWorldInverse);
         const aspect = o.userData.labelAspect as number;
-        const px = Math.min(o.userData.hovered ? 25 : 22, Math.max(14,host.clientWidth*.42/aspect));
+        const px = Math.min(22, Math.max(14,host.clientWidth*.42/aspect));
         const worldHeight = 2*Math.max(.01,-labelPosition.z)*Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*px/Math.max(1,host.clientHeight);
         o.scale.set(worldHeight*aspect,worldHeight,1);
         const projected=anchorWorld.clone().project(camera);
@@ -305,10 +310,11 @@ export default function CoreViewer({ shape, resetNonce, showDims, view = 'iso' }
     // so the inertia after a flick still animates.
     let raf = 0;
     const tick = () => {
-      raf = 0;
+      // Keep this frame marked as pending while update emits `change`.
+      // Otherwise the listener and this damping tail each start a new loop.
       const moving = controls.update();
       render();
-      if (moving) raf = requestAnimationFrame(tick);
+      raf = moving ? requestAnimationFrame(tick) : 0;
     };
     const schedule = () => { if (!raf) raf = requestAnimationFrame(tick); };
     controls.addEventListener('change', schedule);
@@ -429,6 +435,36 @@ export default function CoreViewer({ shape, resetNonce, showDims, view = 'iso' }
         bot.position.z = -split;
         break;
       }
+      case 'E_CORE': {
+        const mat = mk(MATERIALS.rect);
+        const yoke = shape.tongue / 2;
+        const eH = shape.windowH + yoke;
+        /* The E and the I are separate solids because they are separate parts.
+           The E is extruded front-on, so it already stands the right way up;
+           the pair is centred on the joint between them. */
+        const e = add(eCoreE(shape.tongue, shape.windowW, shape.windowH, shape.stack), mat);
+        const i = add(eCoreI(shape.tongue, shape.windowW, shape.stack), mat);
+        e.position.y = -yoke / 4;
+        i.position.y = eH / 2 + yoke / 4;
+        break;
+      }
+      case 'WOUND_CORE':
+        add(obround(shape.id1, shape.id2, shape.od1, shape.od2, shape.ht), mk(MATERIALS.rect));
+        break;
+      case 'STEP_CORE': {
+        const mat = mk(MATERIALS.crgo);
+        const depth = shape.steps.reduce((t, x) => t + x.stack, 0);
+        /* Drawn a window-height long, so the stack reads as a limb rather than
+           as a pile of loose plates. */
+        const length = Math.max(shape.id2, shape.id1) || depth * 2;
+        let y = -depth / 2;
+        shape.steps.forEach((st) => {
+          const plate = add(stepPlate(st.width, st.stack, length), mat);
+          plate.position.y = y + st.stack / 2;
+          y += st.stack;
+        });
+        break;
+      }
       case 'NANO': {
         add(annulus(shape.dims), mk(MATERIALS.nano));
         if (shape.cased) {
@@ -453,6 +489,10 @@ export default function CoreViewer({ shape, resetNonce, showDims, view = 'iso' }
     // shadow has somewhere to land and the grid reads as scale rather than
     // wallpaper. Measured before framing, because dropping the group changes
     // where its centre is.
+    // Geometry is authored around zero. Never measure using the previous
+    // rebuild's floor offset: that alternates the core between two heights.
+    k.group.position.set(0,0,0);
+    k.group.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(k.group);
     const extent = shapeExtent(shape) || 1;
 

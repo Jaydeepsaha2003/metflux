@@ -18,7 +18,10 @@ router.use(requireAuth, resolveTenant);
 /* Reuse the exact SO item shape + rate derivation, plus quotation-only
    print fields (HSN/SAC + unit of measure). */
 const itemSchema = z.object({
-  coreType: z.enum(['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT']),
+  coreType: z.enum([
+    'TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT',
+    'E_CORE', 'WOUND_CORE', 'STEP_CORE',
+  ]),
   // grade / measure / dimensions are optional so a MANUAL line (free-text
   // description + qty + rate, no core spec) can be quoted when an item isn't in
   // the catalogue. Calculated items still send them all.
@@ -48,6 +51,13 @@ const itemSchema = z.object({
   // The material family this line is wound from. NULL = CRGO, which is what
   // every line booked before the alloy existed was.
   alloy:       z.enum(['CRGO', 'NANOCRYSTALLINE', 'AMORPHOUS']).optional().nullable(),
+  /* Step core only: the plate table, as [{width, stack}, ...]. Stored as JSON
+     text because the number of steps is part of the specification, not a fixed
+     shape a set of numbered columns could hold. */
+  steps: z.array(z.object({
+    width: z.coerce.number().positive(),
+    stack: z.coerce.number().positive(),
+  })).max(24).optional().nullable(),
   gapMm:       z.coerce.number().nonnegative().max(100).optional().nullable(),
   stackFactor: z.coerce.number().positive().max(100).optional().nullable(),
   turns:       z.coerce.number().positive().transform((v) => Math.round(v)).optional().nullable(),
@@ -280,6 +290,7 @@ router.post('/', requireAnyPermission('add_quotation', 'add_po'), asyncHandler(a
         ht: it.ht, builtup: it.builtup ?? null,
         gapMm: it.gapMm ?? null,
         alloy: it.alloy ?? null,
+        steps: it.steps?.length ? JSON.stringify(it.steps) : null,
         weightPerPc: it.weightPerPc, pcs: it.pcs, totalWeight: it.totalWeight,
         coreAc: it.coreAc ?? null, coreMl: it.coreMl ?? null, d13: it.d13 ?? null,
         stackFactor: it.stackFactor ?? null,
@@ -368,6 +379,7 @@ router.put('/:id', requireAnyPermission('add_quotation', 'add_po'), asyncHandler
         ht: it.ht, builtup: it.builtup ?? null,
         gapMm: it.gapMm ?? null,
         alloy: it.alloy ?? null,
+        steps: it.steps?.length ? JSON.stringify(it.steps) : null,
         weightPerPc: it.weightPerPc, pcs: it.pcs, totalWeight: it.totalWeight,
         coreAc: it.coreAc ?? null, coreMl: it.coreMl ?? null, d13: it.d13 ?? null,
         stackFactor: it.stackFactor ?? null,
@@ -494,6 +506,7 @@ router.post('/:id/convert', requireAnyPermission('add_quotation', 'add_po'), asy
         id1: it.id1, id2: it.id2, od1: it.od1, od2: it.od2, ht: it.ht, builtup: it.builtup,
         gapMm: it.gapMm ?? null,
         alloy: it.alloy ?? null,
+        steps: it.steps?.length ? JSON.stringify(it.steps) : null,
         weightPerPc: it.weightPerPc, pcs: it.pcs, totalWeight: it.totalWeight,
         coreAc: it.coreAc, coreMl: it.coreMl, d13: it.d13,
         stackFactor: it.stackFactor ?? null,

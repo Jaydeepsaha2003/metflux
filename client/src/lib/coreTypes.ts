@@ -15,7 +15,8 @@
 // seventh family to CoreType makes TypeScript name every map that has not been
 // told about it, rather than silently labelling it a rectangle.
 export type CoreType =
-  | 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE' | 'CUT_ROUND' | 'CUT_RECT';
+  | 'TOROIDAL' | 'RECTANGULAR' | 'NANO' | 'COMPOSITE' | 'CUT_ROUND' | 'CUT_RECT'
+  | 'E_CORE' | 'WOUND_CORE' | 'STEP_CORE';
 
 /** Full name, for headings and anywhere there is room. */
 export const CORE_LABEL: Record<CoreType, string> = {
@@ -25,6 +26,9 @@ export const CORE_LABEL: Record<CoreType, string> = {
   COMPOSITE: 'Composite',
   CUT_ROUND: 'Round cut',
   CUT_RECT: 'Rectangular cut',
+  E_CORE: 'E core',
+  WOUND_CORE: 'Wound core',
+  STEP_CORE: 'Step core',
 };
 
 /** Badge text, for a table cell that has room for one word. */
@@ -35,6 +39,9 @@ export const CORE_SHORT: Record<CoreType, string> = {
   COMPOSITE: 'Comp',
   CUT_ROUND: 'Cut R',
   CUT_RECT: 'Cut X',
+  E_CORE: 'E core',
+  WOUND_CORE: 'Wound',
+  STEP_CORE: 'Step',
 };
 
 /** Two-and-three letter product codes, as the packing list writes them. */
@@ -45,6 +52,9 @@ export const CORE_CODE: Record<CoreType, string> = {
   COMPOSITE: 'CC',
   CUT_ROUND: 'RCC',
   CUT_RECT: 'XCC',
+  E_CORE: 'EC',
+  WOUND_CORE: 'WC',
+  STEP_CORE: 'SC',
 };
 
 /** Tint for a plain badge. */
@@ -55,6 +65,9 @@ export const CORE_BADGE: Record<CoreType, string> = {
   COMPOSITE: 'bg-teal-50 text-teal-700',
   CUT_ROUND: 'bg-sky-50 text-sky-700',
   CUT_RECT: 'bg-cyan-50 text-cyan-700',
+  E_CORE: 'bg-indigo-50 text-indigo-700',
+  WOUND_CORE: 'bg-orange-50 text-orange-700',
+  STEP_CORE: 'bg-emerald-50 text-emerald-700',
 };
 
 /** Same, for the screens that outline their badges. */
@@ -65,6 +78,9 @@ export const CORE_BADGE_RING: Record<CoreType, string> = {
   COMPOSITE: 'bg-teal-100 text-teal-700 ring-teal-200',
   CUT_ROUND: 'bg-sky-100 text-sky-700 ring-sky-200',
   CUT_RECT: 'bg-cyan-100 text-cyan-700 ring-cyan-200',
+  E_CORE: 'bg-indigo-100 text-indigo-700 ring-indigo-200',
+  WOUND_CORE: 'bg-orange-100 text-orange-700 ring-orange-200',
+  STEP_CORE: 'bg-emerald-100 text-emerald-700 ring-emerald-200',
 };
 
 /* The accessors tolerate a string the server has widened ahead of the client —
