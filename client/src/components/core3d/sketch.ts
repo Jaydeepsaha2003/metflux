@@ -493,7 +493,28 @@ const viewsFor = (shape: CoreShape): View[] => {
     /* An EI core is drawn front-on, because that is the view its four figures
        live in: the tongue, the two windows and the yokes are all in it. The
        side view carries the stack, the one thing the front cannot show. */
-    case 'E_CORE':
+    case 'E_CORE': {
+      const o = eCoreOutline(shape);
+      return [{
+        title: 'FRONT — OPEN E', w: o.width, h: o.eHeight,
+        pad: { l: 5.4, r: 5.4, b: 4.2 },
+        draw: (c) => {
+          const W=c.m(o.width), H=c.m(o.eHeight), t=c.m(shape.tongue), y=c.m(o.yoke);
+          const l=c.cx-W/2, top=c.cy-H/2, b=top+H;
+          c.out.push(`<path d="M ${f(l)} ${f(b)} L ${f(l+W)} ${f(b)} L ${f(l+W)} ${f(top)} L ${f(l+W-y)} ${f(top)} L ${f(l+W-y)} ${f(b-y)} L ${f(c.cx+t/2)} ${f(b-y)} L ${f(c.cx+t/2)} ${f(top)} L ${f(c.cx-t/2)} ${f(top)} L ${f(c.cx-t/2)} ${f(b-y)} L ${f(l+y)} ${f(b-y)} L ${f(l+y)} ${f(top)} L ${f(l)} ${f(top)} Z" fill="${STEEL.fill}" stroke="${STEEL.edge}" stroke-width="1.2"/>`,
+            linearDim({x:l,y:b},{x:l+W,y:b},{x:0,y:c.s*2.4},n(o.width),c.s),
+            linearDim({x:l,y:top},{x:l,y:b},{x:-c.s*2.4,y:0},n(o.eHeight),c.s),
+            linearDim({x:c.cx-t/2,y:top},{x:c.cx+t/2,y:top},{x:0,y:-c.s*2.4},`T ${n(shape.tongue)}`,c.s),
+            linearDim({x:l+y,y:top},{x:c.cx-t/2,y:top},{x:0,y:c.s*2},`W ${n(shape.windowW)}`,c.s));
+        },
+      },{
+        title:'SIDE',w:shape.stack,h:o.eHeight,pad:{r:5.5},
+        draw:(c)=>{
+          const D=c.m(shape.stack),H=c.m(o.eHeight),l=c.cx-D/2,t=c.cy-H/2;
+          c.out.push(solidRect(l,t,D,H,STEEL,c.s),linearDim({x:l,y:t+H},{x:l+D,y:t+H},{x:0,y:c.s*2.4},`STACK ${n(shape.stack)}`,c.s));
+        },
+      }];
+    }
     case 'EI_CORE': {
       const o = eCoreOutline(shape);
       return [

@@ -9,6 +9,7 @@ import { Box, Loader2, RotateCcw, Maximize2, X, Ruler, Download, FileText, Image
 import { cn } from '@/lib/cn';
 import { shapeIsDrawable, shapeCaption, shapeTitle, type CoreShape } from './shape';
 import type { SheetMeta } from './specSheet';
+import './CorePreview.css';
 
 const CoreViewer = lazy(() => import('./CoreViewer'));
 
@@ -29,11 +30,6 @@ const TONE = {
    the spec sheet cannot disagree about what is on the screen. */
 const titleOf = shapeTitle;
 
-/* The stage the model sits on. A soft radial wash rather than a flat fill, so
-   the part reads as lit from above and the shadow it casts has something to
-   fall on. */
-const STAGE = 'bg-[radial-gradient(120%_90%_at_50%_0%,#ffffff_0%,#eef2f7_45%,#dde5ee_100%)]';
-
 export const CorePreview = ({ shape, className, meta }: {
   shape: CoreShape;
   className?: string;
@@ -46,8 +42,8 @@ export const CorePreview = ({ shape, className, meta }: {
   // check the numbers, and an unlabelled solid answers a different question.
   const [showDims, setShowDims] = useState(true);
   const [view,setView] = useState<'iso' | 'top' | 'front'>('iso');
-  const viewButtons = <div className="flex gap-0.5 border border-slate-200 bg-white/90 p-0.5 shadow-sm" aria-label="Model orientation">
-    {(['iso','top','front'] as const).map(v=><button key={v} type="button" aria-pressed={view===v} onClick={()=>{setView(v);setResetNonce(n=>n+1);}} className={cn('px-1.5 py-1 text-[10px] font-semibold',view===v ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100')}>{v==='iso'?'3D':v==='top'?'Top':'Front'}</button>)}
+  const viewButtons = <div className="core-preview-views" role="group" aria-label="Model orientation">
+    {(['iso','top','front'] as const).map(v=><button key={v} type="button" aria-pressed={view===v} onClick={()=>{setView(v);setResetNonce(n=>n+1);}} className="core-preview-view">{v==='iso'?'3D':v==='top'?'Top':'Front'}</button>)}
   </div>;
   const [menu, setMenu] = useState(false);
   const [busy, setBusy] = useState<null | 'pdf' | 'jpg'>(null);
@@ -100,7 +96,7 @@ export const CorePreview = ({ shape, className, meta }: {
   };
 
   const stage = (
-    <div className={cn('relative flex-1 overflow-hidden', STAGE)}>
+    <div className="core-preview-stage relative flex-1 overflow-hidden">
       {drawable ? (
         <Suspense fallback={<Waiting label="Loading viewer…" />}>
           <CoreViewer shape={shape} resetNonce={resetNonce} showDims={showDims} view={view} />
@@ -111,9 +107,9 @@ export const CorePreview = ({ shape, className, meta }: {
 
       {drawable && (
         <>
-          {/* Controls float over the stage so the model keeps the full frame. */}
-          <div className="absolute left-2 top-11">{viewButtons}</div>
-          <div className="absolute right-2 top-2 flex gap-1">
+          <div className="core-preview-toolbar absolute inset-x-2 top-2 z-10 flex items-start justify-between gap-2">
+            {viewButtons}
+            <div className="flex shrink-0 gap-1">
             <GlassBtn
               title={showDims ? 'Hide dimensions' : 'Show dimensions'}
               active={showDims}
@@ -135,7 +131,7 @@ export const CorePreview = ({ shape, className, meta }: {
                   : <Download className="h-3.5 w-3.5" />}
               </GlassBtn>
               {menu && (
-                <div className="absolute right-0 top-full z-20 mt-1 w-44 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
+                <div className="core-preview-menu absolute right-0 top-full z-20 mt-1 w-44 overflow-hidden">
                   <MenuItem icon={<FileText className="h-3.5 w-3.5" />} onClick={() => download('pdf')}>
                     PDF drawing + specs
                   </MenuItem>
@@ -148,18 +144,19 @@ export const CorePreview = ({ shape, className, meta }: {
             <GlassBtn title={full ? 'Close' : 'Expand'} onClick={() => setFull((v) => !v)}>
               {full ? <X className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
             </GlassBtn>
+            </div>
           </div>
           {failed && (
-            <div className="absolute inset-x-2 top-12 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] font-medium text-amber-900 shadow-sm">
+            <div className="absolute inset-x-2 top-14 z-10 border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] font-medium text-amber-900 shadow-sm">
               Could not build the sheet. Nothing was downloaded.
             </div>
           )}
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-2">
-            <span className="rounded-md bg-white/75 px-1.5 py-0.5 font-num text-[10px] font-semibold text-slate-700 backdrop-blur-sm">
+          <div className="core-preview-footer pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 px-2.5 py-2">
+            <span className="core-preview-caption font-num text-[10px] font-semibold text-slate-700">
               {caption}
             </span>
-            <span className="rounded-md bg-white/60 px-1.5 py-0.5 text-[10px] text-slate-500 backdrop-blur-sm">
-              Drag to rotate · hover dimensions · mm
+            <span className="core-preview-hint text-[10px] font-medium text-slate-600">
+              Drag · zoom · mm
             </span>
           </div>
         </>
@@ -169,14 +166,14 @@ export const CorePreview = ({ shape, className, meta }: {
 
   return (
     <>
-      <div className={cn('flex flex-col overflow-hidden rounded-xl border bg-white shadow-sm', tone.ring, className)}>
-        <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2">
-          <span className={cn('h-2 w-2 shrink-0 rounded-full', tone.dot)} />
-          <span className={cn('text-[11px] font-bold uppercase tracking-wider', tone.label)}>
+      <div className={cn('core-preview-panel flex flex-col overflow-hidden border', tone.ring, className)}>
+        <div className="core-preview-heading flex items-center gap-2 px-3 py-2">
+          <span className={cn('h-2 w-2 shrink-0', tone.dot)} />
+          <span className={cn('min-w-0 truncate text-[11px] font-bold uppercase tracking-wider', tone.label)}>
             {titleOf(shape)}
           </span>
-          <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">
-            <Box className="h-3 w-3" /> 3D
+          <span className="core-preview-live ml-auto inline-flex shrink-0 items-center gap-1.5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Live model
           </span>
         </div>
         {stage}
@@ -186,21 +183,21 @@ export const CorePreview = ({ shape, className, meta }: {
           proportions are actually judgeable — useful when showing a customer. */}
       {full && drawable && (
         <div
-          className="fixed inset-0 z-[120] flex flex-col bg-slate-900/70 p-3 backdrop-blur-sm sm:p-6"
+          className="fixed inset-0 z-[120] flex flex-col bg-slate-950/75 p-2 backdrop-blur-md sm:p-6"
           onClick={() => setFull(false)}
         >
           <div
-            className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
+            className="core-preview-panel flex min-h-0 flex-1 flex-col overflow-hidden border border-white/70"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2">
+            <div className="core-preview-heading flex items-center gap-2 px-3 py-2">
               <span className={cn('h-2 w-2 rounded-full', tone.dot)} />
               <span className={cn('text-[11px] font-bold uppercase tracking-wider', tone.label)}>{titleOf(shape)}</span>
-              <span className="font-num text-[11px] font-semibold text-slate-500">{caption}</span>
+              <span className="hidden font-num text-[11px] font-semibold text-slate-500 sm:inline">{caption}</span>
               <button
                 type="button"
                 onClick={() => setResetNonce((n) => n + 1)}
-                className="ml-auto rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                className="core-preview-header-action ml-auto p-1.5"
                 aria-label="Reset view"
                 title="Reset view"
               >
@@ -209,13 +206,13 @@ export const CorePreview = ({ shape, className, meta }: {
               <button
                 type="button"
                 onClick={() => setFull(false)}
-                className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                className="core-preview-header-action p-1.5"
                 aria-label="Close"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className={cn('relative min-h-0 flex-1', STAGE)}>
+            <div className="core-preview-stage relative min-h-0 flex-1">
               <div className="absolute left-2 top-2 z-10">{viewButtons}</div>
               <Suspense fallback={<Waiting label="Loading viewer…" />}>
                 <CoreViewer shape={shape} resetNonce={resetNonce} showDims={showDims} view={view} />
@@ -234,7 +231,7 @@ const MenuItem = ({ icon, onClick, children }: {
   <button
     type="button"
     onClick={onClick}
-    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] font-medium text-slate-700 transition hover:bg-slate-50"
+    className="core-preview-menu-item flex w-full items-center gap-2 px-3 py-2.5 text-left text-[12px] font-semibold text-slate-700 transition"
   >
     <span className="text-slate-400">{icon}</span>
     {children}
@@ -250,12 +247,7 @@ const GlassBtn = ({ title, onClick, children, active }: {
     aria-label={title}
     aria-pressed={active}
     onClick={onClick}
-    className={cn(
-      'rounded-md border p-1.5 shadow-sm backdrop-blur-sm transition',
-      active
-        ? 'border-blue-300 bg-blue-50/90 text-blue-700 hover:bg-blue-100'
-        : 'border-white/70 bg-white/70 text-slate-600 hover:bg-white hover:text-slate-900'
-    )}
+    className={cn('core-preview-action flex h-8 w-8 items-center justify-center border transition', active && 'core-preview-action-active')}
   >
     {children}
   </button>

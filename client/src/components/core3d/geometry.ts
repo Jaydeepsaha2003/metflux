@@ -132,46 +132,21 @@ export const gappedAnnulus = (t: Tri, gapMm = 0): THREE.BufferGeometry => {
   const ri = Math.max(t.id / 2, 0.001);
   const ro = t.od / 2;
   const h = t.ht;
-  const meanR = (ri + ro) / 2;
-  // Keep a hairline opening for a plain cut core so the machined joint reads;
-  // cap it well below a half turn to preserve a recognisable ring.
-  const opening = Math.max(gapMm, Math.min(Math.max(t.od * 0.004, 0.2), meanR * 0.08));
-  const gapAngle = Math.min(opening / Math.max(meanR, 0.001), Math.PI / 3);
-  const start = gapAngle / 2;
-  const sweep = Math.PI * 2 - gapAngle;
-  const seg = Math.max(32, Math.round(RADIAL * sweep / (Math.PI * 2)));
-
-  const outerWall = new THREE.CylinderGeometry(ro, ro, h, seg, 1, true, start, sweep);
-  const innerWall = new THREE.CylinderGeometry(ri, ri, h, seg, 1, true, start, sweep);
-  const innerIdx = innerWall.getIndex();
-  if (innerIdx) {
-    const a = Array.from(innerIdx.array);
-    for (let i = 0; i < a.length; i += 3) { const t0 = a[i]; a[i] = a[i + 2]; a[i + 2] = t0; }
-    innerWall.setIndex(a);
-  }
-  const normals = innerWall.getAttribute('normal');
-  for (let i = 0; i < normals.count; i += 1) normals.setXYZ(i, -normals.getX(i), -normals.getY(i), -normals.getZ(i));
-  normals.needsUpdate = true;
-
-  const face = (y: number, up: boolean) => {
-    const g = new THREE.RingGeometry(ri, ro, seg, 1, start, sweep);
-    g.rotateX(up ? -Math.PI / 2 : Math.PI / 2);
-    g.translate(0, y, 0);
-    return g;
-  };
-  const cutFace = (angle: number) => {
-    const g = new THREE.PlaneGeometry(ro - ri, h);
-    g.rotateY(Math.PI / 2);
-    g.translate(0, 0, (ro + ri) / 2);
-    g.rotateY(-angle);
-    return g;
-  };
-  const merged = mergeGeometries([
-    outerWall, innerWall, face(h / 2, true), face(-h / 2, false),
-    cutFace(start), cutFace(start + sweep),
-  ], false);
-  [outerWall, innerWall].forEach((g) => g.dispose());
-  return merged ?? outerWall;
+  /* One planar contour produces both caps and every wall. Separate cylinder
+     and ring primitives use different angle conventions and bridged the gap. */
+  const halfGap = Math.min(Math.max(gapMm, 0.001) / 2, ri * 0.99);
+  const outerAngle = Math.acos(halfGap / ro);
+  const innerAngle = Math.acos(halfGap / ri);
+  const contour = new THREE.Shape();
+  contour.moveTo(halfGap, Math.sqrt(ro * ro - halfGap * halfGap));
+  contour.absarc(0, 0, ro, outerAngle, Math.PI - outerAngle, true);
+  contour.lineTo(-halfGap, Math.sqrt(ri * ri - halfGap * halfGap));
+  contour.absarc(0, 0, ri, Math.PI - innerAngle, innerAngle, false);
+  contour.closePath();
+  const geometry = new THREE.ExtrudeGeometry(contour, { depth: h, bevelEnabled: false, curveSegments: RADIAL });
+  geometry.rotateX(-Math.PI / 2);
+  geometry.translate(0, -h / 2, 0);
+  return geometry;
 };
 
 /** A rectangular window core: outer rectangle with a rectangular hole,
@@ -278,12 +253,20 @@ export const gappedRectRing = (
   // limb. It never lets the gap escape the window or touch a yoke.
   const centre = THREE.MathUtils.clamp(-cutOffset, -zi + halfGap, zi - halfGap);
   const topGap = centre + halfGap, bottomGap = centre - halfGap;
+  const r = Math.min(X, Z) * 0.25;
+  const ir = Math.min(xi, zi) * 0.2;
   const sh = new THREE.Shape();
   sh.moveTo(X, topGap);
-  sh.lineTo(X, Z); sh.lineTo(-X, Z); sh.lineTo(-X, -Z); sh.lineTo(X, -Z);
+  sh.lineTo(X, Z-r); sh.quadraticCurveTo(X,Z,X-r,Z);
+  sh.lineTo(-X+r,Z); sh.quadraticCurveTo(-X,Z,-X,Z-r);
+  sh.lineTo(-X,-Z+r); sh.quadraticCurveTo(-X,-Z,-X+r,-Z);
+  sh.lineTo(X-r,-Z); sh.quadraticCurveTo(X,-Z,X,-Z+r);
   sh.lineTo(X, bottomGap); sh.lineTo(xi, bottomGap);
-  sh.lineTo(xi, -zi); sh.lineTo(-xi, -zi); sh.lineTo(-xi, zi);
-  sh.lineTo(xi, zi); sh.lineTo(xi, topGap); sh.closePath();
+  sh.lineTo(xi,-zi+ir); sh.quadraticCurveTo(xi,-zi,xi-ir,-zi);
+  sh.lineTo(-xi+ir,-zi); sh.quadraticCurveTo(-xi,-zi,-xi,-zi+ir);
+  sh.lineTo(-xi,zi-ir); sh.quadraticCurveTo(-xi,zi,-xi+ir,zi);
+  sh.lineTo(xi-ir,zi); sh.quadraticCurveTo(xi,zi,xi,zi-ir);
+  sh.lineTo(xi, topGap); sh.closePath();
   const g = new THREE.ExtrudeGeometry(sh, { depth: ht, bevelEnabled: false, curveSegments: 16 });
   g.rotateX(-Math.PI / 2);
   g.translate(0, -ht / 2, 0);
@@ -313,19 +296,19 @@ export const eCoreE = (
   outline.moveTo(-width / 2, -eHeight / 2);
   outline.lineTo(width / 2, -eHeight / 2);
   outline.lineTo(width / 2, eHeight / 2);
+  // Trace the two open windows as notches in the perimeter. A hole touching
+  // the outer perimeter is invalid and can triangulate across the openings.
+  outline.lineTo(width / 2 - yoke, eHeight / 2);
+  outline.lineTo(width / 2 - yoke, -eHeight / 2 + yoke);
+  outline.lineTo(tongue / 2, -eHeight / 2 + yoke);
+  outline.lineTo(tongue / 2, eHeight / 2);
+  outline.lineTo(-tongue / 2, eHeight / 2);
+  outline.lineTo(-tongue / 2, -eHeight / 2 + yoke);
+  outline.lineTo(-width / 2 + yoke, -eHeight / 2 + yoke);
+  outline.lineTo(-width / 2 + yoke, eHeight / 2);
   outline.lineTo(-width / 2, eHeight / 2);
   outline.closePath();
 
-  // Both windows sit on the yoke and stop at the top of the E.
-  const window = (cx: number) => {
-    const p = new THREE.Path();
-    const x0 = cx - windowW / 2, x1 = cx + windowW / 2;
-    const y0 = -eHeight / 2 + yoke, y1 = y0 + windowH;
-    p.moveTo(x0, y0); p.lineTo(x1, y0); p.lineTo(x1, y1); p.lineTo(x0, y1); p.closePath();
-    return p;
-  };
-  const offset = (tongue + windowW) / 2;
-  outline.holes.push(window(-offset), window(offset));
 
   const g = new THREE.ExtrudeGeometry(outline, {
     depth: stack, bevelEnabled: false, curveSegments: 4,

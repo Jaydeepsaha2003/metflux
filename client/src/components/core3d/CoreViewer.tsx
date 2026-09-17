@@ -224,15 +224,16 @@ export default function CoreViewer({ shape, resetNonce, showDims, view = 'iso' }
     rim.position.set(-0.6, 1.6, -3.0);
     scene.add(rim);
 
-    /* A shadow-catching floor. It takes no colour of its own — only the shadow
-       is visible — so the part appears to sit on the card rather than float in
-       a grey box. */
+    /* The grid gives enough depth for an engineering preview. A shadow-catching
+       floor made tall/narrow rectangular cores throw an oversized dark shape
+       across the stage, obscuring dimensions, so this plane remains only as a
+       neutral layout anchor and never receives shadows. */
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(1, 1),
-      new THREE.ShadowMaterial({ opacity: 0.22 }),
+      new THREE.ShadowMaterial({ opacity: 0 }),
     );
     ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
+    ground.receiveShadow = false;
     scene.add(ground);
 
     const grid = new THREE.GridHelper(1, 20, 0x94a3b8, 0xcbd5e1);
@@ -446,10 +447,10 @@ export default function CoreViewer({ shape, resetNonce, showDims, view = 'iso' }
            The E is extruded front-on, so it already stands the right way up;
            the pair is centred on the joint between them. */
         const e = add(eCoreE(shape.tongue, shape.windowW, shape.windowH, shape.stack), mat);
-        e.position.y = -yoke / 4;
+        e.position.y = shape.kind === 'EI_CORE' ? -yoke / 2 : 0;
         if (shape.kind === 'EI_CORE') {
           const i = add(eCoreI(shape.tongue, shape.windowW, shape.stack), mat);
-          i.position.y = eH / 2 + yoke / 4;
+          i.position.y = eH / 2;
         }
         break;
       }

@@ -94,8 +94,6 @@
 .sales-order-entry .core-result > div:first-child { font-size:10px; color:#5b6e83; }
 .sales-order-entry .core-result > div:last-child { margin-top:4px; font-family:inherit; font-variant-numeric:tabular-nums; font-size:14px; font-weight:650; color:#20334a; }
 .sales-order-entry .core-entry-form .btn-primary { min-height:40px; padding:9px 18px; background:linear-gradient(#ffffff22,transparent 60%,#00000012),rgb(var(--brand-600)); border:1px solid rgb(var(--brand-700)); box-shadow:inset 0 1px 0 #ffffff65,0 4px 8px #164a2925; font-weight:700; }
-.sales-order-entry .core-model-stage { border-color:#cad6e1; box-shadow:0 6px 14px -9px #182d47,inset 0 1px 0 #fff; }
-.sales-order-entry .core-model-stage > div:first-child { background:linear-gradient(#fff,#edf2f7); }
 .sales-order-workbench .sales-order-header-card input,
 .sales-order-workbench .sales-order-header-card [aria-haspopup=listbox],
 .sales-order-entry .core-readout-value { height:var(--order-control-height); min-height:var(--order-control-height); box-sizing:border-box; padding:0 10px; font-family:inherit; font-size:13px; font-weight:600; font-variant-numeric:tabular-nums; }

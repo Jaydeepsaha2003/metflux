@@ -18,7 +18,7 @@
 // it wrong and the dimensions float half a part-height above the metal they are
 // meant to be measuring, attached to nothing.
 import * as THREE from 'three';
-import { compositeLayout, type CoreShape } from './shape';
+import { compositeLayout, cutOffsetMm, type CoreShape } from './shape';
 
 /** Drawn in near-black, the way a drawing is inked. Against grey metal and a
  *  pale stage this carries further than a colour would, which is what lets the
@@ -304,10 +304,10 @@ export const buildDimensions = (shape: CoreShape, extent: number) => {
       const { id, od, ht } = shape.dims;
       annularDims(id, od, ht);
       if (shape.gapMm > 0) {
-        // The annular gap is at the front (+Z), matching the physical cut
-        // faces in the model instead of pointing at an unrelated outer wall.
+        // The annular joint is on the upper/back rim (-Z), where the model
+        // places the physical cut for the standard isometric view.
         leader(
-          new THREE.Vector3(0, 0, od / 2), new THREE.Vector3(0.5, 0.35, 1),
+          new THREE.Vector3(0, 0, -od / 2), new THREE.Vector3(0.5, 0.35, -1),
           `GAP ${n(shape.gapMm)}`, ctx,
         );
       }
@@ -354,7 +354,7 @@ export const buildDimensions = (shape: CoreShape, extent: number) => {
       if (shape.kind === 'CUT_RECT' && shape.gapMm > 0) {
         leader(
           // A rectangular gap sits on the right limb of the C-shaped body.
-          new THREE.Vector3(x, 0, 0), new THREE.Vector3(1, 0.25, 0),
+          new THREE.Vector3(x, 0, cutOffsetMm(id2, shape.cutAt)), new THREE.Vector3(1, 0.25, 0),
           `GAP ${n(shape.gapMm)}`, ctx,
         );
       }

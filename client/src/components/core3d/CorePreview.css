@@ -1,0 +1,144 @@
+.core-preview-panel {
+  border-radius: 6px;
+  background: rgba(248, 251, 255, .9);
+  box-shadow: 0 12px 30px -22px rgba(25, 47, 76, .5), inset 0 1px rgba(255, 255, 255, .95);
+}
+
+.core-preview-heading {
+  position: relative;
+  z-index: 1;
+  min-height: 37px;
+  border-bottom: 1px solid rgba(160, 180, 203, .42);
+  background: linear-gradient(115deg, rgba(255, 255, 255, .98), rgba(235, 244, 251, .78) 60%, rgba(255, 255, 255, .9));
+  box-shadow: inset 0 1px rgba(255, 255, 255, .98);
+}
+
+.core-preview-live {
+  border: 1px solid rgba(168, 189, 207, .55);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, .7);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .9);
+}
+
+.core-preview-stage {
+  isolation: isolate;
+  background: radial-gradient(ellipse 90% 75% at 48% 27%, #fff 0%, #f3f9fc 48%, #e6eff6 100%);
+}
+
+.core-preview-stage::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(145deg, rgba(255, 255, 255, .7), transparent 38%, rgba(135, 179, 207, .08) 100%);
+  content: '';
+  pointer-events: none;
+}
+
+.core-preview-stage::after {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border: 1px solid rgba(255, 255, 255, .7);
+  box-shadow: inset 0 8px 16px -15px rgba(57, 89, 115, .8), inset 0 -1px rgba(255, 255, 255, .7);
+  content: '';
+  pointer-events: none;
+}
+
+.core-preview-views {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgba(175, 197, 216, .8);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, .77);
+  box-shadow: 0 4px 12px -9px rgba(35, 60, 88, .65), inset 0 1px rgba(255, 255, 255, .95);
+  backdrop-filter: blur(14px);
+}
+
+.core-preview-view {
+  min-width: 37px;
+  min-height: 26px;
+  padding: 3px 5px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  color: #4a6074;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  transition: background .16s, color .16s, box-shadow .16s;
+}
+
+.core-preview-view:hover { background: rgba(227, 239, 247, .85); color: #183a51; }
+.core-preview-view[aria-pressed='true'] {
+  border-color: rgba(28, 86, 83, .65);
+  background: linear-gradient(#2c665e, #174940);
+  color: white;
+  box-shadow: inset 0 1px rgba(255, 255, 255, .25), 0 2px 5px rgba(16, 74, 69, .2);
+}
+
+.core-preview-action {
+  border-color: rgba(175, 197, 216, .8);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, .77);
+  color: #354f66;
+  box-shadow: 0 4px 12px -9px rgba(35, 60, 88, .65), inset 0 1px rgba(255, 255, 255, .95);
+  backdrop-filter: blur(14px);
+}
+
+.core-preview-action:hover,
+.core-preview-header-action:hover {
+  border-color: #7caaab;
+  background: rgba(255, 255, 255, .97);
+  color: #19564b;
+}
+
+.core-preview-action-active {
+  border-color: #72a99b;
+  background: linear-gradient(rgba(255, 255, 255, .92), rgba(216, 245, 237, .94));
+  color: #17594d;
+}
+
+.core-preview-view:focus-visible,
+.core-preview-action:focus-visible,
+.core-preview-header-action:focus-visible,
+.core-preview-menu-item:focus-visible {
+  outline: 2px solid #168c6a;
+  outline-offset: 2px;
+}
+
+.core-preview-menu {
+  border: 1px solid rgba(171, 195, 211, .85);
+  border-radius: 4px;
+  background: rgba(250, 253, 255, .96);
+  box-shadow: 0 15px 32px -17px rgba(30, 54, 79, .65), inset 0 1px white;
+  backdrop-filter: blur(18px);
+}
+
+.core-preview-menu-item:hover { background: #eaf4f3; color: #17594d; }
+.core-preview-menu-item + .core-preview-menu-item { border-top: 1px solid #e2ebef; }
+
+.core-preview-footer {
+  z-index: 3;
+  background: linear-gradient(transparent, rgba(240, 247, 251, .85) 40%, rgba(237, 246, 250, .94));
+}
+
+.core-preview-caption,
+.core-preview-hint {
+  padding: 3px 6px;
+  border: 1px solid rgba(255, 255, 255, .75);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, .7);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .8);
+  backdrop-filter: blur(10px);
+}
+
+.core-preview-caption { max-width: 62%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.core-preview-hint { white-space: nowrap; }
+.core-preview-header-action { border: 1px solid transparent; border-radius: 4px; color: #475b70; }
+
+@media (max-width: 420px) {
+  .core-preview-hint { display: none; }
+  .core-preview-toolbar { gap: 4px; }
+  .core-preview-view { min-width: 33px; padding-inline: 3px; }
+}
