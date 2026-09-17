@@ -144,6 +144,7 @@ const dimensions = (shape: CoreShape): Section => {
           ['Overall height', mm(totalHt)],
         ] as [string, string][];
       }
+      case 'E_CORE':
       case 'EI_CORE': {
         const o = eCoreOutline(shape);
         return [
@@ -253,6 +254,7 @@ const geometry = (shape: CoreShape, meta: SheetMeta): Section | null => {
         ],
       };
     }
+    case 'E_CORE':
     case 'EI_CORE': {
       if (!(shape.tongue > 0 && shape.stack > 0)) return null;
       const sf = stackOr(meta.factor, defaultRectStack(meta.alloy));
@@ -370,6 +372,7 @@ const electrical = (shape: CoreShape, meta: SheetMeta) => {
         meanPathCm: 0.2 * (id1 + id2) + ((od2 - id2) / 20) * 3.14,
       };
     }
+    case 'E_CORE':
     case 'EI_CORE': {
       if (!(shape.tongue > 0 && shape.stack > 0)) return null;
       const sf = stackOr(meta.factor, defaultRectStack(meta.alloy));

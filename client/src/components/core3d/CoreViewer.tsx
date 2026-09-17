@@ -446,6 +446,7 @@ export default function CoreViewer({ shape, resetNonce, showDims, view = 'iso' }
         bot.position.z = -split;
         break;
       }
+      case 'E_CORE':
       case 'EI_CORE': {
         const mat = mk(MATERIALS.rect);
         const yoke = shape.tongue / 2;
@@ -454,9 +455,11 @@ export default function CoreViewer({ shape, resetNonce, showDims, view = 'iso' }
            The E is extruded front-on, so it already stands the right way up;
            the pair is centred on the joint between them. */
         const e = add(eCoreE(shape.tongue, shape.windowW, shape.windowH, shape.stack), mat);
-        const i = add(eCoreI(shape.tongue, shape.windowW, shape.stack), mat);
         e.position.y = -yoke / 4;
-        i.position.y = eH / 2 + yoke / 4;
+        if (shape.kind === 'EI_CORE') {
+          const i = add(eCoreI(shape.tongue, shape.windowW, shape.stack), mat);
+          i.position.y = eH / 2 + yoke / 4;
+        }
         break;
       }
       case 'WOUND_CORE':

@@ -160,6 +160,7 @@ export const emptyShapeFor = (ct: CoreType): CoreShape => {
     case 'RECTANGULAR': return { kind: 'RECTANGULAR', id1: 0, id2: 0, od1: 0, od2: 0, ht: 0 };
     case 'CUT_ROUND':   return { kind: 'CUT_ROUND', dims: zero, gapMm: 0 };
     case 'CUT_RECT':    return { kind: 'CUT_RECT', id1: 0, id2: 0, od1: 0, od2: 0, ht: 0, gapMm: 0 };
+    case 'E_CORE':       return { kind: 'E_CORE', tongue: 0, windowW: 0, windowH: 0, stack: 0 };
     case 'EI_CORE':      return { kind: 'EI_CORE', tongue: 0, windowW: 0, windowH: 0, stack: 0 };
     case 'WOUND_CORE':  return { kind: 'WOUND_CORE', id1: 0, id2: 0, od1: 0, od2: 0, ht: 0 };
     case 'STEP_CORE':   return { kind: 'STEP_CORE', steps: [] };
@@ -212,6 +213,7 @@ const CORE_BADGE: Record<CoreType, string> = {
   NANO:        'bg-violet-50 text-violet-700',
   CUT_ROUND:   'bg-sky-50 text-sky-700',
   CUT_RECT:    'bg-cyan-50 text-cyan-700',
+  E_CORE:       'bg-indigo-50 text-indigo-700',
   EI_CORE:      'bg-indigo-50 text-indigo-700',
   WOUND_CORE:  'bg-orange-50 text-orange-700',
   STEP_CORE:   'bg-emerald-50 text-emerald-700',
@@ -219,7 +221,7 @@ const CORE_BADGE: Record<CoreType, string> = {
 const CORE_SHORT: Record<CoreType, string> = {
   TOROIDAL: 'Toro', RECTANGULAR: 'Rect', COMPOSITE: 'Comp', NANO: 'Nano',
   CUT_ROUND: 'Cut R', CUT_RECT: 'Cut X',
-  EI_CORE: 'EI core', WOUND_CORE: 'Wound', STEP_CORE: 'Step',
+  E_CORE: 'E core', EI_CORE: 'EI core', WOUND_CORE: 'Wound', STEP_CORE: 'Step',
 };
 const coreBadge = (ct: CoreType) => CORE_BADGE[ct] ?? 'bg-slate-100 text-slate-700';
 const coreShort = (ct: CoreType) => CORE_SHORT[ct] ?? ct;
@@ -867,7 +869,7 @@ export const POOrderNewPage = () => {
             <Field label="Core shape">
               <SearchableSelect value={gapMode ? 'GAP' : coreType === 'NANO' || coreType === 'TOROIDAL' ? 'ROUND' : coreType}
                 onChange={value => selectShape(value)} placeholder="Choose core shape…"
-                options={[{value:'ROUND',label:'Round'},{value:'RECTANGULAR',label:'Rectangular'},{value:'CUT_ROUND',label:'Round cut'},{value:'CUT_RECT',label:'Rectangular cut'},{value:'GAP',label:'Gap core'},{value:'EI_CORE',label:'EI core'},{value:'WOUND_CORE',label:'Wound core'},{value:'STEP_CORE',label:'Step core'}]} />
+                options={[{value:'ROUND',label:'Round (Toroidal)'},{value:'RECTANGULAR',label:'Rectangular'},{value:'CUT_ROUND',label:'Round cut'},{value:'CUT_RECT',label:'Rectangular cut'},{value:'GAP',label:'Gap core'},{value:'E_CORE',label:'E core'},{value:'EI_CORE',label:'EI core'},{value:'WOUND_CORE',label:'Wound core'},{value:'STEP_CORE',label:'Step core'}]} />
             </Field>
             {gapMode && <Field label="Gap core shape"><SearchableSelect value={coreType} onChange={value => pickCore(value as CoreType)} options={[{value:'CUT_ROUND',label:'Round gap'},{value:'CUT_RECT',label:'Rectangular gap'}]} /></Field>}
           </div>
@@ -972,7 +974,7 @@ export const POOrderNewPage = () => {
             onEditConsumed={() => setEditSeed(null)}
           />
         )}
-        {(coreType === 'EI_CORE' || coreType === 'WOUND_CORE' || coreType === 'STEP_CORE') && (
+        {(coreType === 'E_CORE' || coreType === 'EI_CORE' || coreType === 'WOUND_CORE' || coreType === 'STEP_CORE') && (
           <StackedCoreForm
             selectedAlloy={family === 'COMPOSITE' ? undefined : family}
             kind={coreType}
@@ -1499,16 +1501,18 @@ const Stat = ({ label, value, accent }: { label: string; value: string; accent?:
    columns of their own. The mapping is written down in ONE place, dimsOf and
    dimsFrom below, so a line always reads back as the shape it was booked as. */
 
-type StackedKind = 'EI_CORE' | 'WOUND_CORE' | 'STEP_CORE';
+type StackedKind = 'E_CORE' | 'EI_CORE' | 'WOUND_CORE' | 'STEP_CORE';
 
 const STACKED_SKIN: Record<StackedKind, { border: string; dot: string; ink: string; title: string }> = {
-  EI_CORE:     { border: 'border-indigo-200 bg-indigo-50/40',   dot: 'bg-indigo-500',  ink: 'text-indigo-800',  title: 'EI core' },
+  E_CORE:      { border: 'border-indigo-200 bg-indigo-50/40',   dot: 'bg-indigo-500',  ink: 'text-indigo-800',  title: 'E core' },
+  EI_CORE:     { border: 'border-violet-200 bg-violet-50/40',    dot: 'bg-violet-500',   ink: 'text-violet-800',   title: 'EI core' },
   WOUND_CORE: { border: 'border-orange-200 bg-orange-50/40',   dot: 'bg-orange-500',  ink: 'text-orange-800',  title: 'Wound core' },
   STEP_CORE:  { border: 'border-emerald-200 bg-emerald-50/40', dot: 'bg-emerald-500', ink: 'text-emerald-800', title: 'Step core' },
 };
 
 const STACKED_NOTE: Record<StackedKind, string> = {
-  EI_CORE: 'outer limbs and yokes are half the tongue',
+  E_CORE: 'E-shaped lamination without the closing I bar',
+  EI_CORE: 'E-shaped lamination with a separate closing I bar',
   WOUND_CORE: 'radiused ends \u00b7 strip wound, not stacked',
   STEP_CORE: 'limb section \u00b7 the window gives the magnetic path',
 };
@@ -1566,15 +1570,15 @@ export const StackedCoreForm = ({
   }, [cardRate?.rateValue, cardRate?.rateBasis]);
 
   const shape: CoreShape = useMemo(() => (
-    kind === 'EI_CORE'
-      ? { kind: 'EI_CORE', tongue, windowW, windowH, stack: stackD }
+    kind === 'E_CORE' || kind === 'EI_CORE'
+      ? { kind, tongue, windowW, windowH, stack: stackD }
       : kind === 'WOUND_CORE'
         ? { kind: 'WOUND_CORE', id1, id2, od1, od2, ht }
         : { kind: 'STEP_CORE', steps, round: roundStep }
   ), [kind, tongue, windowW, windowH, stackD, id1, id2, od1, od2, ht, steps, roundStep]);
 
   const calc = useMemo(() => {
-    if (kind === 'EI_CORE') {
+    if (kind === 'E_CORE' || kind === 'EI_CORE') {
       return eCoreCalc({ tongue, windowW, windowH, stack: stackD, pcs, factor: stack, alloy });
     }
     if (kind === 'WOUND_CORE') {
@@ -1603,7 +1607,7 @@ export const StackedCoreForm = ({
     setAlloy((it.alloy as MaterialKey) ?? 'CRGO');
     setStack(stackOr(it.stackFactor, defaultRectStack(it.alloy))); setStackTouched(true);
     setRateBasis(it.rateBasis ?? 'PER_KG'); setRateValue(it.rateValue ?? 0); setRateTouched(true);
-    if (kind === 'EI_CORE') {
+    if (kind === 'E_CORE' || kind === 'EI_CORE') {
       setWindowW(it.id1); setWindowH(it.id2 ?? 0); setTongue(it.od1); setStackD(it.ht);
     } else if (kind === 'WOUND_CORE') {
       setId1(it.id1); setId2(it.id2 ?? 0); setOd1(it.od1); setOd2(it.od2 ?? 0); setHt(it.ht);
@@ -1630,7 +1634,7 @@ export const StackedCoreForm = ({
     if (!ready) return;
     /* The generic columns, mapped once. Read the pair with dimsFrom in the edit
        branch above: the two must stay opposite each other. */
-    const dims = kind === 'EI_CORE'
+    const dims = kind === 'E_CORE' || kind === 'EI_CORE'
       ? { id1: windowW, id2: windowH, od1: tongue, od2: tongue, ht: stackD }
       : kind === 'WOUND_CORE'
         ? { id1, id2, od1, od2, ht }
@@ -1705,7 +1709,7 @@ export const StackedCoreForm = ({
       </FieldRow>
 
       <FieldRow className="mt-2">
-        {kind === 'EI_CORE' && (<>
+        {(kind === 'E_CORE' || kind === 'EI_CORE') && (<>
           <NumField label="Tongue T" w={FW.dim} value={tongue} onChange={setTongue} />
           <NumField label="Window W" w={FW.dim} value={windowW} onChange={setWindowW} />
           <NumField label="Window H" w={FW.dim} value={windowH} onChange={setWindowH} />

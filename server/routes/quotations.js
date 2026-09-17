@@ -20,7 +20,7 @@ router.use(requireAuth, resolveTenant);
 const itemSchema = z.object({
   coreType: z.enum([
     'TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT',
-    'EI_CORE', 'WOUND_CORE', 'STEP_CORE',
+    'E_CORE', 'EI_CORE', 'WOUND_CORE', 'STEP_CORE',
   ]),
   // grade / measure / dimensions are optional so a MANUAL line (free-text
   // description + qty + rate, no core spec) can be quoted when an item isn't in

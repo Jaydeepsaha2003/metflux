@@ -15,7 +15,7 @@ import { resolveTenant } from '../lib/tenant.js';
 const router = Router();
 router.use(requireAuth, resolveTenant);
 
-const CORE_TYPES = ['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT', 'EI_CORE', 'WOUND_CORE', 'STEP_CORE'];
+const CORE_TYPES = ['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT', 'E_CORE', 'EI_CORE', 'WOUND_CORE', 'STEP_CORE'];
 
 const bodySchema = z.object({
   customerId: z.string().min(1),

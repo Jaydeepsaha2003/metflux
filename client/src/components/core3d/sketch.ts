@@ -481,6 +481,7 @@ const viewsFor = (shape: CoreShape): View[] => {
     /* An EI core is drawn front-on, because that is the view its four figures
        live in: the tongue, the two windows and the yokes are all in it. The
        side view carries the stack, the one thing the front cannot show. */
+    case 'E_CORE':
     case 'EI_CORE': {
       const o = eCoreOutline(shape);
       return [

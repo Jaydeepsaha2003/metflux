@@ -31,6 +31,7 @@ const CORE_TAB_INK: Record<CoreType, string> = {
   COMPOSITE: 'text-teal-700',
   CUT_ROUND: 'text-sky-700',
   CUT_RECT: 'text-cyan-700',
+  E_CORE: 'text-indigo-700',
   EI_CORE: 'text-indigo-700',
   WOUND_CORE: 'text-orange-700',
   STEP_CORE: 'text-emerald-700',
@@ -485,7 +486,7 @@ export const QuotationNewPage = () => {
             <div className="core-family-selector flex flex-wrap gap-0.5 rounded-lg bg-slate-100 p-0.5 text-sm" aria-label="Core family">
               {([
               'TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT',
-              'EI_CORE', 'WOUND_CORE', 'STEP_CORE',
+              'E_CORE', 'EI_CORE', 'WOUND_CORE', 'STEP_CORE',
             ] as CoreType[]).map((ct) => (
                 <button key={ct} type="button" onClick={() => pickCore(ct)}
                   aria-pressed={coreType === ct}
@@ -577,7 +578,7 @@ export const QuotationNewPage = () => {
             edit={editSeed?.item.coreType === 'CUT_RECT' ? editSeed : null} onEditConsumed={() => setEditSeed(null)}
           />
         )}
-        {(coreType === 'EI_CORE' || coreType === 'WOUND_CORE' || coreType === 'STEP_CORE') && (
+        {(coreType === 'E_CORE' || coreType === 'EI_CORE' || coreType === 'WOUND_CORE' || coreType === 'STEP_CORE') && (
           <StackedCoreForm
             kind={coreType} hideTesting
             onShape={setReport}

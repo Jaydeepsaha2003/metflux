@@ -359,9 +359,10 @@ export const buildDimensions = (shape: CoreShape, extent: number) => {
       }
       break;
     }
+    case 'E_CORE':
     case 'EI_CORE': {
       const width = shape.tongue * 2 + shape.windowW * 2;
-      const height = shape.windowH + shape.tongue / 2;
+      const height = shape.windowH + (shape.kind === 'EI_CORE' ? shape.tongue : shape.tongue / 2);
       const yoke = shape.tongue / 2;
       dimension(new THREE.Vector3(-width / 2, -height / 2, 0), new THREE.Vector3(width / 2, -height / 2, 0), new THREE.Vector3(0, -side, 0), `WIDTH ${n(width)}`, ctx);
       dimension(new THREE.Vector3(width / 2, -height / 2, 0), new THREE.Vector3(width / 2, height / 2, 0), new THREE.Vector3(side, 0, 0), `HEIGHT ${n(height)}`, ctx);
@@ -373,6 +374,7 @@ export const buildDimensions = (shape: CoreShape, extent: number) => {
       const { id1, id2, od1, od2, ht } = shape;
       dimension(new THREE.Vector3(-od1 / 2, -ht / 2, od2 / 2), new THREE.Vector3(od1 / 2, -ht / 2, od2 / 2), new THREE.Vector3(0, -side, 0), `OD1 ${n(od1)}`, ctx);
       dimension(new THREE.Vector3(-od1 / 2, -ht / 2, -od2 / 2), new THREE.Vector3(-od1 / 2, -ht / 2, od2 / 2), new THREE.Vector3(-side, 0, 0), `OD2 ${n(od2)}`, ctx);
+      dimension(new THREE.Vector3(-id1 / 2, ht / 2, -id2 / 2), new THREE.Vector3(id1 / 2, ht / 2, -id2 / 2), new THREE.Vector3(0, stand, 0), `ID1 ${n(id1)}`, ctx);
       dimension(new THREE.Vector3(id1 / 2, ht / 2, -id2 / 2), new THREE.Vector3(id1 / 2, ht / 2, id2 / 2), new THREE.Vector3(side, 0, 0), `ID2 ${n(id2)}`, ctx);
       dimension(new THREE.Vector3(od1 / 2, -ht / 2, -od2 / 2), new THREE.Vector3(od1 / 2, ht / 2, -od2 / 2), new THREE.Vector3(side, 0, -side), `HT ${n(ht)}`, ctx);
       break;

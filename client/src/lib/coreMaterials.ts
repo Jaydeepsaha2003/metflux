@@ -63,6 +63,17 @@ export const MATERIALS: Record<MaterialKey, MaterialSpec> = {
   },
 };
 
+/** Apply tenant settings without changing the safe built-in defaults. */
+export const setMaterialPhysics = (value: Partial<Record<MaterialKey, Partial<Pick<MaterialSpec, 'density' | 'stackingFactor'>>>> | null | undefined) => {
+  if (!value) return;
+  (Object.keys(MATERIALS) as MaterialKey[]).forEach((key) => {
+    const next = value[key];
+    if (!next) return;
+    if (typeof next.density === 'number' && Number.isFinite(next.density) && next.density > 0) MATERIALS[key].density = next.density;
+    if (typeof next.stackingFactor === 'number' && Number.isFinite(next.stackingFactor) && next.stackingFactor > 0 && next.stackingFactor <= 1) MATERIALS[key].stackingFactor = next.stackingFactor;
+  });
+};
+
 export const materialOf = (key: MaterialKey | null | undefined): MaterialSpec =>
   MATERIALS[key ?? 'CRGO'] ?? MATERIALS.CRGO;
 

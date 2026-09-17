@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, Suspense } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, IndianRupee, LogOut, ChevronDown, FileText, Settings as SettingsIcon,
@@ -14,6 +15,7 @@ import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { CompanySwitcher } from '@/components/CompanySwitcher';
 import { NotificationBell } from '@/components/NotificationBell';
+import { setMaterialPhysics } from '@/lib/coreMaterials';
 
 /* ---------- nav definition ---------- */
 type NavLeaf = {
@@ -132,6 +134,12 @@ const findActiveGroupKey = (pathname: string): string | null => {
 
 /* ---------- layout ---------- */
 export const AppLayout = () => {
+  const { data: materialPhysics } = useQuery({
+    queryKey: ['company-settings', 'material-physics'],
+    queryFn: () => api('/company-settings/material-physics'),
+    staleTime: 5 * 60 * 1000,
+  });
+  useEffect(() => { setMaterialPhysics(materialPhysics as Parameters<typeof setMaterialPhysics>[0]); }, [materialPhysics]);
   const navigate = useNavigate();
   const location = useLocation();
   const { user, clear } = useAuthStore();

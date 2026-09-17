@@ -2,7 +2,7 @@
 // entry form for grade + material dropdowns. Each grade declares which core
 // types it applies to (Toroidal / Rectangular / Nano); Nano grades also carry
 // finish-output offsets (mm added to ID / OD / HT to get the finished size).
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, Save, X, Layers, Loader2 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
@@ -26,19 +26,20 @@ type Attrs = { coreTypes: CoreType[]; nanoIdOff: number | null; nanoOdOff: numbe
    with nowhere in the UI to put that right. */
 const ALL_CORES: CoreType[] = [
   'TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT',
-  'EI_CORE', 'WOUND_CORE', 'STEP_CORE',
+  'E_CORE', 'EI_CORE', 'WOUND_CORE', 'STEP_CORE',
 ];
 const CORE_LABEL: Record<CoreType, string> = {
   TOROIDAL: 'Toroidal', RECTANGULAR: 'Rectangular', NANO: 'Nano', COMPOSITE: 'Composite',
   CUT_ROUND: 'Round cut', CUT_RECT: 'Rect cut',
-  EI_CORE: 'EI core', WOUND_CORE: 'Wound core', STEP_CORE: 'Step core',
+  E_CORE: 'E core', EI_CORE: 'EI core', WOUND_CORE: 'Wound core', STEP_CORE: 'Step core',
 };
 const CORE_TONE: Record<CoreType, string> = {
   TOROIDAL: 'bg-amber-50 text-amber-700 ring-amber-200',
   RECTANGULAR: 'bg-rose-50 text-rose-700 ring-rose-200',
   NANO: 'bg-violet-50 text-violet-700 ring-violet-200',
   COMPOSITE: 'bg-teal-50 text-teal-700 ring-teal-200',
-  EI_CORE: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
+  E_CORE: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
+  EI_CORE: 'bg-violet-50 text-violet-700 ring-violet-200',
   WOUND_CORE: 'bg-orange-50 text-orange-700 ring-orange-200',
   STEP_CORE: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   CUT_ROUND: 'bg-sky-50 text-sky-700 ring-sky-200',
@@ -101,6 +102,8 @@ export const MaterialsPage = () => {
         <BulkExcel config={bulkConfig} />
       </div>
 
+      <MaterialPhysicsSettings />
+
       <AddRow onSubmit={(b) => addM.mutateAsync(b)} busy={addM.isPending} />
 
       {error && (
@@ -149,6 +152,70 @@ export const MaterialsPage = () => {
       </div>
       {confirmDialog}
     </div>
+  );
+};
+
+/* ---------- material physics defaults ---------- */
+type PhysicsKey = 'CRGO' | 'NANOCRYSTALLINE' | 'AMORPHOUS';
+type Physics = Record<PhysicsKey, { density: number; stackingFactor: number }>;
+const PHYSICS_DEFAULTS: Physics = {
+  CRGO: { density: 7.65, stackingFactor: 0.9603383931 },
+  NANOCRYSTALLINE: { density: 7.30, stackingFactor: 0.7946072185 },
+  AMORPHOUS: { density: 7.25, stackingFactor: 0.86 },
+};
+const PHYSICS_LABEL: Record<PhysicsKey, string> = {
+  CRGO: 'CRGO', NANOCRYSTALLINE: 'Nano Crystalline', AMORPHOUS: 'Amorphous',
+};
+
+const MaterialPhysicsSettings = () => {
+  const qc = useQueryClient();
+  const [form, setForm] = useState<Physics>(PHYSICS_DEFAULTS);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+  const query = useQuery({
+    queryKey: ['company-settings', 'material-physics'],
+    queryFn: () => api<Physics>('/company-settings/material-physics'),
+  });
+  useEffect(() => { if (query.data) setForm({ ...PHYSICS_DEFAULTS, ...query.data }); }, [query.data]);
+  const mutation = useMutation({
+    mutationFn: () => api<Physics>('/company-settings/material-physics', { method: 'PUT', json: form }),
+    onSuccess: (data) => { setForm(data); setSaved(true); setError(''); qc.setQueryData(['company-settings', 'material-physics'], data); setTimeout(() => setSaved(false), 2400); },
+    onError: (e) => setError(e instanceof ApiError ? e.message : 'Could not save material defaults'),
+  });
+  const update = (key: PhysicsKey, field: 'density' | 'stackingFactor', value: string) => {
+    const n = Number(value);
+    setForm((old) => ({ ...old, [key]: { ...old[key], [field]: Number.isFinite(n) ? n : 0 } }));
+  };
+  return (
+    <section className="card border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">Material calculation defaults</h2>
+          <p className="text-xs text-slate-500">Used by weight, net area and test calculations. Changes apply to this company.</p>
+        </div>
+        <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Density: g/cm³ · stacking: 0–1</span>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        {(Object.keys(PHYSICS_LABEL) as PhysicsKey[]).map((key) => (
+          <div key={key} className="border border-slate-200 bg-slate-50/60 p-3">
+            <div className="mb-2 text-sm font-semibold text-slate-800">{PHYSICS_LABEL[key]}</div>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block"><span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">Density</span>
+                <input className="input h-10 font-semibold" type="number" min="0.01" max="30" step="0.01" value={form[key].density} onChange={(e) => update(key, 'density', e.target.value)} /></label>
+              <label className="block"><span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">Stacking factor</span>
+                <input className="input h-10 font-semibold" type="number" min="0.01" max="1" step="0.0001" value={form[key].stackingFactor} onChange={(e) => update(key, 'stackingFactor', e.target.value)} /></label>
+            </div>
+          </div>
+        ))}
+      </div>
+      {(error || saved) && <div className={cn('mt-2 text-xs font-medium', error ? 'text-red-600' : 'text-emerald-700')}>{error || 'Material defaults saved.'}</div>}
+      <div className="mt-3 flex flex-wrap justify-end gap-2">
+        <button type="button" className="btn-ghost" onClick={() => { setForm(PHYSICS_DEFAULTS); setError(''); }}>Reset defaults</button>
+        <button type="button" className="btn-primary" disabled={mutation.isPending || Object.values(form).some((v) => v.density <= 0 || v.density > 30 || v.stackingFactor <= 0 || v.stackingFactor > 1)} onClick={() => mutation.mutate()}>
+          <Save className="h-4 w-4" /> {mutation.isPending ? 'Saving…' : 'Save calculation defaults'}
+        </button>
+      </div>
+    </section>
   );
 };
 

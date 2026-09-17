@@ -19,6 +19,7 @@ const TONE = {
   COMPOSITE:   { dot: 'bg-teal-500',   label: 'text-teal-800',   ring: 'border-teal-200' },
   CUT_ROUND:   { dot: 'bg-sky-500',    label: 'text-sky-800',    ring: 'border-sky-200' },
   CUT_RECT:    { dot: 'bg-cyan-500',   label: 'text-cyan-800',   ring: 'border-cyan-200' },
+  E_CORE:       { dot: 'bg-indigo-500', label: 'text-indigo-800', ring: 'border-indigo-200' },
   EI_CORE:      { dot: 'bg-indigo-500', label: 'text-indigo-800', ring: 'border-indigo-200' },
   WOUND_CORE:  { dot: 'bg-orange-500', label: 'text-orange-800', ring: 'border-orange-200' },
   STEP_CORE:   { dot: 'bg-emerald-500', label: 'text-emerald-800', ring: 'border-emerald-200' },

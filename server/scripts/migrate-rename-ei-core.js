@@ -4,7 +4,7 @@ import 'dotenv/config';
 import { pool } from '../lib/db.js';
 
 const tables = ['PoOrderItem', 'QuotationItem', 'FluxGrade', 'MaterialGrade'];
-const types = ['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT', 'EI_CORE', 'WOUND_CORE', 'STEP_CORE'];
+const types = ['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT', 'E_CORE', 'EI_CORE', 'WOUND_CORE', 'STEP_CORE'];
 
 const main = async () => {
   const list = types.map((v) => `'${v}'`).join(',');

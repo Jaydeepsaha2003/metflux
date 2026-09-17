@@ -17,7 +17,7 @@ const ENUM_TABLES = ['PoOrderItem', 'QuotationItem', 'FluxGrade'];
 /** The full set after this migration, in the order the UI presents them. */
 const CORE_TYPES = [
   'TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT',
-  'EI_CORE', 'WOUND_CORE', 'STEP_CORE',
+  'E_CORE', 'EI_CORE', 'WOUND_CORE', 'STEP_CORE',
 ];
 
 const columnType = async (table, column) => {

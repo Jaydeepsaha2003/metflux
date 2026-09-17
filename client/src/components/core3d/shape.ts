@@ -50,7 +50,7 @@ export type CoreShape =
    *  centre limb (tongue), the window it encloses, and the stack depth. The
    *  outer limbs are half the tongue and the yokes likewise, which is what
    *  makes an E an E rather than a set of four free dimensions. */
-  | { kind: 'EI_CORE'; tongue: number; windowW: number; windowH: number; stack: number }
+  | { kind: 'E_CORE' | 'EI_CORE'; tongue: number; windowW: number; windowH: number; stack: number }
   /** A wound core with radiused ends — the obround, or racetrack. Same five
    *  dimensions as the rectangular, but the ends are true semicircles, which
    *  is both what a strip can actually be wound around and what shortens the
@@ -75,12 +75,18 @@ export const shapeIsDrawable = (s: CoreShape): boolean => {
     case 'WOUND_CORE':
       return s.id1 > 0 && s.id2 > 0 && s.od1 > 0 && s.od2 > 0 && s.ht > 0
         && s.od1 > s.id1 && s.od2 > s.id2;
+    case 'E_CORE':
     case 'EI_CORE':
       return s.tongue > 0 && s.windowW > 0 && s.windowH > 0 && s.stack > 0;
     case 'STEP_CORE':
-      return s.steps.length > 0 && s.steps.every((t) => t.id1 > 0 && t.id2 > 0 && t.ht > 0 && t.builtup > 0)
-        && Math.max(...s.steps.map((t) => t.id1)) > Math.min(...s.steps.map((t) => t.id1))
-        && Math.max(...s.steps.map((t) => t.id2)) > Math.min(...s.steps.map((t) => t.id2));
+      // A valid step core may contain one step. Earlier this required two
+      // different widths before the preview became drawable, which meant a
+      // one-step order line had neither a model nor dimension annotations.
+      // Each row is its own ID/OD section; the number of rows is deliberately
+      // unlimited, so draw as soon as every entered row is geometrically valid.
+      return s.steps.length > 0 && s.steps.every((t) =>
+        t.id1 > 0 && t.id2 > 0 && (!s.round || t.id2 > t.id1) && t.ht > 0 && t.builtup > 0
+      );
     case 'COMPOSITE':
       return triOk(s.crgo) && triOk(s.nano);
   }
@@ -113,6 +119,7 @@ export const shapeExtent = (s: CoreShape): number => {
     case 'RECTANGULAR':
     case 'CUT_RECT':
     case 'WOUND_CORE': return Math.max(s.od1, s.od2, s.ht);
+    case 'E_CORE':
     case 'EI_CORE': return Math.max(eCoreOutline(s).width, eCoreOutline(s).height, s.stack);
     case 'STEP_CORE': return Math.max(...s.steps.flatMap((x) => [x.id1, x.id2, x.ht, x.builtup]), 1);
     case 'COMPOSITE': {
@@ -174,7 +181,8 @@ const KIND_NAME = {
   COMPOSITE: 'Composite core',
   CUT_ROUND: 'Round cut core',
   CUT_RECT: 'Rectangular cut core',
-  EI_CORE: 'EI core',
+    E_CORE: 'E core',
+    EI_CORE: 'EI core',
   WOUND_CORE: 'Wound core',
   STEP_CORE: 'Step core',
 } as const;
@@ -215,6 +223,7 @@ export const shapeCaption = (s: CoreShape): string => {
       const od = Math.max(s.crgo.od, s.nano.od);
       return `${n(id)} × ${n(od)} × ${n(totalHt)} mm`;
     }
+    case 'E_CORE':
     case 'EI_CORE':
       // Tongue first, because that is the figure an EI core is ordered by.
       return `T${n(s.tongue)} · window ${n(s.windowW)} × ${n(s.windowH)} · stack ${n(s.stack)} mm`;
