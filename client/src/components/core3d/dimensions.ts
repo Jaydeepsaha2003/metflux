@@ -326,28 +326,31 @@ export const buildDimensions = (shape: CoreShape, extent: number) => {
       const x = od1 / 2, z = od2 / 2, xi = id1 / 2, zi = id2 / 2;
       const top = ht / 2, bottom = -ht / 2;
 
-      // The two X-spanning dimensions stack in front; the two Z-spanning ones
-      // stack out to the left. Four on one side would be a ladder nobody reads.
+      // Give each span its own side of the footprint. Raising all four above
+      // the top face projects their extension lines into the same small area.
+      // Outer sizes sit at the base; window sizes sit at the opposite top edges.
       dimension(
-        new THREE.Vector3(-x, top, z), new THREE.Vector3(x, top, z),
-        new THREE.Vector3(0, stand, 0), `OD1 ${n(od1)}`, ctx,
+        new THREE.Vector3(-x, bottom, z), new THREE.Vector3(x, bottom, z),
+        new THREE.Vector3(0, 0, side), `OD1 ${n(od1)}`, ctx,
       );
       dimension(
-        new THREE.Vector3(-xi, top, zi), new THREE.Vector3(xi, top, zi),
-        new THREE.Vector3(0, stand + row, 0), `ID1 ${n(id1)}`, ctx,
+        new THREE.Vector3(-xi, top, -zi), new THREE.Vector3(xi, top, -zi),
+        new THREE.Vector3(0, 0, -(z-zi+side)), `ID1 ${n(id1)}`, ctx,
       );
       dimension(
-        new THREE.Vector3(-x, top, -z), new THREE.Vector3(-x, top, z),
-        new THREE.Vector3(0, stand, 0), `OD2 ${n(od2)}`, ctx,
+        new THREE.Vector3(-x, bottom, -z), new THREE.Vector3(-x, bottom, z),
+        new THREE.Vector3(-side, 0, 0), `OD2 ${n(od2)}`, ctx,
       );
       dimension(
-        new THREE.Vector3(-xi, top, -zi), new THREE.Vector3(-xi, top, zi),
-        new THREE.Vector3(0, stand + row, 0), `ID2 ${n(id2)}`, ctx,
+        new THREE.Vector3(xi, top, -zi), new THREE.Vector3(xi, top, zi),
+        new THREE.Vector3(x-xi+side, 0, 0), `ID2 ${n(id2)}`, ctx,
       );
       dimension(
         new THREE.Vector3(x, bottom, -z), new THREE.Vector3(x, top, -z),
-        new THREE.Vector3(side, 0, 0), `HT ${n(ht)}`, ctx,
+        new THREE.Vector3(side, 0, -side), `HT ${n(ht)}`, ctx,
       );
+      leader(new THREE.Vector3(-(x+xi)/2,top,0),new THREE.Vector3(-1,.8,0),`BUILD X ${n((od1-id1)/2)}`,ctx);
+      leader(new THREE.Vector3(0,top,(z+zi)/2),new THREE.Vector3(0,.8,1),`BUILD Y ${n((od2-id2)/2)}`,ctx);
       if (shape.kind === 'CUT_RECT' && shape.gapMm > 0) {
         leader(
           new THREE.Vector3(-x, 0, 0), new THREE.Vector3(-1, 0.25, 0),

@@ -252,6 +252,13 @@ export default function CoreViewer({ shape, resetNonce, showDims, view = 'iso' }
     // coordinates. Orbit, zoom and resize all pass through this render path.
     const labelPosition = new THREE.Vector3();
     const render = () => {
+      // A circular core has no privileged diameter direction. Keep its
+      // dimensions on the visible side instead of drawing through the bore.
+      const annotation = dims.children[0];
+      if (annotation?.userData.roundDimensions) {
+        const angle = Math.atan2(camera.position.x, camera.position.z);
+        annotation.rotation.set(camera.position.y < group.position.y ? Math.PI : 0,angle,0,'YXZ');
+      }
       scene.updateMatrixWorld(true);
       camera.updateMatrixWorld(true);
       const occupied: {x:number;y:number;w:number;h:number}[]=[];
@@ -270,9 +277,10 @@ export default function CoreViewer({ shape, resetNonce, showDims, view = 'iso' }
         const startX=(projected.x+1)*width/2,startY=(1-projected.y)*height/2;
         const x=THREE.MathUtils.clamp(startX,w/2+8,Math.max(w/2+8,width-w/2-8));
         let y=THREE.MathUtils.clamp(startY,h/2+8,height-h/2-8);
-        for(let step=0;step<20;step++) {
+        const slots = [o.userData.labelSlot ?? 0,...Array.from({length:20},(_,i)=>i)];
+        for(const step of slots) {
           const candidate=THREE.MathUtils.clamp(startY+(step%2 ? 1 : -1)*Math.ceil(step/2)*(h+5),h/2+8,height-h/2-8);
-          if(!occupied.some(r=>Math.abs(x-r.x)<(w+r.w)/2+4 && Math.abs(candidate-r.y)<(h+r.h)/2+4)) {y=candidate;break;}
+          if(!occupied.some(r=>Math.abs(x-r.x)<(w+r.w)/2+4 && Math.abs(candidate-r.y)<(h+r.h)/2+4)) {y=candidate;o.userData.labelSlot=step;break;}
         }
         occupied.push({x,y,w,h});
         const adjusted=new THREE.Vector3(x/width*2-1,1-y/height*2,projected.z).unproject(camera);
@@ -515,6 +523,7 @@ export default function CoreViewer({ shape, resetNonce, showDims, view = 'iso' }
 
     if (showDims && shapeIsDrawable(shape)) {
       const built = buildDimensions(shape, shapeExtent(shape) || 1);
+      built.group.userData.roundDimensions = shape.kind === 'TOROIDAL' || shape.kind === 'NANO';
       // Match the offset that drops the part onto the floor, so the annotation
       // sits against the feature it measures rather than floating below it.
       built.group.position.y = k.group.position.y;

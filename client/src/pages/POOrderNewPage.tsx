@@ -134,9 +134,18 @@ const useReportShape = (
   deps: unknown[],
 ) => {
   const ref = useRef(onShape);
+  const lastReport = useRef('');
   ref.current = onShape;
   useEffect(() => {
-    ref.current?.(build());
+    const report = build();
+    const signature = JSON.stringify(report);
+    // Calculation objects and empty arrays may get new identities on render.
+    // Publish only changed values, otherwise parent/child updates rebuild the
+    // scene continuously and interrupt an in-progress orbit.
+    if (lastReport.current !== signature) {
+      lastReport.current = signature;
+      ref.current?.(report);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 };

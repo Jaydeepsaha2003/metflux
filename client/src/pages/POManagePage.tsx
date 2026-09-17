@@ -260,11 +260,11 @@ export const POManagePage = () => {
                         <td className="px-3 py-2.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                           <Link
                             to={`/po/new/${group.poOrderId}`}
-                            className="btn-row"
+                            className="btn-row register-edit-order"
                             title="Edit whole PO (add / remove / modify items)"
                           >
                             <Pencil className="h-3.5 w-3.5" />
-                            <span className="hidden lg:inline">Edit SO</span>
+                            <span>Edit SO</span>
                           </Link>
                         </td>
                       </tr>
@@ -393,7 +393,7 @@ export const POManagePage = () => {
                       <span className="text-xs text-slate-500 font-medium">{group.totalPcs} pcs · {group.totalWeight.toFixed(3)} kg</span>
                       <Link
                         to={`/po/new/${group.poOrderId}`}
-                        className="btn-row"
+                        className="btn-row register-edit-order"
                         title="Edit whole PO"
                       >
                         <Pencil className="h-3.5 w-3.5" /> Edit SO
