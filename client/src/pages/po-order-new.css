@@ -112,6 +112,10 @@
 .sales-order-entry .core-entry-form > .core-field-row + .core-field-row { padding-top:12px; border-top:1px solid #e6edf3; }
 @media (min-width:1280px) {
   .sales-order-entry .core-builder-layout { grid-template-columns:minmax(0,1fr) minmax(240px,23%); }
+  /* A line with no geometry has no model to dock, so the form takes the whole
+     width. Needed as a class rather than a Tailwind utility because the rule
+     above wins on specificity whatever the element is told. */
+  .sales-order-entry .core-builder-layout.is-single { grid-template-columns:minmax(0,1fr); }
 }
 /* Six across needs about 700px of strip beside the section heading. Below
    that it steps down rather than overflowing: three, then two on a phone. */

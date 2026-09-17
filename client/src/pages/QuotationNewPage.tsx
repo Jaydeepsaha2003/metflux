@@ -10,9 +10,28 @@ import { Save, Loader2, Trash2, Copy, Pencil, FileText, Calendar, Hash, User2, P
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { SearchableSelect } from '@/components/SearchableSelect';
-import { type Item, ToroidalForm, RectangularForm, NanoForm } from '@/pages/POOrderNewPage';
+import {
+  type Item, type ShapeReport, ToroidalForm, RectangularForm, NanoForm, emptyShapeFor,
+} from '@/pages/POOrderNewPage';
+import CorePreview from '@/components/core3d/CorePreview';
+// The Sales Order stylesheet, because this screen now uses the same workbench
+// markup for its item entry. The selectors are scoped under
+// .sales-order-workbench, so the wrapper below is what switches them on.
+import '@/pages/po-order-new.css';
 
 import { coreShort, coreLabel } from '@/lib/coreTypes';
+import { useAuthStore, activeMembership } from '@/store/auth';
+/* The selected tab wears its family's colour, exactly as on the Sales Order
+   screen — the accent is the fastest way to see which form you are in. */
+const CORE_TAB_INK: Record<CoreType, string> = {
+  TOROIDAL: 'text-amber-700',
+  RECTANGULAR: 'text-rose-700',
+  NANO: 'text-violet-700',
+  COMPOSITE: 'text-teal-700',
+  CUT_ROUND: 'text-sky-700',
+  CUT_RECT: 'text-cyan-700',
+};
+
 /* Local item = SO item + quotation-only print fields (HSN/SAC + unit). */
 type QItem = Item & { hsnCode?: string; unit?: string };
 
@@ -143,6 +162,15 @@ export const QuotationNewPage = () => {
 
   /* ----- entry ----- */
   const [coreType, setCoreType] = useState<CoreType | 'MANUAL' | ''>('');
+  // The spec sheet downloaded from the dock is headed with the works' name,
+  // the same as on the Sales Order screen.
+  const companyName = useAuthStore((st) => activeMembership(st)?.companyName ?? null);
+  // Live dimensions from whichever entry form is mounted, for the 3D dock.
+  const [report, setReport] = useState<ShapeReport | null>(null);
+  const shape = report?.shape ?? null;
+  // Clearing the report on a tab change stops the old solid flashing up under
+  // the new form's heading before the first keystroke reaches it.
+  const pickCore = (ct: CoreType | 'MANUAL') => { setReport(null); setCoreType(ct); };
   const [items, setItems] = useState<QItem[]>([]);
 
   /* Copy grade / material / rate-basis from a row into the entry form. */
@@ -376,7 +404,7 @@ export const QuotationNewPage = () => {
   };
 
   return (
-    <div className="space-y-4 sm:space-y-5">
+    <div className="sales-order-workbench space-y-4 sm:space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl">
           <FileText className="h-5 w-5 text-brand-600" /> {isEdit ? 'Edit Quotation' : 'New Quotation'}
@@ -432,31 +460,61 @@ export const QuotationNewPage = () => {
       </section>
 
       {/* ============ ITEM ENTRY ============ */}
-      <section className="card p-4 sm:p-5">
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold text-slate-900">Add item</span>
-          <div className="inline-flex rounded-lg bg-slate-100 p-0.5 text-sm">
-            {(['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT'] as CoreType[]).map((ct) => (
-              <button key={ct} type="button" onClick={() => setCoreType(ct)}
-                className={cn('rounded-md px-2.5 py-1.5 font-medium transition whitespace-nowrap',
-                  coreType === ct ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-600 hover:text-slate-900')}>
-                {coreLabel(ct)}
-              </button>
-            ))}
+      {/* Same markup as the Sales Order's "02 Build line item": the accent
+          colour follows the chosen family through data-core, the tab strip is
+          the shared six-across selector, and the form sits beside a sticky 3D
+          dock. One screen to learn, not two. */}
+      <section
+        data-core={coreType && coreType !== 'MANUAL' ? coreType : 'TOROIDAL'}
+        className="sales-order-section sales-order-entry card p-3 sm:p-4 space-y-3"
+      >
+        <div className="sales-order-section-heading flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <span>02</span>
+              <h2 className="text-sm font-semibold text-slate-900">Build new item</h2>
+            </div>
           </div>
-          <span className="text-xs text-slate-400">or</span>
-          <button type="button" onClick={() => setCoreType('MANUAL')}
-            className={cn('inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm font-medium transition',
-              coreType === 'MANUAL' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-300 text-slate-600 hover:bg-slate-50')}>
-            <Plus className="h-3.5 w-3.5" /> Custom item
-          </button>
+          <div className="flex flex-wrap items-center gap-2 self-start">
+            <div className="core-family-selector flex flex-wrap gap-0.5 rounded-lg bg-slate-100 p-0.5 text-sm" aria-label="Core family">
+              {(['TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT'] as CoreType[]).map((ct) => (
+                <button key={ct} type="button" onClick={() => pickCore(ct)}
+                  aria-pressed={coreType === ct}
+                  className={cn('rounded-md px-3 py-1.5 font-medium transition',
+                    coreType === ct ? 'bg-white shadow-sm' : 'text-slate-600 hover:text-slate-900',
+                    coreType === ct && CORE_TAB_INK[ct])}>
+                  {coreLabel(ct)}
+                </button>
+              ))}
+            </div>
+            <span className="text-xs text-slate-400">or</span>
+            <button type="button" onClick={() => pickCore('MANUAL')}
+              className={cn('inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm font-medium transition',
+                coreType === 'MANUAL' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-300 text-slate-600 hover:bg-slate-50')}>
+              <Plus className="h-3.5 w-3.5" /> Custom item
+            </button>
+          </div>
         </div>
+
+        {/* Form on the left, model on the right — sticky, so the solid stays in
+            view down a long form and drops below the fields on a narrow screen. */}
+        {/* The second track is added only when something will stand in it: a
+            custom line has no geometry, and an empty 320px column just made the
+            description field narrower for no reason. */}
+        <div className={cn(
+          'core-builder-layout grid gap-3',
+          coreType && coreType !== 'MANUAL'
+            ? 'xl:grid-cols-[minmax(0,1fr)_320px]'
+            : 'is-single',
+        )}>
+          <div className="min-w-0">
 
         {coreType === 'TOROIDAL' && (
           <ToroidalForm hideTesting
             customerFactor={customer?.toroidalFactor}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'TOROIDAL'))}
             fluxGrades={fluxResp?.grades ?? []}
+            onShape={setReport}
             onAdd={addItem} prefill={prefill} onPrefillConsumed={() => setPrefill(null)}
             edit={editSeed?.item.coreType === 'TOROIDAL' ? editSeed : null} onEditConsumed={() => setEditSeed(null)}
           />
@@ -466,6 +524,7 @@ export const QuotationNewPage = () => {
             customerFactor={customer?.rectStackFactor}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'RECTANGULAR'))}
             fluxGrades={fluxRespRect?.grades ?? []}
+            onShape={setReport}
             onAdd={addItem} prefill={prefill} onPrefillConsumed={() => setPrefill(null)}
             edit={editSeed?.item.coreType === 'RECTANGULAR' ? editSeed : null} onEditConsumed={() => setEditSeed(null)}
           />
@@ -474,6 +533,7 @@ export const QuotationNewPage = () => {
           <NanoForm hideTesting
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'NANO'))}
             fluxGrades={fluxRespNano?.grades ?? []}
+            onShape={setReport}
             onAdd={addItem} prefill={prefill} onPrefillConsumed={() => setPrefill(null)}
             edit={editSeed?.item.coreType === 'NANO' ? editSeed : null} onEditConsumed={() => setEditSeed(null)}
           />
@@ -483,6 +543,7 @@ export const QuotationNewPage = () => {
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'NANO'))}
             typeGrades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'COMPOSITE'))}
             fluxGrades={fluxRespNano?.grades ?? []}
+            onShape={setReport}
             onAdd={addItem} prefill={prefill} onPrefillConsumed={() => setPrefill(null)}
             edit={editSeed?.item.coreType === 'COMPOSITE' ? editSeed : null} onEditConsumed={() => setEditSeed(null)}
           />
@@ -492,6 +553,7 @@ export const QuotationNewPage = () => {
             customerFactor={customer?.toroidalFactor}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'CUT_ROUND'))}
             fluxGrades={fluxResp?.grades ?? []}
+            onShape={setReport}
             onAdd={addItem} prefill={prefill} onPrefillConsumed={() => setPrefill(null)}
             edit={editSeed?.item.coreType === 'CUT_ROUND' ? editSeed : null} onEditConsumed={() => setEditSeed(null)}
           />
@@ -501,6 +563,7 @@ export const QuotationNewPage = () => {
             customerFactor={customer?.rectStackFactor}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'CUT_RECT'))}
             fluxGrades={fluxRespRect?.grades ?? []}
+            onShape={setReport}
             onAdd={addItem} prefill={prefill} onPrefillConsumed={() => setPrefill(null)}
             edit={editSeed?.item.coreType === 'CUT_RECT' ? editSeed : null} onEditConsumed={() => setEditSeed(null)}
           />
@@ -511,6 +574,25 @@ export const QuotationNewPage = () => {
             Pick a core type above, or use <span className="font-medium">Custom item</span>, to start adding items.
           </div>
         )}
+          </div>
+
+          {/* A custom line has no geometry, so it gets no dock — the form takes
+              the full width instead of sitting beside an empty stage. */}
+          {coreType && coreType !== 'MANUAL' && (
+            <div className="min-w-0 xl:sticky xl:top-3 xl:self-start">
+              <CorePreview
+                shape={shape ?? emptyShapeFor(coreType)}
+                meta={{
+                  ...(report?.meta ?? {}),
+                  company: companyName,
+                  customer: customer?.name ?? null,
+                  orderNo: quotationNo || null,
+                }}
+                className="core-model-stage h-[260px] xl:h-[360px]"
+              />
+            </div>
+          )}
+        </div>
       </section>
 
       {/* ============ ITEMS LIST ============ */}

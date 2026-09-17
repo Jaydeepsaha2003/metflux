@@ -134,9 +134,10 @@ const useReportShape = (
   }, deps);
 };
 
-/* The zero-dimension shape a tab starts on. Not drawable, so the preview
-   shows its "enter these fields" prompt rather than a blank stage. */
-const emptyShapeFor = (ct: CoreType): CoreShape => {
+/* The zero-dimension shape a tab starts on. Not drawable, so the preview shows
+   its "enter these fields" prompt rather than a blank stage. Exported so the
+   quotation screen can dock the same preview without its own copy of the map. */
+export const emptyShapeFor = (ct: CoreType): CoreShape => {
   const zero = { id: 0, od: 0, ht: 0 };
   switch (ct) {
     case 'RECTANGULAR': return { kind: 'RECTANGULAR', id1: 0, id2: 0, od1: 0, od2: 0, ht: 0 };
