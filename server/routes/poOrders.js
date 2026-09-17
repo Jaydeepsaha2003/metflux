@@ -38,6 +38,9 @@ const itemSchema = z.object({
   // Total controlled air gap across both joints, mm. Cut and gap cores only;
   // NULL on everything else, because "no gap" and "a gap of zero" are not the
   // same statement about a product.
+  // The material family this line is wound from. NULL = CRGO, which is what
+  // every line booked before the alloy existed was.
+  alloy:       z.enum(['CRGO', 'NANOCRYSTALLINE', 'AMORPHOUS']).optional().nullable(),
   gapMm:       z.coerce.number().nonnegative().max(100).optional().nullable(),
   stackFactor: z.coerce.number().positive().max(100).optional().nullable(),
   turns:       z.coerce.number().positive().transform((v) => Math.round(v)).optional().nullable(),
@@ -157,6 +160,7 @@ router.post('/', requirePermission('add_po'), asyncHandler(async (req, res) => {
         od1: it.od1, od2: it.od2 ?? null,
         ht: it.ht, builtup: it.builtup ?? null,
         gapMm: it.gapMm ?? null,
+        alloy: it.alloy ?? null,
         weightPerPc: it.weightPerPc, pcs: it.pcs, totalWeight: it.totalWeight,
         coreAc: it.coreAc ?? null, coreMl: it.coreMl ?? null, d13: it.d13 ?? null,
         stackFactor: it.stackFactor ?? null,
@@ -274,6 +278,7 @@ const flattenItem = (it) => {
     // The Edit page refills the air-gap input from this; without it a gap core
     // silently reopens as a plain cut core.
     gapMm: it.gapMm ?? null,
+    alloy: it.alloy ?? null,
     weightPerPc: it.weightPerPc,
     pcs: it.pcs,
     totalWeight: it.totalWeight,
@@ -615,6 +620,7 @@ router.get('/summary', requirePermission('po_summary'), asyncHandler(async (req,
     material:      it.material,
     measure:       it.measure,
     gapMm:         it.gapMm ?? null,
+    alloy:         it.alloy ?? null,
     pcsOrdered:    it.pcs,
     pcsProduced:   Number(it.pcsProduced ?? 0),
     // Excess produced beyond what was ordered (per item; never negative).
@@ -760,6 +766,7 @@ router.post('/:poId/items', requirePermission('add_po'), asyncHandler(async (req
     od1: data.od1, od2: data.od2 ?? null,
     ht: data.ht,   builtup: data.builtup ?? null,
     gapMm: data.gapMm ?? null,
+    alloy: data.alloy ?? null,
     weightPerPc: data.weightPerPc, pcs: data.pcs, totalWeight: data.totalWeight,
     coreAc: data.coreAc ?? null, coreMl: data.coreMl ?? null, d13: data.d13 ?? null,
     stackFactor: data.stackFactor ?? null,

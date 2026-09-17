@@ -15,7 +15,8 @@ import {
   toroidalGrossArea, toroidalMeanPath,
 } from '@/lib/calc';
 import {
-  MATERIALS, factorToSF, netArea, testVoltage, gapAmpereTurns,
+  MATERIALS, materialOf, factorToSF, netArea, testVoltage, gapAmpereTurns,
+  type MaterialKey,
 } from '@/lib/coreMaterials';
 import {
   compositeLayout, cutCoreCode, shapeCaption, shapeTitle, type CoreShape,
@@ -47,6 +48,8 @@ export type SheetMeta = {
   /** The grade's whole ATe/cm curve, so the sheet can tabulate every test
    *  level rather than only the one this line happens to be booked at. */
   fluxPoints?: { flux: number; ateCm: number }[] | null;
+  /** Material family. Absent = CRGO. */
+  alloy?: MaterialKey | null;
 };
 
 export type Section = {
@@ -93,6 +96,10 @@ const identification = (shape: CoreShape, meta: SheetMeta): Section => {
   rows.push(['Size', shapeCaption(shape)]);
   if (meta.grade) rows.push(['Grade', meta.grade]);
   if (meta.material) rows.push(['Material', meta.material]);
+  // Named on every sheet, not only when it is unusual: "CRGO" on the paperwork
+  // is a statement, and its absence on a nanocrystalline core would be read as
+  // one too.
+  rows.push(['Alloy', materialOf(meta.alloy).label]);
   rows.push([
     'Construction',
     isCut(shape) ? '2 mating halves — 1 pc = 1 complete core'
@@ -163,7 +170,7 @@ const geometry = (shape: CoreShape, meta: SheetMeta): Section | null => {
       const { id, od, ht } = shape.dims;
       if (!(od > id && ht > 0)) return null;
       const fx = stackOr(meta.factor, TOROIDAL_FACTOR);
-      const sf = factorToSF(fx, MATERIALS.CRGO.density);
+      const sf = factorToSF(fx, materialOf(meta.alloy).density);
       const ag = toroidalGrossArea(id, od, ht);
       return {
         heading: 'Geometry',
@@ -209,7 +216,7 @@ const geometry = (shape: CoreShape, meta: SheetMeta): Section | null => {
     }
     case 'COMPOSITE': {
       const fx = stackOr(meta.factor, TOROIDAL_FACTOR);
-      const sfC = factorToSF(fx, MATERIALS.CRGO.density);
+      const sfC = factorToSF(fx, materialOf(meta.alloy).density);
       const sfN = MATERIALS.NANOCRYSTALLINE.stackingFactor;
       const agC = toroidalGrossArea(shape.crgo.id, shape.crgo.od, shape.crgo.ht);
       const agN = toroidalGrossArea(shape.nano.id, shape.nano.od, shape.nano.ht);
@@ -258,7 +265,7 @@ const electrical = (shape: CoreShape, meta: SheetMeta) => {
     case 'CUT_ROUND': {
       const { id, od, ht } = shape.dims;
       if (!(od > id && ht > 0)) return null;
-      const sf = factorToSF(stackOr(meta.factor, TOROIDAL_FACTOR), MATERIALS.CRGO.density);
+      const sf = factorToSF(stackOr(meta.factor, TOROIDAL_FACTOR), materialOf(meta.alloy).density);
       return {
         areaCm2: netArea(toroidalGrossArea(id, od, ht), sf),
         meanPathCm: toroidalMeanPath(id, od),

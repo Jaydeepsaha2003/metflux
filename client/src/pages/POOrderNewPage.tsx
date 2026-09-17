@@ -9,7 +9,8 @@ import { Plus, Trash2, Save, Loader2, Calendar, Hash, User2, Package, Pencil, Co
 import { api, ApiError } from '@/lib/api';
 import { useCustomerRate, useAutoFillRate, type CardRate } from '@/hooks/useCustomerRate';
 import { cn } from '@/lib/cn';
-import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc, nanoCalc, nanoTestCalc, isCompositeGrade, compositeRuleFromMaterial, compositeCalc, stackOr, TOROIDAL_FACTOR, RECT_STACK_FACTOR } from '@/lib/calc';
+import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc, nanoCalc, nanoTestCalc, isCompositeGrade, compositeRuleFromMaterial, compositeCalc, stackOr, defaultToroidalFactor, defaultRectStack, TOROIDAL_FACTOR, RECT_STACK_FACTOR } from '@/lib/calc';
+import { MATERIALS, type MaterialKey } from '@/lib/coreMaterials';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useConfirm } from '@/hooks/useConfirm';
 import CorePreview from '@/components/core3d/CorePreview';
@@ -44,6 +45,8 @@ export type Item = {
   stackFactor?: number | null;
   /** Cut cores only: total controlled air gap across both joints, mm. */
   gapMm?: number;
+  /** Material family the line is wound from. Absent = CRGO. */
+  alloy?: MaterialKey;
   // Toroidal flux-test calibration — optional, only set when user fills them.
   turns?: number; flux?: number; ateCm?: number; testVoltage?: number; testCurrent?: number;
   // Pricing — rateBasis + rateValue are user-entered; per-kg / per-pc / total
@@ -1366,6 +1369,34 @@ const NumField = ({
    `base` is what this line started from — the customer's figure if they have
    one, otherwise the house default. The reset link only appears once the value
    has actually been moved off `base`, so the common case stays quiet. */
+/**
+ * The material family, and the one control that moves four numbers at once.
+ *
+ * Changing it re-bases the stacking factor unless the operator has typed their
+ * own — which is the whole point. The stacking factor of grain-oriented
+ * laminations (96%) is not the stacking factor of nanocrystalline ribbon (79%),
+ * so carrying one across to the other would weigh the core as something it is
+ * not, and take the test voltage with it.
+ */
+const ALLOY_OPTIONS = (Object.keys(MATERIALS) as MaterialKey[]).map((k) => ({
+  value: k,
+  label: `${MATERIALS[k].label} · ${MATERIALS[k].density} g/cm³`,
+}));
+
+const AlloyField = ({ value, onChange, w }: {
+  value: MaterialKey; onChange: (v: MaterialKey) => void; w?: string;
+}) => (
+  <Field label="Alloy" className={cn('shrink-0', w)}>
+    <SearchableSelect
+      dense
+      value={value}
+      onChange={(v) => onChange((v || 'CRGO') as MaterialKey)}
+      options={ALLOY_OPTIONS}
+      placeholder="CRGO"
+    />
+  </Field>
+);
+
 const StackFactorField = ({
   value, onChange, onReset, base, houseDefault, fromCustomer, w,
 }: {
@@ -1508,10 +1539,17 @@ export const ToroidalForm = ({
   const [stackTouched, setStackTouched] = useState(false);
   // Total controlled air gap across both joints. Cut cores only.
   const [gapMm, setGapMm] = useState(0);
+  const [alloy, setAlloy] = useState<MaterialKey>('CRGO');
+  /* The line's own base factor: the customer's agreed figure on CRGO, this
+     alloy's own otherwise. A rate card is negotiated against a steel, not
+     against every steel. */
+  const alloyBase = alloy === 'CRGO'
+    ? stackOr(customerFactor, TOROIDAL_FACTOR)
+    : defaultToroidalFactor(alloy);
   useEffect(() => {
-    if (!stackTouched) setStack(stackOr(customerFactor, TOROIDAL_FACTOR));
+    if (!stackTouched) setStack(alloyBase);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customerFactor]);
+  }, [customerFactor, alloy]);
   const selfCore: CoreType = cut ? 'CUT_ROUND' : 'TOROIDAL';
   const cardRate = useCustomerRate(customerId, grade, 'TOROIDAL');
   useAutoFillRate(cardRate, rateTouched, (r) => { setRateBasis(r.rateBasis); setRateValue(r.rateValue); });
@@ -1553,19 +1591,20 @@ export const ToroidalForm = ({
     // otherwise opening a line to fix a typo silently changes its weight.
     setStack(stackOr(it.stackFactor, TOROIDAL_FACTOR)); setStackTouched(true);
     setGapMm(it.gapMm ?? 0);
+    setAlloy((it.alloy as MaterialKey) ?? 'CRGO');
     pendingFlux.current = it.flux ?? 0;
     setGrade(it.grade);
     onEditConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [edit?.nonce]);
 
-  const calc = useMemo(() => toroidalCalc({ id, od, ht, pcs, factor: stack }), [id, od, ht, pcs, stack]);
+  const calc = useMemo(() => toroidalCalc({ id, od, ht, pcs, factor: stack, alloy }), [id, od, ht, pcs, stack, alloy]);
   const fluxCalc = useMemo(
     // The stacking factor reaches the test figures too: more steel in the
     // section means more volts for the same flux density. So does the air gap,
     // which on a gapped core usually dominates the magnetising current.
-    () => fluxTestCalc({ id, od, ht, turns, flux, ateCm, factor: stack, gapMm: cut ? gapMm : 0 }),
-    [id, od, ht, turns, flux, ateCm, stack, cut, gapMm]
+    () => fluxTestCalc({ id, od, ht, turns, flux, ateCm, factor: stack, gapMm: cut ? gapMm : 0, alloy }),
+    [id, od, ht, turns, flux, ateCm, stack, cut, gapMm, alloy]
   );
   // Declared after fluxCalc on purpose: the spec sheet carries the test
   // figures, and a dependency list may not name a const that has not been
@@ -1584,11 +1623,11 @@ export const ToroidalForm = ({
         steelAt: fluxCalc.steelAt, gapAt: fluxCalc.gapAt,
         // The whole curve, not just the level this line is booked at: the spec
         // sheet tabulates 0.5 / 1.0 / 1.5 T and needs an ATe/cm for each.
-        fluxPoints,
+        fluxPoints, alloy,
       },
     }),
     [cut, gapMm, id, od, ht, grade, material, pcs, stack,
-     calc.weightPerPc, calc.totalWeight, turns, flux, ateCm, fluxCalc, fluxPoints],
+     calc.weightPerPc, calc.totalWeight, turns, flux, ateCm, fluxCalc, fluxPoints, alloy],
   );
 
   // Derive the OTHER rate + line total locally — must match server's deriveRate.
@@ -1611,6 +1650,7 @@ export const ToroidalForm = ({
     setRateValue(0); setRateTouched(false);
     setStack(stackOr(customerFactor, TOROIDAL_FACTOR)); setStackTouched(false);
     setGapMm(0);
+    setAlloy('CRGO');
   };
 
   const add = async () => {
@@ -1623,7 +1663,7 @@ export const ToroidalForm = ({
       return;
     }
     onAdd({
-      coreType: selfCore, grade, material,
+      coreType: selfCore, grade, material, alloy,
       measure: cut && gapMm > 0 ? `${calc.measure} gap ${gapMm}` : calc.measure,
       id1: id, od1: od, ht, pcs,
       weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight,
@@ -1696,11 +1736,12 @@ export const ToroidalForm = ({
           w={FW.factor}
           value={stack}
           onChange={(v) => { setStackTouched(true); setStack(v); }}
-          onReset={() => { setStackTouched(false); setStack(stackOr(customerFactor, TOROIDAL_FACTOR)); }}
-          base={stackOr(customerFactor, TOROIDAL_FACTOR)}
-          houseDefault={TOROIDAL_FACTOR}
-          fromCustomer={stackOr(customerFactor, TOROIDAL_FACTOR) !== TOROIDAL_FACTOR}
+          onReset={() => { setStackTouched(false); setStack(alloyBase); }}
+          base={alloyBase}
+          houseDefault={defaultToroidalFactor(alloy)}
+          fromCustomer={alloy === 'CRGO' && stackOr(customerFactor, TOROIDAL_FACTOR) !== TOROIDAL_FACTOR}
         />
+        <AlloyField w={FW.selLg} value={alloy} onChange={setAlloy} />
       </FieldRow>
 
       {/* Dimensions and quantity. Millimetre boxes stay narrow; turns/flux are
@@ -1841,10 +1882,16 @@ export const RectangularForm = ({
   const [stack, setStack] = useState(stackOr(customerFactor, RECT_STACK_FACTOR));
   const [stackTouched, setStackTouched] = useState(false);
   const [gapMm, setGapMm] = useState(0);
+  const [alloy, setAlloy] = useState<MaterialKey>('CRGO');
+  // As on the toroidal form: the customer's agreed figure belongs to CRGO,
+  // every other alloy starts from its own.
+  const alloyBase = alloy === 'CRGO'
+    ? stackOr(customerFactor, RECT_STACK_FACTOR)
+    : defaultRectStack(alloy);
   useEffect(() => {
-    if (!stackTouched) setStack(stackOr(customerFactor, RECT_STACK_FACTOR));
+    if (!stackTouched) setStack(alloyBase);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customerFactor]);
+  }, [customerFactor, alloy]);
   const selfCore: CoreType = cut ? 'CUT_RECT' : 'RECTANGULAR';
   const cardRate = useCustomerRate(customerId, grade, 'RECTANGULAR');
   useAutoFillRate(cardRate, rateTouched, (r) => { setRateBasis(r.rateBasis); setRateValue(r.rateValue); });
@@ -1884,6 +1931,7 @@ export const RectangularForm = ({
     // Re-weigh on the factor the line was BOOKED with, not today's default.
     setStack(stackOr(it.stackFactor, RECT_STACK_FACTOR)); setStackTouched(true);
     setGapMm(it.gapMm ?? 0);
+    setAlloy((it.alloy as MaterialKey) ?? 'CRGO');
     pendingFlux.current = it.flux ?? 0;
     setGrade(it.grade);
     onEditConsumed?.();
@@ -1891,7 +1939,7 @@ export const RectangularForm = ({
   }, [edit?.nonce]);
 
   const calc = useMemo(
-    () => rectangularCalc({ id1, id2, od1, od2, ht, pcs, factor: stack }),
+    () => rectangularCalc({ id1, id2, od1, od2, ht, pcs, factor: stack, alloy }),
     [id1, id2, od1, od2, ht, pcs, stack]
   );
   const fluxCalc = useMemo(
@@ -1917,11 +1965,11 @@ export const RectangularForm = ({
         steelAt: fluxCalc.steelAt, gapAt: fluxCalc.gapAt,
         // The whole curve, not just the level this line is booked at: the spec
         // sheet tabulates 0.5 / 1.0 / 1.5 T and needs an ATe/cm for each.
-        fluxPoints,
+        fluxPoints, alloy,
       },
     }),
     [cut, gapMm, id1, id2, od1, od2, ht, grade, material, pcs, stack,
-     calc.weightPerPc, calc.totalWeight, turns, flux, ateCm, fluxCalc, fluxPoints],
+     calc.weightPerPc, calc.totalWeight, turns, flux, ateCm, fluxCalc, fluxPoints, alloy],
   );
 
   // Build-symmetry validation per the spec: (OD-1 − ID-1) must equal (OD-2 − ID-2).
@@ -1951,6 +1999,7 @@ export const RectangularForm = ({
     setRateValue(0); setRateTouched(false);
     setStack(stackOr(customerFactor, RECT_STACK_FACTOR)); setStackTouched(false);
     setGapMm(0);
+    setAlloy('CRGO');
   };
 
   const add = async () => {
@@ -1963,7 +2012,7 @@ export const RectangularForm = ({
       return;
     }
     onAdd({
-      coreType: selfCore, grade, material,
+      coreType: selfCore, grade, material, alloy,
       measure: cut && gapMm > 0 ? `${calc.measure} gap ${gapMm}` : calc.measure,
       id1, id2, od1, od2, ht, builtup: calc.builtup, pcs,
       weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight,
@@ -2035,11 +2084,12 @@ export const RectangularForm = ({
           w={FW.factor}
           value={stack}
           onChange={(v) => { setStackTouched(true); setStack(v); }}
-          onReset={() => { setStackTouched(false); setStack(stackOr(customerFactor, RECT_STACK_FACTOR)); }}
-          base={stackOr(customerFactor, RECT_STACK_FACTOR)}
-          houseDefault={RECT_STACK_FACTOR}
-          fromCustomer={stackOr(customerFactor, RECT_STACK_FACTOR) !== RECT_STACK_FACTOR}
+          onReset={() => { setStackTouched(false); setStack(alloyBase); }}
+          base={alloyBase}
+          houseDefault={defaultRectStack(alloy)}
+          fromCustomer={alloy === 'CRGO' && stackOr(customerFactor, RECT_STACK_FACTOR) !== RECT_STACK_FACTOR}
         />
+        <AlloyField w={FW.selLg} value={alloy} onChange={setAlloy} />
       </FieldRow>
 
       {/* Dimensions and quantity — eight narrow boxes that wrap rather than

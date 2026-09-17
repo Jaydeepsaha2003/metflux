@@ -17,7 +17,8 @@
 //   measure     = "{id1} x {id2} x {od1} x {od2} x {ht} x {builtup}"
 
 import {
-  MATERIALS, factorToSF, netArea, testVoltage, magnetisingCurrent, gapAmpereTurns,
+  materialOf, factorToSF, sfToFactor, netArea, testVoltage,
+  magnetisingCurrent, gapAmpereTurns, type MaterialKey,
 } from '@/lib/coreMaterials';
 
 export const round3 = (n: number) => Math.round(n * 1000) / 1000;
@@ -150,13 +151,35 @@ export const toroidalGrossArea = (id: number, od: number, ht: number) =>
  */
 export const toroidalMeanPath = (id: number, od: number) => 0.157 * (od + id);
 
-export const toroidalCalc = ({ id, od, ht, pcs, factor }: {
+/**
+ * The toroidal multiplier a line should default to for its alloy.
+ *
+ * 5.77 for CRGO, 4.5559 for nanocrystalline, and the amorphous equivalent —
+ * each being π/4 × that alloy's density × that alloy's stacking factor, so the
+ * two legacy constants come out of the formula rather than being special-cased.
+ * The operator can still override it per line; what this fixes is the default
+ * moving when the alloy does, instead of quietly weighing ribbon as if it were
+ * grain-oriented steel.
+ */
+export const defaultToroidalFactor = (alloy?: MaterialKey | null) => {
+  const m = materialOf(alloy);
+  return round3(sfToFactor(m.stackingFactor, m.density));
+};
+
+/** The bare stacking fraction a rectangular line should default to. CRGO keeps
+ *  the house 0.95 it has always used; the others take their own figure. */
+export const defaultRectStack = (alloy?: MaterialKey | null) =>
+  (!alloy || alloy === 'CRGO') ? RECT_STACK_FACTOR : round3(materialOf(alloy).stackingFactor);
+
+export const toroidalCalc = ({ id, od, ht, pcs, factor, alloy }: {
   id: number; od: number; ht: number; pcs: number;
-  /** Customer's toroidal factor; omitted means the 5.77 house default. */
+  /** Customer's toroidal factor; omitted means this alloy's house default. */
   factor?: number | null;
+  /** Material family. Omitted means CRGO, so every existing line is unchanged. */
+  alloy?: MaterialKey | null;
 }) => {
   const valid = id > 0 && od > 0 && ht > 0;
-  const f = stackOr(factor, TOROIDAL_FACTOR);
+  const f = stackOr(factor, defaultToroidalFactor(alloy));
   // Identical arithmetic to the legacy line, deliberately: this is the number
   // already stored against thousands of order lines.
   //   (OD² − ID²) × HT × F × 1e-6  ≡  Ae × Lm × ρ / 1000
@@ -168,19 +191,24 @@ export const toroidalCalc = ({ id, od, ht, pcs, factor }: {
 };
 
 export const rectangularCalc = ({
-  id1, id2, od1, od2, ht, pcs, factor,
+  id1, id2, od1, od2, ht, pcs, factor, alloy,
 }: {
   id1: number; id2: number; od1: number; od2: number; ht: number; pcs: number;
-  /** Customer's rectangular stacking factor; omitted means the 0.95 default. */
+  /** Customer's rectangular stacking factor; omitted means the house default. */
   factor?: number | null;
+  /** Material family. Omitted means CRGO, so every existing line is unchanged. */
+  alloy?: MaterialKey | null;
 }) => {
-  const s = stackOr(factor, RECT_STACK_FACTOR);
+  const s = stackOr(factor, defaultRectStack(alloy));
   const builtup = od1 > 0 && id1 > 0 ? round3((od1 - id1) / 2) : 0;
   const coreAc  = od2 > 0 && id2 > 0 && ht > 0 ? round3(((od2 - id2) / 2) * ht * s / 100) : 0;
   // Match the legacy 3.14 multiplier used by the .NET form.
   const d13     = od2 > 0 && id2 > 0 ? round3(((od2 - id2) / 20) * 3.14) : 0;
   const coreMl  = id1 > 0 && id2 > 0 ? round3(0.2 * (id1 + id2) + d13) : 0;
-  const weightPerPc = coreAc > 0 && coreMl > 0 ? round3((coreAc * coreMl * 7.65) / 1000) : 0;
+  // The density is the alloy's, not a literal 7.65 — that constant was the
+  // only thing tying this formula to grain-oriented steel.
+  const weightPerPc = coreAc > 0 && coreMl > 0
+    ? round3((coreAc * coreMl * materialOf(alloy).density) / 1000) : 0;
   const totalWeight = pcs > 0 ? round3(pcs * weightPerPc) : 0;
   const measure = `${id1 || 0} x ${id2 || 0} x ${od1 || 0} x ${od2 || 0} x ${ht || 0} x ${builtup}`;
   return { builtup, coreAc, d13, coreMl, weightPerPc, totalWeight, measure };
@@ -237,7 +265,7 @@ const fluxTestVI = ({
  * voltage did not, which meant the two could disagree about the same core.
  */
 export const fluxTestCalc = ({
-  id, od, ht, turns, flux, ateCm, factor, gapMm = 0,
+  id, od, ht, turns, flux, ateCm, factor, gapMm = 0, alloy,
 }: {
   id: number; od: number; ht: number;
   turns: number; flux: number; ateCm: number;
@@ -245,9 +273,15 @@ export const fluxTestCalc = ({
   factor?: number | null;
   /** Total controlled air gap across all joints, mm. Cut and gap cores only. */
   gapMm?: number;
+  /** Material family. Omitted means CRGO. */
+  alloy?: MaterialKey | null;
 }) => {
   const geomOk   = id > 0 && od > 0 && ht > 0 && od > id;
-  const sf       = factorToSF(stackOr(factor, TOROIDAL_FACTOR), MATERIALS.CRGO.density);
+  // Recovered against the SAME density the multiplier was built from, or the
+  // stacking factor comes back wrong and the test voltage drifts with it.
+  const sf       = factorToSF(
+    stackOr(factor, defaultToroidalFactor(alloy)), materialOf(alloy).density,
+  );
   const area     = geomOk ? round3(netArea(toroidalGrossArea(id, od, ht), sf)) : 0;
   const meanPath = geomOk ? round3(toroidalMeanPath(id, od)) : 0;
   const gapAt    = gapMm > 0 && flux > 0 ? gapAmpereTurns(flux, gapMm) : 0;
