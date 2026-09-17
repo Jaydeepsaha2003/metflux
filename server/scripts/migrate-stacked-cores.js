@@ -1,4 +1,4 @@
-// E core, wound core and step core.
+// EI core, wound core and step core.
 //
 // Three shapes the coreType enum did not have. The first two are stacked or
 // wound cores the works already makes and had nowhere to book; the third is a
@@ -17,7 +17,7 @@ const ENUM_TABLES = ['PoOrderItem', 'QuotationItem', 'FluxGrade'];
 /** The full set after this migration, in the order the UI presents them. */
 const CORE_TYPES = [
   'TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT',
-  'E_CORE', 'WOUND_CORE', 'STEP_CORE',
+  'EI_CORE', 'WOUND_CORE', 'STEP_CORE',
 ];
 
 const columnType = async (table, column) => {

@@ -214,7 +214,7 @@ export const rectangularCalc = ({
   return { builtup, coreAc, d13, coreMl, weightPerPc, totalWeight, measure };
 };
 
-/* ── E core ───────────────────────────────────────────────────────────────
+/* ── EI core ───────────────────────────────────────────────────────────────
    A stacked lamination rather than a wound ring, so there is no toroidal
    multiplier: the section is simply the tongue by the stack, and the stacking
    factor is the bare fraction the rectangular form already uses. */
@@ -292,33 +292,33 @@ export const woundCoreCalc = ({
    A limb whose section is built from plates of decreasing width, stacked to
    fill a bore. The steps give the area; the window gives the path. */
 
-export type CoreStep = { width: number; stack: number };
+/** One stepped lamination record: two window dimensions, height and build-up. */
+export type CoreStep = { id1: number; id2: number; ht: number; builtup: number };
 
 /** Gross section of the stepped limb, mm². */
 export const stepGrossArea = (steps: CoreStep[]) =>
-  steps.reduce((t, s) => t + (s.width > 0 && s.stack > 0 ? s.width * s.stack : 0), 0);
+  steps.reduce((t, s) => t + (s.id1 > 0 && s.id2 > 0 && s.builtup > 0 ? s.id1 * s.id2 * s.builtup : 0), 0);
 
 export const stepCoreCalc = ({
-  steps, id1, id2, pcs, factor, alloy,
+  steps, pcs, factor, alloy,
 }: {
-  steps: CoreStep[]; id1: number; id2: number; pcs: number;
+  steps: CoreStep[]; pcs: number;
   factor?: number | null; alloy?: MaterialKey | null;
 }) => {
   const sf = stackOr(factor, defaultRectStack(alloy));
-  const gross = stepGrossArea(steps);
-  const depth = steps.reduce((t, x) => t + Math.max(0, x.stack), 0);
-  const width = steps.reduce((t, x) => Math.max(t, x.width), 0);
-  // The circle the section is inscribed in — what the winding has to clear.
-  const circle = round3(Math.sqrt(width * width + depth * depth));
-  const coreAc = gross > 0 ? round3((gross * sf) / 100) : 0;
-  // Same corner convention as the rectangular window core, with the stacked
-  // depth standing in for the build, so the two families agree with each other.
-  const coreMl = id1 > 0 && id2 > 0 ? round3(0.2 * (id1 + id2) + depth * 0.314) : 0;
+  const id1 = steps.length ? Math.min(...steps.map((x) => x.id1).filter(Boolean)) : 0;
+  const id2 = steps.length ? Math.min(...steps.map((x) => x.id2).filter(Boolean)) : 0;
+  const od1 = steps.length ? Math.max(...steps.map((x) => x.id1)) : 0;
+  const od2 = steps.length ? Math.max(...steps.map((x) => x.id2)) : 0;
+  const heights = [...new Set(steps.map((x) => x.ht).filter(Boolean))].sort((a, b) => a - b);
+  const builtup = steps.length ? Math.max(...steps.map((x) => x.builtup)) : 0;
+  const coreAc = od1 > id1 && od2 > id2 && builtup > 0 ? round3(((od1 * od2) - (id1 * id2)) * sf / 100) : 0;
+  const coreMl = id1 > 0 && id2 > 0 ? round3(0.2 * (id1 + id2) + builtup * 0.314) : 0;
   const weightPerPc = coreAc > 0 && coreMl > 0
     ? round3((coreAc * coreMl * materialOf(alloy).density) / 1000) : 0;
   const totalWeight = pcs > 0 ? round3(pcs * weightPerPc) : 0;
-  const measure = `${steps.length} step x ${width || 0} x ${round3(depth) || 0} / ${id1 || 0} x ${id2 || 0}`;
-  return { coreAc, coreMl, weightPerPc, totalWeight, measure, circle, depth: round3(depth), width };
+  const measure = `${id1 || 0} x ${id2 || 0} → ${od1 || 0} x ${od2 || 0} · HT ${heights.join('/')} · BU ${builtup || 0}`;
+  return { coreAc, coreMl, weightPerPc, totalWeight, measure, id1, id2, od1, od2, heights, builtup };
 };
 
 export const numFromInput = (s: string) => {

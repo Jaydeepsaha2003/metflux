@@ -478,10 +478,10 @@ const viewsFor = (shape: CoreShape): View[] => {
       ];
     }
 
-    /* An E core is drawn front-on, because that is the view its four figures
+    /* An EI core is drawn front-on, because that is the view its four figures
        live in: the tongue, the two windows and the yokes are all in it. The
        side view carries the stack, the one thing the front cannot show. */
-    case 'E_CORE': {
+    case 'EI_CORE': {
       const o = eCoreOutline(shape);
       return [
         {
@@ -599,6 +599,8 @@ const viewsFor = (shape: CoreShape): View[] => {
        they are cut to fill. */
     case 'STEP_CORE': {
       const sp = stepCoreSpan(shape);
+      const minId1 = Math.min(...shape.steps.map((step) => step.id1));
+      const minId2 = Math.min(...shape.steps.map((step) => step.id2));
       return [
         {
           title: 'LIMB SECTION',
@@ -612,7 +614,7 @@ const viewsFor = (shape: CoreShape): View[] => {
             );
             let y = c.cy - c.m(sp.depth) / 2;
             shape.steps.forEach((st) => {
-              const w = c.m(st.width), h = c.m(st.stack);
+              const w = c.m(st.id1), h = c.m(st.builtup);
               c.out.push(solidRect(c.cx - w / 2, y, w, h, STEEL, c.s));
               y += h;
             });
@@ -635,21 +637,21 @@ const viewsFor = (shape: CoreShape): View[] => {
         },
         {
           title: 'WINDOW',
-          w: shape.id1, h: shape.id2,
+          w: minId1, h: minId2,
           pad: { l: 5.4, r: 5.4 },
           draw: (c) => {
-            const W = c.m(shape.id1), H = c.m(shape.id2);
+            const W = c.m(minId1), H = c.m(minId2);
             c.out.push(
               `<rect x="${f(c.cx - W / 2)}" y="${f(c.cy - H / 2)}" width="${f(W)}" height="${f(H)}"`
               + ` fill="#ffffff" stroke="${STEEL.edge}" stroke-width="1.2" stroke-dasharray="7 4"/>`,
               centreMarks(c.cx, c.cy, W / 2 + c.s * 1.2, H / 2 + c.s * 1.2),
               linearDim(
                 { x: c.cx - W / 2, y: c.cy + H / 2 }, { x: c.cx + W / 2, y: c.cy + H / 2 },
-                { x: 0, y: c.s * 2.4 }, `ID1 ${n(shape.id1)}`, c.s,
+                { x: 0, y: c.s * 2.4 }, `ID1 ${n(minId1)}`, c.s,
               ),
               linearDim(
                 { x: c.cx - W / 2, y: c.cy - H / 2 }, { x: c.cx - W / 2, y: c.cy + H / 2 },
-                { x: -c.s * 2.6, y: 0 }, `ID2 ${n(shape.id2)}`, c.s,
+                { x: -c.s * 2.6, y: 0 }, `ID2 ${n(minId2)}`, c.s,
               ),
               text({ x: c.cx, y: c.cy }, 'magnetic path', c.s * 0.95, { fill: NOTE }),
             );

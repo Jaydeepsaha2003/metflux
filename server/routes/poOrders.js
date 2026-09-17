@@ -16,7 +16,7 @@ router.use(requireAuth, resolveTenant);
 const itemSchema = z.object({
   coreType: z.enum([
     'TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT',
-    'E_CORE', 'WOUND_CORE', 'STEP_CORE',
+    'EI_CORE', 'WOUND_CORE', 'STEP_CORE',
   ]),
   grade: z.string().trim().min(1).max(80),
   material: z.string().trim().min(1).max(120),
@@ -47,10 +47,11 @@ const itemSchema = z.object({
   /* Step core only: the plate table, as [{width, stack}, ...]. Stored as JSON
      text because the number of steps is part of the specification, not a fixed
      shape a set of numbered columns could hold. */
-  steps: z.array(z.object({
-    width: z.coerce.number().positive(),
-    stack: z.coerce.number().positive(),
-  })).max(24).optional().nullable(),
+  steps: z.array(z.union([
+    z.object({ id1: z.coerce.number().positive(), id2: z.coerce.number().positive(), ht: z.coerce.number().positive(), builtup: z.coerce.number().positive() }),
+    z.object({ width: z.coerce.number().positive(), stack: z.coerce.number().positive() }).transform((s) => ({ id1: s.width, id2: s.width, ht: s.stack, builtup: s.stack })),
+  ])).optional().nullable(),
+  round: z.coerce.boolean().optional().nullable(),
   /* Where the line of cut falls. NULL = centre, which is how every cut core
      booked before today was made. */
   cutAt:       z.enum(['TOP', 'CENTRE', 'BOTTOM']).optional().nullable(),

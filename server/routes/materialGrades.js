@@ -12,7 +12,7 @@ router.use(requireAuth, resolveTenant);
 
 const CORE_TYPES = [
   'TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT',
-  'E_CORE', 'WOUND_CORE', 'STEP_CORE',
+  'EI_CORE', 'WOUND_CORE', 'STEP_CORE',
 ];
 const parseCore = (s) => {
   const a = String(s || '').split(',').map((x) => x.trim()).filter((x) => CORE_TYPES.includes(x));
@@ -59,7 +59,7 @@ const upsertSchema = z.object({
   material: z.string().trim().min(1).max(120),
   coreTypes: z.array(z.enum([
     'TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT',
-    'E_CORE', 'WOUND_CORE', 'STEP_CORE',
+    'EI_CORE', 'WOUND_CORE', 'STEP_CORE',
   ])).optional(),
   nanoIdOff: z.coerce.number().optional().nullable(),
   nanoOdOff: z.coerce.number().optional().nullable(),

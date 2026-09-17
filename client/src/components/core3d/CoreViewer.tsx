@@ -446,7 +446,7 @@ export default function CoreViewer({ shape, resetNonce, showDims, view = 'iso' }
         bot.position.z = -split;
         break;
       }
-      case 'E_CORE': {
+      case 'EI_CORE': {
         const mat = mk(MATERIALS.rect);
         const yoke = shape.tongue / 2;
         const eH = shape.windowH + yoke;
@@ -464,15 +464,14 @@ export default function CoreViewer({ shape, resetNonce, showDims, view = 'iso' }
         break;
       case 'STEP_CORE': {
         const mat = mk(MATERIALS.crgo);
-        const depth = shape.steps.reduce((t, x) => t + x.stack, 0);
-        /* Drawn a window-height long, so the stack reads as a limb rather than
-           as a pile of loose plates. */
-        const length = Math.max(shape.id2, shape.id1) || depth * 2;
+        const depth = shape.steps.reduce((t, x) => t + x.builtup, 0);
         let y = -depth / 2;
         shape.steps.forEach((st) => {
-          const plate = add(stepPlate(st.width, st.stack, length), mat);
-          plate.position.y = y + st.stack / 2;
-          y += st.stack;
+          const plate = add(shape.round
+            ? annulus({ id: st.id1, od: st.id2, ht: st.builtup })
+            : stepPlate(st.id1, st.builtup, st.id2), mat);
+          plate.position.y = y + st.builtup / 2;
+          y += st.builtup;
         });
         break;
       }

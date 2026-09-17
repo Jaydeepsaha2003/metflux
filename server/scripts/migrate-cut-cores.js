@@ -5,7 +5,7 @@
 // the ones already in use; what makes it a different product is that it ships
 // as two mating halves, and later that it can carry a controlled air gap.
 //
-// One piece means one COMPLETE core, both halves, as agreed: a customer orders
+// One piece means one COMPLETEI core, both halves, as agreed: a customer orders
 // fifty cores, not a hundred halves.
 //
 // Idempotent, and additive only — MySQL keeps existing rows untouched when an

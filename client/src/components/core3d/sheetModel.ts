@@ -144,7 +144,7 @@ const dimensions = (shape: CoreShape): Section => {
           ['Overall height', mm(totalHt)],
         ] as [string, string][];
       }
-      case 'E_CORE': {
+      case 'EI_CORE': {
         const o = eCoreOutline(shape);
         return [
           ['Tongue  T', mm(shape.tongue)],
@@ -166,12 +166,14 @@ const dimensions = (shape: CoreShape): Section => {
         ] as [string, string][];
       case 'STEP_CORE': {
         const sp = stepCoreSpan(shape);
+        const minId1 = Math.min(...shape.steps.map((step) => step.id1));
+        const minId2 = Math.min(...shape.steps.map((step) => step.id2));
         return [
           ['Steps', String(shape.steps.length)],
           ['Widest plate', mm(sp.width)],
           ['Stacked build', mm(sp.depth)],
           ['Circumscribing circle', `Ø ${n(sp.circle)} mm`],
-          ['Window  ID1 × ID2', `${n(shape.id1)} × ${n(shape.id2)} mm`],
+          ['Window  ID1 × ID2', `${n(minId1)} × ${n(minId2)} mm`],
         ] as [string, string][];
       }
     }
@@ -251,7 +253,7 @@ const geometry = (shape: CoreShape, meta: SheetMeta): Section | null => {
         ],
       };
     }
-    case 'E_CORE': {
+    case 'EI_CORE': {
       if (!(shape.tongue > 0 && shape.stack > 0)) return null;
       const sf = stackOr(meta.factor, defaultRectStack(meta.alloy));
       const ag = shape.tongue * shape.stack;
@@ -282,7 +284,9 @@ const geometry = (shape: CoreShape, meta: SheetMeta): Section | null => {
     }
     case 'STEP_CORE': {
       const gross = stepGrossArea(shape.steps);
-      if (!(gross > 0 && shape.id1 > 0 && shape.id2 > 0)) return null;
+      const minId1 = Math.min(...shape.steps.map((step) => step.id1));
+      const minId2 = Math.min(...shape.steps.map((step) => step.id2));
+      if (!(gross > 0 && minId1 > 0 && minId2 > 0)) return null;
       const sf = stackOr(meta.factor, defaultRectStack(meta.alloy));
       const sp = stepCoreSpan(shape);
       return {
@@ -290,12 +294,12 @@ const geometry = (shape: CoreShape, meta: SheetMeta): Section | null => {
         rows: [
           ['Gross section  Ag', mm2(gross)],
           ['Net core area  Ac', cm2((gross * sf) / 100)],
-          ['Mean path  Lm', `${(0.2 * (shape.id1 + shape.id2) + sp.depth * 0.314).toFixed(2)} cm`],
+          ['Mean path  Lm', `${(0.2 * (minId1 + minId2) + sp.depth * 0.314).toFixed(2)} cm`],
           ['Space factor in circle', `${((gross / (Math.PI / 4 * sp.circle * sp.circle)) * 100).toFixed(1)} %`],
         ],
         table: {
-          head: ['Step', 'Width (mm)', 'Stack (mm)'],
-          rows: shape.steps.map((st, i) => [String(i + 1), n(st.width), n(st.stack)]),
+          head: ['Step', 'ID 1 (mm)', 'ID 2 (mm)', 'HT (mm)', 'Built-up (mm)'],
+          rows: shape.steps.map((st, i) => [String(i + 1), n(st.id1), n(st.id2), n(st.ht), n(st.builtup)]),
         },
       };
     }
@@ -366,7 +370,7 @@ const electrical = (shape: CoreShape, meta: SheetMeta) => {
         meanPathCm: 0.2 * (id1 + id2) + ((od2 - id2) / 20) * 3.14,
       };
     }
-    case 'E_CORE': {
+    case 'EI_CORE': {
       if (!(shape.tongue > 0 && shape.stack > 0)) return null;
       const sf = stackOr(meta.factor, defaultRectStack(meta.alloy));
       return {
@@ -384,11 +388,13 @@ const electrical = (shape: CoreShape, meta: SheetMeta) => {
     }
     case 'STEP_CORE': {
       const gross = stepGrossArea(shape.steps);
-      if (!(gross > 0 && shape.id1 > 0 && shape.id2 > 0)) return null;
+      const minId1 = Math.min(...shape.steps.map((step) => step.id1));
+      const minId2 = Math.min(...shape.steps.map((step) => step.id2));
+      if (!(gross > 0 && minId1 > 0 && minId2 > 0)) return null;
       const sf = stackOr(meta.factor, defaultRectStack(meta.alloy));
       return {
         areaCm2: (gross * sf) / 100,
-        meanPathCm: 0.2 * (shape.id1 + shape.id2) + stepCoreSpan(shape).depth * 0.314,
+        meanPathCm: 0.2 * (minId1 + minId2) + stepCoreSpan(shape).depth * 0.314,
       };
     }
     default:

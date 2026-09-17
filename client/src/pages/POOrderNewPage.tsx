@@ -51,6 +51,7 @@ export type Item = {
   alloy?: MaterialKey;
   /** Step core only: the plate table that gives the limb its section. */
   steps?: CoreStep[];
+  round?: boolean;
   // Toroidal flux-test calibration — optional, only set when user fills them.
   turns?: number; flux?: number; ateCm?: number; testVoltage?: number; testCurrent?: number;
   // Pricing — rateBasis + rateValue are user-entered; per-kg / per-pc / total
@@ -159,9 +160,9 @@ export const emptyShapeFor = (ct: CoreType): CoreShape => {
     case 'RECTANGULAR': return { kind: 'RECTANGULAR', id1: 0, id2: 0, od1: 0, od2: 0, ht: 0 };
     case 'CUT_ROUND':   return { kind: 'CUT_ROUND', dims: zero, gapMm: 0 };
     case 'CUT_RECT':    return { kind: 'CUT_RECT', id1: 0, id2: 0, od1: 0, od2: 0, ht: 0, gapMm: 0 };
-    case 'E_CORE':      return { kind: 'E_CORE', tongue: 0, windowW: 0, windowH: 0, stack: 0 };
+    case 'EI_CORE':      return { kind: 'EI_CORE', tongue: 0, windowW: 0, windowH: 0, stack: 0 };
     case 'WOUND_CORE':  return { kind: 'WOUND_CORE', id1: 0, id2: 0, od1: 0, od2: 0, ht: 0 };
-    case 'STEP_CORE':   return { kind: 'STEP_CORE', steps: [], id1: 0, id2: 0 };
+    case 'STEP_CORE':   return { kind: 'STEP_CORE', steps: [] };
     case 'NANO':        return { kind: 'NANO', dims: zero, cased: true };
     case 'COMPOSITE':   return { kind: 'COMPOSITE', rule: 'CONTINUOUS_LOOP', crgo: zero, nano: zero };
     default:            return { kind: 'TOROIDAL', dims: zero };
@@ -211,14 +212,14 @@ const CORE_BADGE: Record<CoreType, string> = {
   NANO:        'bg-violet-50 text-violet-700',
   CUT_ROUND:   'bg-sky-50 text-sky-700',
   CUT_RECT:    'bg-cyan-50 text-cyan-700',
-  E_CORE:      'bg-indigo-50 text-indigo-700',
+  EI_CORE:      'bg-indigo-50 text-indigo-700',
   WOUND_CORE:  'bg-orange-50 text-orange-700',
   STEP_CORE:   'bg-emerald-50 text-emerald-700',
 };
 const CORE_SHORT: Record<CoreType, string> = {
   TOROIDAL: 'Toro', RECTANGULAR: 'Rect', COMPOSITE: 'Comp', NANO: 'Nano',
   CUT_ROUND: 'Cut R', CUT_RECT: 'Cut X',
-  E_CORE: 'E core', WOUND_CORE: 'Wound', STEP_CORE: 'Step',
+  EI_CORE: 'EI core', WOUND_CORE: 'Wound', STEP_CORE: 'Step',
 };
 const coreBadge = (ct: CoreType) => CORE_BADGE[ct] ?? 'bg-slate-100 text-slate-700';
 const coreShort = (ct: CoreType) => CORE_SHORT[ct] ?? ct;
@@ -282,6 +283,21 @@ export const POOrderNewPage = () => {
 
   /* ----- entry state (current item being built) ----- */
   const [coreType, setCoreType] = useState<CoreType | ''>('');
+  const [family, setFamily] = useState<MaterialKey | 'COMPOSITE'>('CRGO');
+  const [gapMode, setGapMode] = useState(false);
+  const selectShape = (value: string, nextFamily = family) => {
+    setGapMode(value === 'GAP');
+    pickCore(value === 'GAP' ? 'CUT_ROUND' : value === 'ROUND' ? (nextFamily === 'NANOCRYSTALLINE' ? 'NANO' : 'TOROIDAL') : value as CoreType);
+  };
+  const selectFamily = (next: MaterialKey | 'COMPOSITE') => {
+    setFamily(next);
+    if (next === 'COMPOSITE') { setGapMode(false); pickCore('COMPOSITE'); }
+    else selectShape(gapMode ? 'GAP' : !coreType || ['TOROIDAL','NANO','COMPOSITE'].includes(coreType) ? 'ROUND' : coreType, next);
+  };
+  const restoreFamily = (it: Item) => {
+    setFamily(it.coreType === 'COMPOSITE' ? 'COMPOSITE' : it.coreType === 'NANO' ? 'NANOCRYSTALLINE' : it.alloy ?? 'CRGO');
+    setGapMode((it.gapMm ?? 0) > 0);
+  };
   // What the 3D dock is drawing. Reported up by whichever line form is
   // open; cleared on a core-type switch so the old solid never lingers
   // beside the new form's empty fields.
@@ -301,6 +317,7 @@ export const POOrderNewPage = () => {
     null | { coreType: CoreType; grade: string; material: string; rateBasis: 'PER_KG' | 'PER_PCS' }
   >(null);
   const copyToForm = (it: Item) => {
+    restoreFamily(it);
     setCoreType(it.coreType);
     setPrefill({ coreType: it.coreType, grade: it.grade, material: it.material, rateBasis: it.rateBasis ?? 'PER_KG' });
   };
@@ -312,6 +329,7 @@ export const POOrderNewPage = () => {
   const editItem = (idx: number) => {
     const it = items[idx];
     if (!it || it._locked) return;
+    restoreFamily(it);
     setCoreType(it.coreType);
     editNonce.current += 1;
     setEditSeed({ item: it, nonce: editNonce.current });
@@ -835,136 +853,36 @@ export const POOrderNewPage = () => {
       <section data-core={coreType || 'TOROIDAL'} className="sales-order-section sales-order-entry card p-3 sm:p-4 space-y-3">
         <div className="sales-order-section-heading flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div><div className="flex items-center gap-2"><span>02</span><h2 className="text-sm font-semibold text-slate-900">Build line item</h2></div></div>
-          {/* Segmented pill selector — replaces the dropdown for a touchable, visible toggle */}
-          <div className="core-family-selector flex flex-wrap gap-0.5 rounded-lg bg-slate-100 p-0.5 text-sm self-start" aria-label="Core family">
-            <button
-              type="button"
-              onClick={() => pickCore('TOROIDAL')}
-              aria-pressed={coreType === 'TOROIDAL'}
-              className={cn(
-                'rounded-md px-3 py-1.5 font-medium transition',
-                coreType === 'TOROIDAL'
-                  ? 'bg-white text-amber-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              )}
-            >
-              Toroidal
-            </button>
-            <button
-              type="button"
-              onClick={() => pickCore('RECTANGULAR')}
-              aria-pressed={coreType === 'RECTANGULAR'}
-              className={cn(
-                'rounded-md px-3 py-1.5 font-medium transition',
-                coreType === 'RECTANGULAR'
-                  ? 'bg-white text-rose-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              )}
-            >
-              Rectangular
-            </button>
-            <button
-              type="button"
-              onClick={() => pickCore('NANO')}
-              aria-pressed={coreType === 'NANO'}
-              className={cn(
-                'rounded-md px-3 py-1.5 font-medium transition',
-                coreType === 'NANO'
-                  ? 'bg-white text-violet-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              )}
-            >
-              Nano
-            </button>
-            <button
-              type="button"
-              onClick={() => pickCore('COMPOSITE')}
-              aria-pressed={coreType === 'COMPOSITE'}
-              className={cn(
-                'rounded-md px-3 py-1.5 font-medium transition',
-                coreType === 'COMPOSITE'
-                  ? 'bg-white text-teal-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              )}
-            >
-              Composite
-            </button>
-            <button
-              type="button"
-              onClick={() => pickCore('CUT_ROUND')}
-              aria-pressed={coreType === 'CUT_ROUND'}
-              className={cn(
-                'rounded-md px-3 py-1.5 font-medium transition',
-                coreType === 'CUT_ROUND'
-                  ? 'bg-white text-sky-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              )}
-            >
-              Round cut
-            </button>
-            <button
-              type="button"
-              onClick={() => pickCore('CUT_RECT')}
-              aria-pressed={coreType === 'CUT_RECT'}
-              className={cn(
-                'rounded-md px-3 py-1.5 font-medium transition',
-                coreType === 'CUT_RECT'
-                  ? 'bg-white text-cyan-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              )}
-            >
-              Rect cut
-            </button>
-            <button
-              type="button"
-              onClick={() => pickCore('E_CORE')}
-              aria-pressed={coreType === 'E_CORE'}
-              className={cn(
-                'rounded-md px-3 py-1.5 font-medium transition',
-                coreType === 'E_CORE'
-                  ? 'bg-white text-indigo-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              )}
-            >
-              E core
-            </button>
-            <button
-              type="button"
-              onClick={() => pickCore('WOUND_CORE')}
-              aria-pressed={coreType === 'WOUND_CORE'}
-              className={cn(
-                'rounded-md px-3 py-1.5 font-medium transition',
-                coreType === 'WOUND_CORE'
-                  ? 'bg-white text-orange-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              )}
-            >
-              Wound
-            </button>
-            <button
-              type="button"
-              onClick={() => pickCore('STEP_CORE')}
-              aria-pressed={coreType === 'STEP_CORE'}
-              className={cn(
-                'rounded-md px-3 py-1.5 font-medium transition',
-                coreType === 'STEP_CORE'
-                  ? 'bg-white text-emerald-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              )}
-            >
-              Step
-            </button>
+          <div className="grid grid-cols-2 sm:flex gap-1 w-full sm:w-auto" aria-label="Material family">
+            {([{value:'CRGO',label:'CRGO'},{value:'NANOCRYSTALLINE',label:'Nano Crystalline'},{value:'AMORPHOUS',label:'Amorphous'},{value:'COMPOSITE',label:'Composite'}] as const).map(option => (
+              <button key={option.value} type="button" aria-pressed={family === option.value} onClick={() => selectFamily(option.value)}
+                className={cn('flex-1 sm:flex-none border px-3 py-2 text-xs font-semibold transition shadow-sm',family === option.value ? 'border-brand-500 bg-gradient-to-b from-brand-500 to-brand-700 text-white' : 'border-slate-200 bg-gradient-to-b from-white to-slate-50 text-slate-700 hover:border-brand-400')}>
+                {option.label}
+              </button>
+            ))}
           </div>
         </div>
+        {family !== 'COMPOSITE' && (
+          <div className="grid gap-3 sm:grid-cols-2 lg:max-w-2xl">
+            <Field label="Core shape">
+              <SearchableSelect value={gapMode ? 'GAP' : coreType === 'NANO' || coreType === 'TOROIDAL' ? 'ROUND' : coreType}
+                onChange={value => selectShape(value)} placeholder="Choose core shape…"
+                options={[{value:'ROUND',label:'Round'},{value:'RECTANGULAR',label:'Rectangular'},{value:'CUT_ROUND',label:'Round cut'},{value:'CUT_RECT',label:'Rectangular cut'},{value:'GAP',label:'Gap core'},{value:'EI_CORE',label:'EI core'},{value:'WOUND_CORE',label:'Wound core'},{value:'STEP_CORE',label:'Step core'}]} />
+            </Field>
+            {gapMode && <Field label="Gap core shape"><SearchableSelect value={coreType} onChange={value => pickCore(value as CoreType)} options={[{value:'CUT_ROUND',label:'Round gap'},{value:'CUT_RECT',label:'Rectangular gap'}]} /></Field>}
+          </div>
+        )}
 
         {/* Form on the left, model on the right. The dock is sticky so the
             solid stays in view while someone works down a long form, and it
             drops below the fields on a narrow screen rather than squeezing
             them into a column too thin to type in. */}
         <div className="core-builder-layout grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="min-w-0">
+          <div className="min-w-0" key={`${family}-${coreType}-${gapMode}`}>
         {coreType === 'TOROIDAL' && (
           <ToroidalForm
+            selectedAlloy={family === 'COMPOSITE' ? undefined : family}
+            requireGap={gapMode}
             onShape={setReport}
             customerId={customerId}
             customerFactor={selectedCustomer?.toroidalFactor}
@@ -979,6 +897,8 @@ export const POOrderNewPage = () => {
         )}
         {coreType === 'RECTANGULAR' && (
           <RectangularForm
+            selectedAlloy={family === 'COMPOSITE' ? undefined : family}
+            requireGap={gapMode}
             onShape={setReport}
             customerId={customerId}
             customerFactor={selectedCustomer?.rectStackFactor}
@@ -1020,6 +940,8 @@ export const POOrderNewPage = () => {
         )}
         {coreType === 'CUT_ROUND' && (
           <ToroidalForm
+            selectedAlloy={family === 'COMPOSITE' ? undefined : family}
+            requireGap={gapMode}
             cut
             onShape={setReport}
             customerId={customerId}
@@ -1035,6 +957,8 @@ export const POOrderNewPage = () => {
         )}
         {coreType === 'CUT_RECT' && (
           <RectangularForm
+            selectedAlloy={family === 'COMPOSITE' ? undefined : family}
+            requireGap={gapMode}
             cut
             onShape={setReport}
             customerId={customerId}
@@ -1048,8 +972,9 @@ export const POOrderNewPage = () => {
             onEditConsumed={() => setEditSeed(null)}
           />
         )}
-        {(coreType === 'E_CORE' || coreType === 'WOUND_CORE' || coreType === 'STEP_CORE') && (
+        {(coreType === 'EI_CORE' || coreType === 'WOUND_CORE' || coreType === 'STEP_CORE') && (
           <StackedCoreForm
+            selectedAlloy={family === 'COMPOSITE' ? undefined : family}
             kind={coreType}
             onShape={setReport}
             customerId={customerId}
@@ -1574,22 +1499,22 @@ const Stat = ({ label, value, accent }: { label: string; value: string; accent?:
    columns of their own. The mapping is written down in ONE place, dimsOf and
    dimsFrom below, so a line always reads back as the shape it was booked as. */
 
-type StackedKind = 'E_CORE' | 'WOUND_CORE' | 'STEP_CORE';
+type StackedKind = 'EI_CORE' | 'WOUND_CORE' | 'STEP_CORE';
 
 const STACKED_SKIN: Record<StackedKind, { border: string; dot: string; ink: string; title: string }> = {
-  E_CORE:     { border: 'border-indigo-200 bg-indigo-50/40',   dot: 'bg-indigo-500',  ink: 'text-indigo-800',  title: 'E core' },
+  EI_CORE:     { border: 'border-indigo-200 bg-indigo-50/40',   dot: 'bg-indigo-500',  ink: 'text-indigo-800',  title: 'EI core' },
   WOUND_CORE: { border: 'border-orange-200 bg-orange-50/40',   dot: 'bg-orange-500',  ink: 'text-orange-800',  title: 'Wound core' },
   STEP_CORE:  { border: 'border-emerald-200 bg-emerald-50/40', dot: 'bg-emerald-500', ink: 'text-emerald-800', title: 'Step core' },
 };
 
 const STACKED_NOTE: Record<StackedKind, string> = {
-  E_CORE: 'outer limbs and yokes are half the tongue',
+  EI_CORE: 'outer limbs and yokes are half the tongue',
   WOUND_CORE: 'radiused ends \u00b7 strip wound, not stacked',
   STEP_CORE: 'limb section \u00b7 the window gives the magnetic path',
 };
 
 export const StackedCoreForm = ({
-  kind, grades, onAdd, onShape, customerId, edit, onEditConsumed, hideTesting = false,
+  kind, grades, onAdd, onShape, customerId, edit, onEditConsumed, hideTesting = false, selectedAlloy,
 }: {
   kind: StackedKind;
   grades: GradeRow[];
@@ -1599,16 +1524,17 @@ export const StackedCoreForm = ({
   edit?: { item: Item; nonce: number } | null;
   onEditConsumed?: () => void;
   hideTesting?: boolean;
+  selectedAlloy?: MaterialKey;
 }) => {
   const skin = STACKED_SKIN[kind];
   const [grade, setGrade] = useState('');
   const [material, setMaterial] = useState('');
-  const [alloy, setAlloy] = useState<MaterialKey>('CRGO');
+  const [alloy, setAlloy] = useState<MaterialKey>(selectedAlloy ?? 'CRGO');
   const [pcs, setPcs] = useState(0);
   const [rateBasis, setRateBasis] = useState<'PER_KG' | 'PER_PCS'>('PER_KG');
   const [rateValue, setRateValue] = useState(0);
 
-  // E core
+  // EI core
   const [tongue, setTongue] = useState(0);
   const [windowW, setWindowW] = useState(0);
   const [windowH, setWindowH] = useState(0);
@@ -1620,7 +1546,8 @@ export const StackedCoreForm = ({
   const [od2, setOd2] = useState(0);
   const [ht, setHt] = useState(0);
   // Step core
-  const [steps, setSteps] = useState<CoreStep[]>([{ width: 0, stack: 0 }]);
+  const [steps, setSteps] = useState<CoreStep[]>([{ id1: 0, id2: 0, ht: 0, builtup: 0 }]);
+  const [roundStep, setRoundStep] = useState(false);
 
   const [stack, setStack] = useState(defaultRectStack('CRGO'));
   const [stackTouched, setStackTouched] = useState(false);
@@ -1639,22 +1566,22 @@ export const StackedCoreForm = ({
   }, [cardRate?.rateValue, cardRate?.rateBasis]);
 
   const shape: CoreShape = useMemo(() => (
-    kind === 'E_CORE'
-      ? { kind: 'E_CORE', tongue, windowW, windowH, stack: stackD }
+    kind === 'EI_CORE'
+      ? { kind: 'EI_CORE', tongue, windowW, windowH, stack: stackD }
       : kind === 'WOUND_CORE'
         ? { kind: 'WOUND_CORE', id1, id2, od1, od2, ht }
-        : { kind: 'STEP_CORE', steps, id1, id2 }
-  ), [kind, tongue, windowW, windowH, stackD, id1, id2, od1, od2, ht, steps]);
+        : { kind: 'STEP_CORE', steps, round: roundStep }
+  ), [kind, tongue, windowW, windowH, stackD, id1, id2, od1, od2, ht, steps, roundStep]);
 
   const calc = useMemo(() => {
-    if (kind === 'E_CORE') {
+    if (kind === 'EI_CORE') {
       return eCoreCalc({ tongue, windowW, windowH, stack: stackD, pcs, factor: stack, alloy });
     }
     if (kind === 'WOUND_CORE') {
       const r = woundCoreCalc({ id1, id2, od1, od2, ht, pcs, factor: stack, alloy });
       return r;
     }
-    return stepCoreCalc({ steps, id1, id2, pcs, factor: stack, alloy });
+    return stepCoreCalc({ steps, pcs, factor: stack, alloy });
   }, [kind, tongue, windowW, windowH, stackD, id1, id2, od1, od2, ht, steps, pcs, stack, alloy]);
 
   useReportShape(
@@ -1676,13 +1603,13 @@ export const StackedCoreForm = ({
     setAlloy((it.alloy as MaterialKey) ?? 'CRGO');
     setStack(stackOr(it.stackFactor, defaultRectStack(it.alloy))); setStackTouched(true);
     setRateBasis(it.rateBasis ?? 'PER_KG'); setRateValue(it.rateValue ?? 0); setRateTouched(true);
-    if (kind === 'E_CORE') {
+    if (kind === 'EI_CORE') {
       setWindowW(it.id1); setWindowH(it.id2 ?? 0); setTongue(it.od1); setStackD(it.ht);
     } else if (kind === 'WOUND_CORE') {
       setId1(it.id1); setId2(it.id2 ?? 0); setOd1(it.od1); setOd2(it.od2 ?? 0); setHt(it.ht);
     } else {
-      setId1(it.id1); setId2(it.id2 ?? 0);
-      setSteps(it.steps?.length ? it.steps : [{ width: 0, stack: 0 }]);
+      setSteps(it.steps?.length ? it.steps : [{ id1: 0, id2: 0, ht: 0, builtup: 0 }]);
+      setRoundStep(Boolean((it as Item & { round?: boolean }).round));
     }
     onEditConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1692,7 +1619,8 @@ export const StackedCoreForm = ({
     setPcs(0); setRateValue(0); setRateTouched(false);
     setTongue(0); setWindowW(0); setWindowH(0); setStackD(0);
     setId1(0); setId2(0); setOd1(0); setOd2(0); setHt(0);
-    setSteps([{ width: 0, stack: 0 }]);
+    setSteps([{ id1: 0, id2: 0, ht: 0, builtup: 0 }]);
+    setRoundStep(false);
     setStack(defaultRectStack(alloy)); setStackTouched(false);
   };
 
@@ -1702,11 +1630,11 @@ export const StackedCoreForm = ({
     if (!ready) return;
     /* The generic columns, mapped once. Read the pair with dimsFrom in the edit
        branch above: the two must stay opposite each other. */
-    const dims = kind === 'E_CORE'
+    const dims = kind === 'EI_CORE'
       ? { id1: windowW, id2: windowH, od1: tongue, od2: tongue, ht: stackD }
       : kind === 'WOUND_CORE'
         ? { id1, id2, od1, od2, ht }
-        : { id1, id2, od1: 0, od2: 0, ht: 0 };
+        : { id1: (calc as ReturnType<typeof stepCoreCalc>).id1, id2: (calc as ReturnType<typeof stepCoreCalc>).id2, od1: (calc as ReturnType<typeof stepCoreCalc>).od1, od2: (calc as ReturnType<typeof stepCoreCalc>).od2, ht: (calc as ReturnType<typeof stepCoreCalc>).heights?.[0] ?? 0, builtup: (calc as ReturnType<typeof stepCoreCalc>).builtup, round: roundStep };
     const ratePerKg = rateBasis === 'PER_KG'
       ? rateValue
       : (calc.weightPerPc > 0 ? rateValue / calc.weightPerPc : 0);
@@ -1715,7 +1643,8 @@ export const StackedCoreForm = ({
       coreType: kind, grade, material, alloy,
       measure: calc.measure,
       ...dims,
-      steps: kind === 'STEP_CORE' ? steps.filter((t) => t.width > 0 && t.stack > 0) : undefined,
+      steps: kind === 'STEP_CORE' ? steps.filter((t) => t.id1 > 0 && t.id2 > 0 && t.ht > 0 && t.builtup > 0) : undefined,
+      round: kind === 'STEP_CORE' ? roundStep : undefined,
       weightPerPc: calc.weightPerPc, pcs, totalWeight: calc.totalWeight,
       coreAc: calc.coreAc, coreMl: calc.coreMl,
       stackFactor: stack,
@@ -1730,8 +1659,7 @@ export const StackedCoreForm = ({
 
   // Only the step core has a circumscribing circle; narrowing it here keeps
   // the read-out honest instead of poking at a field the other two lack.
-  const stepInfo = kind === 'STEP_CORE' && 'circle' in calc
-    ? (calc as ReturnType<typeof stepCoreCalc>) : null;
+  const stepInfo = kind === 'STEP_CORE' ? (calc as ReturnType<typeof stepCoreCalc>) : null;
 
   const setStep = (i: number, patch: Partial<CoreStep>) =>
     setSteps((ss) => ss.map((t, j) => (i === j ? { ...t, ...patch } : t)));
@@ -1773,11 +1701,11 @@ export const StackedCoreForm = ({
           houseDefault={defaultRectStack(alloy)}
           fromCustomer={false}
         />
-        <AlloyField w={FW.selLg} value={alloy} onChange={setAlloy} />
+        {!selectedAlloy && <AlloyField w={FW.selLg} value={alloy} onChange={setAlloy} />}
       </FieldRow>
 
       <FieldRow className="mt-2">
-        {kind === 'E_CORE' && (<>
+        {kind === 'EI_CORE' && (<>
           <NumField label="Tongue T" w={FW.dim} value={tongue} onChange={setTongue} />
           <NumField label="Window W" w={FW.dim} value={windowW} onChange={setWindowW} />
           <NumField label="Window H" w={FW.dim} value={windowH} onChange={setWindowH} />
@@ -1805,11 +1733,15 @@ export const StackedCoreForm = ({
             </span>
             <button
               type="button"
-              onClick={() => setSteps((ss) => [...ss, { width: 0, stack: 0 }])}
+              onClick={() => setSteps((ss) => [...ss, { id1: 0, id2: 0, ht: 0, builtup: 0 }])}
               className="btn-row"
             >
               <Plus className="h-3 w-3" /> Add step
             </button>
+          </div>
+          <div className="mb-2 flex items-center gap-1">
+            <button type="button" onClick={() => setRoundStep(false)} className={cn('btn-row', !roundStep && 'bg-emerald-100 text-emerald-800')}>Rectangular</button>
+            <button type="button" onClick={() => setRoundStep(true)} className={cn('btn-row', roundStep && 'bg-emerald-100 text-emerald-800')}>Round</button>
           </div>
           <div className="space-y-1.5">
             {steps.map((st, i) => (
@@ -1818,12 +1750,20 @@ export const StackedCoreForm = ({
                   {i + 1}
                 </span>
                 <NumField
-                  label="Plate width" w={FW.dim} value={st.width}
-                  onChange={(v) => setStep(i, { width: v })}
+                  label="ID 1" w={FW.dim} value={st.id1}
+                  onChange={(v) => setStep(i, { id1: v })}
                 />
                 <NumField
-                  label="Stack" w={FW.dim} value={st.stack}
-                  onChange={(v) => setStep(i, { stack: v })}
+                  label="ID 2" w={FW.dim} value={st.id2}
+                  onChange={(v) => setStep(i, { id2: v })}
+                />
+                <NumField
+                  label="HT" w={FW.dim} value={st.ht}
+                  onChange={(v) => setStep(i, { ht: v })}
+                />
+                <NumField
+                  label="Built-up" w={FW.dim} value={st.builtup}
+                  onChange={(v) => setStep(i, { builtup: v })}
                 />
                 {steps.length > 1 && (
                   <button
@@ -1848,7 +1788,7 @@ export const StackedCoreForm = ({
           <Stat label="Core A/C"  value={calc.coreAc > 0 ? calc.coreAc.toFixed(3) : '\u2014'} />
           <Stat label="Mean path" value={calc.coreMl > 0 ? calc.coreMl.toFixed(2) : '\u2014'} />
           {kind === 'STEP_CORE' && (
-            <Stat label="Ø circle" value={stepInfo && stepInfo.circle > 0 ? stepInfo.circle.toFixed(1) : '—'} />
+            <Stat label="Built-up" value={stepInfo && stepInfo.builtup > 0 ? stepInfo.builtup.toFixed(1) : '—'} />
           )}
           <div className="col-span-2 sm:col-span-6">
             <Stat label="Measure" value={calc.measure} />
@@ -1868,7 +1808,7 @@ export const StackedCoreForm = ({
 
 /* ---------- TOROIDAL ---------- */
 export const ToroidalForm = ({
-  grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed, hideTesting = false,
+  grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed, hideTesting = false, selectedAlloy, requireGap = false,
   customerId, customerFactor, onShape, cut = false,
 }: {
   grades: GradeRow[];
@@ -1890,6 +1830,8 @@ export const ToroidalForm = ({
   onEditConsumed?: () => void;
   /** Quotation mode — flux/test calibration is irrelevant to a quote, so hide it. */
   hideTesting?: boolean;
+  selectedAlloy?: MaterialKey;
+  requireGap?: boolean;
 }) => {
   const [grade, setGrade] = useState('');
   const [material, setMaterial] = useState('');
@@ -1912,7 +1854,7 @@ export const ToroidalForm = ({
   const [stackTouched, setStackTouched] = useState(false);
   // Total controlled air gap across both joints. Cut cores only.
   const [gapMm, setGapMm] = useState(0);
-  const [alloy, setAlloy] = useState<MaterialKey>('CRGO');
+  const [alloy, setAlloy] = useState<MaterialKey>(selectedAlloy ?? 'CRGO');
   /* The line's own base factor: the customer's agreed figure on CRGO, this
      alloy's own otherwise. A rate card is negotiated against a steel, not
      against every steel. */
@@ -2021,12 +1963,13 @@ export const ToroidalForm = ({
     setId(0); setOd(0); setHt(0); setPcs(0);
     setTurns(0); setFlux(0);
     setRateValue(0); setRateTouched(false);
-    setStack(stackOr(customerFactor, TOROIDAL_FACTOR)); setStackTouched(false);
+    setStack(alloyBase); setStackTouched(false);
     setGapMm(0);
-    setAlloy('CRGO');
+    setAlloy(selectedAlloy ?? 'CRGO');
   };
 
   const add = async () => {
+    if (requireGap && gapMm <= 0) { await showAlert({ title: 'Air gap required', message: 'Enter a positive air gap for a gap core.', tone: 'warning' }); return; }
     if (!grade || !material) {
       await showAlert({ title: 'Missing fields', message: 'Pick grade and material before adding.', tone: 'warning' });
       return;
@@ -2114,7 +2057,7 @@ export const ToroidalForm = ({
           houseDefault={defaultToroidalFactor(alloy)}
           fromCustomer={alloy === 'CRGO' && stackOr(customerFactor, TOROIDAL_FACTOR) !== TOROIDAL_FACTOR}
         />
-        <AlloyField w={FW.selLg} value={alloy} onChange={setAlloy} />
+        {!selectedAlloy && <AlloyField w={FW.selLg} value={alloy} onChange={setAlloy} />}
       </FieldRow>
 
       {/* Dimensions and quantity. Millimetre boxes stay narrow; turns/flux are
@@ -2213,7 +2156,7 @@ export const ToroidalForm = ({
 
 /* ---------- RECTANGULAR ---------- */
 export const RectangularForm = ({
-  grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed, hideTesting = false,
+  grades, fluxGrades, onAdd, prefill, onPrefillConsumed, edit, onEditConsumed, hideTesting = false, selectedAlloy, requireGap = false,
   customerId, customerFactor, onShape, cut = false,
 }: {
   grades: GradeRow[];
@@ -2235,6 +2178,8 @@ export const RectangularForm = ({
   onEditConsumed?: () => void;
   /** Quotation mode — flux/test calibration is irrelevant to a quote, so hide it. */
   hideTesting?: boolean;
+  selectedAlloy?: MaterialKey;
+  requireGap?: boolean;
 }) => {
   const [grade, setGrade] = useState('');
   const [material, setMaterial] = useState('');
@@ -2255,7 +2200,7 @@ export const RectangularForm = ({
   const [stack, setStack] = useState(stackOr(customerFactor, RECT_STACK_FACTOR));
   const [stackTouched, setStackTouched] = useState(false);
   const [gapMm, setGapMm] = useState(0);
-  const [alloy, setAlloy] = useState<MaterialKey>('CRGO');
+  const [alloy, setAlloy] = useState<MaterialKey>(selectedAlloy ?? 'CRGO');
   // As on the toroidal form: the customer's agreed figure belongs to CRGO,
   // every other alloy starts from its own.
   const alloyBase = alloy === 'CRGO'
@@ -2370,12 +2315,13 @@ export const RectangularForm = ({
     setId1(0); setId2(0); setOd1(0); setOd2(0); setHt(0); setPcs(0);
     setTurns(0); setFlux(0);
     setRateValue(0); setRateTouched(false);
-    setStack(stackOr(customerFactor, RECT_STACK_FACTOR)); setStackTouched(false);
+    setStack(alloyBase); setStackTouched(false);
     setGapMm(0);
-    setAlloy('CRGO');
+    setAlloy(selectedAlloy ?? 'CRGO');
   };
 
   const add = async () => {
+    if (requireGap && gapMm <= 0) { await showAlert({ title: 'Air gap required', message: 'Enter a positive air gap for a gap core.', tone: 'warning' }); return; }
     if (!grade || !material) {
       await showAlert({ title: 'Missing fields', message: 'Pick grade and material before adding.', tone: 'warning' });
       return;
@@ -2462,7 +2408,7 @@ export const RectangularForm = ({
           houseDefault={defaultRectStack(alloy)}
           fromCustomer={alloy === 'CRGO' && stackOr(customerFactor, RECT_STACK_FACTOR) !== RECT_STACK_FACTOR}
         />
-        <AlloyField w={FW.selLg} value={alloy} onChange={setAlloy} />
+        {!selectedAlloy && <AlloyField w={FW.selLg} value={alloy} onChange={setAlloy} />}
       </FieldRow>
 
       {/* Dimensions and quantity — eight narrow boxes that wrap rather than

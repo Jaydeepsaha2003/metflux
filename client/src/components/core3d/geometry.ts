@@ -257,7 +257,7 @@ export const eCoreE = (
   return g;
 };
 
-/** The I bar that closes an E core. */
+/** The I bar that closes an EI core. */
 export const eCoreI = (
   tongue: number, windowW: number, stack: number,
 ): THREE.BufferGeometry => {

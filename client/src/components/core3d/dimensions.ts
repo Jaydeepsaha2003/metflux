@@ -359,6 +359,36 @@ export const buildDimensions = (shape: CoreShape, extent: number) => {
       }
       break;
     }
+    case 'EI_CORE': {
+      const width = shape.tongue * 2 + shape.windowW * 2;
+      const height = shape.windowH + shape.tongue / 2;
+      const yoke = shape.tongue / 2;
+      dimension(new THREE.Vector3(-width / 2, -height / 2, 0), new THREE.Vector3(width / 2, -height / 2, 0), new THREE.Vector3(0, -side, 0), `WIDTH ${n(width)}`, ctx);
+      dimension(new THREE.Vector3(width / 2, -height / 2, 0), new THREE.Vector3(width / 2, height / 2, 0), new THREE.Vector3(side, 0, 0), `HEIGHT ${n(height)}`, ctx);
+      dimension(new THREE.Vector3(-shape.tongue / 2, height / 2 - yoke, 0), new THREE.Vector3(shape.tongue / 2, height / 2 - yoke, 0), new THREE.Vector3(0, stand, 0), `TONGUE ${n(shape.tongue)}`, ctx);
+      leader(new THREE.Vector3(0, 0, shape.stack / 2), new THREE.Vector3(0, 0, 1), `STACK ${n(shape.stack)}`, ctx);
+      break;
+    }
+    case 'WOUND_CORE': {
+      const { id1, id2, od1, od2, ht } = shape;
+      dimension(new THREE.Vector3(-od1 / 2, -ht / 2, od2 / 2), new THREE.Vector3(od1 / 2, -ht / 2, od2 / 2), new THREE.Vector3(0, -side, 0), `OD1 ${n(od1)}`, ctx);
+      dimension(new THREE.Vector3(-od1 / 2, -ht / 2, -od2 / 2), new THREE.Vector3(-od1 / 2, -ht / 2, od2 / 2), new THREE.Vector3(-side, 0, 0), `OD2 ${n(od2)}`, ctx);
+      dimension(new THREE.Vector3(id1 / 2, ht / 2, -id2 / 2), new THREE.Vector3(id1 / 2, ht / 2, id2 / 2), new THREE.Vector3(side, 0, 0), `ID2 ${n(id2)}`, ctx);
+      dimension(new THREE.Vector3(od1 / 2, -ht / 2, -od2 / 2), new THREE.Vector3(od1 / 2, ht / 2, -od2 / 2), new THREE.Vector3(side, 0, -side), `HT ${n(ht)}`, ctx);
+      break;
+    }
+    case 'STEP_CORE': {
+      const totalStack = shape.steps.reduce((sum, step) => sum + step.builtup, 0);
+      const maxId1 = Math.max(...shape.steps.map((step) => step.id1));
+      const maxId2 = Math.max(...shape.steps.map((step) => step.id2));
+      leader(new THREE.Vector3(0, 0, 0), new THREE.Vector3(1, 0.8, 0), `${shape.round ? 'Ø' : 'OD'} ${n(maxId1)} × ${n(maxId2)}`, ctx);
+      leader(new THREE.Vector3(0, -totalStack / 2, 0), new THREE.Vector3(-1, -0.8, 0), `BU ${n(Math.max(...shape.steps.map((step) => step.builtup)))}`, ctx);
+      shape.steps.forEach((step, index) => leader(
+        new THREE.Vector3(0, -totalStack / 2 + shape.steps.slice(0, index).reduce((sum, item) => sum + item.builtup, 0) + step.builtup / 2, 0),
+        new THREE.Vector3(1, 0.45, 0), `STEP ${index + 1} · ${n(step.id1)} × ${n(step.id2)} · HT ${n(step.ht)}`, ctx,
+      ));
+      break;
+    }
   }
 
   return {
