@@ -59,6 +59,25 @@ const main = async () => {
       console.log(`[migrate] ${table}.cutAt added`);
     }
   }
+  /* The line of cut itself: how far in from the datum edge the saw goes. The
+     cutAt column above holds which edge that is measured from; this holds the
+     distance. Two columns rather than one because they answer two different
+     questions, and a single "cut at TOP" told the works nothing about where. */
+  for (const table of TABLES) {
+    if (!(await tableExists(table))) continue;
+    const [has] = await pool.query(
+      `SELECT 1 FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'cutMm' LIMIT 1`,
+      [table]
+    );
+    if (has.length) {
+      console.log(`[migrate] ${table}.cutMm already present — skipping`);
+      continue;
+    }
+    await pool.query(`ALTER TABLE \`${table}\` ADD COLUMN \`cutMm\` DOUBLE NULL AFTER \`cutAt\``);
+    console.log(`[migrate] ${table}.cutMm added`);
+  }
+
   console.log('[migrate] Cut position ready.');
 };
 

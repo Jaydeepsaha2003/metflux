@@ -354,7 +354,7 @@ export const buildDimensions = (shape: CoreShape, extent: number) => {
       if (shape.kind === 'CUT_RECT' && shape.gapMm > 0) {
         leader(
           // A rectangular gap sits on the right limb of the C-shaped body.
-          new THREE.Vector3(x, 0, cutOffsetMm(id2, shape.cutAt)), new THREE.Vector3(1, 0.25, 0),
+          new THREE.Vector3(x, 0, cutOffsetMm(od2, shape.cutMm, shape.cutFrom)), new THREE.Vector3(1, 0.25, 0),
           `GAP ${n(shape.gapMm)}`, ctx,
         );
       }

@@ -417,7 +417,7 @@ export default function CoreViewer({ shape, resetNonce, showDims, view = 'iso' }
         break;
       case 'CUT_RECT': {
         const mat = mk(MATERIALS.rect);
-        const off = cutOffsetMm(shape.id2, shape.cutAt);
+        const off = cutOffsetMm(shape.od2, shape.cutMm, shape.cutFrom);
         if (shape.gapMm > 0) {
           add(gappedRectRing(shape.id1, shape.id2, shape.od1, shape.od2, shape.ht, shape.gapMm, off), mat);
         } else {

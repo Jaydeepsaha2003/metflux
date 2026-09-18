@@ -446,11 +446,24 @@ const viewsFor = (shape: CoreShape): View[] => {
             );
             detailBalloon(c, { x: c.cx, y: c.cy - (ri + ro) / 2 });
           } else {
-            c.out.push(
-              line({ x: c.cx - ro, y: c.cy }, { x: c.cx + ro, y: c.cy }, STEEL.edge, 1.5),
-              noteOnPart({ x: c.cx - ro * 0.5, y: c.cy - c.s * 1.15 }, 'LINE OF CUT', c.s),
+            const cy = c.cy - c.m(cutOffsetMm(od, shape.cutMm, shape.cutFrom));
+            const dy = cy - c.cy;
+            // Where the chord meets each circle. Outside the bore it is one
+            // run; across the bore it is two, with air between them.
+            const xo = Math.sqrt(Math.max(0, ro * ro - dy * dy));
+            const xi = Math.abs(dy) < ri ? Math.sqrt(ri * ri - dy * dy) : 0;
+            const runs: [number, number][] = xi > 0
+              ? [[c.cx - xo, c.cx - xi], [c.cx + xi, c.cx + xo]]
+              : [[c.cx - xo, c.cx + xo]];
+            const fromBottom = (shape.cutFrom ?? 'TOP') === 'BOTTOM';
+            lineOfCut(
+              c, runs, cy,
+              fromBottom ? c.cy + ro : c.cy - ro,
+              c.cx - ro - c.s * 3.1,
+              { x: c.cx - (xi > 0 ? (xo + xi) / 2 : xo * 0.5), y: cy - c.s * 1.2 },
+              shape.cutMm, shape.cutFrom,
             );
-            detailBalloon(c, { x: c.cx + (ri + ro) / 2, y: c.cy });
+            detailBalloon(c, { x: c.cx + (xi > 0 ? (xo + xi) / 2 : xo * 0.5), y: cy });
           }
         }),
         annularSection(id, od, ht, STEEL),
@@ -467,8 +480,9 @@ const viewsFor = (shape: CoreShape): View[] => {
       const { id1, id2, od1, od2, ht } = shape;
       return [
         rectPlan(id1, id2, od1, od2, STEEL, (c, W) => {
-          const cy = c.cy - c.m(cutOffsetMm(id2, shape.cutAt));
+          const cy = c.cy - c.m(cutOffsetMm(od2, shape.cutMm, shape.cutFrom));
           const innerRight = c.cx + c.m(id1) / 2;
+          const H = c.m(od2);
           if (shape.gapMm > 0) {
             c.out.push(
               // A gapped rectangular core is one C-shaped path with its joint
@@ -478,11 +492,22 @@ const viewsFor = (shape: CoreShape): View[] => {
             );
             detailBalloon(c, { x: c.cx + W / 2 - c.m((od1 - id1) / 4), y: cy });
           } else {
-            c.out.push(
-              line({ x: c.cx - W / 2, y: cy }, { x: c.cx + W / 2, y: cy }, STEEL.edge, 1.5),
-              noteOnPart({ x: c.cx, y: cy - c.s * 1.15 }, 'LINE OF CUT', c.s),
+            const innerLeft = c.cx - c.m(id1) / 2;
+            const hI = c.m(id2);
+            // Across the window the saw is in air; outside it, it is in a limb.
+            const inWindow = Math.abs(cy - c.cy) < hI / 2;
+            const runs: [number, number][] = inWindow
+              ? [[c.cx - W / 2, innerLeft], [innerRight, c.cx + W / 2]]
+              : [[c.cx - W / 2, c.cx + W / 2]];
+            const fromBottom = (shape.cutFrom ?? 'TOP') === 'BOTTOM';
+            lineOfCut(
+              c, runs, cy,
+              fromBottom ? c.cy + H / 2 : c.cy - H / 2,
+              c.cx + W / 2 + c.s * 5.6,
+              { x: (c.cx - W / 2 + innerLeft) / 2, y: cy - c.s * 1.2 },
+              shape.cutMm, shape.cutFrom,
             );
-            detailBalloon(c, { x: c.cx + W / 2 - c.m((od1 - id1) / 4), y: cy });
+            detailBalloon(c, { x: (innerRight + c.cx + W / 2) / 2, y: cy });
           }
         }),
         rectSection(id1, od1, ht, STEEL),
@@ -786,6 +811,60 @@ const viewsFor = (shape: CoreShape): View[] => {
 };
 
 /* ── layout ──────────────────────────────────────────────────────────────── */
+
+/**
+ * The line of cut, drawn with the measurement that puts it there.
+ *
+ * `runs` are the stretches of METAL the saw actually passes through. On a round
+ * core cut off the diameter that is two separate spans, one through each wall,
+ * with the bore untouched between them — drawing one line straight across
+ * showed a saw cutting air, and worse, showed a cut the part does not have.
+ *
+ * The distance is dimensioned from the datum edge the operator was given,
+ * placed clear of the part at `dimX`, because that is the instruction: "cut at
+ * 40 from the top", not "cut somewhere above the middle". Halved is said in
+ * words instead of dimensioned — half of the part exactly is a decision, and a
+ * dimension reading 80.0 on a 160 core looks like a coincidence.
+ */
+const lineOfCut = (
+  c: Ctx,
+  runs: [number, number][],
+  cy: number,
+  datum: number,
+  dimX: number,
+  noteAt: P,
+  cutMm: number | undefined,
+  from: 'TOP' | 'BOTTOM' | undefined,
+) => {
+  runs.forEach(([a, b]) => {
+    if (b - a > 0.5) c.out.push(line({ x: a, y: cy }, { x: b, y: cy }, STEEL.edge, 1.7, '10 4'));
+  });
+
+  const measured = !!(cutMm && cutMm > 0);
+  if (measured) {
+    const span = runs.length ? [runs[0][0], runs[runs.length - 1][1]] : [dimX, dimX];
+    /* Measured off the part, with real witness lines, and the dimension line
+       carried out to dimX. Anchoring it at dimX instead left the figure
+       floating in space with nothing tying it to either edge. */
+    const anchorX = dimX < span[0] ? span[0] : span[1];
+    c.out.push(
+      line({ x: span[0], y: datum }, { x: span[1], y: datum }, DIM, 0.6, '4 3'),
+      linearDim(
+        { x: anchorX, y: datum }, { x: anchorX, y: cy },
+        { x: dimX - anchorX, y: 0 }, `CUT ${n(cutMm!)}`, c.s,
+      ),
+      text(
+        { x: dimX, y: datum + ((from ?? 'TOP') === 'BOTTOM' ? c.s * 1.5 : -c.s * 1.5) },
+        (from ?? 'TOP') === 'BOTTOM' ? 'FROM BOTTOM' : 'FROM TOP',
+        c.s * 0.85, { fill: NOTE },
+      ),
+    );
+  }
+  // Always the same three words. "HALVED" used to ride along here and ran
+  // straight into the detail balloon; the sheet says it in words instead, and
+  // the absence of a CUT dimension says it on the drawing.
+  c.out.push(noteOnPart(noteAt, 'LINE OF CUT', c.s));
+};
 
 export type SketchResult = {
   svg: string; width: number; height: number;

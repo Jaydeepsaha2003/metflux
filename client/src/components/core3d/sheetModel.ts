@@ -20,7 +20,7 @@ import {
 } from '@/lib/coreMaterials';
 import {
   compositeLayout, cutCoreCode, eCoreOutline, stepCoreSpan, shapeCaption, shapeTitle,
-  CUT_AT_LABEL, type CoreShape,
+  CUT_FROM_LABEL, cutSpanMm, type CoreShape,
 } from './shape';
 import {
   eCoreMeanPath, woundMeanPath, stepGrossArea, defaultRectStack,
@@ -181,11 +181,18 @@ const dimensions = (shape: CoreShape): Section => {
   })();
 
   if (isCut(shape)) {
+    /* The instruction the saw follows, written the way it is given: a distance
+       and the edge it is measured from. Halved is the default and is said in
+       words, because a blank here would read as "not decided yet". */
+    const span = cutSpanMm(shape);
+    rows.push([
+      'Line of cut',
+      shape.cutMm && shape.cutMm > 0
+        ? `${mm(shape.cutMm)} ${CUT_FROM_LABEL[shape.cutFrom ?? 'TOP']}`
+        : `Centre — ${mm(span / 2)} from either edge`,
+    ]);
     const g = gapOf(shape);
-    rows.push(['Line of cut', g > 0 ? mm(g) : 'Butt — no deliberate gap']);
-    if (shape.kind === 'CUT_RECT') {
-      rows.push(['Cut position', CUT_AT_LABEL[shape.cutAt ?? 'CENTRE']]);
-    }
+    if (g > 0) rows.push(['Air gap at the joint', mm(g)]);
   }
   if (shape.kind === 'NANO' && shape.cased) {
     rows.push(['Case  ID / OD', `${n(shape.dims.id - 5)} / ${n(shape.dims.od + 5)} mm`]);

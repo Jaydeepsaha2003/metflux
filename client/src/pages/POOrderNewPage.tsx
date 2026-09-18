@@ -14,7 +14,7 @@ import { MATERIALS, type MaterialKey } from '@/lib/coreMaterials';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useConfirm } from '@/hooks/useConfirm';
 import CorePreview from '@/components/core3d/CorePreview';
-import { shapeIsDrawable, type CoreShape } from '@/components/core3d/shape';
+import { shapeIsDrawable, type CoreShape, type CutFrom } from '@/components/core3d/shape';
 import type { SheetMeta } from '@/components/core3d/specSheet';
 import { useAuthStore, activeMembership } from '@/store/auth';
 import './po-order-new.css';
@@ -47,6 +47,9 @@ export type Item = {
   stackFactor?: number | null;
   /** Cut cores only: total controlled air gap across both joints, mm. */
   gapMm?: number;
+  /** Line of cut: how far in from `cutFrom` the saw goes, mm. Absent = halved. */
+  cutMm?: number;
+  cutFrom?: CutFrom;
   /** Material family the line is wound from. Absent = CRGO. */
   alloy?: MaterialKey;
   /** Step core only: the plate table that gives the limb its section. */
@@ -289,7 +292,14 @@ export const POOrderNewPage = () => {
   const [gapMode, setGapMode] = useState(false);
   const selectShape = (value: string, nextFamily = family) => {
     setGapMode(value === 'GAP');
-    pickCore(value === 'GAP' ? 'CUT_ROUND' : value === 'ROUND' ? (nextFamily === 'NANOCRYSTALLINE' ? 'NANO' : 'TOROIDAL') : value as CoreType);
+    // LINE_OF_CUT is a family, not a shape: it opens on the round profile and
+    // keeps whichever profile is already chosen when coming back to it.
+    pickCore(
+      value === 'GAP' ? 'CUT_ROUND'
+      : value === 'LINE_OF_CUT' ? (coreType === 'CUT_RECT' ? 'CUT_RECT' : 'CUT_ROUND')
+      : value === 'ROUND' ? (nextFamily === 'NANOCRYSTALLINE' ? 'NANO' : 'TOROIDAL')
+      : value as CoreType,
+    );
   };
   const selectFamily = (next: MaterialKey | 'COMPOSITE') => {
     setFamily(next);
@@ -867,11 +877,26 @@ export const POOrderNewPage = () => {
         {family !== 'COMPOSITE' && (
           <div className="grid gap-3 sm:grid-cols-2 lg:max-w-2xl">
             <Field label="Core shape">
-              <SearchableSelect value={gapMode ? 'GAP' : coreType === 'NANO' || coreType === 'TOROIDAL' ? 'ROUND' : coreType}
+              <SearchableSelect value={gapMode ? 'GAP'
+                : coreType === 'NANO' || coreType === 'TOROIDAL' ? 'ROUND'
+                : coreType === 'CUT_ROUND' || coreType === 'CUT_RECT' ? 'LINE_OF_CUT'
+                : coreType}
                 onChange={value => selectShape(value)} placeholder="Choose core shape…"
-                options={[{value:'ROUND',label:'Round (Toroidal)'},{value:'RECTANGULAR',label:'Rectangular'},{value:'CUT_ROUND',label:'Round cut'},{value:'CUT_RECT',label:'Rectangular cut'},{value:'GAP',label:'Gap core'},{value:'E_CORE',label:'E core'},{value:'EI_CORE',label:'EI core'},{value:'WOUND_CORE',label:'Wound core'},{value:'STEP_CORE',label:'Step core'}]} />
+                options={[{value:'ROUND',label:'Round (Toroidal)'},{value:'RECTANGULAR',label:'Rectangular'},{value:'LINE_OF_CUT',label:'Line of cut core'},{value:'GAP',label:'Gap core'},{value:'E_CORE',label:'E core'},{value:'EI_CORE',label:'EI core'},{value:'WOUND_CORE',label:'Wound core'},{value:'STEP_CORE',label:'Step core'}]} />
             </Field>
             {gapMode && <Field label="Gap core shape"><SearchableSelect value={coreType} onChange={value => pickCore(value as CoreType)} options={[{value:'CUT_ROUND',label:'Round gap'},{value:'CUT_RECT',label:'Rectangular gap'}]} /></Field>}
+            {/* Round and rectangular are the same product cut two ways, so they
+                are one entry on the shape list and a profile chosen here —
+                rather than two families a step apart on the same menu. */}
+            {!gapMode && (coreType === 'CUT_ROUND' || coreType === 'CUT_RECT') && (
+              <Field label="Cut core profile">
+                <SearchableSelect
+                  value={coreType}
+                  onChange={value => pickCore(value as CoreType)}
+                  options={[{value:'CUT_ROUND',label:'Round'},{value:'CUT_RECT',label:'Rectangular'}]}
+                />
+              </Field>
+            )}
           </div>
         )}
 
@@ -1394,6 +1419,45 @@ const AlloyField = ({ value, onChange, w }: {
   </Field>
 );
 
+/**
+ * The line of cut: how far in from an edge the saw goes, and which edge that
+ * is measured from.
+ *
+ * This replaced an "Air gap" box, and the two are different things. A gap is a
+ * width left at the joint after assembly; this is an instruction to the saw,
+ * and it is what the works is actually given — "cut at 55 from the top". Left
+ * empty it means halve the part, which is what a cut core has always meant
+ * when nobody said otherwise, so the placeholder says so rather than sitting
+ * blank.
+ */
+const LineOfCutFields = ({ cutMm, onCut, cutFrom, onFrom, halfOf }: {
+  cutMm: number; onCut: (v: number) => void;
+  cutFrom: CutFrom; onFrom: (v: CutFrom) => void;
+  /** Half the span the cut crosses — the figure "centred" would come to. */
+  halfOf: number;
+}) => (
+  <>
+    <NumField
+      label="Line of cut"
+      w={FW.factor}
+      align="right"
+      value={cutMm}
+      onChange={onCut}
+      hint={cutMm > 0
+        ? `${cutFrom === 'BOTTOM' ? 'from the bottom' : 'from the top'}`
+        : (halfOf > 0 ? `blank = centre (${halfOf.toFixed(1)})` : 'blank = centre')}
+    />
+    <Field label="Measured from" className={cn('shrink-0', FW.sel)}>
+      <SearchableSelect
+        dense
+        value={cutFrom}
+        onChange={(v) => onFrom((v || 'TOP') as CutFrom)}
+        options={[{ value: 'TOP', label: 'Top' }, { value: 'BOTTOM', label: 'Bottom' }]}
+      />
+    </Field>
+  </>
+);
+
 const StackFactorField = ({
   value, onChange, onReset, base, houseDefault, fromCustomer, w,
 }: {
@@ -1858,6 +1922,10 @@ export const ToroidalForm = ({
   const [stackTouched, setStackTouched] = useState(false);
   // Total controlled air gap across both joints. Cut cores only.
   const [gapMm, setGapMm] = useState(0);
+  /* The line of cut: a distance and the edge it is measured from. Not a gap —
+     a gap is what is left at the joint, this is where the saw goes. */
+  const [cutMm, setCutMm] = useState(0);
+  const [cutFrom, setCutFrom] = useState<CutFrom>('TOP');
   const [alloy, setAlloy] = useState<MaterialKey>(selectedAlloy ?? 'CRGO');
   /* The line's own base factor: the customer's agreed figure on CRGO, this
      alloy's own otherwise. A rate card is negotiated against a steel, not
@@ -1910,6 +1978,8 @@ export const ToroidalForm = ({
     // otherwise opening a line to fix a typo silently changes its weight.
     setStack(stackOr(it.stackFactor, TOROIDAL_FACTOR)); setStackTouched(true);
     setGapMm(it.gapMm ?? 0);
+    setCutMm(it.cutMm ?? 0);
+    setCutFrom(it.cutFrom ?? 'TOP');
     setAlloy((it.alloy as MaterialKey) ?? 'CRGO');
     pendingFlux.current = it.flux ?? 0;
     setGrade(it.grade);
@@ -1932,7 +2002,7 @@ export const ToroidalForm = ({
     onShape,
     () => ({
       shape: cut
-        ? { kind: 'CUT_ROUND', dims: { id, od, ht }, gapMm }
+        ? { kind: 'CUT_ROUND', dims: { id, od, ht }, gapMm, cutMm, cutFrom }
         : { kind: 'TOROIDAL', dims: { id, od, ht } },
       meta: {
         grade, material, pcs, factor: stack,
@@ -1945,7 +2015,7 @@ export const ToroidalForm = ({
         fluxPoints, alloy,
       },
     }),
-    [cut, gapMm, id, od, ht, grade, material, pcs, stack,
+    [cut, gapMm, cutMm, cutFrom, id, od, ht, grade, material, pcs, stack,
      calc.weightPerPc, calc.totalWeight, turns, flux, ateCm, fluxCalc, fluxPoints, alloy],
   );
 
@@ -1969,6 +2039,7 @@ export const ToroidalForm = ({
     setRateValue(0); setRateTouched(false);
     setStack(alloyBase); setStackTouched(false);
     setGapMm(0);
+    setCutMm(0); setCutFrom('TOP');
     setAlloy(selectedAlloy ?? 'CRGO');
   };
 
@@ -1989,6 +2060,8 @@ export const ToroidalForm = ({
       weightPerPc: calc.weightPerPc, totalWeight: calc.totalWeight,
       stackFactor: stack,
       gapMm: cut && gapMm > 0 ? gapMm : undefined,
+      cutMm: cut && cutMm > 0 ? cutMm : undefined,
+      cutFrom: cut && cutMm > 0 ? cutFrom : undefined,
       // Only attach test-calibration values when the user actually filled them.
       turns:       turns > 0 ? turns : undefined,
       flux:        flux  > 0 ? flux  : undefined,
@@ -2072,12 +2145,10 @@ export const ToroidalForm = ({
         <NumField label="HT" w={FW.dim} value={ht} onChange={setHt} />
         <NumField label="Pcs" w={FW.qty} align="right" value={pcs} onChange={setPcs} />
         {cut && (
-          <NumField
-            label="Air gap"
-            w={FW.factor}
-            align="right"
-            value={gapMm}
-            onChange={setGapMm}
+          <LineOfCutFields
+            cutMm={cutMm} onCut={setCutMm}
+            cutFrom={cutFrom} onFrom={setCutFrom}
+            halfOf={od / 2}
           />
         )}
         {!hideTesting && (<>
@@ -2204,6 +2275,10 @@ export const RectangularForm = ({
   const [stack, setStack] = useState(stackOr(customerFactor, RECT_STACK_FACTOR));
   const [stackTouched, setStackTouched] = useState(false);
   const [gapMm, setGapMm] = useState(0);
+  /* The line of cut: a distance and the edge it is measured from. Not a gap —
+     a gap is what is left at the joint, this is where the saw goes. */
+  const [cutMm, setCutMm] = useState(0);
+  const [cutFrom, setCutFrom] = useState<CutFrom>('TOP');
   const [alloy, setAlloy] = useState<MaterialKey>(selectedAlloy ?? 'CRGO');
   // As on the toroidal form: the customer's agreed figure belongs to CRGO,
   // every other alloy starts from its own.
@@ -2253,6 +2328,8 @@ export const RectangularForm = ({
     // Re-weigh on the factor the line was BOOKED with, not today's default.
     setStack(stackOr(it.stackFactor, RECT_STACK_FACTOR)); setStackTouched(true);
     setGapMm(it.gapMm ?? 0);
+    setCutMm(it.cutMm ?? 0);
+    setCutFrom(it.cutFrom ?? 'TOP');
     setAlloy((it.alloy as MaterialKey) ?? 'CRGO');
     pendingFlux.current = it.flux ?? 0;
     setGrade(it.grade);
@@ -2277,7 +2354,7 @@ export const RectangularForm = ({
     onShape,
     () => ({
       shape: cut
-        ? { kind: 'CUT_RECT', id1, id2, od1, od2, ht, gapMm }
+        ? { kind: 'CUT_RECT', id1, id2, od1, od2, ht, gapMm, cutMm, cutFrom }
         : { kind: 'RECTANGULAR', id1, id2, od1, od2, ht },
       meta: {
         grade, material, pcs, factor: stack,
@@ -2290,7 +2367,7 @@ export const RectangularForm = ({
         fluxPoints, alloy,
       },
     }),
-    [cut, gapMm, id1, id2, od1, od2, ht, grade, material, pcs, stack,
+    [cut, gapMm, cutMm, cutFrom, id1, id2, od1, od2, ht, grade, material, pcs, stack,
      calc.weightPerPc, calc.totalWeight, turns, flux, ateCm, fluxCalc, fluxPoints, alloy],
   );
 
@@ -2321,6 +2398,7 @@ export const RectangularForm = ({
     setRateValue(0); setRateTouched(false);
     setStack(alloyBase); setStackTouched(false);
     setGapMm(0);
+    setCutMm(0); setCutFrom('TOP');
     setAlloy(selectedAlloy ?? 'CRGO');
   };
 
@@ -2342,6 +2420,8 @@ export const RectangularForm = ({
       coreAc: calc.coreAc, coreMl: calc.coreMl, d13: calc.d13,
       stackFactor: stack,
       gapMm: cut && gapMm > 0 ? gapMm : undefined,
+      cutMm: cut && cutMm > 0 ? cutMm : undefined,
+      cutFrom: cut && cutMm > 0 ? cutFrom : undefined,
       // Flux-test fields — only included when the user filled them.
       turns:       turns > 0 ? turns : undefined,
       flux:        flux  > 0 ? flux  : undefined,
@@ -2425,7 +2505,11 @@ export const RectangularForm = ({
         <NumField label="HT"   w={FW.dim} value={ht}  onChange={setHt} />
         <NumField label="Pcs"  w={FW.qty} align="right" value={pcs} onChange={setPcs} />
         {cut && (
-          <NumField label="Air gap" w={FW.factor} align="right" value={gapMm} onChange={setGapMm} />
+          <LineOfCutFields
+            cutMm={cutMm} onCut={setCutMm}
+            cutFrom={cutFrom} onFrom={setCutFrom}
+            halfOf={od2 / 2}
+          />
         )}
         {!hideTesting && (<>
           <NumField label="Turns" w={FW.qty} align="right" value={turns} onChange={setTurns} />

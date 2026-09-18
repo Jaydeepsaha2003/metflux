@@ -9,31 +9,52 @@ import type { CompositeRule } from '@/lib/calc';
 
 export type Tri = { id: number; od: number; ht: number };
 
-/** Where the line of cut sits on a cut core. */
-export type CutAt = 'TOP' | 'CENTRE' | 'BOTTOM';
+/** Which edge the line of cut is measured in from. */
+export type CutFrom = 'TOP' | 'BOTTOM';
+
+export const CUT_FROM_LABEL: Record<CutFrom, string> = {
+  TOP: 'from the top',
+  BOTTOM: 'from the bottom',
+};
 
 /**
- * How far off centre the line of cut sits, in mm along the ID2 axis.
+ * The line of cut, as a signed distance from the centre line in mm — positive
+ * toward the top.
  *
- * A quarter of the window each way: far enough to see and to matter, and still
- * across the limbs rather than through the yoke — cut past the window and you
- * are no longer making two C halves, you are making a C and a lid.
+ * `cutMm` is the instruction the saw actually follows: how far in from the
+ * chosen edge to cut. That is a measurement, not a category, and it is what
+ * the works is told — "cut at 55 from the top", not "cut nearer the top". An
+ * unset or zero figure means halve it, which is what a cut core has always
+ * meant when nobody said otherwise.
+ *
+ * `span` is the outside dimension the cut crosses: OD for a round core, OD2
+ * for a rectangular one.
  */
-export const cutOffsetMm = (id2: number, at: CutAt | undefined) =>
-  (at === 'TOP' ? id2 / 4 : at === 'BOTTOM' ? -id2 / 4 : 0);
-
-export const CUT_AT_LABEL: Record<CutAt, string> = {
-  TOP: 'Nearer the top yoke',
-  CENTRE: 'Centre — two equal halves',
-  BOTTOM: 'Nearer the bottom yoke',
+export const cutOffsetMm = (
+  span: number, cutMm: number | undefined, from: CutFrom | undefined = 'TOP',
+) => {
+  if (!(cutMm && cutMm > 0) || !(span > 0)) return 0;
+  // Clamped to the part: a cut past the far edge is not a cut, it is a miss,
+  // and letting it through would build a solid inside out.
+  const d = Math.min(cutMm, span);
+  return from === 'BOTTOM' ? d - span / 2 : span / 2 - d;
 };
+
+/** The outside dimension the line of cut crosses. */
+export const cutSpanMm = (s: CoreShape) =>
+  s.kind === 'CUT_ROUND' ? s.dims.od : s.kind === 'CUT_RECT' ? s.od2 : 0;
 
 export type CoreShape =
   | { kind: 'TOROIDAL'; dims: Tri }
   /** A toroid cut into two mating C halves. Dimensioned by the core it was cut
    *  from, so the weight and area formulas are the toroidal ones; `gapMm` is
    *  the total controlled air gap across both joints, 0 for a plain cut core. */
-  | { kind: 'CUT_ROUND'; dims: Tri; gapMm: number }
+  | {
+      kind: 'CUT_ROUND'; dims: Tri; gapMm: number;
+      /** How far in from `cutFrom` the saw goes, mm. 0 / unset = halved. */
+      cutMm?: number;
+      cutFrom?: CutFrom;
+    }
   | { kind: 'RECTANGULAR'; id1: number; id2: number; od1: number; od2: number; ht: number }
   /** A rectangular window core sawn straight across both limbs into two C
    *  halves. Same dimensions as the ring it came from; `gapMm` is the total
@@ -41,9 +62,9 @@ export type CoreShape =
   | {
       kind: 'CUT_RECT'; id1: number; id2: number; od1: number; od2: number; ht: number;
       gapMm: number;
-      /** Where along the limbs the line of cut falls. Centre gives two equal C
-       *  halves; top or bottom gives a deep C and a shallow one. */
-      cutAt?: CutAt;
+      /** How far in from `cutFrom` the saw goes, mm. 0 / unset = halved. */
+      cutMm?: number;
+      cutFrom?: CutFrom;
     }
   | { kind: 'NANO'; dims: Tri; cased: boolean }
   /** A stacked E+I lamination core, quoted the way the trade quotes it: the
@@ -179,8 +200,8 @@ const KIND_NAME = {
   RECTANGULAR: 'Rectangular core',
   NANO: 'Nano core',
   COMPOSITE: 'Composite core',
-  CUT_ROUND: 'Round cut core',
-  CUT_RECT: 'Rectangular cut core',
+  CUT_ROUND: 'Line of cut core — round',
+  CUT_RECT: 'Line of cut core — rectangular',
     E_CORE: 'E core',
     EI_CORE: 'EI core',
   WOUND_CORE: 'Wound core',
