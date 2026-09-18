@@ -290,6 +290,29 @@ const pdfSection = (sec: Section): any[] => {
 export const downloadSheetPdf = async (shape: CoreShape, meta: SheetMeta) => {
   const { loadPdfMake } = await import('@/lib/reportPdf');
   const pdfMake = await loadPdfMake();
+
+  /* A wound core gets the full two-sheet drawing set instead of the generic
+     spec sheet: plan, section, both elevations, the strip detail and a
+     pictorial, with the title block and signature panel a customer approval
+     drawing has to carry. The generic sheet stays for every other family. */
+  if (shape.kind === 'WOUND_CORE') {
+    const { buildWoundDrawing } = await import('./woundDrawing');
+    const set = buildWoundDrawing(shape, meta);
+    pdfMake.createPdf({
+      pageSize: 'A4',
+      pageOrientation: 'landscape',
+      // Full bleed: the sheet draws its own frame, so pdfmake must not add one
+      // of its own in the form of a margin.
+      pageMargins: [0, 0, 0, 0],
+      defaultStyle: { font: 'Montserrat' },
+      content: [
+        { svg: set.pages[0], width: 841.89 },
+        { svg: set.pages[1], width: 841.89, pageBreak: 'before' },
+      ],
+    }).download(`${fileStem(shape, meta)}-drawing.pdf`);
+    return;
+  }
+
   const model = buildSheetModel(shape, meta);
   // Sized so the whole sheet lands on one page. A spec sheet that runs to two
   // pages with a title block alone on the second is a sheet somebody prints,
