@@ -1,0 +1,12 @@
+{
+  "name": "wound-core-viewer",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Parametric 3D viewer for a racetrack (obround) wound transformer/CT core, as a vanilla web component.",
+  "//": "type:module is scoped to this folder so the component can be plain .js ESM without making the repo root ESM.",
+  "type": "module",
+  "main": "wound-core-viewer.js",
+  "scripts": {
+    "test": "node --test wound-core-viewer.test.mjs"
+  }
+}

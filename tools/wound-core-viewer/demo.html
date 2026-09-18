@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Wound core viewer</title>
+
+<!--
+  three.js is pinned here, once, by import map.
+
+  Not a UMD script tag: three stopped shipping a non-module OrbitControls after
+  r147, so a script-tag build would mean either a five-year-old three or a
+  second copy of the library on the page. An import map pins exactly as firmly,
+  keeps one copy, and needs no bundler.
+
+  To run offline, point these two at a local copy of three instead — the
+  component only ever asks for the bare specifiers.
+-->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/"
+  }
+}
+</script>
+
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 0 0 24px; background: #f6f8fa; color: #0f172a;
+         font: 14px/1.5 system-ui, sans-serif; }
+  header { padding: 18px 20px 12px; border-bottom: 1px solid #dfe5ec; background: #fff; }
+  h1 { margin: 0; font-size: 17px; }
+  p.lead { margin: 4px 0 0; max-width: 62ch; color: #475569; font-size: 13px; }
+  main { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
+  section { margin-top: 18px; background: #fff; border: 1px solid #dfe5ec; }
+  .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px;
+          padding: 10px 14px; border-bottom: 1px solid #e7ecf2; background: #fbfcfd; }
+  .head h2 { margin: 0; font-size: 13px; text-transform: uppercase;
+             letter-spacing: .06em; color: #334155; }
+  .head span { font-size: 12px; color: #64748b; }
+  wound-core-viewer { height: 460px; }
+  @media (max-width: 760px) { wound-core-viewer { height: 620px; } }
+  .log { margin: 0; padding: 8px 14px; border-top: 1px solid #e7ecf2;
+         background: #f8fafc; font: 11px/1.5 ui-monospace, monospace; color: #475569; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Wound core viewer</h1>
+  <p class="lead">
+    A racetrack wound core, built from the inner window outward. Drag the build
+    and strip-width sliders — every magnetic figure recomputes from the mean
+    path, and each one shows the expression behind it.
+  </p>
+</header>
+
+<main>
+  <!--
+    A metering CT core: small window, modest build, narrow strip. Corner radius
+    is half the window width, so the window is a true obround — the shape strip
+    naturally takes. Left uncut, which is the whole point for a CT: any air gap
+    and the magnetising current rises and the accuracy class goes with it.
+  -->
+  <section>
+    <div class="head">
+      <h2>LT CT core</h2>
+      <span>uncut · CRGO 0.27 · window 60 × 24, an obround</span>
+    </div>
+    <wound-core-viewer id="ct"
+      window-length="60" window-width="24" corner-radius="12"
+      build="14" strip-width="20"
+      strip-thickness="0.27" stacking-factor="0.96" density="7.65"></wound-core-viewer>
+    <pre class="log" data-for="ct"></pre>
+  </section>
+
+  <!--
+    A single-phase distribution transformer core: long window for the coil,
+    generous build, wide strip. Same geometry, two orders of magnitude more
+    steel — which is why the camera fits from the bounding sphere rather than
+    from a fixed distance.
+  -->
+  <section>
+    <div class="head">
+      <h2>Single-phase DT core</h2>
+      <span>CRGO 0.30 · window 320 × 90</span>
+    </div>
+    <wound-core-viewer id="dt"
+      window-length="320" window-width="90" corner-radius="45"
+      build="75" strip-width="140"
+      strip-thickness="0.30" stacking-factor="0.965" density="7.65"></wound-core-viewer>
+    <pre class="log" data-for="dt"></pre>
+  </section>
+</main>
+
+<script type="module">
+  import './wound-core-viewer.js';
+
+  /* The component reports everything it computed on every change, so a host
+     page never has to reach into it or recompute anything itself. */
+  for (const el of document.querySelectorAll('wound-core-viewer')) {
+    const log = document.querySelector(`.log[data-for="${el.id}"]`);
+    el.addEventListener('change', (e) => {
+      const { derived, errors } = e.detail;
+      if (errors.length) { log.textContent = `refused: ${errors.join('; ')}`; return; }
+      log.textContent = [
+        `Lm ${derived.meanPath.toFixed(1)} mm`,
+        `Ae ${derived.netArea.toFixed(0)} mm²`,
+        `W ${derived.weightKg.toFixed(3)} kg`,
+        `${derived.wraps.toFixed(0)} wraps`,
+        `${(derived.stripLength / 1000).toFixed(1)} m of strip`,
+      ].join('   ·   ');
+    });
+  }
+</script>
+
+</body>
+</html>
