@@ -1341,7 +1341,9 @@ export const POOrderNewPage = () => {
    Sub-components
 ==================================================================== */
 
-const Field = ({
+// Exported so the Quotation screen's build-item block uses the same label
+// styling rather than a second copy of it a pixel off.
+export const Field = ({
   label, icon: Icon, children, className,
 }: {
   label: string;

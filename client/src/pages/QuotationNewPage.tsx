@@ -12,7 +12,7 @@ import { cn } from '@/lib/cn';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import {
   type Item, type ShapeReport, ToroidalForm, RectangularForm, NanoForm,
-  StackedCoreForm, emptyShapeFor,
+  StackedCoreForm, emptyShapeFor, Field,
 } from '@/pages/POOrderNewPage';
 import CorePreview from '@/components/core3d/CorePreview';
 // The Sales Order stylesheet, because this screen now uses the same workbench
@@ -20,22 +20,9 @@ import CorePreview from '@/components/core3d/CorePreview';
 // .sales-order-workbench, so the wrapper below is what switches them on.
 import '@/pages/po-order-new.css';
 
-import { coreShort, coreLabel } from '@/lib/coreTypes';
+import { coreShort } from '@/lib/coreTypes';
+import { type MaterialKey } from '@/lib/coreMaterials';
 import { useAuthStore, activeMembership } from '@/store/auth';
-/* The selected tab wears its family's colour, exactly as on the Sales Order
-   screen — the accent is the fastest way to see which form you are in. */
-const CORE_TAB_INK: Record<CoreType, string> = {
-  TOROIDAL: 'text-amber-700',
-  RECTANGULAR: 'text-rose-700',
-  NANO: 'text-violet-700',
-  COMPOSITE: 'text-teal-700',
-  CUT_ROUND: 'text-sky-700',
-  CUT_RECT: 'text-cyan-700',
-  E_CORE: 'text-indigo-700',
-  EI_CORE: 'text-indigo-700',
-  WOUND_CORE: 'text-orange-700',
-  STEP_CORE: 'text-emerald-700',
-};
 
 /* Local item = SO item + quotation-only print fields (HSN/SAC + unit). */
 type QItem = Item & { hsnCode?: string; unit?: string };
@@ -169,6 +156,34 @@ export const QuotationNewPage = () => {
 
   /* ----- entry ----- */
   const [coreType, setCoreType] = useState<CoreType | 'MANUAL' | ''>('');
+  /* Two axes, exactly as on the Sales Order screen: the alloy the core is
+     wound from, and the shape it is wound into. Ten core types on one strip
+     read as ten unrelated products; they are four alloys crossed with a
+     handful of shapes, and choosing them that way is how the works talks. */
+  const [family, setFamily] = useState<MaterialKey | 'COMPOSITE'>('CRGO');
+  const [gapMode, setGapMode] = useState(false);
+  const selectShape = (value: string, nextFamily = family) => {
+    setGapMode(value === 'GAP');
+    // LINE_OF_CUT is a family, not a shape: it opens on the round profile and
+    // keeps whichever profile is already chosen when coming back to it.
+    pickCore(
+      value === 'GAP' ? 'CUT_ROUND'
+      : value === 'LINE_OF_CUT' ? (coreType === 'CUT_RECT' ? 'CUT_RECT' : 'CUT_ROUND')
+      : value === 'ROUND' ? (nextFamily === 'NANOCRYSTALLINE' ? 'NANO' : 'TOROIDAL')
+      : value as CoreType,
+    );
+  };
+  const selectFamily = (next: MaterialKey | 'COMPOSITE') => {
+    setFamily(next);
+    if (next === 'COMPOSITE') { setGapMode(false); pickCore('COMPOSITE'); }
+    // 'MANUAL' is in the reset list because a custom line has no shape to keep:
+    // choosing an alloy from one has to land somewhere, and round is the default.
+    else selectShape(gapMode ? 'GAP' : !coreType || ['TOROIDAL','NANO','COMPOSITE','MANUAL'].includes(coreType) ? 'ROUND' : coreType, next);
+  };
+  const restoreFamily = (it: Item) => {
+    setFamily(it.coreType === 'COMPOSITE' ? 'COMPOSITE' : it.coreType === 'NANO' ? 'NANOCRYSTALLINE' : it.alloy ?? 'CRGO');
+    setGapMode((it.gapMm ?? 0) > 0);
+  };
   // The spec sheet downloaded from the dock is headed with the works' name,
   // the same as on the Sales Order screen.
   const companyName = useAuthStore((st) => activeMembership(st)?.companyName ?? null);
@@ -185,6 +200,7 @@ export const QuotationNewPage = () => {
     null | { coreType: CoreType; grade: string; material: string; rateBasis: 'PER_KG' | 'PER_PCS' }
   >(null);
   const copyToForm = (it: QItem) => {
+    restoreFamily(it);
     setCoreType(it.coreType);
     setPrefill({ coreType: it.coreType, grade: it.grade, material: it.material, rateBasis: it.rateBasis ?? 'PER_KG' });
   };
@@ -210,6 +226,7 @@ export const QuotationNewPage = () => {
   const editItem = (idx: number) => {
     const it = items[idx];
     if (!it) return;
+    restoreFamily(it);
     setCoreType(it.coreType);
     editNonce.current += 1;
     pendingExtras.current = { hsnCode: it.hsnCode, unit: it.unit };
@@ -467,10 +484,12 @@ export const QuotationNewPage = () => {
       </section>
 
       {/* ============ ITEM ENTRY ============ */}
-      {/* Same markup as the Sales Order's "02 Build line item": the accent
-          colour follows the chosen family through data-core, the tab strip is
-          the shared six-across selector, and the form sits beside a sticky 3D
-          dock. One screen to learn, not two. */}
+      {/* The same markup as the Sales Order's "02 Build line item", down to the
+          class names: the alloy buttons and the core-shape list, the accent
+          colour following the choice through data-core, and the form beside a
+          sticky 3D dock. One screen to learn, not two. The only thing here the
+          Sales Order has not got is the custom line, which a quotation needs
+          for charges that are not a core at all. */}
       <section
         data-core={coreType && coreType !== 'MANUAL' ? coreType : 'TOROIDAL'}
         className="sales-order-section sales-order-entry card p-3 sm:p-4 space-y-3"
@@ -482,29 +501,49 @@ export const QuotationNewPage = () => {
               <h2 className="text-sm font-semibold text-slate-900">Build new item</h2>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 self-start">
-            <div className="core-family-selector flex flex-wrap gap-0.5 rounded-lg bg-slate-100 p-0.5 text-sm" aria-label="Core family">
-              {([
-              'TOROIDAL', 'RECTANGULAR', 'NANO', 'COMPOSITE', 'CUT_ROUND', 'CUT_RECT',
-              'E_CORE', 'EI_CORE', 'WOUND_CORE', 'STEP_CORE',
-            ] as CoreType[]).map((ct) => (
-                <button key={ct} type="button" onClick={() => pickCore(ct)}
-                  aria-pressed={coreType === ct}
-                  className={cn('rounded-md px-3 py-1.5 font-medium transition',
-                    coreType === ct ? 'bg-white shadow-sm' : 'text-slate-600 hover:text-slate-900',
-                    coreType === ct && CORE_TAB_INK[ct])}>
-                  {coreLabel(ct)}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+            <div className="grid grid-cols-2 sm:flex gap-1 w-full sm:w-auto" aria-label="Material family">
+              {([{value:'CRGO',label:'CRGO'},{value:'NANOCRYSTALLINE',label:'Nano Crystalline'},{value:'AMORPHOUS',label:'Amorphous'},{value:'COMPOSITE',label:'Composite'}] as const).map(option => (
+                <button key={option.value} type="button" aria-pressed={coreType !== 'MANUAL' && family === option.value} onClick={() => selectFamily(option.value)}
+                  className={cn('flex-1 sm:flex-none border px-3 py-2 text-xs font-semibold transition shadow-sm',coreType !== 'MANUAL' && family === option.value ? 'border-brand-500 bg-gradient-to-b from-brand-500 to-brand-700 text-white' : 'border-slate-200 bg-gradient-to-b from-white to-slate-50 text-slate-700 hover:border-brand-400')}>
+                  {option.label}
                 </button>
               ))}
             </div>
-            <span className="text-xs text-slate-400">or</span>
+            {/* Quotation-only: a line with no geometry at all — freight, tooling,
+                a bought-in part — which no core shape can describe. */}
             <button type="button" onClick={() => pickCore('MANUAL')}
-              className={cn('inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm font-medium transition',
-                coreType === 'MANUAL' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-300 text-slate-600 hover:bg-slate-50')}>
+              className={cn('inline-flex items-center justify-center gap-1 border px-3 py-2 text-xs font-semibold transition shadow-sm',
+                coreType === 'MANUAL' ? 'border-brand-500 bg-gradient-to-b from-brand-500 to-brand-700 text-white' : 'border-slate-200 bg-gradient-to-b from-white to-slate-50 text-slate-700 hover:border-brand-400')}>
               <Plus className="h-3.5 w-3.5" /> Custom item
             </button>
           </div>
         </div>
+        {family !== 'COMPOSITE' && coreType !== 'MANUAL' && (
+          <div className="grid gap-3 sm:grid-cols-2 lg:max-w-2xl">
+            <Field label="Core shape">
+              <SearchableSelect value={gapMode ? 'GAP'
+                : coreType === 'NANO' || coreType === 'TOROIDAL' ? 'ROUND'
+                : coreType === 'CUT_ROUND' || coreType === 'CUT_RECT' ? 'LINE_OF_CUT'
+                : coreType}
+                onChange={value => selectShape(value)} placeholder="Choose core shape…"
+                options={[{value:'ROUND',label:'Round (Toroidal)'},{value:'RECTANGULAR',label:'Rectangular'},{value:'LINE_OF_CUT',label:'Line of cut core'},{value:'GAP',label:'Gap core'},{value:'E_CORE',label:'E core'},{value:'EI_CORE',label:'EI core'},{value:'WOUND_CORE',label:'Wound core'},{value:'STEP_CORE',label:'Step core'}]} />
+            </Field>
+            {gapMode && <Field label="Gap core shape"><SearchableSelect value={coreType} onChange={value => pickCore(value as CoreType)} options={[{value:'CUT_ROUND',label:'Round gap'},{value:'CUT_RECT',label:'Rectangular gap'}]} /></Field>}
+            {/* Round and rectangular are the same product cut two ways, so they
+                are one entry on the shape list and a profile chosen here —
+                rather than two families a step apart on the same menu. */}
+            {!gapMode && (coreType === 'CUT_ROUND' || coreType === 'CUT_RECT') && (
+              <Field label="Cut core profile">
+                <SearchableSelect
+                  value={coreType}
+                  onChange={value => pickCore(value as CoreType)}
+                  options={[{value:'CUT_ROUND',label:'Round'},{value:'CUT_RECT',label:'Rectangular'}]}
+                />
+              </Field>
+            )}
+          </div>
+        )}
 
         {/* Form on the left, model on the right — sticky, so the solid stays in
             view down a long form and drops below the fields on a narrow screen. */}
@@ -517,10 +556,12 @@ export const QuotationNewPage = () => {
             ? 'xl:grid-cols-[minmax(0,1fr)_320px]'
             : 'is-single',
         )}>
-          <div className="min-w-0">
+          <div className="min-w-0" key={`${family}-${coreType}-${gapMode}`}>
 
         {coreType === 'TOROIDAL' && (
           <ToroidalForm hideTesting
+            selectedAlloy={family === 'COMPOSITE' ? undefined : family}
+            requireGap={gapMode}
             customerFactor={customer?.toroidalFactor}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'TOROIDAL'))}
             fluxGrades={fluxResp?.grades ?? []}
@@ -531,6 +572,8 @@ export const QuotationNewPage = () => {
         )}
         {coreType === 'RECTANGULAR' && (
           <RectangularForm hideTesting
+            selectedAlloy={family === 'COMPOSITE' ? undefined : family}
+            requireGap={gapMode}
             customerFactor={customer?.rectStackFactor}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'RECTANGULAR'))}
             fluxGrades={fluxRespRect?.grades ?? []}
@@ -560,6 +603,8 @@ export const QuotationNewPage = () => {
         )}
         {coreType === 'CUT_ROUND' && (
           <ToroidalForm cut hideTesting
+            selectedAlloy={family === 'COMPOSITE' ? undefined : family}
+            requireGap={gapMode}
             customerFactor={customer?.toroidalFactor}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'CUT_ROUND'))}
             fluxGrades={fluxResp?.grades ?? []}
@@ -570,6 +615,8 @@ export const QuotationNewPage = () => {
         )}
         {coreType === 'CUT_RECT' && (
           <RectangularForm cut hideTesting
+            selectedAlloy={family === 'COMPOSITE' ? undefined : family}
+            requireGap={gapMode}
             customerFactor={customer?.rectStackFactor}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, 'CUT_RECT'))}
             fluxGrades={fluxRespRect?.grades ?? []}
@@ -580,6 +627,7 @@ export const QuotationNewPage = () => {
         )}
         {(coreType === 'E_CORE' || coreType === 'EI_CORE' || coreType === 'WOUND_CORE' || coreType === 'STEP_CORE') && (
           <StackedCoreForm
+            selectedAlloy={family === 'COMPOSITE' ? undefined : family}
             kind={coreType} hideTesting
             onShape={setReport}
             grades={(gradesResp?.grades ?? []).filter((g) => gradeAppliesTo(g, coreType))}
