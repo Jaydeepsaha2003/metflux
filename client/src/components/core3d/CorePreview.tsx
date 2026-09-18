@@ -5,6 +5,7 @@
 // typed a set of dimensions worth drawing — an operator who never opens a line
 // form never pays for it, and it never lands in the main bundle.
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Box, Loader2, RotateCcw, Maximize2, X, Ruler, Download, FileText, Image as ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { shapeIsDrawable, shapeCaption, shapeTitle, type CoreShape } from './shape';
@@ -180,8 +181,17 @@ export const CorePreview = ({ shape, className, meta }: {
       </div>
 
       {/* Expanded view. Same component, so the model is rebuilt at a size where
-          proportions are actually judgeable — useful when showing a customer. */}
-      {full && drawable && (
+          proportions are actually judgeable — useful when showing a customer.
+
+          Rendered through a portal, and it has to be. The dock this preview
+          sits in is `xl:sticky`, and position:sticky creates a stacking
+          context — so z-[120] was being scoped inside that dock and the
+          sidebar, at a mere z-40 but in the root context, painted straight over
+          the top of it. Only above 1280px, because that is where the dock
+          becomes sticky, which is exactly the sort of bug that looks fine on a
+          laptop and wrong on the machine it is used on. A portal puts the
+          overlay on <body>, where nothing can trap it. */}
+      {full && drawable && createPortal(
         <div
           className="fixed inset-0 z-[120] flex flex-col bg-slate-950/75 p-2 backdrop-blur-md sm:p-6"
           onClick={() => setFull(false)}
@@ -219,7 +229,8 @@ export const CorePreview = ({ shape, className, meta }: {
               </Suspense>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
