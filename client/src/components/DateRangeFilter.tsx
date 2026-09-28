@@ -5,7 +5,7 @@
 //
 // Opens on Alt+F2 from anywhere on the page it's mounted on.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Calendar, ChevronDown, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
+import { Calendar, Check, ChevronDown, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import {
   DATE_RANGE_PRESETS, detectDateRangePreset, formatDateRangeLabel,
@@ -72,6 +72,19 @@ export const DateRangeFilter = ({ from, to, onChange, label = 'Filter by date', 
   const isRange = (a: string, b: string) => from === a && to === b;
   const months = useMemo(() => fyMonths(fy), [fy]);
 
+  // The ◀ ▶ steppers only move which year's chips are on show — they never
+  // touch the filter by themselves. That was invisible: the year figure is
+  // small, nothing else on screen changes, and if the applied range belongs to
+  // a different year (or no range is applied at all, e.g. "All time"), no chip
+  // lights up either — so stepping through years looked like it might or might
+  // not be doing anything. This names the two states outright, and remounting
+  // the figure on every step (via `key`) gives it a brief flash so the change
+  // itself is never silent.
+  const fyChipMatches = isRange(fyStartISO(fy), fyEndISO(fy))
+    || isRange(fyStartISO(fy), toISO(new Date()))
+    || ([1, 2, 3, 4] as const).some((q) => { const r = fyQuarter(fy, q); return isRange(r.from, r.to); })
+    || months.some((m) => isRange(m.from, m.to));
+
   return (
     <div ref={ref} className={cn('relative inline-flex items-stretch', className)}>
       {/* ◀ steps the window back by its own length; only meaningful once closed */}
@@ -137,10 +150,24 @@ export const DateRangeFilter = ({ from, to, onChange, label = 'Filter by date', 
                 <span className="inline-flex items-center gap-0.5">
                   <button type="button" onClick={() => setFy((y) => y - 1)} title="Previous FY"
                     className="rounded p-0.5 text-slate-400 hover:bg-slate-100"><ChevronLeft className="h-3 w-3" /></button>
-                  <span className="min-w-[52px] text-center font-mono text-[11px] font-bold text-slate-700">{fyLabel(fy)}</span>
+                  {/* key={fy} remounts the label on every step, so the fade-in
+                      plays again each time — a flash that says "this changed",
+                      not just a digit that happened to look different. */}
+                  <span key={fy} className="min-w-[52px] animate-fade-in text-center font-mono text-[11px] font-bold text-slate-700">
+                    {fyLabel(fy)}
+                  </span>
                   <button type="button" onClick={() => setFy((y) => y + 1)} disabled={fy >= thisFy + 1} title="Next FY"
                     className="rounded p-0.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30"><ChevronRight className="h-3 w-3" /></button>
                 </span>
+              </div>
+              {/* States the one thing the stepper itself never makes obvious:
+                  browsing to a different year is not the same as filtering by
+                  it — nothing is applied until a chip below is clicked. */}
+              <div className={cn('mb-1.5 flex items-center gap-1 text-[10px] font-medium',
+                fyChipMatches ? 'text-emerald-600' : 'text-amber-600')}>
+                {fyChipMatches
+                  ? <><Check className="h-2.5 w-2.5" /> Applied — this year is the active filter</>
+                  : <>Browsing only — pick a range below to filter by it</>}
               </div>
 
               <div className="grid grid-cols-2 gap-1">
