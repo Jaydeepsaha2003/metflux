@@ -47,8 +47,15 @@ export const JournalRegisterPage = () => {
     setUploading(true); setErr(null); setMsg(null);
     try {
       const matrix = await readXlsxMatrix(file);
-      const r = await api<{ vouchers: number; lines: number; unbalanced: number }>('/journal/import', { method: 'POST', body: JSON.stringify({ rows: matrix }) });
-      setMsg(`Imported ${r.vouchers} voucher${r.vouchers === 1 ? '' : 's'} (${r.lines} lines)${r.unbalanced ? ` · ⚠ ${r.unbalanced} unbalanced` : ''}.`);
+      const r = await api<{
+        vouchers: number; lines: number; unbalanced: number;
+        replacedLines: number; periodFrom: string; periodTo: string;
+      }>('/journal/import', { method: 'POST', body: JSON.stringify({ rows: matrix }) });
+      // Says which period this touched, since the import only replaces the
+      // dates the file itself covers — every other period's entries stay put.
+      setMsg(`Imported ${r.vouchers} voucher${r.vouchers === 1 ? '' : 's'} (${r.lines} lines) for `
+        + `${r.periodFrom} to ${r.periodTo}${r.replacedLines ? ` · replaced ${r.replacedLines} existing line${r.replacedLines === 1 ? '' : 's'} in that period` : ''}`
+        + `${r.unbalanced ? ` · ⚠ ${r.unbalanced} unbalanced` : ''}.`);
       invalidate();
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Could not import the file.');

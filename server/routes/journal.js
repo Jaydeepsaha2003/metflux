@@ -17,7 +17,15 @@ const router = Router();
 router.use(requireAuth, resolveTenant);
 const PERM = ['receive_payments', 'manage_invoices'];
 
-/* POST /import — parse an uploaded Journal Register and REPLACE the current one. */
+/* POST /import — parse an uploaded Journal Register and REPLACE the PERIOD it
+   covers, leaving every other period untouched.
+   The register is exported one financial year at a time, so "replace" has to
+   mean "replace this year", not "replace the company's whole journal" — the
+   old code deleted every JOURNAL row regardless of date, so uploading FY
+   25-26 silently erased FY 24-25. Scoping the delete to the imported file's
+   own [min date, max date] keeps the re-upload-to-correct-a-period behaviour
+   this route was built for, without that being able to reach into a period
+   the file never mentions. */
 router.post('/import', requireAnyPermission(...PERM), asyncHandler(async (req, res) => {
   const { rows } = z.object({ rows: z.array(z.array(z.any())).max(100000) }).parse(req.body);
   const { vouchers, error } = parseJournalRegister(rows);
@@ -25,8 +33,19 @@ router.post('/import', requireAnyPermission(...PERM), asyncHandler(async (req, r
   if (!vouchers.length) throw new AppError('No journal vouchers were found in that file.', 400, 'EMPTY');
   const companyId = req.tenant.companyId;
 
+  const dates = vouchers.map((v) => +v.date).filter(Number.isFinite);
+  const minDate = new Date(Math.min(...dates));
+  const maxDate = new Date(Math.max(...dates));
+  // End-of-day on the latest voucher date for the query bound, so a voucher
+  // dated on that day (with any time-of-day the export happens to carry) is
+  // still inside the range being replaced.
+  const periodTo = new Date(+maxDate + 86400000 - 1);
+
   const summary = await txn(async (tx) => {
-    await tx.q("DELETE FROM `JournalVoucher` WHERE `companyId` = ? AND `source` = 'JOURNAL'", [companyId]);
+    const del = await tx.q(
+      "DELETE FROM `JournalVoucher` WHERE `companyId` = ? AND `source` = 'JOURNAL' AND `entryDate` BETWEEN ? AND ?",
+      [companyId, minDate, periodTo],
+    );
     const params = [];
     const ph = [];
     let lines = 0, unbalanced = 0;
@@ -52,7 +71,12 @@ router.post('/import', requireAnyPermission(...PERM), asyncHandler(async (req, r
       const sliceParams = params.slice(i * PER, (i + CHUNK) * PER);
       await tx.q(`INSERT INTO \`JournalVoucher\` ${COLS} VALUES ${slicePh.join(',')}`, sliceParams);
     }
-    return { vouchers: vouchers.length, lines, unbalanced };
+    return {
+      vouchers: vouchers.length, lines, unbalanced,
+      replacedLines: del?.affectedRows ?? 0,
+      periodFrom: minDate.toISOString().slice(0, 10),
+      periodTo: maxDate.toISOString().slice(0, 10),
+    };
   });
   notifyCompanyAdmins(companyId, {
     type: 'JOURNAL', title: 'Journal Register imported',
