@@ -314,11 +314,13 @@ export const TestingCalculatorPage = () => {
           <button onClick={exportExcel} disabled={!exportable} className="btn-ghost border border-slate-300 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
             <Download className="h-4 w-4" /> Excel
           </button>
-          {exportable && (
-            <button onClick={exportPdf} disabled={generating} className="btn-primary disabled:opacity-50">
-              {generating ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating…</> : <><FileText className="h-4 w-4" /> Download PDF</>}
-            </button>
-          )}
+          {/* Always shown: hiding it until the sheet was ready made the PDF option
+              look missing on a fresh page. Disabled, with the reason on hover. */}
+          <button onClick={exportPdf} disabled={!exportable || generating}
+            title={exportable ? 'Download the lab sheet as a PDF' : 'Fill in dimensions, turns, grade and flux levels first'}
+            className="btn-primary disabled:opacity-50">
+            {generating ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating…</> : <><FileText className="h-4 w-4" /> Download PDF</>}
+          </button>
         </div>
       </div>
 
