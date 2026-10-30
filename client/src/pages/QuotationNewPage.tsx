@@ -458,7 +458,7 @@ export const QuotationNewPage = () => {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <label className="block">
             <span className="mb-1 flex items-center gap-1 text-xs font-medium text-slate-600"><Hash className="h-3.5 w-3.5" /> Quotation No.</span>
-            <input className={cellInput} value={quotationNo} onChange={(e) => setQuotationNo(e.target.value)} placeholder="MEI/SQ/1/2026-27" />
+            <input className="input" value={quotationNo} onChange={(e) => setQuotationNo(e.target.value)} placeholder="MEI/SQ/1/2026-27" />
           </label>
           <label className="block">
             <span className="mb-1 flex items-center gap-1 text-xs font-medium text-slate-600"><User2 className="h-3.5 w-3.5" /> Customer</span>
@@ -471,11 +471,11 @@ export const QuotationNewPage = () => {
           </label>
           <label className="block">
             <span className="mb-1 flex items-center gap-1 text-xs font-medium text-slate-600"><Calendar className="h-3.5 w-3.5" /> Quotation Date</span>
-            <input type="date" className={cellInput} value={quotationDate} onChange={(e) => setQuotationDate(e.target.value)} />
+            <input type="date" className="input" value={quotationDate} onChange={(e) => setQuotationDate(e.target.value)} />
           </label>
           <label className="block">
             <span className="mb-1 flex items-center gap-1 text-xs font-medium text-slate-600"><Calendar className="h-3.5 w-3.5" /> Valid Until <span className="text-slate-400">(optional)</span></span>
-            <input type="date" className={cellInput} value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
+            <input type="date" className="input" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
           </label>
         </div>
         {customer && (customer.gstRate ?? 0) > 0 && (
@@ -708,7 +708,7 @@ export const QuotationNewPage = () => {
                             </span>
                             <span className="font-medium text-slate-800">{it.material}</span>
                           </div>
-                          {sub && <div className="mt-0.5 font-mono text-[11px] text-slate-500 break-all">{sub}</div>}
+                          {sub && <div className="mt-0.5 font-mono text-[11px] font-semibold text-slate-500 break-all">{sub}</div>}
                         </>);
                       })()}
                     </td>
