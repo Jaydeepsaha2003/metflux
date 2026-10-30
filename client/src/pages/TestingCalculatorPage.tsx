@@ -2,7 +2,7 @@
 // cores. Each row picks its own core type; the inputs, flux grades and Volt +
 // Ie-max math adapt per row (same math as the PO / Testing Report). Export the
 // lab sheet as Excel or a styled PDF.
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Calculator, Plus, Trash2, Download, FileDown, FileText, X, Search, Loader2, Beaker,
@@ -11,6 +11,8 @@ import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { fluxTestCalc, rectangularCalc, rectangularFluxTestCalc, nanoTestCalc, toroidalCalc, nanoCalc, round3, stackOr, TOROIDAL_FACTOR, RECT_STACK_FACTOR } from '@/lib/calc';
 import { todayStamp } from '@/lib/excel';
+import { useBranding } from '@/store/branding';
+import { brandColorFor } from '@/lib/brandColor';
 import './testing-calculator.css';
 
 import { coreBadge, coreLabel, type CoreType } from '@/lib/coreTypes';
@@ -267,31 +269,49 @@ export const TestingCalculatorPage = () => {
     XLSX.writeFile(wb, `testing-calc-${todayStamp()}.xlsx`);
   };
 
-  /* ── PDF export — styled lab sheet, captured offscreen via html2pdf ── */
-  const printRef = useRef<HTMLDivElement>(null);
+  /* ── PDF export — vector lab sheet via pdfmake, one size per page ── */
   const [generating, setGenerating] = useState(false);
+  const brandColor = useBranding((st) => st.brandColor);
   const exportPdf = async () => {
-    const el = printRef.current;
-    if (!el || !exportable) return;
+    if (!exportable) return;
     setGenerating(true);
-    await new Promise((r) => requestAnimationFrame(r));
     try {
-      const html2pdf = (await import('html2pdf.js')).default;
-      await html2pdf().set({
-        margin: 10,
+      const { downloadTestingCalcPdf } = await import('@/lib/testingCalcPdf');
+      const num = (v: number, d: number) => v.toFixed(d);
+      await downloadTestingCalcPdf({
+        company: company ?? {},
+        brand: brandColorFor(company?.name) ?? brandColor,
+        date: fmtDate(new Date()),
         filename: `testing-report-${todayStamp()}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff', windowWidth: 1040 },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-        pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.tc-size'] },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any).from(el).save();
+        sizes: exportRows.map((it) => {
+          const w = weightOf(it);
+          const spec: [string, string][] = [
+            ['Turns', it.turns], ['Grade', it.grade], ['Weight / pc', w ? `${w.toFixed(3)} kg` : '—'],
+          ];
+          if (isNanoLike(it.coreType)) { spec.push(['Frequency', `${it.freq || 50} Hz`], ['Test stacking factor', it.sfac || '0.8']); }
+          else spec.push(['Stacking factor', it.stack]);
+          if (isCut(it.coreType) && +it.gapMm > 0) spec.push(['Air gap', `${it.gapMm} mm`]);
+          return {
+            core: coreLabel(it.coreType),
+            measure: measureOf(it),
+            spec,
+            rows: it.fluxes.map((f) => {
+              const c = cell(it, f);
+              return {
+                flux: num(f, 2),
+                volt: c ? num(c.volt, 3) : '—',
+                mv: c ? num(c.mv, 2) : '—',
+                ieA: c && c.ieA > 0 ? num(c.ieA, 5) : '—',
+                ie: c && c.leMax > 0 ? num(c.leMax, 2) : '—',
+              };
+            }),
+          };
+        }),
+      });
     } finally {
       setGenerating(false);
     }
   };
-
-  const addressLine = company?.address?.replace(/\n+/g, ', ').trim() ?? '';
 
   return (
     <div className="testing-calculator tc-page space-y-5">
@@ -511,81 +531,6 @@ export const TestingCalculatorPage = () => {
 
       {importOpen && <ImportDialog onClose={() => setImportOpen(false)} onAdd={addFromPo} />}
 
-      {/* ── Offscreen printable document — one size per A4 page ── */}
-      <div style={{ position: 'fixed', left: -10000, top: 0, width: 1040 }} aria-hidden>
-        <div ref={printRef} style={{ width: 1040, fontFamily: 'Poppins, sans-serif', color: '#000', background: '#fff' }}>
-          {exportRows.map((it, idx) => {
-            const core = coreLabel(it.coreType);
-            const measure = measureOf(it);
-            const n = it.fluxes.length;
-            return (
-              <div key={it.key} className="tc-size" style={{ pageBreakInside: 'avoid', ...(idx > 0 ? { pageBreakBefore: 'always' } : {}) }}>
-                {/* Company header */}
-                <div className="flex items-center gap-4 border-b-2 border-black px-2 pb-3 pt-2">
-                  {company?.logoUrl
-                    ? <img src={company.logoUrl} alt={company.name} className="h-16 w-16 shrink-0 object-contain" />
-                    : <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-slate-100 text-xs text-slate-400">LOGO</div>}
-                  <div className="min-w-0">
-                    <div className="text-xl font-bold uppercase leading-tight tracking-wide">{company?.name ?? 'Company Name'}</div>
-                    {addressLine && <div className="mt-0.5 text-[13px] font-medium leading-snug text-slate-700">{addressLine}</div>}
-                    {(company?.phone || company?.whatsappNumber || company?.email) && (
-                      <div className="mt-0.5 text-[12px] text-slate-600">{[company.phone, company.whatsappNumber, company.email].filter(Boolean).join('  |  ')}</div>
-                    )}
-                    {company?.gstNumber && <div className="mt-0.5 text-[12px] text-slate-600">GSTIN: {company.gstNumber}</div>}
-                  </div>
-                </div>
-
-                {/* Title */}
-                <div className="border-b-2 border-black px-2 py-3 text-center">
-                  <span className="inline-block rounded border-2 border-slate-900 px-8 py-2 text-xl font-extrabold uppercase tracking-[0.22em]">
-                    Testing Report
-                  </span>
-                </div>
-
-                {/* Meta */}
-                <div className="flex justify-between px-2 py-2.5 text-[13px] font-medium text-slate-700">
-                  <span>Size {idx + 1} of {exportRows.length}</span>
-                  <span>Date: {fmtDate(new Date())}</span>
-                </div>
-
-                {/* Per-size table */}
-                <div className="px-2 pb-4">
-                  <table className="w-full border-collapse text-[13px]">
-                    <thead>
-                      <tr className="bg-slate-100">
-                        {['Core', 'Measure', 'Turns', 'Grade', 'Wt/pc (kg)', 'Flux (T)', 'Volt (V)', 'V (mV)', 'Ie max (A)', 'Ie max (mA)'].map((h) => (
-                          <th key={h} className="border border-slate-500 px-2 py-1.5 text-center text-[12px] font-bold uppercase tracking-wide">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {it.fluxes.map((f, fi) => {
-                        const c = cell(it, f);
-                        return (
-                          <tr key={f}>
-                            {fi === 0 && <>
-                              <td rowSpan={n} className="border border-slate-500 px-2 py-1.5 text-center align-middle font-medium">{core}</td>
-                              <td rowSpan={n} className="border border-slate-500 px-2 py-1.5 text-center align-middle font-semibold">{measure}</td>
-                              <td rowSpan={n} className="border border-slate-500 px-2 py-1.5 text-center align-middle tabular-nums">{it.turns}</td>
-                              <td rowSpan={n} className="border border-slate-500 px-2 py-1.5 text-center align-middle font-medium">{it.grade}</td>
-                              <td rowSpan={n} className="border border-slate-500 px-2 py-1.5 text-center align-middle tabular-nums font-semibold">{weightOf(it) ? weightOf(it).toFixed(3) : '—'}</td>
-                            </>}
-                            <td className="border border-slate-500 px-2 py-1.5 text-center tabular-nums">{f.toFixed(2)}</td>
-                            <td className="border border-slate-500 px-2 py-1.5 text-right tabular-nums">{c ? c.volt.toFixed(3) : '—'}</td>
-                            <td className="border border-slate-500 px-2 py-1.5 text-right tabular-nums">{c ? c.mv.toFixed(2) : '—'}</td>
-                            <td className="border border-slate-500 px-2 py-1.5 text-right tabular-nums">{c && c.ieA > 0 ? c.ieA.toFixed(5) : '—'}</td>
-                            <td className="border border-slate-500 px-2 py-1.5 text-right tabular-nums">{c && c.leMax > 0 ? c.leMax.toFixed(2) : '—'}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
     </div>
   );
 };
