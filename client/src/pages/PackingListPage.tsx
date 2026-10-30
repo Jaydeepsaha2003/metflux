@@ -649,7 +649,14 @@ export const PackingListPage = () => {
                                 <Display value={row.weight} />
                               </td>
                               <td className="px-0.5 align-middle">
-                                <Cell value={row.remarks} onChange={(v) => updateRow(row.dispatchId, 'remarks', v)} align="left" />
+                                <div className="flex items-center gap-0.5">
+                                  <Cell value={row.remarks} onChange={(v) => updateRow(row.dispatchId, 'remarks', v)} align="left" />
+                                  <button type="button" title="Testing report for this size only"
+                                    onClick={() => navigate('/testing-report', { state: effectivePlId ? { plId: effectivePlId, onlyIds: [row.dispatchId] } : { dispatchIds: [row.dispatchId] } })}
+                                    className="shrink-0 rounded p-1 text-violet-700 hover:bg-violet-50">
+                                    <ClipboardCheck className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))}

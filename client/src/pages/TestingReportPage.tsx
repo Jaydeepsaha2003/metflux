@@ -121,8 +121,10 @@ const fmtDate = (iso: string | null | undefined) => {
 export const TestingReportPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const state = (location.state ?? {}) as { dispatchIds?: string[]; plId?: string };
-  const { dispatchIds: stateIds, plId } = state;
+  // onlyIds narrows a saved packing list to chosen sizes — one size out of 50 —
+  // while keeping the list's invoice / tested-by autofill.
+  const state = (location.state ?? {}) as { dispatchIds?: string[]; plId?: string; onlyIds?: string[] };
+  const { dispatchIds: stateIds, plId, onlyIds } = state;
 
   useEffect(() => {
     if (!stateIds?.length && !plId) navigate('/packing', { replace: true });
@@ -150,7 +152,7 @@ export const TestingReportPage = () => {
   });
 
   const dispatches: DispatchDetail[] = plId
-    ? (existingPl?.dispatches ?? []) as DispatchDetail[]
+    ? ((existingPl?.dispatches ?? []) as DispatchDetail[]).filter((d) => !onlyIds?.length || onlyIds.includes(d.id))
     : dispatchQueries.filter((q) => q.data).map((q) => q.data as DispatchDetail);
 
   const isLoading = plId ? loadingPl : dispatchQueries.some((q) => q.isLoading);
