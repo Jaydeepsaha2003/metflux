@@ -11,6 +11,7 @@ import { useCustomerRate, useAutoFillRate, type CardRate } from '@/hooks/useCust
 import { cn } from '@/lib/cn';
 import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc, nanoCalc, nanoTestCalc, isCompositeGrade, compositeRuleFromMaterial, compositeCalc, stackOr, defaultToroidalFactor, defaultRectStack, eCoreCalc, woundCoreCalc, stepCoreCalc, type CoreStep, TOROIDAL_FACTOR, RECT_STACK_FACTOR } from '@/lib/calc';
 import { MATERIALS, type MaterialKey } from '@/lib/coreMaterials';
+import { nanoFinishSize } from '@/lib/coreTypes';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useConfirm } from '@/hooks/useConfirm';
 import CorePreview from '@/components/core3d/CorePreview';
@@ -84,20 +85,6 @@ type GradeRow = {
 };
 // A grade with no coreTypes (legacy) applies to all.
 const gradeAppliesTo = (g: GradeRow, ct: CoreType) => !g.coreTypes || g.coreTypes.length === 0 || g.coreTypes.includes(ct);
-/** Finished size of a nano line: its bare ID × OD × HT plus the grade's case
- *  offsets. Not stored on the line — derived from the measure and the grade, so
- *  it follows the grade table. Null when there are no offsets to apply. */
-export const nanoFinishSize = (
-  it: { coreType: string; grade: string; measure: string },
-  grades: GradeRow[] | undefined,
-): string | null => {
-  if (it.coreType !== 'NANO') return null;
-  const g = grades?.find((x) => x.grade === it.grade);
-  const dims = it.measure.match(/\d+(?:\.\d+)?/g)?.map(Number);
-  if (!g || !dims || dims.length < 3) return null;
-  if (g.nanoIdOff == null && g.nanoOdOff == null && g.nanoHtOff == null) return null;
-  return `${dims[0] + (g.nanoIdOff ?? 0)} × ${dims[1] + (g.nanoOdOff ?? 0)} × ${dims[2] + (g.nanoHtOff ?? 0)}`;
-};
 type FluxPoint = { flux: number; ateCm: number };
 type FluxGroup = { grade: string; points: FluxPoint[] };
 

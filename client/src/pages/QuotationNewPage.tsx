@@ -12,7 +12,7 @@ import { cn } from '@/lib/cn';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import {
   type Item, type ShapeReport, ToroidalForm, RectangularForm, NanoForm,
-  StackedCoreForm, emptyShapeFor, Field, nanoFinishSize,
+  StackedCoreForm, emptyShapeFor, Field,
 } from '@/pages/POOrderNewPage';
 import CorePreview from '@/components/core3d/CorePreview';
 // The Sales Order stylesheet, because this screen now uses the same workbench
@@ -20,7 +20,7 @@ import CorePreview from '@/components/core3d/CorePreview';
 // .sales-order-workbench, so the wrapper below is what switches them on.
 import '@/pages/po-order-new.css';
 
-import { coreShort } from '@/lib/coreTypes';
+import { coreShort, nanoFinishSize } from '@/lib/coreTypes';
 import { type MaterialKey } from '@/lib/coreMaterials';
 import { useAuthStore, activeMembership } from '@/store/auth';
 

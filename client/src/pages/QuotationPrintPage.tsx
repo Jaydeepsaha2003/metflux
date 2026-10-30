@@ -19,11 +19,12 @@ import { api } from '@/lib/api';
 import { shareViaWhatsApp, type ShareTarget } from '@/lib/share';
 import { useBranding } from '@/store/branding';
 import { brandColorFor } from '@/lib/brandColor';
+import { nanoFinishSize } from '@/lib/coreTypes';
 import { downloadQuotationPdf, quotationPdfBlob, type QuotationPdf } from '@/lib/reportPdf';
 
 type Customer = { id: string; name: string; gstNumber: string | null; gstRate: number; state: string | null; address: string | null; phone?: string | null };
 type QItem = {
-  id: string; material: string; grade: string; measure: string;
+  id: string; coreType: string; material: string; grade: string; measure: string;
   hsnCode: string | null; unit: string | null; pcs: number;
   rateBasis: 'PER_KG' | 'PER_PCS' | null; rateValue: number | null;
   ratePerPc: number | null; totalAmount: number | null;
@@ -86,6 +87,11 @@ export const QuotationPrintPage = () => {
     queryKey: ['quotation-print', id],
     queryFn: () => api<Quotation>(`/quotations/${id}`),
     enabled: !!id,
+  });
+  // Finish size is derived from the grade's case offsets, not stored on the line.
+  const { data: gradesResp } = useQuery({
+    queryKey: ['material-grades'],
+    queryFn: () => api<{ grades: { grade: string; nanoIdOff?: number | null; nanoOdOff?: number | null; nanoHtOff?: number | null }[] }>('/material-grades'),
   });
   const { data: company } = useQuery({
     queryKey: ['company-me'],
@@ -162,7 +168,7 @@ export const QuotationPrintPage = () => {
         const showGrade = it.grade && !it.material.toUpperCase().includes(it.grade.toUpperCase());
         return {
           description: `${it.material}${it.measure ? ` - ${it.measure}` : ''}`,
-          sub: showGrade ? it.grade : '',
+          sub: [showGrade ? it.grade : '', nanoFinishSize(it, gradesResp?.grades) ? `Finish size ${nanoFinishSize(it, gradesResp?.grades)}` : ''].filter(Boolean).join(' · '),
           hsn: it.hsnCode || '',
           qty: it.pcs.toLocaleString('en-IN'),
           unit: it.unit || 'Pcs',
@@ -311,6 +317,7 @@ export const QuotationPrintPage = () => {
                   <td className="px-2 py-2 border-r border-slate-200">
                     <div className="font-medium">{it.material}{it.measure ? ` - ${it.measure}` : ''}</div>
                     {showGrade && <div className="mt-0.5 text-[11px] text-slate-500">{it.grade}</div>}
+                    {nanoFinishSize(it, gradesResp?.grades) && <div className="mt-0.5 text-[11px] text-slate-500">Finish size {nanoFinishSize(it, gradesResp?.grades)}</div>}
                   </td>
                   <td className="px-2 py-2 border-r border-slate-200 text-center font-mono">{it.hsnCode || '—'}</td>
                   <td className="px-2 py-2 border-r border-slate-200 text-right tabular-nums">{it.pcs.toLocaleString('en-IN')}</td>

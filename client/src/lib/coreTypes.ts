@@ -100,3 +100,18 @@ export const coreBadge = (ct: string | null | undefined) =>
   pick(CORE_BADGE, ct, 'bg-slate-100 text-slate-700');
 export const coreBadgeRing = (ct: string | null | undefined) =>
   pick(CORE_BADGE_RING, ct, 'bg-slate-100 text-slate-700 ring-slate-200');
+
+/** Finished size of a nano line: its bare ID × OD × HT plus the grade's case
+ *  offsets. Not stored on the line — derived from the measure and the grade, so
+ *  it follows the grade table. Null when there are no offsets to apply. */
+export const nanoFinishSize = (
+  it: { coreType: string; grade: string; measure: string },
+  grades: { grade: string; nanoIdOff?: number | null; nanoOdOff?: number | null; nanoHtOff?: number | null }[] | undefined,
+): string | null => {
+  if (it.coreType !== 'NANO') return null;
+  const g = grades?.find((x) => x.grade === it.grade);
+  const dims = it.measure.match(/\d+(?:\.\d+)?/g)?.map(Number);
+  if (!g || !dims || dims.length < 3) return null;
+  if (g.nanoIdOff == null && g.nanoOdOff == null && g.nanoHtOff == null) return null;
+  return `${dims[0] + (g.nanoIdOff ?? 0)} × ${dims[1] + (g.nanoOdOff ?? 0)} × ${dims[2] + (g.nanoHtOff ?? 0)}`;
+};
