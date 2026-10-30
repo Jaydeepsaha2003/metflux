@@ -12,7 +12,7 @@ import { cn } from '@/lib/cn';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import {
   type Item, type ShapeReport, ToroidalForm, RectangularForm, NanoForm,
-  StackedCoreForm, emptyShapeFor, Field,
+  StackedCoreForm, emptyShapeFor, Field, nanoFinishSize,
 } from '@/pages/POOrderNewPage';
 import CorePreview from '@/components/core3d/CorePreview';
 // The Sales Order stylesheet, because this screen now uses the same workbench
@@ -698,7 +698,8 @@ export const QuotationNewPage = () => {
                     <td className="px-2 py-2">
                       {(() => {
                         const manual = !it.grade && !it.measure;
-                        const sub = [it.grade, it.measure].filter(Boolean).join(' · ');
+                        const finish = nanoFinishSize(it, gradesResp?.grades);
+                        const sub = [it.grade, finish ? `bare ${it.measure}` : it.measure, finish && `finish ${finish}`].filter(Boolean).join(' · ');
                         return (<>
                           <div className="flex items-center gap-1.5">
                             <span className={cn('rounded-full px-1.5 py-0.5 text-[10px] font-medium uppercase',

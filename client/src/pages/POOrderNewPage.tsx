@@ -84,6 +84,20 @@ type GradeRow = {
 };
 // A grade with no coreTypes (legacy) applies to all.
 const gradeAppliesTo = (g: GradeRow, ct: CoreType) => !g.coreTypes || g.coreTypes.length === 0 || g.coreTypes.includes(ct);
+/** Finished size of a nano line: its bare ID × OD × HT plus the grade's case
+ *  offsets. Not stored on the line — derived from the measure and the grade, so
+ *  it follows the grade table. Null when there are no offsets to apply. */
+export const nanoFinishSize = (
+  it: { coreType: string; grade: string; measure: string },
+  grades: GradeRow[] | undefined,
+): string | null => {
+  if (it.coreType !== 'NANO') return null;
+  const g = grades?.find((x) => x.grade === it.grade);
+  const dims = it.measure.match(/\d+(?:\.\d+)?/g)?.map(Number);
+  if (!g || !dims || dims.length < 3) return null;
+  if (g.nanoIdOff == null && g.nanoOdOff == null && g.nanoHtOff == null) return null;
+  return `${dims[0] + (g.nanoIdOff ?? 0)} × ${dims[1] + (g.nanoOdOff ?? 0)} × ${dims[2] + (g.nanoHtOff ?? 0)}`;
+};
 type FluxPoint = { flux: number; ateCm: number };
 type FluxGroup = { grade: string; points: FluxPoint[] };
 
@@ -1071,7 +1085,10 @@ export const POOrderNewPage = () => {
                     {it.grade}{it.material ? ` · ${it.material}` : ''}
                   </span>
                 </div>
-                <div className="font-mono text-[11px] text-slate-700 break-all">{it.measure}</div>
+                <div className="font-mono text-[11px] text-slate-700 break-all">
+                  {it.measure}
+                  {nanoFinishSize(it, gradesResp?.grades) && <span className="text-brand-700"> → finish {nanoFinishSize(it, gradesResp?.grades)}</span>}
+                </div>
                 <div className="mt-1 flex justify-between text-xs">
                   <span className="text-slate-500 tabular-nums">
                     {it.pcs} × {it.weightPerPc.toFixed(3)}
@@ -1186,7 +1203,10 @@ export const POOrderNewPage = () => {
                   </td>
                   <td className="px-3 py-2">{it.grade}</td>
                   <td className="px-3 py-2">{it.material}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{it.measure}</td>
+                  <td className="px-3 py-2 font-mono text-xs">
+                    {it.measure}
+                    {nanoFinishSize(it, gradesResp?.grades) && <div className="text-brand-700">finish {nanoFinishSize(it, gradesResp?.grades)}</div>}
+                  </td>
                   <td className="px-3 py-2 text-right font-mono tabular-nums">{it.weightPerPc.toFixed(3)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{it.pcs}</td>
                   <td className="px-3 py-2 text-right font-mono font-semibold tabular-nums">{it.totalWeight.toFixed(3)}</td>
