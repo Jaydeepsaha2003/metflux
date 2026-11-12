@@ -397,6 +397,8 @@ export type QuotationPdf = {
   items: Array<{ description: string; sub: string; hsn: string; qty: string; unit: string; price: string; amount: string }>;
   totalQty: string; unit: string; subTotal: string;
   gstRate: number; intra: boolean; tax: string; grandTotal: string; amountWords: string;
+  /** ISO code + symbol; absent = INR / ₹, which is what every earlier caller meant. */
+  currency?: string; currencySymbol?: string;
   bank: { name: string; accountName: string; accountNumber: string; ifsc: string; branch: string };
   terms: string; notes: string;
 };
@@ -469,7 +471,7 @@ rightStack.push({
 
   // Items table
   const body: any[] = [[
-    th('S.N'), th('Description of Goods', 'left'), th('HSN/SAC'), th('Qty', 'right'), th('Unit'), th('Price', 'right'), th('Amount', 'right'),
+    th('S.N'), th('Description of Goods', 'left'), th('HSN/SAC'), th('Qty', 'right'), th('Unit'), th(d.currency && d.currency !== 'INR' ? `Price (${d.currency})` : 'Price', 'right'), th(d.currency && d.currency !== 'INR' ? `Amount (${d.currency})` : 'Amount', 'right'),
   ]];
   d.items.forEach((it, i) => {
     body.push([
@@ -507,12 +509,13 @@ rightStack.push({
     }
   }
   totalLines.push({
-    columns: [{ text: 'Grand Total', width: '*', fontSize: 11, bold: true, color: brandDark }, { text: `₹ ${d.grandTotal}`, width: 'auto', fontSize: 11, bold: true, alignment: 'right', color: brandDark }],
+    columns: [{ text: 'Grand Total', width: '*', fontSize: 11, bold: true, color: brandDark }, { text: `${d.currencySymbol ?? '₹'} ${d.grandTotal}`, width: 'auto', fontSize: 11, bold: true, alignment: 'right', color: brandDark }],
+    columnGap: 8, // a long code ("CHF 12,345.00") otherwise runs into the label
     margin: [0, 3, 0, 0],
   });
   content.push({
     table: { widths: ['*', 'auto'], body: [[
-      { stack: [{ text: 'AMOUNT IN WORDS', bold: true, fontSize: 8, color: GREY }, { text: `INR ${d.amountWords}`, bold: true, fontSize: 9.5, margin: [0, 2, 0, 0] }], margin: [0, 2, 10, 2] },
+      { stack: [{ text: 'AMOUNT IN WORDS', bold: true, fontSize: 8, color: GREY }, { text: d.amountWords, bold: true, fontSize: 9.5, margin: [0, 2, 0, 0] }], margin: [0, 2, 10, 2] },
       { width: 200, stack: totalLines, margin: [0, 2, 0, 2] },
     ]] },
     layout: { hLineWidth: (i: number) => (i === 0 || i === 1 ? 0.5 : 0), vLineWidth: (i: number) => (i === 1 ? 0.5 : 0), hLineColor: () => LIGHT, vLineColor: () => LIGHT, paddingLeft: () => 6, paddingRight: () => 6, paddingTop: () => 2, paddingBottom: () => 2 },

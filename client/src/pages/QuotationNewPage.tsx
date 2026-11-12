@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Save, Loader2, Trash2, Copy, Pencil, FileText, Calendar, Hash, User2, Plus, Landmark } from 'lucide-react';
+import { Save, Loader2, Trash2, Copy, Pencil, FileText, Calendar, Hash, User2, Plus, Landmark, Coins } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { SearchableSelect } from '@/components/SearchableSelect';
@@ -21,6 +21,7 @@ import CorePreview from '@/components/core3d/CorePreview';
 import '@/pages/po-order-new.css';
 
 import { coreShort, nanoFinishSize } from '@/lib/coreTypes';
+import { CurrencyContext, currencyOptions, fmtMoney, useCurrency } from '@/lib/currency';
 import { type MaterialKey } from '@/lib/coreMaterials';
 import { useAuthStore, activeMembership } from '@/store/auth';
 
@@ -44,11 +45,11 @@ const QUOTE_DRAFT_KEY = 'quotation_draft_new';
 /* Shape persisted to localStorage as an auto-draft (New quotation only). */
 type QuoteDraft = {
   quotationNo: string; customerId: string; quotationDate: string; validUntil: string;
+  currency?: string; exchangeRate?: string;
   notes: string; terms: string;
   bankName: string; bankBranch: string; bankAccountName: string; bankAccountNumber: string; bankIfsc: string;
   items: QItem[];
 };
-const money0 = (n: number | undefined | null) => Math.round(Number(n) || 0).toLocaleString('en-IN');
 
 const coreBadge = (ct: CoreType) =>
   ct === 'TOROIDAL' ? 'bg-amber-50 text-amber-700'
@@ -64,6 +65,7 @@ const cellInput =
 /* Manual / custom quotation line — free-text description + qty + rate, for items
    not in the grade/material catalogue. No core spec or dimensions. */
 const ManualLineForm = ({ onAdd }: { onAdd: (item: QItem) => void }) => {
+  const cur = useCurrency();
   const [description, setDescription] = useState('');
   const [hsnCode, setHsnCode] = useState('');
   const [unit, setUnit] = useState('Pcs');
@@ -117,11 +119,11 @@ const ManualLineForm = ({ onAdd }: { onAdd: (item: QItem) => void }) => {
       </div>
       <div className="mt-2 grid grid-cols-2 items-end gap-2 sm:grid-cols-6">
         <label className="block sm:col-span-2">
-          <span className="mb-1 block text-[11px] text-slate-500">Rate (₹ / unit)</span>
+          <span className="mb-1 block text-[11px] text-slate-500">Rate ({cur.sym} / unit)</span>
           <input type="number" min={0} className={cellInput} value={rate || ''} onChange={(e) => setRate(parseFloat(e.target.value) || 0)} />
         </label>
         <div className="text-xs text-slate-500 sm:col-span-2">
-          Amount: <span className="font-semibold text-brand-700 tabular-nums">₹{money0(rate * qty)}</span>
+          Amount: <span className="font-semibold text-brand-700 tabular-nums">{cur.fmt(rate * qty)}</span>
         </div>
         <div className="col-span-2 flex justify-end sm:col-span-2">
           <button type="button" onClick={add} className="btn-primary w-full sm:w-auto"><Plus className="h-4 w-4" /> Add custom line</button>
@@ -143,6 +145,11 @@ export const QuotationNewPage = () => {
   const [customerId, setCustomerId] = useState('');
   const [quotationDate, setQuotationDate] = useState(todayISO());
   const [validUntil, setValidUntil] = useState('');
+  // Amounts are typed in this currency and never converted. The rate (₹ per unit)
+  // matters only when the quotation is turned into a Sales Order, which is in rupees.
+  const [currency, setCurrency] = useState('INR');
+  const [exchangeRate, setExchangeRate] = useState('');
+  const foreign = currency !== 'INR';
   const [notes, setNotes] = useState('');
 
   /* ----- per-quotation bank details + terms (prefilled from company defaults) ----- */
@@ -258,13 +265,13 @@ export const QuotationNewPage = () => {
     if (!customerId && items.length === 0) return;
     const id = setTimeout(() => {
       const draft: QuoteDraft = {
-        quotationNo, customerId, quotationDate, validUntil, notes, terms,
+        quotationNo, customerId, quotationDate, validUntil, currency, exchangeRate, notes, terms,
         bankName, bankBranch, bankAccountName, bankAccountNumber, bankIfsc, items,
       };
       localStorage.setItem(QUOTE_DRAFT_KEY, JSON.stringify(draft));
     }, 1500);
     return () => clearTimeout(id);
-  }, [isEdit, quotationNo, customerId, quotationDate, validUntil, notes, terms,
+  }, [isEdit, quotationNo, customerId, quotationDate, validUntil, currency, exchangeRate, notes, terms,
       bankName, bankBranch, bankAccountName, bankAccountNumber, bankIfsc, items]);
 
   const restoreDraft = () => {
@@ -274,6 +281,7 @@ export const QuotationNewPage = () => {
     setCustomerId(d.customerId ?? '');
     setQuotationDate(d.quotationDate || todayISO());
     setValidUntil(d.validUntil ?? '');
+    setCurrency(d.currency || 'INR'); setExchangeRate(d.exchangeRate ?? '');
     setNotes(d.notes ?? '');
     setTerms(d.terms ?? '');
     setBankName(d.bankName ?? ''); setBankBranch(d.bankBranch ?? '');
@@ -329,6 +337,8 @@ export const QuotationNewPage = () => {
     setCustomerId(existing.customerId ?? '');
     setQuotationDate(existing.quotationDate ? String(existing.quotationDate).slice(0, 10) : todayISO());
     setValidUntil(existing.validUntil ? String(existing.validUntil).slice(0, 10) : '');
+    setCurrency(existing.currency || 'INR');
+    setExchangeRate(existing.exchangeRate != null ? String(Number(existing.exchangeRate)) : '');
     setNotes(existing.notes ?? '');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     setItems((existing.items ?? []).map((r: any): QItem => ({
@@ -401,6 +411,8 @@ export const QuotationNewPage = () => {
           customerId,
           quotationDate,
           validUntil: validUntil || null,
+          currency,
+          exchangeRate: foreign && +exchangeRate > 0 ? +exchangeRate : null,
           notes: notes.trim() || null,
           terms: terms.trim() || null,
           bankDetails: {
@@ -455,7 +467,7 @@ export const QuotationNewPage = () => {
 
       {/* ============ HEADER ============ */}
       <section className="card p-4 sm:p-5">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <label className="block">
             <span className="mb-1 flex items-center gap-1 text-xs font-medium text-slate-600"><Hash className="h-3.5 w-3.5" /> Quotation No.</span>
             <input className="input" value={quotationNo} onChange={(e) => setQuotationNo(e.target.value)} placeholder="MEI/SQ/1/2026-27" />
@@ -477,10 +489,27 @@ export const QuotationNewPage = () => {
             <span className="mb-1 flex items-center gap-1 text-xs font-medium text-slate-600"><Calendar className="h-3.5 w-3.5" /> Valid Until <span className="text-slate-400">(optional)</span></span>
             <input type="date" className="input" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
           </label>
+          <label className="block">
+            <span className="mb-1 flex items-center gap-1 text-xs font-medium text-slate-600"><Coins className="h-3.5 w-3.5" /> Currency</span>
+            <SearchableSelect value={currency} onChange={(v) => setCurrency(v || 'INR')} options={currencyOptions} placeholder="Currency" />
+          </label>
         </div>
-        {customer && (customer.gstRate ?? 0) > 0 && (
-          <div className="mt-2 text-[11px] text-slate-500">GST @ {customer.gstRate}% will be applied on the printed quotation.</div>
+        {foreign && (
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-slate-600">
+            <span className="font-medium">1 {currency} = ₹</span>
+            <input type="number" min={0} step="any" className="input !w-32" value={exchangeRate} placeholder="e.g. 83.50"
+              onChange={(e) => setExchangeRate(e.target.value)} aria-label={`Rupees per ${currency}`} />
+            <span className="text-slate-500">
+              Used only if this quotation is converted to a Sales Order, which is kept in rupees. Amounts on this
+              quotation are entered and printed in {currency}; nothing already entered is converted when you change the currency.
+            </span>
+          </div>
         )}
+        {foreign
+          ? <div className="mt-2 text-[11px] text-slate-500">No GST is applied to a quotation in {currency}.</div>
+          : customer && (customer.gstRate ?? 0) > 0 && (
+              <div className="mt-2 text-[11px] text-slate-500">GST @ {customer.gstRate}% will be applied on the printed quotation.</div>
+            )}
       </section>
 
       {/* ============ ITEM ENTRY ============ */}
@@ -490,6 +519,7 @@ export const QuotationNewPage = () => {
           sticky 3D dock. One screen to learn, not two. The only thing here the
           Sales Order has not got is the custom line, which a quotation needs
           for charges that are not a core at all. */}
+      <CurrencyContext.Provider value={currency}>
       <section
         data-core={coreType && coreType !== 'MANUAL' ? coreType : 'TOROIDAL'}
         className="sales-order-section sales-order-entry card p-3 sm:p-4 space-y-3"
@@ -662,6 +692,7 @@ export const QuotationNewPage = () => {
           )}
         </div>
       </section>
+      </CurrencyContext.Provider>
 
       {/* ============ ITEMS LIST ============ */}
       <section className="card overflow-hidden">
@@ -670,7 +701,7 @@ export const QuotationNewPage = () => {
           <div className="text-xs text-slate-500">
             Total Wt: <span className="font-semibold text-slate-900 tabular-nums">{totalWeight.toFixed(3)} kg</span>
             <span className="mx-2 text-slate-300">·</span>
-            Amount: <span className="font-semibold text-brand-700 tabular-nums">₹{money0(totalAmount)}</span>
+            Amount: <span className="font-semibold text-brand-700 tabular-nums">{fmtMoney(totalAmount, currency)}</span>
           </div>
         </div>
 
@@ -719,8 +750,8 @@ export const QuotationNewPage = () => {
                     <td className="px-2 py-2">
                       <input className={cellInput} value={it.unit ?? 'Pcs'} onChange={(e) => patchItem(idx, { unit: e.target.value })} />
                     </td>
-                    <td className="px-2 py-2 text-right tabular-nums">{it.ratePerPc != null ? money0(it.ratePerPc) : '—'}</td>
-                    <td className="px-2 py-2 text-right font-semibold tabular-nums">{it.totalAmount != null ? `₹${money0(it.totalAmount)}` : '—'}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">{it.ratePerPc != null ? fmtMoney(it.ratePerPc, currency) : '—'}</td>
+                    <td className="px-2 py-2 text-right font-semibold tabular-nums">{it.totalAmount != null ? fmtMoney(it.totalAmount, currency) : '—'}</td>
                     <td className="px-2 py-2">
                       <div className="flex items-center gap-1">
                         {(it.grade || it.measure) && (

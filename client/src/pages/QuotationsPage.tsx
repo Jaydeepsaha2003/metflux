@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FileText, Plus, Search, Loader2, Printer, ArrowRightLeft, Trash2, CheckCircle2, XCircle, Pencil } from 'lucide-react';
+import { fmtMoney } from '@/lib/currency';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
@@ -18,6 +19,7 @@ type Row = {
   convertedPoOrderId: string | null;
   customer: { id: string; name: string };
   itemsAmount: number;
+  currency?: string;
   _count: { items: number };
 };
 
@@ -26,7 +28,6 @@ const fmtDate = (iso: string | null) => {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
-const money0 = (n: number) => Math.round(n || 0).toLocaleString('en-IN');
 
 const STATUS_STYLE: Record<Row['status'], string> = {
   OPEN: 'bg-blue-50 text-blue-700',
@@ -135,7 +136,7 @@ export const QuotationsPage = () => {
                     <td className="px-3 py-2.5 text-slate-600">{fmtDate(r.quotationDate)}</td>
                     <td className="px-3 py-2.5 font-medium text-slate-800">{r.customer.name}</td>
                     <td className="px-3 py-2.5 text-center tabular-nums text-slate-600">{r._count.items}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums font-semibold">₹{money0(r.itemsAmount)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums font-semibold">{fmtMoney(r.itemsAmount, r.currency)}</td>
                     <td className="px-3 py-2.5 text-center">
                       <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium', STATUS_STYLE[r.status])}>
                         {r.status === 'CONVERTED' ? <CheckCircle2 className="h-3 w-3" /> : r.status === 'CANCELLED' ? <XCircle className="h-3 w-3" /> : null}
@@ -189,7 +190,7 @@ export const QuotationsPage = () => {
                   </div>
                   <div className="text-right">
                     <div className="text-[11px] uppercase tracking-wide text-slate-400">Amount</div>
-                    <div className="tabular-nums font-semibold">₹{money0(r.itemsAmount)}</div>
+                    <div className="tabular-nums font-semibold">{fmtMoney(r.itemsAmount, r.currency)}</div>
                   </div>
                 </div>
                 <div className="mt-3 flex items-center justify-end gap-1 border-t border-slate-100 pt-3">

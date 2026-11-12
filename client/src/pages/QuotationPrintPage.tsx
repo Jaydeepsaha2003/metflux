@@ -20,6 +20,7 @@ import { shareViaWhatsApp, type ShareTarget } from '@/lib/share';
 import { useBranding } from '@/store/branding';
 import { brandColorFor } from '@/lib/brandColor';
 import { nanoFinishSize } from '@/lib/coreTypes';
+import { currencySymbol, fmtPlain, wordsIntl } from '@/lib/currency';
 import { downloadQuotationPdf, quotationPdfBlob, type QuotationPdf } from '@/lib/reportPdf';
 
 type Customer = { id: string; name: string; gstNumber: string | null; gstRate: number; state: string | null; address: string | null; phone?: string | null };
@@ -34,6 +35,7 @@ type Quotation = {
   id: string; quotationNo: string; quotationDate: string; validUntil: string | null;
   status: string; notes: string | null; terms: string | null; bankDetails: BankDetails | null;
   customer: Customer; items: QItem[];
+  currency?: string;
 };
 type CompanyMe = {
   name: string; address: string | null; phone: string | null; whatsappNumber: string | null;
@@ -45,7 +47,6 @@ const fmtDate = (iso: string | null | undefined) => {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
-const fmt2 = (n: number) => n.toFixed(2);
 
 /* Indian-style "Amount in words" — up to crores. */
 const numberToWordsIndian = (num: number): string => {
@@ -126,10 +127,16 @@ export const QuotationPrintPage = () => {
     setTerms(qt.terms || qsettings?.terms || '1. Subject to Jurisdiction only.');
   }, [qt, qsettings, edited]);
 
+  // The quotation's own currency. GST is an Indian domestic tax: a quotation in any
+  // other currency is an export quote and carries none.
+  const cur = qt?.currency || 'INR';
+  const foreign = cur !== 'INR';
+  const sym = currencySymbol(cur);
+  const fmt2 = (n: number) => fmtPlain(n, cur);
   const totals = useMemo(() => {
     if (!qt) return { sub: 0, gstRate: 0, tax: 0, grand: 0, intra: false, totalQty: 0, unit: 'Pcs' };
     const sub = qt.items.reduce((s, it) => s + (it.totalAmount ?? 0), 0);
-    const gstRate = qt.customer.gstRate ?? 0;
+    const gstRate = foreign ? 0 : (qt.customer.gstRate ?? 0);
     // Same-state (GSTIN state code matches) → CGST+SGST; else IGST.
     const coState = (company?.gstNumber ?? '').slice(0, 2);
     const custState = (qt.customer.gstNumber ?? '').slice(0, 2);
@@ -139,7 +146,9 @@ export const QuotationPrintPage = () => {
     const totalQty = qt.items.reduce((s, it) => s + it.pcs, 0);
     const unit = qt.items[0]?.unit || 'Pcs';
     return { sub: +sub.toFixed(2), gstRate, tax, grand, intra, totalQty, unit };
-  }, [qt, company?.gstNumber]);
+  }, [qt, company?.gstNumber, foreign]);
+
+  const words = foreign ? wordsIntl(totals.grand, cur) : `INR ${numberToWordsIndian(totals.grand)}`;
 
   // Colour follows the company the quotation is FOR; falls back to the domain's.
   const storeBrand = useBranding((s) => s.brandColor);
@@ -181,7 +190,7 @@ export const QuotationPrintPage = () => {
       subTotal: fmt2(totals.sub),
       gstRate: totals.gstRate, intra: totals.intra,
       tax: fmt2(totals.tax), grandTotal: fmt2(totals.grand),
-      amountWords: numberToWordsIndian(totals.grand),
+      amountWords: words, currency: cur, currencySymbol: sym,
       bank: { name: bankName, accountName: bankAcctName, accountNumber: bankAcc, ifsc: bankIfsc, branch: bankBranch },
       terms, notes: qt.notes ?? '',
     };
@@ -207,7 +216,7 @@ export const QuotationPrintPage = () => {
         company?.name ? `From: ${company.name}` : null,
         `To: ${qt.customer.name}`,
         `Date: ${fmtDate(qt.quotationDate)}`,
-        `Grand Total: ₹ ${fmt2(totals.grand)}`,
+        `Grand Total: ${sym} ${fmt2(totals.grand)}`,
       ].filter(Boolean).join('\n');
       await shareViaWhatsApp({
         message,
@@ -302,8 +311,8 @@ export const QuotationPrintPage = () => {
                 <th className="px-2 py-1.5 border-r border-brand-500 text-center font-bold">HSN/SAC</th>
                 <th className="px-2 py-1.5 border-r border-brand-500 text-right font-bold">Qty</th>
                 <th className="px-2 py-1.5 border-r border-brand-500 text-center font-bold">Unit</th>
-                <th className="px-2 py-1.5 border-r border-brand-500 text-right font-bold">Price</th>
-                <th className="px-2 py-1.5 text-right font-bold">Amount</th>
+                <th className="px-2 py-1.5 border-r border-brand-500 text-right font-bold">Price{foreign ? ` (${cur})` : ''}</th>
+                <th className="px-2 py-1.5 text-right font-bold">Amount{foreign ? ` (${cur})` : ''}</th>
               </tr>
             </thead>
             <tbody>
@@ -341,7 +350,7 @@ export const QuotationPrintPage = () => {
           <div className="grid grid-cols-2 border-b border-slate-300">
             <div className="border-r border-slate-300 px-5 py-3 text-[12px]">
               <div className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold mb-1">Amount In Words</div>
-              <div className="font-semibold">INR {numberToWordsIndian(totals.grand)}</div>
+              <div className="font-semibold">{words}</div>
             </div>
             <div className="px-5 py-3 text-[12px] space-y-1">
               <div className="flex justify-between"><span className="text-slate-600">Sub Total</span><span className="tabular-nums">{fmt2(totals.sub)}</span></div>
@@ -355,7 +364,7 @@ export const QuotationPrintPage = () => {
               ))}
               <div className="flex justify-between border-t-2 border-brand-600 pt-1.5 mt-1.5">
                 <span className="font-bold text-brand-800">Grand Total</span>
-                <span className="tabular-nums font-bold text-brand-800">₹ {fmt2(totals.grand)}</span>
+                <span className="tabular-nums font-bold text-brand-800">{sym} {fmt2(totals.grand)}</span>
               </div>
             </div>
           </div>

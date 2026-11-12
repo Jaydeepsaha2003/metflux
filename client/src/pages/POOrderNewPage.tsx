@@ -12,6 +12,7 @@ import { cn } from '@/lib/cn';
 import { numFromInput, rectangularCalc, toroidalCalc, fluxTestCalc, rectangularFluxTestCalc, nanoCalc, nanoTestCalc, isCompositeGrade, compositeRuleFromMaterial, compositeCalc, stackOr, defaultToroidalFactor, defaultRectStack, eCoreCalc, woundCoreCalc, stepCoreCalc, type CoreStep, TOROIDAL_FACTOR, RECT_STACK_FACTOR } from '@/lib/calc';
 import { MATERIALS, type MaterialKey } from '@/lib/coreMaterials';
 import { nanoFinishSize } from '@/lib/coreTypes';
+import { useCurrency } from '@/lib/currency';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useConfirm } from '@/hooks/useConfirm';
 import CorePreview from '@/components/core3d/CorePreview';
@@ -1910,6 +1911,7 @@ export const ToroidalForm = ({
   selectedAlloy?: MaterialKey;
   requireGap?: boolean;
 }) => {
+  const cur = useCurrency();
   const [grade, setGrade] = useState('');
   const [material, setMaterial] = useState('');
   const [id, setId] = useState(0);
@@ -2123,7 +2125,7 @@ export const ToroidalForm = ({
         </Field>
         <div className={cn('shrink-0', FW.rate)}>
           <NumField
-            label={rateBasis === 'PER_KG' ? 'Rate ₹/kg' : 'Rate ₹/pc'}
+            label={rateBasis === 'PER_KG' ? `Rate ${cur.sym}/kg` : `Rate ${cur.sym}/pc`}
             align="right"
             value={rateValue}
             onChange={(v) => { setRateTouched(true); setRateValue(v); }}
@@ -2220,9 +2222,9 @@ export const ToroidalForm = ({
         </div>
         {rateValue > 0 && (
           <div className="mt-2 grid grid-cols-3 gap-x-3 gap-y-1.5 border-t border-amber-100 pt-2">
-            <Stat label="Rate / Kg"  value={`₹${money0(ratePerKg)}`} />
-            <Stat label="Rate / Pc"  value={`₹${money0(ratePerPc)}`} />
-            <Stat label="Line Total" value={`₹${money0(totalAmount)}`} accent="primary" />
+            <Stat label="Rate / Kg"  value={cur.fmt(ratePerKg)} />
+            <Stat label="Rate / Pc"  value={cur.fmt(ratePerPc)} />
+            <Stat label="Line Total" value={cur.fmt(totalAmount)} accent="primary" />
           </div>
         )}
       </div>
@@ -2265,6 +2267,7 @@ export const RectangularForm = ({
   selectedAlloy?: MaterialKey;
   requireGap?: boolean;
 }) => {
+  const cur = useCurrency();
   const [grade, setGrade] = useState('');
   const [material, setMaterial] = useState('');
   const [id1, setId1] = useState(0);
@@ -2481,7 +2484,7 @@ export const RectangularForm = ({
         </Field>
         <div className={cn('shrink-0', FW.rate)}>
           <NumField
-            label={rateBasis === 'PER_KG' ? 'Rate ₹/kg' : 'Rate ₹/pc'}
+            label={rateBasis === 'PER_KG' ? `Rate ${cur.sym}/kg` : `Rate ${cur.sym}/pc`}
             align="right"
             value={rateValue}
             onChange={(v) => { setRateTouched(true); setRateValue(v); }}
@@ -2591,9 +2594,9 @@ export const RectangularForm = ({
         </div>
         {rateValue > 0 && (
           <div className="mt-2 grid grid-cols-3 gap-x-3 gap-y-1.5 border-t border-rose-100 pt-2">
-            <Stat label="Rate / Kg"  value={`₹${money0(ratePerKg)}`} />
-            <Stat label="Rate / Pc"  value={`₹${money0(ratePerPc)}`} />
-            <Stat label="Line Total" value={`₹${money0(totalAmount)}`} accent="primary" />
+            <Stat label="Rate / Kg"  value={cur.fmt(ratePerKg)} />
+            <Stat label="Rate / Pc"  value={cur.fmt(ratePerPc)} />
+            <Stat label="Line Total" value={cur.fmt(totalAmount)} accent="primary" />
           </div>
         )}
       </div>
@@ -2634,6 +2637,7 @@ export const NanoForm = ({
   /** Quotation mode — flux/test calibration is irrelevant to a quote, so hide it. */
   hideTesting?: boolean;
 }) => {
+  const cur = useCurrency();
   const selfCore: CoreType = compositeMode ? 'COMPOSITE' : 'NANO';
   const [grade, setGrade] = useState('');
   const [material, setMaterial] = useState('');
@@ -2845,7 +2849,7 @@ export const NanoForm = ({
         <span className={cn('text-xs font-bold uppercase tracking-wider', composite ? 'text-teal-800' : 'text-violet-800')}>{composite ? 'Composite Core (Nano + CRGO)' : 'Nano Core'}</span>
         <span className="ml-auto flex flex-wrap items-center gap-x-2 gap-y-1">
           <HeadStat label="Wt / pc" value={`${pieceWeight.toFixed(3)} kg`} on={pieceWeight > 0} />
-          <HeadStat label="Total" value={`₹${money0(lineTotal)}`} on={lineTotal > 0} />
+          <HeadStat label="Total" value={cur.fmt(lineTotal)} on={lineTotal > 0} />
         </span>
       </div>
 
@@ -2911,10 +2915,10 @@ export const NanoForm = ({
                     <SearchableSelect dense value={crgoBasis} onChange={(value) => setCrgoBasis(value === 'PER_PCS' ? 'PER_PCS' : 'PER_KG')} options={[{value:'PER_KG',label:'Per Kg'},{value:'PER_PCS',label:'Per Pcs'}]} />
                   </Field>
                   <NumField
-                    label={crgoBasis === 'PER_KG' ? 'Rate ₹/kg' : 'Rate ₹/pc'}
+                    label={crgoBasis === 'PER_KG' ? `Rate ${cur.sym}/kg` : `Rate ${cur.sym}/pc`}
                     w={FW.rate} align="right" value={crgoRate} onChange={setCrgoRate}
                   />
-                  <ReadOut label="Amt / pc" w={FW.stat} tone="amber" value={`₹${money0(crgoAmtPc)}`} />
+                  <ReadOut label="Amt / pc" w={FW.stat} tone="amber" value={cur.fmt(crgoAmtPc)} />
                 </FieldRow>
               </section>
 
@@ -2929,9 +2933,9 @@ export const NanoForm = ({
                   <ReadOut label="Wt (kg)" w={FW.stat} tone="violet" value={nanoPieceWt.toFixed(3)} />
                 </FieldRow>
                 <FieldRow className="mt-2">
-                  <NumField label="Nano ₹/kg" w={FW.rate} align="right" value={nanoPrice} onChange={setNanoPrice} />
-                  <NumField label="Case ₹/kg" w={FW.rate} align="right" value={casePrice} onChange={setCasePrice} />
-                  <ReadOut label="Amt / pc" w={FW.stat} tone="violet" value={`₹${money0(nanoAmtPc)}`} />
+                  <NumField label={`Nano ${cur.sym}/kg`} w={FW.rate} align="right" value={nanoPrice} onChange={setNanoPrice} />
+                  <NumField label={`Case ${cur.sym}/kg`} w={FW.rate} align="right" value={casePrice} onChange={setCasePrice} />
+                  <ReadOut label="Amt / pc" w={FW.stat} tone="violet" value={cur.fmt(nanoAmtPc)} />
                 </FieldRow>
                 <div className="mt-1.5 font-num text-[10px] text-slate-500">
                   Core {(comp?.coreWeight ?? 0).toFixed(3)}{isEpoxy ? ' · epoxy (case not weighed)' : ` + case ${effCaseWt.toFixed(3)}`} kg
@@ -2942,7 +2946,7 @@ export const NanoForm = ({
             {/* Quantity and the optional override price for the finished piece. */}
             <FieldRow>
               <NumField label="Pcs" w={FW.qty} align="right" value={pcs} onChange={setPcs} />
-              <NumField label="SO rate ₹/pc" w={FW.rate} align="right" value={soRate} onChange={setSoRate} />
+              <NumField label={`SO rate ${cur.sym}/pc`} w={FW.rate} align="right" value={soRate} onChange={setSoRate} />
               {rule && (
                 <div className="flex min-h-[46px] items-end pb-1 text-[11px] text-slate-500">
                   {rule === 'CONTINUOUS_LOOP' ? 'Continuous loop → ID = min, OD = max, HT = same (concentric).'
@@ -3000,8 +3004,8 @@ export const NanoForm = ({
                   onGrade={setGrade} onMaterial={setMaterial} listIdSuffix="nano"
                 />
               </div>
-              <NumField label="Nano ₹/kg" w={FW.rate} align="right" value={nanoPrice} onChange={setNanoPrice} />
-              <NumField label="Case ₹/kg" w={FW.rate} align="right" value={casePrice} onChange={setCasePrice} />
+              <NumField label={`Nano ${cur.sym}/kg`} w={FW.rate} align="right" value={nanoPrice} onChange={setNanoPrice} />
+              <NumField label={`Case ${cur.sym}/kg`} w={FW.rate} align="right" value={casePrice} onChange={setCasePrice} />
             </FieldRow>
 
             {/* Dimensions + SO rate — one aligned line */}
@@ -3012,7 +3016,7 @@ export const NanoForm = ({
                 <NumField label="OD" w={FW.dim} value={od} onChange={setOd} />
                 <NumField label="HT" w={FW.dim} value={ht} onChange={setHt} />
                 <NumField label="Pcs" w={FW.qty} align="right" value={pcs} onChange={setPcs} />
-                <NumField label="SO rate ₹/pc" w={FW.rate} align="right" value={soRate} onChange={setSoRate} />
+                <NumField label={`SO rate ${cur.sym}/pc`} w={FW.rate} align="right" value={soRate} onChange={setSoRate} />
                 <ReadOut label="Wt / pc" w={FW.stat} tone="violet" value={pieceWeight.toFixed(3)} />
               </FieldRow>
             </div>
@@ -3066,11 +3070,11 @@ export const NanoForm = ({
             <Stat label="Composite Size" value={geomOk ? finalMeasure : '—'} accent="primary" />
           </div>
           <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-teal-100 pt-3 sm:grid-cols-5">
-            <Stat label="Nano Amt / Pc" value={`₹${money0(nanoAmtPc)}`} />
-            <Stat label="CRGO Amt / Pc" value={`₹${money0(crgoAmtPc)}`} />
-            <Stat label="Combined / Pc" value={`₹${money0(nanoCasePc)}`} />
-            <Stat label="Applied / Pc" value={soRate > 0 ? `₹${money0(soRate)}` : `₹${money0(effRate)}`} />
-            <Stat label="Line Total" value={`₹${money0(lineTotal)}`} accent="primary" />
+            <Stat label="Nano Amt / Pc" value={cur.fmt(nanoAmtPc)} />
+            <Stat label="CRGO Amt / Pc" value={cur.fmt(crgoAmtPc)} />
+            <Stat label="Combined / Pc" value={cur.fmt(nanoCasePc)} />
+            <Stat label="Applied / Pc" value={soRate > 0 ? cur.fmt(soRate) : cur.fmt(effRate)} />
+            <Stat label="Line Total" value={cur.fmt(lineTotal)} accent="primary" />
           </div>
         </div>
       ) : (
@@ -3083,10 +3087,10 @@ export const NanoForm = ({
             <Stat label="Finish Size" value={finished ?? '—'} accent={finished ? 'primary' : undefined} />
           </div>
           <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-violet-100 pt-3 sm:grid-cols-4">
-            <Stat label="Nano+Case / Pc" value={`₹${money0(nanoCasePc)}`} />
-            <Stat label="SO Rate/Pcs"    value={soRate > 0 ? `₹${money0(soRate)}` : '— (auto)'} />
-            <Stat label="Applied / Pc"   value={`₹${money0(effRate)}`} />
-            <Stat label="Line Total"     value={`₹${money0(lineTotal)}`} accent="primary" />
+            <Stat label="Nano+Case / Pc" value={cur.fmt(nanoCasePc)} />
+            <Stat label="SO Rate/Pcs"    value={soRate > 0 ? cur.fmt(soRate) : '— (auto)'} />
+            <Stat label="Applied / Pc"   value={cur.fmt(effRate)} />
+            <Stat label="Line Total"     value={cur.fmt(lineTotal)} accent="primary" />
           </div>
         </div>
       )}

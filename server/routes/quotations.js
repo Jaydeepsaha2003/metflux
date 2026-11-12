@@ -111,6 +111,10 @@ const createSchema = z.object({
   customerId: z.string().min(1),
   quotationDate: z.coerce.date(),
   validUntil: z.coerce.date().optional().nullable(),
+  // ISO 4217 code. Amounts are entered in this currency and never converted.
+  currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/, 'Use a 3-letter currency code').optional().default('INR'),
+  // Rupees per one unit of `currency`; only consulted when converting to a Sales Order.
+  exchangeRate: z.coerce.number().positive().max(1_000_000).optional().nullable(),
   notes: z.string().max(2000).optional().nullable(),
   terms: z.string().max(8000).optional().nullable(),
   bankDetails: bankSchema,
@@ -235,6 +239,7 @@ router.get('/', requireAnyPermission('view_quotation', 'view_po'), asyncHandler(
     quotationNo: r.quotationNo,
     quotationDate: r.quotationDate,
     validUntil: r.validUntil,
+    currency: r.currency ?? 'INR',
     status: r.status,
     convertedPoOrderId: r.convertedPoOrderId,
     createdAt: r.createdAt,
@@ -273,6 +278,8 @@ router.post('/', requireAnyPermission('add_quotation', 'add_po'), asyncHandler(a
       customerId: customer.id,
       quotationDate: data.quotationDate,
       validUntil: data.validUntil ?? null,
+      currency: data.currency,
+      exchangeRate: data.currency === 'INR' ? null : (data.exchangeRate ?? null),
       notes: data.notes ?? null,
       terms: data.terms ?? null,
       bankDetails: bankJson(data.bankDetails),
@@ -372,6 +379,8 @@ router.put('/:id', requireAnyPermission('add_quotation', 'add_po'), asyncHandler
       customerId: customer.id,
       quotationDate: data.quotationDate,
       validUntil: data.validUntil ?? null,
+      currency: data.currency,
+      exchangeRate: data.currency === 'INR' ? null : (data.exchangeRate ?? null),
       notes: data.notes ?? null,
       terms: data.terms ?? null,
       bankDetails: bankJson(data.bankDetails),
@@ -487,6 +496,17 @@ router.post('/:id/convert', requireAnyPermission('add_quotation', 'add_po'), asy
   const qItems = await loadItems(quotation.id);
   if (qItems.length === 0) throw new AppError('Quotation has no items to convert', 400, 'NO_ITEMS');
 
+  /* Sales Orders are in rupees. A foreign-currency quotation can only come across
+     through the exchange rate set on it; without one its figures would be booked
+     as rupees. Rates are scaled here so deriveRate sees rupee values throughout. */
+  const fx = quotation.currency && quotation.currency !== 'INR' ? Number(quotation.exchangeRate) : 1;
+  if (!(fx > 0)) {
+    throw new AppError(
+      `This quotation is in ${quotation.currency}. Edit it and set the exchange rate (₹ per ${quotation.currency}) before converting.`,
+      400, 'NO_EXCHANGE_RATE');
+  }
+  const inr = (v) => (v == null ? v : +(Number(v) * fx).toFixed(2));
+
   const orderDate = data.orderDate ?? new Date();
   const deliveryDays = data.deliveryDays ?? 0;
   const deliveryDate = data.deliveryDate
@@ -508,7 +528,7 @@ router.post('/:id/convert', requireAnyPermission('add_quotation', 'add_po'), asy
     });
     for (const it of qItems) {
       const derived = deriveRate({
-        rateBasis: it.rateBasis, rateValue: it.rateValue,
+        rateBasis: it.rateBasis, rateValue: inr(it.rateValue),
         weightPerPc: it.weightPerPc, pcs: it.pcs, totalWeight: it.totalWeight,
       });
       await tx.insert('PoOrderItem', {
@@ -525,9 +545,9 @@ router.post('/:id/convert', requireAnyPermission('add_quotation', 'add_po'), asy
         stackFactor: it.stackFactor ?? null,
         turns: it.turns, flux: it.flux, ateCm: it.ateCm,
         testVoltage: it.testVoltage, testCurrent: it.testCurrent,
-        rateBasis: it.rateBasis, rateValue: it.rateValue,
+        rateBasis: it.rateBasis, rateValue: inr(it.rateValue),
         ratePerKg: derived.ratePerKg, ratePerPc: derived.ratePerPc, totalAmount: derived.totalAmount,
-        nanoPrice: it.nanoPrice, casePrice: it.casePrice, caseWeight: it.caseWeight, nanoSoRate: it.nanoSoRate,
+        nanoPrice: inr(it.nanoPrice), casePrice: inr(it.casePrice), caseWeight: it.caseWeight, nanoSoRate: inr(it.nanoSoRate),
       });
     }
     await tx.update('Quotation', quotation.id, { status: 'CONVERTED', convertedPoOrderId: po.id });
