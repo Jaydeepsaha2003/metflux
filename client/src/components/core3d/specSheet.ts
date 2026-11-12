@@ -16,6 +16,34 @@ import type { CoreShape } from './shape';
 
 export type { SheetMeta } from './sheetModel';
 
+/* ── Company watermark ────────────────────────────────────────────────────
+   An optional image the company uploads under Company settings, drawn behind
+   every downloaded drawing sheet. It is always a PNG (converted on upload),
+   which is what pdfmake can embed. Fetched at download time rather than carried
+   in meta so every caller of the sheet gets it without being changed. A missing
+   or unreachable watermark must never stop a drawing from downloading. */
+type Watermark = { dataUrl: string; w: number; h: number };
+
+const loadWatermark = async (): Promise<Watermark | null> => {
+  try {
+    const { api } = await import('@/lib/api');
+    const c = await api<{ watermarkUrl?: string | null } | null>('/companies/me');
+    if (!c?.watermarkUrl) return null;
+    const img = new Image();
+    await new Promise<void>((resolve, reject) => { img.onload = () => resolve(); img.onerror = () => reject(new Error('bad image')); img.src = c.watermarkUrl!; });
+    return img.naturalWidth && img.naturalHeight ? { dataUrl: c.watermarkUrl, w: img.naturalWidth, h: img.naturalHeight } : null;
+  } catch { return null; }
+};
+
+/** pdfmake page background: the image, contained in 80% of the page and centred. */
+const watermarkBackground = (wm: Watermark | null) => (wm
+  ? (_page: number, size: { width: number; height: number }) => {
+      const k = Math.min((size.width * 0.8) / wm.w, (size.height * 0.8) / wm.h);
+      const w = wm.w * k; const h = wm.h * k;
+      return { image: wm.dataUrl, width: w, height: h, absolutePosition: { x: (size.width - w) / 2, y: (size.height - h) / 2 } };
+    }
+  : undefined);
+
 const stamp = () => new Date().toLocaleDateString('en-IN', {
   day: '2-digit', month: 'short', year: 'numeric',
 });
@@ -25,6 +53,14 @@ const stamp = () => new Date().toLocaleDateString('en-IN', {
    what is on it rather than being a fixed height — a toroid quoted on weight
    alone is half the sheet of a gap core with a full test block, and a fixed
    canvas either crops the second or leaves the first mostly blank. */
+
+/** The watermark as an SVG <image>, contained in 80% of the sheet and centred. */
+const wmImage = (wm: Watermark | null, W: number, H: number) => {
+  if (!wm) return '';
+  const k = Math.min((W * 0.8) / wm.w, (H * 0.8) / wm.h);
+  const w = wm.w * k; const h = wm.h * k;
+  return `<image href="${wm.dataUrl}" x="${(W - w) / 2}" y="${(H - h) / 2}" width="${w}" height="${h}"/>`;
+};
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -120,6 +156,7 @@ const drawSection = (sec: Section, x: number, y: number, w: number): [string, nu
 };
 
 export const downloadSheetJpg = async (shape: CoreShape, meta: SheetMeta) => {
+  const wm = await loadWatermark();
   const W = 1400;
   const M = 44;                                     // sheet margin
   const model = buildSheetModel(shape, meta);
@@ -181,6 +218,7 @@ export const downloadSheetJpg = async (shape: CoreShape, meta: SheetMeta) => {
 
   const header = [
     `<rect x="0" y="0" width="${W}" height="${H}" fill="#ffffff"/>`,
+    wmImage(wm, W, H),
     `<rect x="0" y="0" width="${W}" height="7" fill="#0f172a"/>`,
     T(M, 62, meta.company || 'Core specification', 30, { weight: 700 }),
     T(M, 94, `${model.title} · ${model.subtitle}`, 19, { fill: '#475569' }),
@@ -188,7 +226,7 @@ export const downloadSheetJpg = async (shape: CoreShape, meta: SheetMeta) => {
     T(W - M, 94, [meta.grade, meta.material].filter(Boolean).join(' · '), 17,
       { fill: '#475569', anchor: 'end' }),
     `<line x1="${M}" y1="112" x2="${W - M}" y2="112" stroke="#cbd5e1"/>`,
-    `<rect x="${M}" y="140" width="${W - M * 2}" height="${sk.height + 10}" fill="#ffffff" stroke="#e2e8f0"/>`,
+    `<rect x="${M}" y="140" width="${W - M * 2}" height="${sk.height + 10}" fill="${wm ? 'none' : '#ffffff'}" stroke="#e2e8f0"/>`,
   ].join('');
 
   const sheet =
@@ -290,6 +328,7 @@ const pdfSection = (sec: Section): any[] => {
 export const downloadSheetPdf = async (shape: CoreShape, meta: SheetMeta) => {
   const { loadPdfMake } = await import('@/lib/reportPdf');
   const pdfMake = await loadPdfMake();
+  const wm = await loadWatermark();
 
   /* A wound core gets the full two-sheet drawing set instead of the generic
      spec sheet: plan, section, both elevations, the strip detail and a
@@ -305,6 +344,7 @@ export const downloadSheetPdf = async (shape: CoreShape, meta: SheetMeta) => {
       // of its own in the form of a margin.
       pageMargins: [0, 0, 0, 0],
       defaultStyle: { font: 'Montserrat' },
+      background: watermarkBackground(wm),
       content: [
         { svg: set.pages[0], width: 841.89 },
         { svg: set.pages[1], width: 841.89, pageBreak: 'before' },
@@ -344,6 +384,7 @@ export const downloadSheetPdf = async (shape: CoreShape, meta: SheetMeta) => {
     pageOrientation: 'landscape',
     pageMargins: [32, 30, 32, 40],
     defaultStyle: { font: 'Montserrat', fontSize: 8.5, color: '#0f172a' },
+    background: watermarkBackground(wm),
     content: [
       { text: `${model.title} — Technical drawing`, fontSize:17, bold:true },
       { text:[meta.company,meta.customer,meta.orderNo].filter(Boolean).join(' · ') || 'Core geometry specification',fontSize:9,color:'#475569',margin:[0,4,0,10] },

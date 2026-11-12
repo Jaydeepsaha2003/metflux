@@ -953,7 +953,8 @@ export const buildSketch = (shape: CoreShape, width = 720, height = 340): Sketch
 
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`
-    + `<rect x="0" y="0" width="${width}" height="${height}" fill="#ffffff"/>`
+    // No page-sized white rect: every caller already draws on a white sheet, and an
+    // opaque one here would paint over the company watermark behind the drawing.
     + out.join('')
     // No units note here: the sheet prints one in its own title block, and two
     // of them land on top of each other.

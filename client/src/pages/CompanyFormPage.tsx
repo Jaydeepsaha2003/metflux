@@ -8,6 +8,7 @@ import { ArrowLeft, Save, Trash2, Loader2, Building2, ImagePlus, X } from 'lucid
 import { api, ApiError } from '@/lib/api';
 import { useAuthStore, type LoginPayload } from '@/store/auth';
 import { useConfirm } from '@/hooks/useConfirm';
+import { toPngFile } from '@/lib/image';
 
 type ShareTarget = 'PROMPT' | 'CUSTOMER' | 'COMPANY';
 
@@ -21,6 +22,7 @@ type Company = {
   whatsappNumber: string | null;
   email: string | null;
   logoUrl: string | null;
+  watermarkUrl?: string | null;
   defaultShareTarget: ShareTarget;
   isActive: boolean;
 };
@@ -53,6 +55,9 @@ export const CompanyFormPage = () => {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [logoError, setLogoError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const wmRef = useRef<HTMLInputElement>(null);
+  const [wmPreview, setWmPreview] = useState<string | null>(null);
+  const [wmError, setWmError] = useState<string | null>(null);
   const { confirm, confirmDialog } = useConfirm();
 
   const { data: existing } = useQuery({
@@ -73,6 +78,7 @@ export const CompanyFormPage = () => {
       defaultShareTarget: existing.defaultShareTarget ?? 'PROMPT',
     });
     setLogoPreview(existing.logoUrl ?? null);
+    setWmPreview(existing.watermarkUrl ?? null);
   }, [existing]);
 
   // After creating, pull a fresh refresh-token round-trip so the sidebar
@@ -107,6 +113,28 @@ export const CompanyFormPage = () => {
       await refreshAuth();
     },
   });
+
+  const uploadWm = useMutation({
+    mutationFn: ({ companyId, file }: { companyId: string; file: File }) => {
+      const fd = new FormData();
+      fd.append('watermark', file);
+      return api<Company>(`/companies/${companyId}/watermark`, { method: 'POST', body: fd });
+    },
+    onSuccess: (data) => { setWmPreview(data.watermarkUrl ?? null); setWmError(null); queryClient.invalidateQueries({ queryKey: ['company', id] }); queryClient.invalidateQueries({ queryKey: ['company-me'] }); },
+    onError: () => setWmError('Upload failed — please try another image.'),
+  });
+  const removeWm = useMutation({
+    mutationFn: (companyId: string) => api(`/companies/${companyId}/watermark`, { method: 'DELETE' }),
+    onSuccess: () => { setWmPreview(null); queryClient.invalidateQueries({ queryKey: ['company', id] }); queryClient.invalidateQueries({ queryKey: ['company-me'] }); },
+  });
+  const onWmChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !id) return;
+    setWmError(null);
+    try { uploadWm.mutate({ companyId: id, file: await toPngFile(file) }); }
+    catch (err) { setWmError(err instanceof Error ? err.message : 'Could not read that image.'); }
+  };
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -275,6 +303,39 @@ export const CompanyFormPage = () => {
                 className="hidden"
                 onChange={onFileChange}
               />
+            </div>
+          </div>
+        )}
+
+        {/* Watermark — printed faintly behind the downloaded core drawing sheets */}
+        {isEdit && (
+          <div className="space-y-2">
+            <span className="block text-xs font-medium uppercase tracking-wide text-slate-500">Drawing Watermark</span>
+            <div className="flex items-center gap-4">
+              <div className="relative flex h-20 w-28 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-slate-300 bg-white">
+                {wmPreview ? (
+                  <>
+                    <img src={wmPreview} alt="Watermark" className="h-full w-full object-contain p-1" />
+                    <button type="button" onClick={() => id && removeWm.mutate(id)} disabled={removeWm.isPending} title="Remove watermark"
+                      className="absolute right-0.5 top-0.5 rounded-full bg-red-500 p-0.5 text-white opacity-0 transition-opacity hover:opacity-100 focus:opacity-100">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </>
+                ) : <ImagePlus className="h-7 w-7 text-slate-300" />}
+              </div>
+              <div className="space-y-1.5">
+                <button type="button" onClick={() => wmRef.current?.click()} disabled={uploadWm.isPending} className="btn-ghost text-sm">
+                  {uploadWm.isPending
+                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Uploading…</>
+                    : <><ImagePlus className="h-4 w-4" /> {wmPreview ? 'Change watermark' : 'Upload watermark'}</>}
+                </button>
+                <p className="max-w-xs text-[11px] text-slate-400">
+                  Drawn behind the downloaded drawing sheets exactly as uploaded, so use a light, faint image.
+                  JPEG, PNG, WebP or SVG.
+                </p>
+                {wmError && <p className="text-[11px] text-red-600">{wmError}</p>}
+              </div>
+              <input ref={wmRef} type="file" accept="image/jpeg,image/png,image/webp,image/svg+xml" className="hidden" onChange={onWmChange} />
             </div>
           </div>
         )}

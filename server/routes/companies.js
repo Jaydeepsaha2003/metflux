@@ -26,6 +26,17 @@ const logoUpload = multer({
   },
 });
 
+// The watermark goes into a PDF, and pdfmake can only embed PNG and JPEG — a WebP
+// here would make every drawing download fail — so nothing else is accepted.
+const watermarkUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = ['image/jpeg', 'image/png'].includes(file.mimetype);
+    cb(ok ? null : new Error('The watermark must be a PNG or JPEG image'), ok);
+  },
+});
+
 const router = Router();
 router.use(requireAuth);
 
@@ -39,6 +50,7 @@ const publicCompany = (c) => ({
   whatsappNumber: c.whatsappNumber ?? null,
   email: c.email,
   logoUrl: c.logoUrl ?? null,
+  watermarkUrl: c.watermarkUrl ?? null,
   defaultShareTarget: c.defaultShareTarget ?? 'PROMPT',
   isActive: !!c.isActive,
   createdAt: c.createdAt,
@@ -204,6 +216,24 @@ router.post('/:id/logo', logoUpload.single('logo'), asyncHandler(async (req, res
   const logoUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
   const updated = await update('Company', c.id, { logoUrl });
   res.json(publicCompany(updated));
+}));
+
+/* POST /api/companies/:id/watermark */
+router.post('/:id/watermark', watermarkUpload.single('watermark'), asyncHandler(async (req, res) => {
+  const c = await qOne('SELECT * FROM `Company` WHERE `id` = ?', [req.params.id]);
+  if (!c) throw new AppError('Company not found', 404, 'NOT_FOUND');
+  if (!req.file) throw new AppError('No file uploaded', 400, 'NO_FILE');
+  const watermarkUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+  const updated = await update('Company', c.id, { watermarkUrl });
+  res.json(publicCompany(updated));
+}));
+
+/* DELETE /api/companies/:id/watermark */
+router.delete('/:id/watermark', asyncHandler(async (req, res) => {
+  const c = await qOne('SELECT * FROM `Company` WHERE `id` = ?', [req.params.id]);
+  if (!c) throw new AppError('Company not found', 404, 'NOT_FOUND');
+  await update('Company', c.id, { watermarkUrl: null });
+  res.status(204).end();
 }));
 
 /* DELETE /api/companies/:id/logo */

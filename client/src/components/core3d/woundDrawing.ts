@@ -107,7 +107,8 @@ class Pen {
   svg(): string {
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${f(W)}" height="${f(H)}"`
       + ` viewBox="0 0 ${f(W)} ${f(H)}">`
-      + `<rect x="0" y="0" width="${f(W)}" height="${f(H)}" fill="${WHITE}"/>`
+      // No white page rect: the PDF page is already white, and an opaque one here
+      // would paint over the company watermark that sits behind the sheet.
       + this.out.join('') + '</svg>';
   }
 
@@ -272,9 +273,10 @@ const frame = (p: Pen) => {
 const sheetHeader = (p: Pen, title: string, sub: string) => {
   p.rect(M_IN, H - 56, COL_X - M_IN, 3, { fill: ACCENT });
   p.text(L0, H - 47, title, 12.5, { bold: true });
-  // Montserrat is wider than the Helvetica this layout was drawn in, so the
-  // subtitle is placed from a measured advance rather than a fixed offset.
-  p.text(L0 + title.length * 12.5 * 0.62 + 10, H - 47, sub, 9, { fill: SUB });
+  // Right-aligned to the drawing region's edge, not placed after the title: the
+  // title's width depends on the font the PDF ends up using, and an estimate of it
+  // ran the two together in Montserrat.
+  p.text(COL_X - 14, H - 47, sub, 9, { fill: SUB, anchor: 'end' });
 };
 
 const companyBlock = (p: Pen, company: string, sheetNo: number, total = 2) => {
