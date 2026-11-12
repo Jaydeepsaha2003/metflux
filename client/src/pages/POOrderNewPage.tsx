@@ -78,14 +78,14 @@ type Customer = {
   /** Per-customer weight-calc stacking factors; null = the house defaults. */
   toroidalFactor?: number | null; rectStackFactor?: number | null;
 };
-type GradeRow = {
+export type GradeRow = {
   grade: string;
   materials: { id: string; material: string }[];
   coreTypes?: CoreType[];
   nanoIdOff?: number | null; nanoOdOff?: number | null; nanoHtOff?: number | null;
 };
 // A grade with no coreTypes (legacy) applies to all.
-const gradeAppliesTo = (g: GradeRow, ct: CoreType) => !g.coreTypes || g.coreTypes.length === 0 || g.coreTypes.includes(ct);
+export const gradeAppliesTo = (g: GradeRow, ct: CoreType) => !g.coreTypes || g.coreTypes.length === 0 || g.coreTypes.includes(ct);
 type FluxPoint = { flux: number; ateCm: number };
 type FluxGroup = { grade: string; points: FluxPoint[] };
 

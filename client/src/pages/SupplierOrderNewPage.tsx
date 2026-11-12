@@ -9,6 +9,9 @@ import { api, ApiError } from '@/lib/api';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { ItemTypeahead } from '@/components/ItemTypeahead';
 import { useConfirm } from '@/hooks/useConfirm';
+import { CoreBuilder } from '@/components/CoreBuilder';
+import type { Item as CoreItem } from '@/pages/POOrderNewPage';
+import { coreLabel } from '@/lib/coreTypes';
 
 type Supplier = { id: string; name: string; gstRate: number; gstNumber: string | null; state: string | null };
 type CompanyMe = { name: string };
@@ -21,6 +24,25 @@ type Item = {
   rate: number;
   amount: number;
   notes: string;
+};
+
+/* A calculated core becomes an ordinary PO line, so the PO, its print and the edit
+   screen need no knowledge of cores. Priced per kg it is bought by weight
+   (qty = total kg); otherwise by the piece. The weights ride along in the notes,
+   because the line itself has nowhere to carry them. */
+const lineFromCore = (c: CoreItem): Item => {
+  const byKg = c.rateBasis === 'PER_KG' && (c.rateValue ?? 0) > 0 && c.totalWeight > 0;
+  const rate = (c.rateValue ?? 0) > 0 ? c.rateValue! : 0;
+  const qty = byKg ? +c.totalWeight.toFixed(3) : c.pcs;
+  return {
+    description: [coreLabel(c.coreType), c.material, c.grade, c.measure].filter(Boolean).join(' ').toUpperCase().slice(0, 300),
+    hsnCode: '',
+    qty,
+    unit: byKg ? 'KG' : 'PCS',
+    rate,
+    amount: c.totalAmount ?? +(qty * rate).toFixed(2),
+    notes: `${c.pcs} pcs × ${c.weightPerPc.toFixed(3)} kg = ${c.totalWeight.toFixed(3)} kg`,
+  };
 };
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -244,6 +266,13 @@ export const SupplierOrderNewPage = () => {
           </div>
         )}
       </section>
+
+      {/* CORE BUILDER — the same calculation forms and 3D model as the Sales Order and Quotation */}
+      <CoreBuilder
+        customerName={supplier?.name ?? null}
+        orderNo={poNumber || null}
+        onAdd={(c) => setItems((prev) => [...prev, lineFromCore(c)])}
+      />
 
       {/* ITEM ENTRY */}
       <ItemEntry onAdd={(it) => setItems((prev) => [...prev, it])} />
