@@ -41,6 +41,8 @@ const FieldInput = ({ f, pi, set }: { f: Field; pi: PiForm; set: (k: keyof PiFor
   const value = pi[f.key] as string | number;
   const empty = isMissing(pi, f);
   const cls = cn('input h-9 w-full text-sm', empty && 'border-red-400 bg-red-50/40');
+  // `.input` pads top and bottom; inside a fixed 36px box that pushes a select's text down and clips it.
+  const selCls = cn(cls, 'py-0 leading-9');
   const id = `pi-${f.key}`;
   const tag = { 'data-field': f.key };   // lets the missing-details list jump to and focus this control
   let control: React.ReactNode;
@@ -54,13 +56,13 @@ const FieldInput = ({ f, pi, set }: { f: Field; pi: PiForm; set: (k: keyof PiFor
     </div>
   );
   else if (f.kind === 'yesno') control = (
-    <select {...tag} className={cls} value={value as string} onChange={(e) => set(f.key, e.target.value as never)}>
+    <select {...tag} className={selCls} value={value as string} onChange={(e) => set(f.key, e.target.value as never)}>
       <option>Yes</option><option>No</option>
     </select>
   );
   else if (f.key === 'currency') control = (
     // A real dropdown: the amount in words and the headings depend on a known code, so no free typing.
-    <select {...tag} className={cls} value={value as string} onChange={(e) => set(f.key, e.target.value as never)}>
+    <select {...tag} className={selCls} value={value as string} onChange={(e) => set(f.key, e.target.value as never)}>
       {!PI_CURRENCIES.some((c) => c.code === value) && <option value={value as string}>{value as string}</option>}
       {PI_CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
     </select>
