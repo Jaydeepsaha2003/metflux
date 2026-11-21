@@ -21,7 +21,7 @@ import {
   SECTIONS, amountWords, blankItem, blankPi, calcPi, fmt2, fromRecord, isMissing, lineAmount, lineNetWt, missingFields, missingRequired, toPayload,
   type Field, type PiForm, type PiItem,
 } from '@/lib/proforma';
-import { UNITS } from '@/lib/proformaLists';
+import { UNITS, PI_CURRENCIES } from '@/lib/proformaLists';
 import { downloadPiForm, usePiSettings } from '@/lib/proformaApi';
 
 const itemFromCore = (c: CoreItem): PiItem => {
@@ -58,10 +58,17 @@ const FieldInput = ({ f, pi, set }: { f: Field; pi: PiForm; set: (k: keyof PiFor
       <option>Yes</option><option>No</option>
     </select>
   );
+  else if (f.key === 'currency') control = (
+    // A real dropdown: the amount in words and the headings depend on a known code, so no free typing.
+    <select {...tag} className={cls} value={value as string} onChange={(e) => set(f.key, e.target.value as never)}>
+      {!PI_CURRENCIES.some((c) => c.code === value) && <option value={value as string}>{value as string}</option>}
+      {PI_CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
+    </select>
+  );
   else control = (
     <>
       <input {...tag} className={cls} list={f.options ? id : undefined} value={value as string}
-        onChange={(e) => set(f.key, (f.key === 'currency' ? e.target.value.toUpperCase().slice(0, 3) : e.target.value) as never)} />
+        onChange={(e) => set(f.key, e.target.value as never)} />
       {f.options && <datalist id={id}>{f.options.map((o) => <option key={o} value={o} />)}</datalist>}
     </>
   );
