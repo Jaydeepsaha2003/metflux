@@ -6,7 +6,7 @@ import {
   Plus, ListChecks, BarChart3, Layers, Building2, Factory, Inbox, ClipboardList,
   PanelLeftClose, Users2, Truck, PackageCheck, ShoppingCart, Activity, RotateCcw, Menu, X, ShieldAlert,
   Receipt, Clock, Wallet, TrendingUp, Calculator, Warehouse, MonitorSmartphone, History,
-  Image as ImageIcon, ArrowLeftRight, Ban, BookText, BookOpen, Scale, Bell,
+  Image as ImageIcon, ArrowLeftRight, Ban, BookText, BookOpen, Scale, Bell, FileSpreadsheet,
 } from 'lucide-react';
 import { useAuthStore, can, activeMembership } from '@/store/auth';
 import { useBranding } from '@/store/branding';
@@ -44,6 +44,8 @@ const NAV: NavItem[] = [
       { kind: 'leaf', to: '/po/summary', label: 'SO Summary',      icon: BarChart3,  perm: 'po_summary' },
       { kind: 'leaf', to: '/quotation/new',    label: 'New Quotation', icon: FileText,      perm: 'add_quotation' },
       { kind: 'leaf', to: '/quotation/manage', label: 'Quotations',    icon: ClipboardList, perm: 'view_quotation' },
+      { kind: 'leaf', to: '/proforma/new',    label: 'New Proforma Invoice', icon: FileSpreadsheet, perm: 'add_quotation' },
+      { kind: 'leaf', to: '/proforma/manage', label: 'Proforma Invoices',    icon: ClipboardList,   perm: 'view_quotation' },
     ],
   },
   {
@@ -112,6 +114,7 @@ const NAV: NavItem[] = [
       { kind: 'leaf', to: '/settings/labours',   label: 'Workers',   icon: Users2,    perm: 'add_staff' },
       { kind: 'leaf', to: '/settings/suppliers', label: 'Suppliers', icon: Truck,     perm: 'add_supplier' },
       { kind: 'leaf', to: '/settings/quotation', label: 'Quotation Terms', icon: FileText, adminOnly: true },
+      { kind: 'leaf', to: '/settings/proforma',  label: 'Proforma / Export', icon: FileSpreadsheet, adminOnly: true },
       { kind: 'leaf', to: '/settings/notifications', label: 'Notifications', icon: Bell, adminOnly: true },
       { kind: 'leaf', to: '/settings/user-logs',   label: 'User Logs',   icon: MonitorSmartphone, adminOnly: true },
       { kind: 'leaf', to: '/settings/audit-log',   label: 'Audit Log',   icon: History, perm: 'view_audit_log' },

@@ -44,6 +44,9 @@ const QuotationNewPage    = page(() => import('@/pages/QuotationNewPage'), 'Quot
 const QuotationsPage      = page(() => import('@/pages/QuotationsPage'), 'QuotationsPage');
 const QuotationPrintPage  = page(() => import('@/pages/QuotationPrintPage'), 'QuotationPrintPage');
 const QuotationSettingsPage = page(() => import('@/pages/QuotationSettingsPage'), 'QuotationSettingsPage');
+const ProformaListPage     = page(() => import('@/pages/ProformaListPage'), 'ProformaListPage');
+const ProformaFormPage     = page(() => import('@/pages/ProformaFormPage'), 'ProformaFormPage');
+const ProformaSettingsPage = page(() => import('@/pages/ProformaSettingsPage'), 'ProformaSettingsPage');
 const POManagePage        = page(() => import('@/pages/POManagePage'), 'POManagePage');
 const POEditPage          = page(() => import('@/pages/POEditPage'), 'POEditPage');
 const POOrderEditPage     = page(() => import('@/pages/POOrderEditPage'), 'POOrderEditPage');
@@ -133,6 +136,10 @@ export const App = () => {
       <Route path="/quotation/manage"     element={<QuotationsPage />} />
       <Route path="/quotation/:id/print"  element={<QuotationPrintPage />} />
       <Route path="/settings/quotation"    element={<QuotationSettingsPage />} />
+      <Route path="/proforma/new"          element={<ProformaFormPage />} />
+      <Route path="/proforma/:id/edit"     element={<ProformaFormPage />} />
+      <Route path="/proforma/manage"       element={<ProformaListPage />} />
+      <Route path="/settings/proforma"     element={<ProformaSettingsPage />} />
 
       {/* Production */}
       <Route path="/production"          element={<ProductionListPage />} />

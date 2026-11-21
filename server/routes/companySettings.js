@@ -14,6 +14,7 @@ router.use(requireAuth, resolveTenant);
 
 const QUOTATION_KEY = 'quotation_settings';
 const MATERIAL_PHYSICS_KEY = 'material_physics';
+const PROFORMA_KEY = 'proforma_settings';
 
 const quotationSchema = z.object({
   bankName:          z.string().max(160).optional().default(''),
@@ -26,6 +27,24 @@ const quotationSchema = z.object({
   // the next quotation number is …/SQ/131/FY). Null/empty = start from 1.
   seriesStart:       z.coerce.number().int().min(1).max(9_999_999).optional().nullable(),
 }).strip();
+
+/* Exporter, bank and terms for the proforma invoice — set once, printed on every PI.
+   Free text throughout: what a foreign bank wants spelled out is the bank's business. */
+const text = (n) => z.string().max(n).optional().default('');
+const proformaSchema = z.object({
+  address: text(400), phone: text(120), email: text(160), gstin: text(40), pan: text(20),
+  iec: text(20), lutArn: text(40), adCode: text(40), rcmc: text(60),
+  beneficiary: text(160), bankName: text(160), bankBranch: text(300), accountNo: text(60),
+  ifsc: text(40), swift: text(40), intermediaryBank: text(300), signatory: text(120),
+  terms: z.array(z.object({
+    title: z.string().trim().max(80), text: z.string().max(1500), print: z.boolean().default(true),
+  })).max(30).optional().default([]),
+}).strip();
+const PROFORMA_EMPTY = {
+  address: '', phone: '', email: '', gstin: '', pan: '', iec: '', lutArn: '', adCode: '', rcmc: '',
+  beneficiary: '', bankName: '', bankBranch: '', accountNo: '', ifsc: '', swift: '', intermediaryBank: '',
+  signatory: '', terms: [],
+};
 
 const EMPTY = { bankName: '', bankBranch: '', bankAccountName: '', bankAccountNumber: '', bankIfsc: '', terms: '', seriesStart: null };
 const MATERIAL_PHYSICS_EMPTY = {
@@ -65,6 +84,19 @@ router.get('/quotation', asyncHandler(async (req, res) => {
 router.put('/quotation', requireRole('COMPANY_ADMIN'), asyncHandler(async (req, res) => {
   const data = quotationSchema.parse(req.body ?? {});
   await writeSetting(req.tenant.companyId, QUOTATION_KEY, JSON.stringify(data));
+  res.json(data);
+}));
+
+/* GET /api/company-settings/proforma — exporter, bank and terms for the PI. */
+router.get('/proforma', asyncHandler(async (req, res) => {
+  const saved = await readSetting(req.tenant.companyId, PROFORMA_KEY);
+  res.json({ ...PROFORMA_EMPTY, ...(saved ?? {}) });
+}));
+
+/* PUT /api/company-settings/proforma — company admin only. */
+router.put('/proforma', requireRole('COMPANY_ADMIN'), asyncHandler(async (req, res) => {
+  const data = proformaSchema.parse(req.body ?? {});
+  await writeSetting(req.tenant.companyId, PROFORMA_KEY, JSON.stringify(data));
   res.json(data);
 }));
 

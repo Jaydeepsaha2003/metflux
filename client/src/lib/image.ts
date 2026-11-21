@@ -26,3 +26,21 @@ export const toPngFile = (file: File, maxSide = 1600): Promise<File> => new Prom
   };
   reader.readAsDataURL(file);
 });
+
+/** A data: URL image (the stored logo, in any format the browser reads) as a PNG data URL
+ *  plus its pixel size, longest side capped at `maxSide`. Spreadsheet and PDF libraries
+ *  embed only PNG/JPEG; data: because the production CSP refuses blob: images. */
+export const dataUrlToPng = (src: string, maxSide = 600): Promise<{ dataUrl: string; w: number; h: number }> =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, maxSide / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round((img.naturalWidth || maxSide) * k));
+      canvas.height = Math.max(1, Math.round((img.naturalHeight || maxSide) * k));
+      canvas.getContext('2d')?.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve({ dataUrl: canvas.toDataURL('image/png'), w: canvas.width, h: canvas.height });
+    };
+    img.onerror = () => reject(new Error('Could not read the image'));
+    img.src = src;
+  });
