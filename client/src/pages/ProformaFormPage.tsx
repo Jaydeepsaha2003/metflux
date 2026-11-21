@@ -14,6 +14,7 @@ import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
 import { CoreBuilder } from '@/components/CoreBuilder';
+import { ComboInput } from '@/components/ComboInput';
 import type { Item as CoreItem } from '@/pages/POOrderNewPage';
 import { coreLabel } from '@/lib/coreTypes';
 import { CurrencyContext } from '@/lib/currency';
@@ -67,13 +68,10 @@ const FieldInput = ({ f, pi, set }: { f: Field; pi: PiForm; set: (k: keyof PiFor
       {PI_CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
     </select>
   );
-  else control = (
-    <>
-      <input {...tag} className={cls} list={f.options ? id : undefined} value={value as string}
-        onChange={(e) => set(f.key, e.target.value as never)} />
-      {f.options && <datalist id={id}>{f.options.map((o) => <option key={o} value={o} />)}</datalist>}
-    </>
+  else if (f.options) control = (
+    <ComboInput {...tag} id={id} className={cls} options={f.options} value={value as string} onChange={(v) => set(f.key, v as never)} />
   );
+  else control = <input {...tag} id={id} className={cls} value={value as string} onChange={(e) => set(f.key, e.target.value as never)} />;
   return (
     <label className="block">
       <span className="mb-1 flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">
@@ -284,7 +282,7 @@ export const ProformaFormPage = () => {
                         <td className="px-2 py-1.5"><input className="input h-8 w-full text-xs" value={it.grade} onChange={(e) => setItem(i, { grade: e.target.value })} placeholder="CRGO M4" /></td>
                         <td className="px-2 py-1.5"><input className="input h-8 w-full text-xs" value={it.hsn} onChange={(e) => setItem(i, { hsn: e.target.value })} /></td>
                         <td className="px-2 py-1.5"><input type="number" min={0} step="any" className="input h-8 w-full text-right text-xs" value={it.qty || ''} onChange={(e) => setItem(i, { qty: num(e.target.value) })} /></td>
-                        <td className="px-2 py-1.5"><input className="input h-8 w-full text-xs" list="pi-units" value={it.unit} onChange={(e) => setItem(i, { unit: e.target.value })} /></td>
+                        <td className="px-2 py-1.5"><ComboInput aria-label="Unit" className="input h-8 w-full py-0 text-xs" options={UNITS} value={it.unit} onChange={(v) => setItem(i, { unit: v })} /></td>
                         <td className="px-2 py-1.5"><input type="number" min={0} step="any" className="input h-8 w-full text-right text-xs" value={it.netWtUnit || ''} onChange={(e) => setItem(i, { netWtUnit: num(e.target.value) })} /></td>
                         <td className="px-2 py-1.5"><input type="number" min={0} step="any" className="input h-8 w-full text-right text-xs" value={it.price || ''} onChange={(e) => setItem(i, { price: num(e.target.value) })} /></td>
                         <td className="px-2 py-2 text-right font-semibold tabular-nums">{lineAmount(it) ? fmt2(lineAmount(it)) : ''}</td>
@@ -311,7 +309,6 @@ export const ProformaFormPage = () => {
                     </tr>
                   </tfoot>
                 </table>
-                <datalist id="pi-units">{UNITS.map((u) => <option key={u} value={u} />)}</datalist>
               </div>
             </section>
 
