@@ -175,7 +175,7 @@ export const ProformaFormPage = () => {
 
   return (
     <CurrencyContext.Provider value={pi.currency}>
-      <div className="mx-auto max-w-[1400px] space-y-4 pb-6">
+      <div className="w-full space-y-4 pb-6">
         {/* Title bar */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">

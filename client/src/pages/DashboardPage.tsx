@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowUpRight, Boxes, Factory, Loader2, PackageCheck, RotateCcw, ShoppingBag, Sun, Moon, Truck, Trophy, type LucideIcon } from 'lucide-react';
+import { ArrowUpRight, Boxes, Factory, Loader2, PackageCheck, RotateCcw, ShoppingBag, Sun, Moon, TrendingDown, TrendingUp, Truck, Trophy, type LucideIcon } from 'lucide-react';
 import { useAuthStore, activeMembership, useHideCustomerNames } from '@/store/auth';
 import { useBranding } from '@/store/branding';
 import { api } from '@/lib/api';
@@ -255,6 +255,8 @@ export const DashboardPage = () => {
               meta={`${stats.salesOrders.kg.toFixed(1)} kg · ${stats.salesOrders.customers} customers`}
               spark={series?.salesOrders}
               to={`/po/summary?status=ACTIVE${drillQuery().replace('?', '&')}`}
+              cta="View sales orders"
+              delta={previousStats && comparison && <Delta now={stats.salesOrders.pcs} before={previousStats.salesOrders.pcs} days={comparison.days} />}
               title="Pcs from active Sales Orders created in the selected range. Opens SO Summary on the same slice."
               chips={<>
                 <DashChip tone="accent">{fmtCompactMoney(stats.salesOrders.amount)}</DashChip>
@@ -269,6 +271,8 @@ export const DashboardPage = () => {
               meta={`${stats.pendingProduction.kg.toFixed(1)} kg not yet produced`}
               spark={series?.pendingProduction}
               to={`/po/summary${drillQuery({ dates: false })}`}
+              cta="View backlog"
+              rail="warn"
               title="Pcs not yet produced across ALL Sales Orders, regardless of date — the full current backlog. The trend shows pcs produced per day in the selected range."
               chips={<>
                 <DashChip tone="warn">{fmtCompactMoney(stats.pendingProduction.amount)}</DashChip>
@@ -282,6 +286,7 @@ export const DashboardPage = () => {
               meta={`${stats.readyDispatch.kg.toFixed(1)} kg produced, not shipped`}
               spark={series?.readyDispatch}
               to={`/po/summary?status=ACTIVE${drillQuery({ dates: false }).replace('?', '&')}`}
+              cta="View ready stock"
               title="Pcs produced but not yet dispatched across ALL Sales Orders — ready to ship now. The trend shows the daily net movement into that pile."
               chips={<>
                 <DashChip tone="accent">{fmtCompactMoney(stats.readyDispatch.amount)}</DashChip>
@@ -295,6 +300,8 @@ export const DashboardPage = () => {
               meta={`${stats.dispatched.kg.toFixed(1)} kg shipped in range`}
               spark={series?.dispatched}
               to={`/dispatch${drillQuery()}`}
+              cta="View dispatch notes"
+              delta={previousStats && comparison && <Delta now={stats.dispatched.pcs} before={previousStats.dispatched.pcs} days={comparison.days} />}
               title="Pcs dispatched within the selected date range. Opens the dispatch records on the same slice."
               chips={<>
                 <DashChip tone="accent">{fmtCompactMoney(stats.dispatched.amount)}</DashChip>
@@ -309,6 +316,8 @@ export const DashboardPage = () => {
               meta="Across all time, not date filtered"
               spark={series?.openReturns}
               to="/returns"
+              cta="View returns"
+              rail={stats.openReturns ? 'danger' : 'accent'}
               title="Open return requests across all time — deliberately not filtered by the date range."
               chips={stats.openReturns
                 ? <>
@@ -529,23 +538,52 @@ const Th = ({ children, align = 'left', className }: {
 
 /** One KPI tile. The whole card is the drill-down link it always was; `title`
  *  carries the explanation the old info tooltip held. */
-const KpiCard = ({ icon: Icon = Boxes, label, figure, unit = 'pcs', meta, spark, chips, to, title }: {
+const RAIL = { accent: 'var(--d-accent)', warn: 'var(--d-warn)', danger: 'var(--d-danger)' } as const;
+
+/** Change against the previous equal-length range. Only for figures that are
+ *  measured *in* the range — the all-time cards have no earlier snapshot to compare. */
+const Delta = ({ now, before, days }: { now: number; before: number; days: number }) => {
+  if (before <= 0 && now <= 0) return null;
+  const pct = before > 0 ? ((now - before) / before) * 100 : null;
+  const up = now >= before;
+  const Arrow = up ? TrendingUp : TrendingDown;
+  return (
+    <span
+      title={`${pcs(before)} pcs in the previous ${days} day${days === 1 ? '' : 's'}`}
+      className="ml-auto inline-flex items-center gap-1 rounded-[3px] px-1.5 py-[3px] text-[10.5px] font-bold leading-none tabular-nums"
+      style={{ color: up ? 'var(--d-accent)' : 'var(--d-danger)', backgroundColor: up ? 'var(--d-accent-dim)' : 'var(--d-danger-dim)' }}
+    >
+      <Arrow className="h-3 w-3" />{pct === null ? 'New' : `${up ? '+' : '−'}${Math.abs(pct).toFixed(pct >= 100 ? 0 : 1)}%`}
+    </span>
+  );
+};
+
+/** One KPI tile. The whole card is the drill-down link; a coloured top rail marks its
+ *  meaning, `cta` says where it goes, and `title` carries the longer explanation. */
+const KpiCard = ({ icon: Icon = Boxes, label, figure, unit = 'pcs', meta, spark, chips, to, title, cta, rail = 'accent', delta }: {
   icon?: LucideIcon; label: string; figure: string; unit?: string; meta: string;
-  spark?: number[]; chips: React.ReactNode; to: string; title: string;
+  spark?: number[]; chips: React.ReactNode; to: string; title: string; cta: string;
+  rail?: keyof typeof RAIL; delta?: React.ReactNode;
 }) => (
   <Link
     to={to}
     title={title}
-    className="dash-kpi group flex -translate-y-0 cursor-pointer flex-col gap-1 rounded-lg border border-[var(--d-line)] bg-[var(--d-panel)] px-3 py-2.5 transition-[transform,border-color,background-color] duration-200 hover:-translate-y-0.5 hover:border-[var(--d-accent-line)] hover:bg-[var(--d-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--d-accent)] motion-reduce:transform-none motion-reduce:transition-none"
+    aria-label={`${label}: ${figure} ${unit}. ${cta}`}
+    className="dash-kpi group relative flex -translate-y-0 cursor-pointer flex-col gap-1 overflow-hidden rounded-lg border border-[var(--d-line)] bg-[var(--d-panel)] px-3 py-2.5 transition-[transform,border-color,background-color] duration-200 hover:-translate-y-0.5 hover:border-[var(--d-accent-line)] hover:bg-[var(--d-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--d-accent)] motion-reduce:transform-none motion-reduce:transition-none"
   >
+    <span aria-hidden className="absolute inset-x-0 top-0 h-[3px] opacity-80 transition-[height,opacity] duration-200 group-hover:h-[4px] group-hover:opacity-100" style={{ background: RAIL[rail] }} />
     <div className="dash-kpi-heading"><DashLabel>{label}</DashLabel><span className="dash-kpi-icon"><Icon className="h-4 w-4" /></span></div>
     <div className="flex items-baseline gap-1.5">
       <span className="dash-kpi-figure font-num text-[26px] font-extrabold leading-none tracking-tight tabular-nums"><AnimatedNumber value={Number(figure.replaceAll(',', ''))} /></span>
       <span className="text-[11px] text-[var(--d-muted)]">{unit}</span>
+      {delta}
     </div>
     <DashCaption className="leading-relaxed">{meta}</DashCaption>
     {spark && spark.length > 1 && <Sparkline values={spark} />}
-    <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">{chips}<ArrowUpRight className="ml-auto h-3.5 w-3.5 text-[var(--d-faint)] transition-colors group-hover:text-[var(--d-accent)]" /></div>
+    <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">{chips}</div>
+    <div className="mt-1 flex items-center justify-between border-t border-[var(--d-line)] pt-2 text-[11px] font-bold text-[var(--d-muted)] transition-colors group-hover:text-[var(--d-accent)]">
+      {cta}<ArrowUpRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 motion-reduce:transform-none" />
+    </div>
   </Link>
 );
 
