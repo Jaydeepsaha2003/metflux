@@ -182,15 +182,15 @@ export const UserFormPage = () => {
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <Link to="/settings/users" className="btn-ghost text-slate-600">
+        <div className="flex min-w-0 items-center gap-3">
+          <Link to="/settings/users" className="btn-ghost shrink-0 text-slate-600">
             <ArrowLeft className="h-4 w-4" /> Back
           </Link>
-          <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-50 text-brand-600">
+          <h1 className="flex min-w-0 items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600">
               <UserCog className="h-4 w-4" />
             </span>
-            {isEdit ? `Edit user${user ? ` — ${user.name}` : ''}` : 'New user'}
+            <span className="truncate">{isEdit ? `Edit user${user ? ` — ${user.name}` : ''}` : 'New user'}</span>
           </h1>
         </div>
       </div>
@@ -363,11 +363,11 @@ const MembershipCard = ({
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 px-4 py-3">
-        <div className="flex items-center gap-2 font-medium text-slate-900">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-50 text-brand-600">
+        <div className="flex w-full min-w-0 items-center gap-2 font-medium text-slate-900 sm:w-auto">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600">
             <Building2 className="h-4 w-4" />
           </span>
-          {membership.companyName ?? membership.companyId}
+          <span className="truncate">{membership.companyName ?? membership.companyId}</span>
         </div>
 
         {/* Role — segmented control instead of a native select, so the current
