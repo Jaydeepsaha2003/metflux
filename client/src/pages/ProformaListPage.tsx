@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarClock, Download, FileSpreadsheet, Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { CalendarClock, Download, FileSpreadsheet, FileText, Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
@@ -51,9 +51,9 @@ export const ProformaListPage = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['proforma-invoices'] }),
   });
 
-  const download = async (r: Row) => {
+  const download = async (r: Row, kind: 'xlsx' | 'pdf') => {
     setBusyId(r.id);
-    try { await downloadSavedPi(r.id); }
+    try { await downloadSavedPi(r.id, kind); }
     catch (e) { await confirm({ title: 'Could not download', message: e instanceof ApiError ? e.message : 'The Excel sheet could not be built.', tone: 'danger', alertOnly: true, confirmLabel: 'OK' }); }
     finally { setBusyId(null); }
   };
@@ -124,7 +124,11 @@ export const ProformaListPage = () => {
                     <td className="px-3 py-2.5 text-right font-semibold tabular-nums">{fmtMoney(r.grandTotal, r.currency)} <span className="text-[10px] font-normal text-slate-400">{r.currency}</span></td>
                     <td className="px-3 py-2.5">
                       <div className="flex justify-end gap-1">
-                        <button type="button" onClick={() => download(r)} disabled={busyId === r.id} title="Download Excel"
+                        <button type="button" onClick={() => download(r, 'pdf')} disabled={busyId === r.id} title="Download PDF"
+                          className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50">
+                          <FileText className="h-3.5 w-3.5" /> PDF
+                        </button>
+                        <button type="button" onClick={() => download(r, 'xlsx')} disabled={busyId === r.id} title="Download Excel"
                           className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
                           {busyId === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Excel
                         </button>

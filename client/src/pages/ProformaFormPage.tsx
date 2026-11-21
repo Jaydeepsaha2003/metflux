@@ -134,7 +134,7 @@ export const ProformaFormPage = () => {
     save.mutate();
   };
 
-  const onDownload = async () => {
+  const onDownload = async (kind: 'xlsx' | 'pdf' = 'xlsx') => {
     if (!settings) return;
     if (missing.length) {
       const ok = await confirm({
@@ -145,8 +145,8 @@ export const ProformaFormPage = () => {
       if (!ok) return;
     }
     setBusy(true);
-    try { await downloadPiForm(pi, settings, company); }
-    catch { setError('The Excel sheet could not be built.'); }
+    try { await downloadPiForm(pi, settings, company, kind); }
+    catch { setError(`The ${kind === 'pdf' ? 'PDF' : 'Excel sheet'} could not be built.`); }
     finally { setBusy(false); }
   };
 
@@ -188,7 +188,10 @@ export const ProformaFormPage = () => {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 xl:hidden">
-            <button type="button" onClick={onDownload} disabled={busy || !ready} className="btn-ghost border border-slate-300 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
+            <button type="button" onClick={() => onDownload('pdf')} disabled={busy || !ready} className="btn-ghost border border-slate-300 text-rose-700 hover:bg-rose-50 disabled:opacity-50">
+              <FileText className="h-4 w-4" /> PDF
+            </button>
+            <button type="button" onClick={() => onDownload('xlsx')} disabled={busy || !ready} className="btn-ghost border border-slate-300 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Excel
             </button>
             <button type="button" onClick={onSave} disabled={save.isPending} className="btn-primary">
@@ -356,7 +359,10 @@ export const ProformaFormPage = () => {
               </div>
 
               <div className="hidden gap-2 border-t border-slate-100 bg-slate-50 px-4 py-3 xl:flex">
-                <button type="button" onClick={onDownload} disabled={busy || !ready} className="btn-ghost flex-1 justify-center border border-slate-300 bg-white text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
+                <button type="button" onClick={() => onDownload('pdf')} disabled={busy || !ready} className="btn-ghost flex-1 justify-center border border-slate-300 bg-white text-rose-700 hover:bg-rose-50 disabled:opacity-50">
+                  <FileText className="h-4 w-4" /> PDF
+                </button>
+                <button type="button" onClick={() => onDownload('xlsx')} disabled={busy || !ready} className="btn-ghost flex-1 justify-center border border-slate-300 bg-white text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
                   {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Excel
                 </button>
                 <button type="button" onClick={onSave} disabled={save.isPending} className="btn-primary flex-1 justify-center">

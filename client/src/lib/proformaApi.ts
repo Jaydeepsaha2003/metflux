@@ -5,6 +5,9 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { DEFAULT_TERMS } from './proformaLists';
 import { downloadProformaXlsx, type PiSettings } from './proformaXlsx';
+import { downloadProformaPdf } from './proformaPdf';
+import { useBranding } from '@/store/branding';
+import { brandColorFor } from '@/lib/brandColor';
 import { fromRecord, type PiForm } from './proforma';
 
 type Company = { name: string; logoUrl: string | null; address: string | null; phone: string | null; email: string | null; gstNumber: string | null };
@@ -34,15 +37,22 @@ export const usePiSettings = () => {
 
 type Rec = Parameters<typeof fromRecord>[0] & { id: string };
 
-/** Download a saved PI as Excel: fetch the record, the settings and the company, build. */
-export const downloadSavedPi = async (id: string) => {
+/** The PDF takes the colour of the company it is for, as every other PDF does. */
+const brandOf = (name?: string | null) => brandColorFor(name) ?? useBranding.getState().brandColor;
+
+/** Download a saved PI as Excel or PDF: fetch the record, the settings and the company, build. */
+export const downloadSavedPi = async (id: string, kind: 'xlsx' | 'pdf' = 'xlsx') => {
   const [rec, saved, company] = await Promise.all([
     api<Rec>(`/proforma-invoices/${id}`),
     api<PiSettings>('/company-settings/proforma'),
     api<Company | null>('/companies/me'),
   ]);
-  await downloadProformaXlsx(fromRecord(rec), withDefaults(saved, company), { name: company?.name ?? 'Company', logoUrl: company?.logoUrl });
+  const who = { name: company?.name ?? 'Company', logoUrl: company?.logoUrl };
+  if (kind === 'pdf') await downloadProformaPdf(fromRecord(rec), withDefaults(saved, company), who, brandOf(company?.name));
+  else await downloadProformaXlsx(fromRecord(rec), withDefaults(saved, company), who);
 };
 
-export const downloadPiForm = async (pi: PiForm, settings: PiSettings, company: Company | null) =>
-  downloadProformaXlsx(pi, settings, { name: company?.name ?? 'Company', logoUrl: company?.logoUrl });
+export const downloadPiForm = async (pi: PiForm, settings: PiSettings, company: Company | null, kind: 'xlsx' | 'pdf' = 'xlsx') => {
+  const who = { name: company?.name ?? 'Company', logoUrl: company?.logoUrl };
+  return kind === 'pdf' ? downloadProformaPdf(pi, settings, who, brandOf(company?.name)) : downloadProformaXlsx(pi, settings, who);
+};
