@@ -7,6 +7,8 @@
 //   GET    /warehouses/so-lines        open SO lines to stock-out against (by spec)
 //   POST   /warehouses/stock-in        send overproduced pcs from a PO line into a store
 //   POST   /warehouses/stock-out       dispatch stock to a customer SO line (normal sale)
+//   PATCH  /warehouses/movements/:id   edit one stock entry (pcs, date, notes)
+//   DELETE /warehouses/movements/:id   delete one stock entry (a stock-out also removes its dispatch)
 import { Router } from 'express';
 import { z } from 'zod';
 import { q, qOne, insert, update, del, txn } from '../lib/db.js';
@@ -120,7 +122,7 @@ router.get('/movements', requirePermission('dispatch'), asyncHandler(async (req,
   }).parse(req.query);
   const rows = await q(
     `SELECT sm.\`id\`, sm.\`direction\`, sm.\`pcs\`, sm.\`totalWeight\`, sm.\`notes\`,
-            sm.\`movementDate\`, sm.\`vehicleNo\`,
+            sm.\`movementDate\`, sm.\`vehicleNo\`, sm.\`dispatchId\`, sm.\`poOrderItemId\`,
             po.\`poNumber\` AS poNumber, c.\`name\` AS customerName
        FROM \`StockMovement\` sm
        LEFT JOIN \`PoOrderItem\` it ON it.\`id\` = sm.\`poOrderItemId\`
@@ -134,6 +136,7 @@ router.get('/movements', requirePermission('dispatch'), asyncHandler(async (req,
     id: r.id, direction: r.direction, pcs: Number(r.pcs) || 0, totalWeight: Number(r.totalWeight) || 0,
     notes: r.notes, movementDate: r.movementDate, vehicleNo: r.vehicleNo,
     poNumber: r.poNumber ?? null, customerName: r.customerName ?? null,
+    dispatchId: r.dispatchId ?? null, fromPo: !!r.poOrderItemId,
   })) });
 }));
 
@@ -378,6 +381,81 @@ router.post('/stock-out', requirePermission('dispatch'), asyncHandler(async (req
   });
 
   res.status(201).json({ dispatchId: result, dispatched: data.pcs });
+}));
+
+/* ---------- Edit / delete one stock entry ----------
+   An IN may only shrink or go while what is left still covers what was already sent
+   out; a stock-out is a real dispatch, so it changes or goes together with it. */
+const onHandOf = (db, companyId, warehouseId, specKey, excludeId) => db.qOne(
+  `SELECT COALESCE(SUM(CASE WHEN \`direction\` = 'IN' THEN \`pcs\` ELSE -\`pcs\` END), 0) AS n
+     FROM \`StockMovement\` WHERE \`companyId\` = ? AND \`warehouseId\` = ? AND \`specKey\` = ? AND \`isRejection\` = 0 AND \`id\` <> ?`,
+  [companyId, warehouseId, specKey, excludeId]
+).then((r) => Number(r?.n ?? 0));
+
+const packingListOf = (dispatchId) => qOne(
+  `SELECT p.\`plNumber\` AS plNumber FROM \`PackingListItem\` pli
+     INNER JOIN \`PackingList\` p ON p.\`id\` = pli.\`packingListId\` WHERE pli.\`dispatchId\` = ?`, [dispatchId]);
+
+router.patch('/movements/:id', requirePermission('dispatch'), asyncHandler(async (req, res) => {
+  const data = z.object({
+    pcs:          z.coerce.number().int().positive().optional(),
+    movementDate: z.coerce.date().optional(),
+    notes:        z.string().trim().max(400).optional().nullable(),
+  }).parse(req.body);
+  const row = await qOne('SELECT * FROM `StockMovement` WHERE `id` = ? AND `companyId` = ? AND `isRejection` = 0', [req.params.id, req.tenant.companyId]);
+  if (!row) throw new AppError('Stock entry not found', 404, 'NOT_FOUND');
+
+  await txn(async (tx) => {
+    const patch = {};
+    if (data.pcs !== undefined && data.pcs !== row.pcs) {
+      const others = await onHandOf(tx, row.companyId, row.warehouseId, row.specKey, row.id);
+      if (row.direction === 'IN') {
+        if (others + data.pcs < 0) throw new AppError(`${-others} pcs from this store were already sent out, so this entry can't go below ${-others} pcs.`, 400, 'PCS_IN_USE');
+        if (row.poOrderItemId) {
+          const it = await tx.qOne(
+            `SELECT (SELECT COALESCE(SUM(\`pcs\`),0) FROM \`Production\` WHERE \`poOrderItemId\` = ?) AS produced,
+                    (SELECT COALESCE(SUM(\`pcs\`),0) FROM \`Dispatch\` WHERE \`poOrderItemId\` = ?) AS dispatched,
+                    (SELECT COALESCE(SUM(\`pcs\`),0) FROM \`StockMovement\` WHERE \`poOrderItemId\` = ? AND \`direction\` = 'IN' AND \`id\` <> ?) AS otherIn`,
+            [row.poOrderItemId, row.poOrderItemId, row.poOrderItemId, row.id]);
+          const available = Math.max(Number(it?.produced || 0) - Number(it?.dispatched || 0) - Number(it?.otherIn || 0), 0);
+          if (data.pcs > available) throw new AppError(`Pcs (${data.pcs}) exceeds the produced pcs available on that order (${available}).`, 400, 'PCS_EXCEEDS');
+        }
+      } else if (data.pcs > others) {
+        throw new AppError(`Pcs (${data.pcs}) exceeds stock on hand (${others}).`, 400, 'PCS_EXCEEDS');
+      }
+      patch.pcs = data.pcs;
+      patch.totalWeight = w3(data.pcs * (Number(row.weightPerPc) || 0));
+    }
+    if (data.movementDate !== undefined) patch.movementDate = data.movementDate;
+    if (data.notes !== undefined) patch.notes = data.notes || null;
+    if (!Object.keys(patch).length) return;
+    await tx.update('StockMovement', row.id, patch);
+    if (row.dispatchId) {
+      const d = {};
+      if (patch.pcs !== undefined) { d.pcs = patch.pcs; d.totalWeight = patch.totalWeight; }
+      if (patch.movementDate !== undefined) d.dispatchDate = patch.movementDate;
+      if (patch.notes !== undefined) d.notes = patch.notes;
+      await tx.update('Dispatch', row.dispatchId, d);
+    }
+  });
+  res.json({ ok: true });
+}));
+
+router.delete('/movements/:id', requirePermission('dispatch'), asyncHandler(async (req, res) => {
+  const row = await qOne('SELECT * FROM `StockMovement` WHERE `id` = ? AND `companyId` = ? AND `isRejection` = 0', [req.params.id, req.tenant.companyId]);
+  if (!row) throw new AppError('Stock entry not found', 404, 'NOT_FOUND');
+  if (row.direction === 'IN') {
+    const others = await onHandOf({ qOne }, row.companyId, row.warehouseId, row.specKey, row.id);
+    if (others < 0) throw new AppError(`${-others} of these pcs were already sent out of this store. Delete or reduce those stock-outs first.`, 409, 'PCS_IN_USE');
+  } else if (row.dispatchId) {
+    const pl = await packingListOf(row.dispatchId);
+    if (pl) throw new AppError(`This stock-out is on packing list ${pl.plNumber}. Delete that packing list first, then this entry.`, 409, 'ON_PACKING_LIST');
+  }
+  await txn(async (tx) => {
+    await tx.del('StockMovement', row.id);
+    if (row.direction === 'OUT' && row.dispatchId) await tx.q('DELETE FROM `Dispatch` WHERE `id` = ? AND `companyId` = ?', [row.dispatchId, row.companyId]);
+  });
+  res.status(204).end();
 }));
 
 /* ---------- Rejection — move produced pcs into a store, set aside as rejected ----------

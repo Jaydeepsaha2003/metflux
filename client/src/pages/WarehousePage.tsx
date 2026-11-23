@@ -300,19 +300,53 @@ export const WarehousePage = () => {
 };
 
 /* ── Stock movements drill-down — the individual IN/OUT rows behind an on-hand
-   line, so the notes entered on stock-in / opening stock are visible here. ── */
+   line, with their notes. Each entry can be corrected or deleted here; a stock-out
+   is a real dispatch, so the server changes or removes that dispatch with it. ── */
 type Movement = {
   id: string; direction: 'IN' | 'OUT'; pcs: number; totalWeight: number; notes: string | null;
   movementDate: string | null; vehicleNo: string | null; poNumber: string | null; customerName: string | null;
+  dispatchId: string | null; fromPo: boolean;
+};
+const isoDay = (v: string | null) => {
+  if (!v) return todayISO();
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? todayISO() : new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
 };
 const MovementsPanel = ({ warehouseId, specKey }: { warehouseId: string; specKey: string }) => {
+  const qc = useQueryClient();
+  const { confirm, confirmDialog } = useConfirm();
+  const [edit, setEdit] = useState<{ id: string; date: string; pcs: string; notes: string } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
   const { data, isLoading } = useQuery({
     queryKey: ['warehouse-movements', warehouseId, specKey],
     queryFn: () => api<{ items: Movement[] }>(`/warehouses/movements?warehouseId=${encodeURIComponent(warehouseId)}&specKey=${encodeURIComponent(specKey)}`),
   });
+  const refresh = () => ['warehouse-movements', 'warehouse-stock', 'dispatch'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+  const fail = (e: unknown) => setErr(e instanceof ApiError ? e.message : 'Could not save the change');
+  const save = useMutation({
+    mutationFn: (e: NonNullable<typeof edit>) => api(`/warehouses/movements/${e.id}`, { method: 'PATCH', json: { movementDate: e.date, pcs: Number(e.pcs), notes: e.notes.trim() || null } }),
+    onSuccess: () => { setEdit(null); setErr(null); refresh(); },
+    onError: fail,
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => api(`/warehouses/movements/${id}`, { method: 'DELETE' }),
+    onSuccess: () => { setErr(null); refresh(); },
+    onError: fail,
+  });
+  const onDelete = async (m: Movement) => {
+    const ok = await confirm({
+      title: m.direction === 'IN' ? 'Delete this stock-in?' : 'Delete this stock-out?',
+      message: m.direction === 'IN'
+        ? <>Remove <strong>{m.pcs} pcs</strong> from this store{m.notes ? <> ({m.notes})</> : null}. This cannot be undone.</>
+        : <>This also deletes its dispatch{m.customerName ? <> to <strong>{m.customerName}</strong></> : null}, so the <strong>{m.pcs} pcs</strong> go back into this store and the order shows them as not yet dispatched. This cannot be undone.</>,
+      tone: 'danger', confirmLabel: 'Delete',
+    });
+    if (ok) remove.mutate(m.id);
+  };
   const items = data?.items ?? [];
   if (isLoading) return <div className="py-3 text-center text-slate-400"><Loader2 className="mx-auto h-4 w-4 animate-spin" /></div>;
   if (!items.length) return <div className="py-3 text-center text-xs text-slate-400">No movements.</div>;
+  const pcsBad = edit && !(Number.isInteger(Number(edit.pcs)) && Number(edit.pcs) > 0);
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
       <table className="w-full text-xs">
@@ -323,24 +357,60 @@ const MovementsPanel = ({ warehouseId, specKey }: { warehouseId: string; specKey
             <th className="px-2 py-1.5 text-right">Pcs</th>
             <th className="px-2 py-1.5">Note</th>
             <th className="px-2 py-1.5">Reference</th>
+            <th className="w-20 px-2 py-1.5 text-right">Edit</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {items.map((m) => (
-            <tr key={m.id}>
-              <td data-label="Date" className="px-2 py-1 text-slate-600">{fmtDate(m.movementDate)}</td>
-              <td data-label="Movement" className="px-2 py-1">
-                <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', m.direction === 'IN' ? 'bg-emerald-50 text-emerald-700' : 'bg-brand-50 text-brand-700')}>
-                  {m.direction === 'IN' ? 'Stock In' : 'Stock Out'}
-                </span>
-              </td>
-              <td data-label="Pcs" className="px-2 py-1 text-right font-semibold tabular-nums">{m.direction === 'IN' ? '+' : '−'}{m.pcs}</td>
-              <td data-label="Note" className="px-2 py-1 text-slate-700">{m.notes || '—'}</td>
-              <td data-label="Reference" className="px-2 py-1 text-slate-500">{[m.customerName, m.poNumber, m.vehicleNo].filter(Boolean).join(' · ') || '—'}</td>
-            </tr>
-          ))}
+          {items.map((m) => {
+            const editing = edit?.id === m.id;
+            return (
+              <tr key={m.id} className={cn(editing && 'bg-amber-50/60')}>
+                <td data-label="Date" className="px-2 py-1 text-slate-600">
+                  {editing
+                    ? <input type="date" aria-label="Date" className="input h-7 w-36 py-0 text-xs" value={edit.date} onChange={(e) => setEdit({ ...edit, date: e.target.value })} />
+                    : fmtDate(m.movementDate)}
+                </td>
+                <td data-label="Movement" className="px-2 py-1">
+                  <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', m.direction === 'IN' ? 'bg-emerald-50 text-emerald-700' : 'bg-brand-50 text-brand-700')}>
+                    {m.direction === 'IN' ? 'Stock In' : 'Stock Out'}
+                  </span>
+                </td>
+                <td data-label="Pcs" className="px-2 py-1 text-right font-semibold tabular-nums">
+                  {editing
+                    ? <input type="number" min={1} step={1} aria-label="Pcs" className={cn('input h-7 w-20 py-0 text-right text-xs', pcsBad && 'border-red-400')} value={edit.pcs} onChange={(e) => setEdit({ ...edit, pcs: e.target.value })} />
+                    : <>{m.direction === 'IN' ? '+' : '−'}{m.pcs}</>}
+                </td>
+                <td data-label="Note" className="px-2 py-1 text-slate-700">
+                  {editing
+                    ? <input aria-label="Note" maxLength={400} className="input h-7 w-full min-w-[120px] py-0 text-xs" value={edit.notes} onChange={(e) => setEdit({ ...edit, notes: e.target.value })} />
+                    : m.notes || '—'}
+                </td>
+                <td data-label="Reference" className="px-2 py-1 text-slate-500">{[m.customerName, m.poNumber, m.vehicleNo].filter(Boolean).join(' · ') || '—'}</td>
+                <td data-label="Edit" className="whitespace-nowrap px-2 py-1 text-right">
+                  {editing ? (
+                    <>
+                      <button type="button" onClick={() => save.mutate(edit)} disabled={save.isPending || !!pcsBad}
+                        className="rounded p-1 text-emerald-600 hover:bg-emerald-50 disabled:opacity-40" aria-label="Save changes" title="Save">
+                        {save.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                      </button>
+                      <button type="button" onClick={() => { setEdit(null); setErr(null); }} className="rounded p-1 text-slate-400 hover:bg-slate-100" aria-label="Cancel editing" title="Cancel"><X className="h-3.5 w-3.5" /></button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" onClick={() => { setErr(null); setEdit({ id: m.id, date: isoDay(m.movementDate), pcs: String(m.pcs), notes: m.notes ?? '' }); }}
+                        className="rounded p-1 text-slate-400 hover:bg-brand-50 hover:text-brand-700" aria-label={`Edit ${m.direction === 'IN' ? 'stock-in' : 'stock-out'} of ${m.pcs} pcs`} title="Edit"><Pencil className="h-3.5 w-3.5" /></button>
+                      <button type="button" onClick={() => onDelete(m)} disabled={remove.isPending}
+                        className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40" aria-label={`Delete ${m.direction === 'IN' ? 'stock-in' : 'stock-out'} of ${m.pcs} pcs`} title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>
+                    </>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
+      {err && <div role="alert" className="border-t border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{err}</div>}
+      {confirmDialog}
     </div>
   );
 };

@@ -297,7 +297,19 @@ router.patch('/:id', requirePermission('dispatch'), asyncHandler(async (req, res
   );
   if (!existing) throw new AppError('Dispatch record not found', 404, 'NOT_FOUND');
 
-  if (data.pcs !== undefined) {
+  if (data.pcs !== undefined && existing.sourceType === 'WAREHOUSE') {
+    // Came out of a store, not off production: the limit is that store's stock, counting this dispatch's own pcs back in.
+    const s = await qOne(
+      `SELECT COALESCE(SUM(CASE WHEN o.\`direction\` = 'IN' THEN o.\`pcs\` ELSE -o.\`pcs\` END), 0) AS n
+         FROM \`StockMovement\` mv
+         INNER JOIN \`StockMovement\` o ON o.\`companyId\` = mv.\`companyId\` AND o.\`warehouseId\` = mv.\`warehouseId\` AND o.\`specKey\` = mv.\`specKey\`
+                                     AND o.\`isRejection\` = 0 AND o.\`id\` <> mv.\`id\`
+        WHERE mv.\`dispatchId\` = ? AND mv.\`direction\` = 'OUT'`,
+      [existing.id]
+    );
+    const available = Math.max(Number(s?.n ?? 0), 0);
+    if (data.pcs > available) throw new AppError(`New pcs (${data.pcs}) exceeds the store's stock (${available}).`, 400, 'PCS_EXCEEDS');
+  } else if (data.pcs !== undefined) {
     const available = Math.max(Number(existing.produced ?? 0) - Number(existing.others ?? 0), 0);
     if (data.pcs > available) {
       throw new AppError(`New pcs (${data.pcs}) exceeds available capacity (${available}).`, 400, 'PCS_EXCEEDS');
@@ -317,6 +329,14 @@ router.patch('/:id', requirePermission('dispatch'), asyncHandler(async (req, res
   if (Object.keys(patch).length > 0) {
     const before = await snapshotEntity('Dispatch', existing.id);
     await update('Dispatch', existing.id, patch);
+    // A dispatch out of a store has a matching OUT movement; keep its pcs and date in step.
+    if (existing.sourceType === 'WAREHOUSE' && (patch.pcs !== undefined || patch.dispatchDate !== undefined)) {
+      const mv = await qOne("SELECT `id`, `weightPerPc` FROM `StockMovement` WHERE `dispatchId` = ? AND `direction` = 'OUT'", [existing.id]);
+      if (mv) await update('StockMovement', mv.id, {
+        ...(patch.pcs !== undefined && { pcs: patch.pcs, totalWeight: +(patch.pcs * (Number(mv.weightPerPc) || 0)).toFixed(3) }),
+        ...(patch.dispatchDate !== undefined && { movementDate: patch.dispatchDate }),
+      });
+    }
     await logAudit(req, { entity: 'Dispatch', entityId: existing.id, action: 'UPDATE',
       summary: `Edited dispatch — ${Object.keys(patch).join(', ')}`, before });
   }
@@ -353,6 +373,8 @@ router.delete('/:id', requirePermission('dispatch'), asyncHandler(async (req, re
   const d = info ? flatten(info) : null;
   const before = await snapshotEntity('Dispatch', row.id);
   await del('Dispatch', row.id);
+  // A dispatch out of a store gives its pcs back to that store.
+  await q("DELETE FROM `StockMovement` WHERE `dispatchId` = ? AND `direction` = 'OUT'", [row.id]);
   await logAudit(req, { entity: 'Dispatch', entityId: row.id, action: 'DELETE',
     summary: d ? `Deleted dispatch ${d.pcs} pcs · ${d.customerName ?? ''} · ${d.measure ?? ''} (PO ${d.poNumber ?? ''})`.replace(/\s+·\s+·/g, ' ·').trim() : 'Deleted dispatch', before });
   res.status(204).end();
