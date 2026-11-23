@@ -22,6 +22,9 @@ export const PERMISSION_KEYS = Object.freeze([
   // checkbox so granting one doesn't silently imply the other)
   'add_quotation',
   'view_quotation',
+  // Proforma invoices + export test certificates
+  'add_proforma',
+  'view_proforma',
   // Supplier purchase orders
   'add_supplier_po',
   'view_supplier_po',
@@ -67,6 +70,8 @@ export const PERMISSION_LABELS = Object.freeze({
   po_summary:       'View SO Summary',
   add_quotation:    'Create / edit Quotations',
   view_quotation:   'View Quotations',
+  add_proforma:     'Create / edit Proforma Invoices & Test Certificates',
+  view_proforma:    'View Proforma Invoices & Test Certificates',
   add_supplier_po:  'Create / edit Supplier PO',
   view_supplier_po: 'View Supplier POs',
   assign_work:      'Assign Work (Work Allotment)',

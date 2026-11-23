@@ -44,8 +44,8 @@ const NAV: NavItem[] = [
       { kind: 'leaf', to: '/po/summary', label: 'SO Summary',      icon: BarChart3,  perm: 'po_summary' },
       { kind: 'leaf', to: '/quotation/new',    label: 'New Quotation', icon: FileText,      perm: 'add_quotation' },
       { kind: 'leaf', to: '/quotation/manage', label: 'Quotations',    icon: ClipboardList, perm: 'view_quotation' },
-      { kind: 'leaf', to: '/proforma/new',    label: 'New Proforma Invoice', icon: FileSpreadsheet, perm: 'add_quotation' },
-      { kind: 'leaf', to: '/proforma/manage', label: 'Proforma Invoices',    icon: ClipboardList,   perm: 'view_quotation' },
+      { kind: 'leaf', to: '/proforma/new',    label: 'New Proforma Invoice', icon: FileSpreadsheet, perm: 'add_proforma' },
+      { kind: 'leaf', to: '/proforma/manage', label: 'Proforma Invoices',    icon: ClipboardList,   perm: 'view_proforma' },
     ],
   },
   {

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Save, Trash2, Building2, Star, ShieldCheck, Loader2, Eye, EyeOff,
   UserCog, LayoutDashboard, FileText, ShoppingCart, ClipboardList, Factory,
-  Calculator, Truck, PackageCheck, RotateCcw, Receipt, Layers, Check, X,
+  Calculator, Truck, PackageCheck, RotateCcw, Receipt, Layers, Check, X, Ship,
   type LucideIcon,
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
@@ -41,6 +41,7 @@ type Company = { id: string; name: string };
 const GROUP_ICON: Record<string, LucideIcon> = {
   Overview: LayoutDashboard,
   'Sales Orders': FileText,
+  Export: Ship,
   'Supplier Orders': ShoppingCart,
   'Work Allotment': ClipboardList,
   Production: Factory,

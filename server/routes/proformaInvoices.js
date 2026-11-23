@@ -16,8 +16,8 @@ import { logAudit } from '../lib/audit.js';
 const router = Router();
 router.use(requireAuth, resolveTenant);
 
-const READ = ['view_quotation', 'view_po'];
-const WRITE = ['add_quotation', 'add_po'];
+const READ = ['view_proforma'];
+const WRITE = ['add_proforma'];
 
 const money = (v) => Math.round((Number(v) || 0) * 100) / 100;
 
