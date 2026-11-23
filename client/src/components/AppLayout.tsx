@@ -6,7 +6,7 @@ import {
   Plus, ListChecks, BarChart3, Layers, Building2, Factory, Inbox, ClipboardList,
   PanelLeftClose, Users2, Truck, PackageCheck, ShoppingCart, Activity, RotateCcw, Menu, X, ShieldAlert,
   Receipt, Clock, Wallet, TrendingUp, Calculator, Warehouse, MonitorSmartphone, History,
-  Image as ImageIcon, ArrowLeftRight, Ban, BookText, BookOpen, Scale, Bell, FileSpreadsheet,
+  Image as ImageIcon, ArrowLeftRight, Ban, BookText, BookOpen, Scale, Bell, FileSpreadsheet, ClipboardCheck,
 } from 'lucide-react';
 import { useAuthStore, can, activeMembership } from '@/store/auth';
 import { useBranding } from '@/store/branding';
@@ -46,6 +46,8 @@ const NAV: NavItem[] = [
       { kind: 'leaf', to: '/quotation/manage', label: 'Quotations',    icon: ClipboardList, perm: 'view_quotation' },
       { kind: 'leaf', to: '/proforma/new',    label: 'New Proforma Invoice', icon: FileSpreadsheet, perm: 'add_proforma' },
       { kind: 'leaf', to: '/proforma/manage', label: 'Proforma Invoices',    icon: ClipboardList,   perm: 'view_proforma' },
+      { kind: 'leaf', to: '/test-certificates/new', label: 'New Test Certificate', icon: ClipboardCheck, perm: 'add_proforma' },
+      { kind: 'leaf', to: '/test-certificates', label: 'Test Certificates',   icon: ClipboardList,   perm: 'view_proforma' },
     ],
   },
   {

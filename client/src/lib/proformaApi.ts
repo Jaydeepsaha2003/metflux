@@ -3,7 +3,7 @@
 // the register's download button and the settings page agree on what "empty" means.
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { DEFAULT_TERMS } from './proformaLists';
+import { DEFAULT_TERMS, TC_TEST_METHOD, TC_CERTIFICATION } from './proformaLists';
 import { downloadProformaXlsx, type PiSettings } from './proformaXlsx';
 import { downloadProformaPdf } from './proformaPdf';
 import { useBranding } from '@/store/branding';
@@ -24,6 +24,8 @@ export const withDefaults = (s: PiSettings, c?: Company | null): PiSettings => (
   pan: s.pan || (c?.gstNumber ? c.gstNumber.slice(2, 12) : ''),
   terms: s.terms.length ? s.terms : DEFAULT_TERMS,
   lists: s.lists ?? {},
+  tcTestMethod: s.tcTestMethod || TC_TEST_METHOD,
+  tcCertification: s.tcCertification || TC_CERTIFICATION,
 });
 
 export const usePiSettings = () => {

@@ -2,7 +2,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarClock, Download, FileSpreadsheet, FileText, Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { CalendarClock, ClipboardCheck, Download, FileSpreadsheet, FileText, Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { useConfirm } from '@/hooks/useConfirm';
@@ -132,6 +132,7 @@ export const ProformaListPage = () => {
                           className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
                           {busyId === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Excel
                         </button>
+                        <button type="button" onClick={() => navigate(`/test-certificates/new?pi=${r.id}`)} title="Create a test certificate for this PI" aria-label={`Test certificate for ${r.piNumber}`} className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-brand-700"><ClipboardCheck className="h-4 w-4" /></button>
                         <button type="button" onClick={() => navigate(`/proforma/${r.id}/edit`)} title="Edit" className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><Pencil className="h-4 w-4" /></button>
                         <button type="button" onClick={() => remove(r)} title="Delete" className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                       </div>

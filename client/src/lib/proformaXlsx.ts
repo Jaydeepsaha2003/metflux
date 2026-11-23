@@ -18,6 +18,7 @@ export type PiSettings = {
   beneficiary: string; bankName: string; bankBranch: string; accountNo: string; ifsc: string; swift: string; intermediaryBank: string;
   signatory: string; terms: { title: string; text: string; print: boolean }[];
   lists?: Partial<Record<string, string[]>>;
+  tcFormatNo?: string; tcWorks?: string; tcTestMethod?: string; tcCertification?: string; tcTestedBy?: string; tcApprovedBy?: string;
 };
 export type PiLogo = { base64: string; w: number; h: number };
 

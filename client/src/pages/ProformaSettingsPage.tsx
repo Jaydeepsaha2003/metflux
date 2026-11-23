@@ -9,7 +9,7 @@ import { usePiSettings } from '@/lib/proformaApi';
 import { DEFAULT_TERMS, EDITABLE_LISTS, listOptions, type ListKey } from '@/lib/proformaLists';
 import type { PiSettings } from '@/lib/proformaXlsx';
 
-type K = keyof Omit<PiSettings, 'terms' | 'lists'>;
+type K = Exclude<keyof PiSettings, 'terms' | 'lists'>;
 // Required ones are those a foreign bank or customs will ask for; the red outline mirrors the workbook's.
 const GROUPS: { title: string; fields: { k: K; label: string; required?: boolean; note?: string; area?: boolean }[] }[] = [
   { title: 'Exporter', fields: [
@@ -32,6 +32,14 @@ const GROUPS: { title: string; fields: { k: K; label: string; required?: boolean
     { k: 'ifsc', label: 'IFSC', required: true },
     { k: 'swift', label: 'SWIFT / BIC code', required: true, note: 'Compulsory for an overseas buyer to send money.' },
     { k: 'intermediaryBank', label: 'Intermediary / correspondent bank', area: true, note: "Your bank's correspondent (name + SWIFT) — reduces failed or delayed remittances." },
+  ] },
+  { title: 'Test certificate', fields: [
+    { k: 'tcFormatNo', label: 'Format No.', note: 'Your QA document number, e.g. MEI/QA/F-07  Rev. 00.' },
+    { k: 'tcWorks', label: 'Test station / works', note: 'Where the cores are tested, e.g. Vadodara Works, Gujarat, India.' },
+    { k: 'tcTestedBy', label: 'Tested by (default name)' },
+    { k: 'tcApprovedBy', label: 'Approved by — QA (default name)' },
+    { k: 'tcTestMethod', label: 'Test method', area: true },
+    { k: 'tcCertification', label: 'Certification statement', area: true },
   ] },
 ];
 
@@ -64,14 +72,14 @@ export const ProformaSettingsPage = () => {
           <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-brand-700">{g.title}</h2>
           <div className="grid gap-3 sm:grid-cols-2">
             {g.fields.map((f) => {
-              const empty = f.required && !form[f.k].trim();
+              const empty = f.required && !(form[f.k] ?? '').trim();
               const cls = cn('input w-full text-sm', f.area ? 'min-h-[64px] py-2' : 'h-9', empty && 'border-red-400 bg-red-50/40');
               return (
                 <label key={f.k} className={cn('block', f.area && 'sm:col-span-2')}>
                   <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-slate-500">{f.label}{f.required && <span className={empty ? ' text-red-500' : ' text-slate-300'}> *</span>}</span>
                   {f.area
-                    ? <textarea className={cls} value={form[f.k]} onChange={(e) => set(f.k, e.target.value)} />
-                    : <input className={cls} value={form[f.k]} onChange={(e) => set(f.k, e.target.value)} />}
+                    ? <textarea className={cls} value={form[f.k] ?? ''} onChange={(e) => set(f.k, e.target.value)} />
+                    : <input className={cls} value={form[f.k] ?? ''} onChange={(e) => set(f.k, e.target.value)} />}
                   {f.note && <span className="mt-0.5 block text-[11px] text-slate-400">{f.note}</span>}
                 </label>
               );

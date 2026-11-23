@@ -36,6 +36,9 @@ const proformaSchema = z.object({
   iec: text(20), lutArn: text(40), adCode: text(40), rcmc: text(60),
   beneficiary: text(160), bankName: text(160), bankBranch: text(300), accountNo: text(60),
   ifsc: text(40), swift: text(40), intermediaryBank: text(300), signatory: text(120),
+  // Export test certificate: printed on every certificate.
+  tcFormatNo: text(60), tcWorks: text(160), tcTestMethod: text(1000), tcCertification: text(1000),
+  tcTestedBy: text(120), tcApprovedBy: text(120),
   terms: z.array(z.object({
     title: z.string().trim().max(80), text: z.string().max(1500), print: z.boolean().default(true),
   })).max(30).optional().default([]),
@@ -46,6 +49,7 @@ const PROFORMA_EMPTY = {
   address: '', phone: '', email: '', gstin: '', pan: '', iec: '', lutArn: '', adCode: '', rcmc: '',
   beneficiary: '', bankName: '', bankBranch: '', accountNo: '', ifsc: '', swift: '', intermediaryBank: '',
   signatory: '', terms: [], lists: {},
+  tcFormatNo: '', tcWorks: '', tcTestMethod: '', tcCertification: '', tcTestedBy: '', tcApprovedBy: '',
 };
 
 const EMPTY = { bankName: '', bankBranch: '', bankAccountName: '', bankAccountNumber: '', bankIfsc: '', terms: '', seriesStart: null };

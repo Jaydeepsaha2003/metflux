@@ -417,3 +417,10 @@ export const LIST_FOR_FIELD: Partial<Record<string, ListKey>> = {
 /** The company's own list if it saved one, else the standard list. */
 export const listOptions = (lists: Partial<Record<ListKey, string[]>> | undefined, key: ListKey): readonly string[] =>
   lists?.[key]?.length ? lists[key]! : EDITABLE_LISTS.find((l) => l.key === key)!.defaults;
+
+
+/** Export test certificate wording, from the workbook's Settings sheet (editable in Settings). */
+export const TC_TEST_METHOD =
+  'Dimensions measured with a calibrated digital vernier caliper (least count 0.01 mm). Excitation current measured at the applied voltage and frequency across the stated number of turns.';
+export const TC_CERTIFICATION =
+  'This is to certify that the cores listed above have been tested as per the specified grade and dimensions, and all test parameters are found within permissible limits. The material is accepted and released for dispatch.';

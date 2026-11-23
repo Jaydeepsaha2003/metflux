@@ -47,6 +47,8 @@ const QuotationSettingsPage = page(() => import('@/pages/QuotationSettingsPage')
 const ProformaListPage     = page(() => import('@/pages/ProformaListPage'), 'ProformaListPage');
 const ProformaFormPage     = page(() => import('@/pages/ProformaFormPage'), 'ProformaFormPage');
 const ProformaSettingsPage = page(() => import('@/pages/ProformaSettingsPage'), 'ProformaSettingsPage');
+const TestCertListPage     = page(() => import('@/pages/TestCertListPage'), 'TestCertListPage');
+const TestCertFormPage     = page(() => import('@/pages/TestCertFormPage'), 'TestCertFormPage');
 const POManagePage        = page(() => import('@/pages/POManagePage'), 'POManagePage');
 const POEditPage          = page(() => import('@/pages/POEditPage'), 'POEditPage');
 const POOrderEditPage     = page(() => import('@/pages/POOrderEditPage'), 'POOrderEditPage');
@@ -140,6 +142,9 @@ export const App = () => {
       <Route path="/proforma/:id/edit"     element={<ProformaFormPage />} />
       <Route path="/proforma/manage"       element={<ProformaListPage />} />
       <Route path="/settings/proforma"     element={<ProformaSettingsPage />} />
+      <Route path="/test-certificates"           element={<TestCertListPage />} />
+      <Route path="/test-certificates/new"       element={<TestCertFormPage />} />
+      <Route path="/test-certificates/:id/edit"  element={<TestCertFormPage />} />
 
       {/* Production */}
       <Route path="/production"          element={<ProductionListPage />} />
