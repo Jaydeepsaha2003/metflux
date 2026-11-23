@@ -29,7 +29,7 @@ const itemFromCore = (c: CoreItem): PiItem => {
   const perPc = c.ratePerPc ?? (c.pcs ? (c.totalAmount ?? 0) / c.pcs : 0);
   return {
     desc: `${coreLabel(c.coreType).toUpperCase()} — ${c.measure}`,
-    grade: [c.material, c.grade].filter(Boolean).join(' '),
+    grade: c.grade || '',   // the material is internal; the buyer sees the grade only
     hsn: '85049010', qty: c.pcs, unit: 'Pcs',
     netWtUnit: +c.weightPerPc.toFixed(4), price: +perPc.toFixed(2),
   };

@@ -79,6 +79,11 @@ const numberToWordsIndian = (num: number): string => {
 const rateOf = (it: QItem) =>
   it.ratePerPc ?? (it.rateBasis === 'PER_PCS' ? (it.rateValue ?? 0) : (it.pcs ? (it.totalAmount ?? 0) / it.pcs : 0));
 
+/** What the customer sees per line: grade and size. The material is internal and
+ *  never printed; it stands in only for a line with no grade (a custom line). */
+const itemLine = (it: { grade: string; material: string; measure: string }) =>
+  `${it.grade?.trim() || it.material}${it.measure ? ` - ${it.measure}` : ''}`;
+
 export const QuotationPrintPage = () => {
   const { id } = useParams();
   const [generating, setGenerating] = useState(false);
@@ -174,10 +179,9 @@ export const QuotationPrintPage = () => {
         gstin: qt.customer.gstNumber ?? '',
       },
       items: qt.items.map((it) => {
-        const showGrade = it.grade && !it.material.toUpperCase().includes(it.grade.toUpperCase());
         return {
-          description: `${it.material}${it.measure ? ` - ${it.measure}` : ''}`,
-          sub: [showGrade ? it.grade : '', nanoFinishSize(it, gradesResp?.grades) ? `Finish size ${nanoFinishSize(it, gradesResp?.grades)}` : ''].filter(Boolean).join(' · '),
+          description: itemLine(it),
+          sub: nanoFinishSize(it, gradesResp?.grades) ? `Finish size ${nanoFinishSize(it, gradesResp?.grades)}` : '',
           hsn: it.hsnCode || '',
           qty: it.pcs.toLocaleString('en-IN'),
           unit: it.unit || 'Pcs',
@@ -317,15 +321,11 @@ export const QuotationPrintPage = () => {
             </thead>
             <tbody>
               {qt.items.map((it, idx) => {
-                // Hide the grade sub-line when it's already part of the material name
-                // (e.g. material "SS CASE" + grade "SS" was showing a redundant "SS").
-                const showGrade = it.grade && !it.material.toUpperCase().includes(it.grade.toUpperCase());
                 return (
                 <tr key={it.id} className="border-b border-slate-200 align-top">
                   <td className="px-2 py-2 border-r border-slate-200 text-center">{idx + 1}</td>
                   <td className="px-2 py-2 border-r border-slate-200">
-                    <div className="font-medium">{it.material}{it.measure ? ` - ${it.measure}` : ''}</div>
-                    {showGrade && <div className="mt-0.5 text-[11px] text-slate-500">{it.grade}</div>}
+                    <div className="font-medium">{itemLine(it)}</div>
                     {nanoFinishSize(it, gradesResp?.grades) && <div className="mt-0.5 text-[11px] text-slate-500">Finish size {nanoFinishSize(it, gradesResp?.grades)}</div>}
                   </td>
                   <td className="px-2 py-2 border-r border-slate-200 text-center font-mono">{it.hsnCode || '—'}</td>
