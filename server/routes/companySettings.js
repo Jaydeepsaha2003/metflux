@@ -39,11 +39,13 @@ const proformaSchema = z.object({
   terms: z.array(z.object({
     title: z.string().trim().max(80), text: z.string().max(1500), print: z.boolean().default(true),
   })).max(30).optional().default([]),
+  // The company's own drop-down options, keyed by list (see client proformaLists EDITABLE_LISTS).
+  lists: z.record(z.string().max(40), z.array(z.string().trim().min(1).max(160)).max(200)).optional().default({}),
 }).strip();
 const PROFORMA_EMPTY = {
   address: '', phone: '', email: '', gstin: '', pan: '', iec: '', lutArn: '', adCode: '', rcmc: '',
   beneficiary: '', bankName: '', bankBranch: '', accountNo: '', ifsc: '', swift: '', intermediaryBank: '',
-  signatory: '', terms: [],
+  signatory: '', terms: [], lists: {},
 };
 
 const EMPTY = { bankName: '', bankBranch: '', bankAccountName: '', bankAccountNumber: '', bankIfsc: '', terms: '', seriesStart: null };

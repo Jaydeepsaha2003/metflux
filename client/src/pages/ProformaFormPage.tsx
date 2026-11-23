@@ -22,7 +22,7 @@ import {
   SECTIONS, amountWords, blankItem, blankPi, calcPi, fmt2, fromRecord, isMissing, lineAmount, lineNetWt, missingFields, missingRequired, toPayload,
   type Field, type PiForm, type PiItem,
 } from '@/lib/proforma';
-import { UNITS, PI_CURRENCIES } from '@/lib/proformaLists';
+import { LIST_FOR_FIELD, PI_CURRENCIES, listOptions } from '@/lib/proformaLists';
 import { downloadPiForm, usePiSettings } from '@/lib/proformaApi';
 
 const itemFromCore = (c: CoreItem): PiItem => {
@@ -38,7 +38,7 @@ const itemFromCore = (c: CoreItem): PiItem => {
 const num = (v: string) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
 
 /** One field of the form, drawn from its definition. */
-const FieldInput = ({ f, pi, set }: { f: Field; pi: PiForm; set: (k: keyof PiForm, v: never) => void }) => {
+const FieldInput = ({ f, pi, set, options }: { f: Field; pi: PiForm; set: (k: keyof PiForm, v: never) => void; options?: readonly string[] }) => {
   const value = pi[f.key] as string | number;
   const empty = isMissing(pi, f);
   const cls = cn('input h-9 w-full text-sm', empty && 'border-red-400 bg-red-50/40');
@@ -68,8 +68,8 @@ const FieldInput = ({ f, pi, set }: { f: Field; pi: PiForm; set: (k: keyof PiFor
       {PI_CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
     </select>
   );
-  else if (f.options) control = (
-    <ComboInput {...tag} id={id} className={cls} options={f.options} value={value as string} onChange={(v) => set(f.key, v as never)} />
+  else if (options) control = (
+    <ComboInput {...tag} id={id} className={cls} options={options} value={value as string} onChange={(v) => set(f.key, v as never)} />
   );
   else control = <input {...tag} id={id} className={cls} value={value as string} onChange={(e) => set(f.key, e.target.value as never)} />;
   return (
@@ -249,7 +249,7 @@ export const ProformaFormPage = () => {
                   {open && (
                     <div className="grid gap-3 p-3 sm:grid-cols-2 sm:p-4 lg:grid-cols-3">
                       {sec.fields.filter((f) => !f.consignee || pi.consigneeSame === 'No').map((f) => (
-                        <FieldInput key={f.key} f={f} pi={pi} set={set} />
+                        <FieldInput key={f.key} f={f} pi={pi} set={set} options={LIST_FOR_FIELD[f.key] ? listOptions(settings?.lists, LIST_FOR_FIELD[f.key]!) : f.options} />
                       ))}
                     </div>
                   )}
@@ -282,7 +282,7 @@ export const ProformaFormPage = () => {
                         <td className="px-2 py-1.5"><input className="input h-8 w-full text-xs" value={it.grade} onChange={(e) => setItem(i, { grade: e.target.value })} placeholder="CRGO M4" /></td>
                         <td className="px-2 py-1.5"><input className="input h-8 w-full text-xs" value={it.hsn} onChange={(e) => setItem(i, { hsn: e.target.value })} /></td>
                         <td className="px-2 py-1.5"><input type="number" min={0} step="any" className="input h-8 w-full text-right text-xs" value={it.qty || ''} onChange={(e) => setItem(i, { qty: num(e.target.value) })} /></td>
-                        <td className="px-2 py-1.5"><ComboInput aria-label="Unit" className="input h-8 w-full py-0 text-xs" options={UNITS} value={it.unit} onChange={(v) => setItem(i, { unit: v })} /></td>
+                        <td className="px-2 py-1.5"><ComboInput aria-label="Unit" className="input h-8 w-full py-0 text-xs" options={listOptions(settings?.lists, 'units')} value={it.unit} onChange={(v) => setItem(i, { unit: v })} /></td>
                         <td className="px-2 py-1.5"><input type="number" min={0} step="any" className="input h-8 w-full text-right text-xs" value={it.netWtUnit || ''} onChange={(e) => setItem(i, { netWtUnit: num(e.target.value) })} /></td>
                         <td className="px-2 py-1.5"><input type="number" min={0} step="any" className="input h-8 w-full text-right text-xs" value={it.price || ''} onChange={(e) => setItem(i, { price: num(e.target.value) })} /></td>
                         <td className="px-2 py-2 text-right font-semibold tabular-nums">{lineAmount(it) ? fmt2(lineAmount(it)) : ''}</td>

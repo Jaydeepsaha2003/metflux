@@ -2,14 +2,14 @@
 // company and printed on every proforma invoice; company admins edit it.
 import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, FileSpreadsheet, Loader2, Plus, Save, Trash2 } from 'lucide-react';
+import { Check, FileSpreadsheet, ListChecks, Loader2, Plus, RotateCcw, Save, Trash2, X } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { usePiSettings } from '@/lib/proformaApi';
-import { DEFAULT_TERMS } from '@/lib/proformaLists';
+import { DEFAULT_TERMS, EDITABLE_LISTS, listOptions, type ListKey } from '@/lib/proformaLists';
 import type { PiSettings } from '@/lib/proformaXlsx';
 
-type K = keyof Omit<PiSettings, 'terms'>;
+type K = keyof Omit<PiSettings, 'terms' | 'lists'>;
 // Required ones are those a foreign bank or customs will ask for; the red outline mirrors the workbook's.
 const GROUPS: { title: string; fields: { k: K; label: string; required?: boolean; note?: string; area?: boolean }[] }[] = [
   { title: 'Exporter', fields: [
@@ -103,6 +103,8 @@ export const ProformaSettingsPage = () => {
         </div>
       </section>
 
+      <ListsEditor lists={form.lists ?? {}} onChange={(lists) => { setForm({ ...form, lists }); setSaved(false); }} />
+
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
       <div className="flex items-center justify-end gap-3">
         {saved && <span className="flex items-center gap-1 text-sm text-emerald-700"><Check className="h-4 w-4" /> Saved</span>}
@@ -111,5 +113,76 @@ export const ProformaSettingsPage = () => {
         </button>
       </div>
     </div>
+  );
+};
+
+/** The workbook's Lists sheet: add or remove the options each drop-down offers.
+ *  A list left as standard is not stored, so later changes to the standard list still reach it. */
+const ListsEditor = ({ lists, onChange }: { lists: Partial<Record<string, string[]>>; onChange: (l: Partial<Record<string, string[]>>) => void }) => {
+  const [key, setKey] = useState<ListKey>(EDITABLE_LISTS[0].key);
+  const [draft, setDraft] = useState('');
+  const def = EDITABLE_LISTS.find((l) => l.key === key)!;
+  const items = listOptions(lists, key);
+  const custom = !!lists[key]?.length;
+  const put = (next: readonly string[]) => {
+    const same = next.length === def.defaults.length && next.every((v, i) => v === def.defaults[i]);
+    const { [key]: _drop, ...rest } = lists;
+    onChange(same ? rest : { ...rest, [key]: [...next] });
+  };
+  const add = () => {
+    const v = draft.trim();
+    if (!v) return;
+    if (!items.some((o) => o.toLowerCase() === v.toLowerCase())) put([...items, v]);
+    setDraft('');
+  };
+
+  return (
+    <section className="card p-3 sm:p-4">
+      <div className="mb-1 flex items-center gap-2">
+        <ListChecks className="h-4 w-4 text-brand-600" />
+        <h2 className="text-xs font-bold uppercase tracking-wider text-brand-700">Drop-down lists</h2>
+      </div>
+      <p className="mb-3 text-xs text-slate-500">
+        The options offered on the proforma form. Add your own or remove ones you never use; the form still accepts typed values.
+        Currency, Incoterm and Payment terms are fixed, because the amount in words, Incoterm wording and advance % come from them.
+      </p>
+      <div className="grid gap-3 md:grid-cols-[220px_minmax(0,1fr)]">
+        <div className="flex gap-1 overflow-x-auto md:flex-col md:overflow-visible" role="tablist" aria-label="Lists">
+          {EDITABLE_LISTS.map((l) => (
+            <button key={l.key} type="button" role="tab" aria-selected={l.key === key} onClick={() => { setKey(l.key); setDraft(''); }}
+              className={cn('flex shrink-0 items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors',
+                l.key === key ? 'bg-brand-50 font-semibold text-brand-800 ring-1 ring-brand-200' : 'text-slate-600 hover:bg-slate-100')}>
+              <span className="whitespace-nowrap md:whitespace-normal">{l.label}</span>
+              {lists[l.key]?.length ? <span className="rounded bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-700">Edited</span> : null}
+            </button>
+          ))}
+        </div>
+        <div className="min-w-0 rounded-lg border border-slate-200 p-3">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm font-semibold text-slate-800">{def.label} <span className="font-normal text-slate-400">· {items.length} option{items.length === 1 ? '' : 's'}</span></span>
+            {custom && (
+              <button type="button" onClick={() => put(def.defaults)} className="btn-ghost text-xs"><RotateCcw className="h-3.5 w-3.5" /> Reset to standard</button>
+            )}
+          </div>
+          <ul className="max-h-72 space-y-1 overflow-y-auto">
+            {items.map((o) => (
+              <li key={o} className="flex items-center gap-2 rounded-md bg-slate-50 px-2.5 py-1.5 text-sm text-slate-700">
+                <span className="min-w-0 flex-1 break-words">{o}</span>
+                <button type="button" disabled={items.length === 1} onClick={() => put(items.filter((x) => x !== o))}
+                  className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30" aria-label={`Remove ${o}`} title={items.length === 1 ? 'A list needs at least one option' : 'Remove'}>
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-2 flex gap-2">
+            <input className="input h-9 min-w-0 flex-1 text-sm" value={draft} maxLength={160} placeholder={`Add to ${def.label.toLowerCase()}…`}
+              onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
+            <button type="button" onClick={add} disabled={!draft.trim()} className="btn-ghost border border-slate-300 text-brand-700 hover:bg-brand-50 disabled:opacity-40"><Plus className="h-4 w-4" /> Add</button>
+          </div>
+        </div>
+      </div>
+      <p className="mt-2 text-[11px] text-slate-400">Changes apply after you press Save settings.</p>
+    </section>
   );
 };

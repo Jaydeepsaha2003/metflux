@@ -388,3 +388,32 @@ export const DEFAULT_TERMS: { title: string; text: string; print: boolean }[] = 
 
 export const DECLARATION =
   'We declare that this proforma invoice shows the actual price of the goods described and that all particulars are true and correct. This is a proforma invoice and not a tax invoice; the final commercial invoice will be issued at the time of shipment.';
+
+/** The drop-downs a company can edit in Settings → Proforma / Export, as on the workbook's
+ *  Lists sheet. Currency, Incoterm and Payment terms stay fixed: the amount in words, the
+ *  printed Incoterm wording and the advance % are looked up from their entries. */
+export const EDITABLE_LISTS = [
+  { key: 'portLoading', label: 'Port of loading', defaults: PORTS_OF_LOADING },
+  { key: 'transportMode', label: 'Mode of transport', defaults: TRANSPORT_MODES },
+  { key: 'precarriage', label: 'Pre-carriage by', defaults: PRECARRIAGE },
+  { key: 'container', label: 'Container', defaults: CONTAINERS },
+  { key: 'allowed', label: 'Partial shipment / Transshipment', defaults: ALLOWED },
+  { key: 'priceBasis', label: 'Price basis', defaults: PRICE_BASIS },
+  { key: 'bankCharges', label: 'Bank charges', defaults: BANK_CHARGES },
+  { key: 'inspection', label: 'Inspection', defaults: INSPECTION },
+  { key: 'exportType', label: 'Export type (GST)', defaults: EXPORT_TYPES },
+  { key: 'packageType', label: 'Package type', defaults: PACKAGE_TYPES },
+  { key: 'units', label: 'Item unit', defaults: UNITS },
+] as const;
+export type ListKey = (typeof EDITABLE_LISTS)[number]['key'];
+
+/** Form field → the editable list that feeds its drop-down. */
+export const LIST_FOR_FIELD: Partial<Record<string, ListKey>> = {
+  portLoading: 'portLoading', transportMode: 'transportMode', precarriage: 'precarriage', container: 'container',
+  partialShipment: 'allowed', transshipment: 'allowed', priceBasis: 'priceBasis', bankCharges: 'bankCharges',
+  inspection: 'inspection', exportType: 'exportType', packageType: 'packageType',
+};
+
+/** The company's own list if it saved one, else the standard list. */
+export const listOptions = (lists: Partial<Record<ListKey, string[]>> | undefined, key: ListKey): readonly string[] =>
+  lists?.[key]?.length ? lists[key]! : EDITABLE_LISTS.find((l) => l.key === key)!.defaults;

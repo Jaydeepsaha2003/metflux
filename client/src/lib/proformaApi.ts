@@ -23,6 +23,7 @@ export const withDefaults = (s: PiSettings, c?: Company | null): PiSettings => (
   // GSTIN characters 3–12 are the PAN, and an exporter's IEC is normally the same.
   pan: s.pan || (c?.gstNumber ? c.gstNumber.slice(2, 12) : ''),
   terms: s.terms.length ? s.terms : DEFAULT_TERMS,
+  lists: s.lists ?? {},
 });
 
 export const usePiSettings = () => {
