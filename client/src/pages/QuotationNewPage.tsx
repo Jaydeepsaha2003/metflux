@@ -4,7 +4,7 @@
 // number, PDF print). A quotation touches nothing downstream until it is
 // converted into a Sales Order from the Quotations list.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Save, Loader2, Trash2, Copy, Pencil, FileText, Calendar, Hash, User2, Plus, Landmark, Coins } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
@@ -134,11 +134,23 @@ const ManualLineForm = ({ onAdd }: { onAdd: (item: QItem) => void }) => {
   );
 };
 
+/** Step-core plates come back from the server as JSON text. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const parseSteps = (v: any) => {
+  if (Array.isArray(v)) return v;
+  if (typeof v !== 'string' || !v) return undefined;
+  try { const a = JSON.parse(v); return Array.isArray(a) && a.length ? a : undefined; } catch { return undefined; }
+};
+
 export const QuotationNewPage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { id: editId } = useParams<{ id?: string }>();
   const isEdit = !!editId;
+  // ?copy=<id> starts a NEW quotation pre-filled from an existing one (Duplicate).
+  const [search] = useSearchParams();
+  const copyId = isEdit ? undefined : search.get('copy') || undefined;
+  const sourceId = editId ?? copyId;
 
   /* ----- header ----- */
   const [quotationNo, setQuotationNo] = useState('');
@@ -325,18 +337,24 @@ export const QuotationNewPage = () => {
 
   /* ----- edit mode: load the existing quotation once and prefill ----- */
   const { data: existing } = useQuery({
-    queryKey: ['quotation', editId],
+    queryKey: ['quotation', sourceId],
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    queryFn: () => api<any>(`/quotations/${editId}`),
-    enabled: isEdit,
+    queryFn: () => api<any>(`/quotations/${sourceId}`),
+    enabled: !!sourceId,
   });
   const [prefilled, setPrefilled] = useState(false);
   useEffect(() => {
     if (!existing || prefilled) return;
-    setQuotationNo(existing.quotationNo ?? '');
     setCustomerId(existing.customerId ?? '');
-    setQuotationDate(existing.quotationDate ? String(existing.quotationDate).slice(0, 10) : todayISO());
-    setValidUntil(existing.validUntil ? String(existing.validUntil).slice(0, 10) : '');
+    if (isEdit) {
+      setQuotationNo(existing.quotationNo ?? '');
+      setQuotationDate(existing.quotationDate ? String(existing.quotationDate).slice(0, 10) : todayISO());
+      setValidUntil(existing.validUntil ? String(existing.validUntil).slice(0, 10) : '');
+    } else if (existing.quotationDate && existing.validUntil) {
+      // A copy is dated today (its number follows from that) and keeps the same validity period.
+      const days = Math.round((Date.parse(String(existing.validUntil).slice(0, 10)) - Date.parse(String(existing.quotationDate).slice(0, 10))) / 86_400_000);
+      if (days > 0) setValidUntil(new Date(Date.parse(todayISO()) + days * 86_400_000).toISOString().slice(0, 10));
+    }
     setCurrency(existing.currency || 'INR');
     setExchangeRate(existing.exchangeRate != null ? String(Number(existing.exchangeRate)) : '');
     setNotes(existing.notes ?? '');
@@ -353,6 +371,8 @@ export const QuotationNewPage = () => {
       rateBasis: r.rateBasis ?? undefined, rateValue: r.rateValue ?? undefined,
       ratePerKg: r.ratePerKg ?? undefined, ratePerPc: r.ratePerPc ?? undefined, totalAmount: r.totalAmount ?? undefined,
       nanoPrice: r.nanoPrice ?? undefined, casePrice: r.casePrice ?? undefined, caseWeight: r.caseWeight ?? undefined, nanoSoRate: r.nanoSoRate ?? undefined,
+      stackFactor: r.stackFactor ?? undefined, gapMm: r.gapMm ?? undefined, cutMm: r.cutMm ?? undefined, alloy: r.alloy ?? undefined,
+      steps: parseSteps(r.steps),
     })));
     setPrefilled(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -362,7 +382,7 @@ export const QuotationNewPage = () => {
   // (blanks fall back to company defaults), else the company defaults.
   useEffect(() => {
     if (bankTermsReady) return;
-    if (isEdit && !existing) return;
+    if (sourceId && !existing) return;
     if (!isEdit && !qsettings) return;
     const s = qsettings;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -443,13 +463,13 @@ export const QuotationNewPage = () => {
     <div className="sales-order-workbench space-y-4 sm:space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl">
-          <FileText className="h-5 w-5 text-brand-600" /> {isEdit ? 'Edit Quotation' : 'New Quotation'}
+          <FileText className="h-5 w-5 text-brand-600" /> {isEdit ? 'Edit Quotation' : copyId ? `Duplicate of ${existing?.quotationNo ?? '…'}` : 'New Quotation'}
         </h1>
         <Link to="/quotation/manage" className="btn-ghost self-start text-slate-600 sm:self-auto">Back</Link>
       </div>
 
       {/* ============ DRAFT RESTORE BANNER ============ */}
-      {!isEdit && draftAvailable && draftData && (
+      {!isEdit && !copyId && draftAvailable && draftData && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
           <div className="text-sm text-amber-800">
             <span className="font-semibold">Unsaved draft found</span>

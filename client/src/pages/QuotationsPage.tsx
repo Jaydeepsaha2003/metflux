@@ -4,7 +4,7 @@ import '@/components/sales-tables.css';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileText, Plus, Search, Loader2, Printer, ArrowRightLeft, Trash2, CheckCircle2, XCircle, Pencil } from 'lucide-react';
+import { FileText, Plus, Search, Loader2, Printer, ArrowRightLeft, Trash2, CheckCircle2, XCircle, Pencil, Copy } from 'lucide-react';
 import { fmtMoney } from '@/lib/currency';
 import { api, ApiError } from '@/lib/api';
 import { cn } from '@/lib/cn';
@@ -146,6 +146,7 @@ export const QuotationsPage = () => {
                     <td className="px-3 py-2.5">
                       <div className="flex items-center justify-end gap-1">
                         <Link to={`/quotation/${r.id}/print`} title="Print / PDF" className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"><Printer className="h-4 w-4" /></Link>
+                        <Link to={`/quotation/new?copy=${r.id}`} title="Duplicate as a new quotation" aria-label={`Duplicate ${r.quotationNo}`} className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-brand-700"><Copy className="h-4 w-4" /></Link>
                         {r.status === 'OPEN' && (
                           <Link to={`/quotation/${r.id}/edit`} title="Edit quotation" className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-brand-700"><Pencil className="h-4 w-4" /></Link>
                         )}
@@ -195,6 +196,7 @@ export const QuotationsPage = () => {
                 </div>
                 <div className="mt-3 flex items-center justify-end gap-1 border-t border-slate-100 pt-3">
                   <Link to={`/quotation/${r.id}/print`} title="Print / PDF" className="rounded p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800"><Printer className="h-4 w-4" /></Link>
+                  <Link to={`/quotation/new?copy=${r.id}`} title="Duplicate as a new quotation" aria-label={`Duplicate ${r.quotationNo}`} className="rounded p-2 text-slate-500 hover:bg-slate-100 hover:text-brand-700"><Copy className="h-4 w-4" /></Link>
                   {r.status === 'OPEN' && (
                     <Link to={`/quotation/${r.id}/edit`} title="Edit quotation" className="rounded p-2 text-slate-500 hover:bg-slate-100 hover:text-brand-700"><Pencil className="h-4 w-4" /></Link>
                   )}
